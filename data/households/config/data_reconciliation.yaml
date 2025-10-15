@@ -1,0 +1,152 @@
+# Data Reconciliation Configuration
+# Handles messy, incomplete, and inconsistent real-world data
+# Census data is often obfuscated for privacy and excludes communal establishments
+
+# Overall reconciliation strategy
+reconciliation:
+  strategy: "best_effort"         # "best_effort" or "strict"
+  # best_effort: Try to allocate as many people as possible, accept some unallocated
+  # strict: Fail if unable to allocate everyone exactly
+
+  # Expected data quality (helps set realistic expectations)
+  expected_accuracy:
+    household_compositions: 0.85  # Census household data ~85% accurate (privacy noise)
+    communal_establishments: 0.95 # Institutional data usually more accurate
+    demographics: 1.0              # Age/sex demographics should be exact
+
+# Three-stage allocation process
+allocation_stages:
+  # STAGE 1: Private households with exact compositions (prioritize kids!)
+  stage1_private:
+    description: "Constrained private households (families with kids first)"
+    enabled: true
+    priority: 1
+
+    # Allocation settings
+    allow_partial_households: false  # Must create complete household or fail
+    demotion_on_failure: true        # Demote to simpler compositions if can't create
+
+    # Demotion strategy when household creation fails
+    demotion_strategy: "resource_aware"  # "resource_aware" or "hierarchical"
+    # resource_aware: Remove scarcest resource first (smart)
+    # hierarchical: Remove in fixed order (simple)
+
+    # Priority order for household creation
+    prioritization:
+      families_with_kids_first: true
+      sort_by_kid_count_desc: true     # More kids = higher priority
+      sort_by_adult_count_desc: true    # More adults = higher priority (tiebreaker)
+
+  # STAGE 2: Communal establishments
+  stage2_communal:
+    description: "Care homes, student dorms, boarding schools, etc."
+    enabled: true
+    priority: 2
+
+    # Allocation settings
+    allow_partial_fill: true          # OK to partially fill establishments
+    allow_overfill: true              # Allow slight overcapacity (realistic)
+    overfill_percentage: 0.10         # Allow 10% over stated capacity
+
+    # What to do if establishment capacity doesn't match population
+    capacity_mismatch_handling:
+      warn_on_underfill: true
+      warn_on_overfill: true
+      create_additional_if_needed: false  # Don't auto-create new establishments
+
+  # STAGE 3: Flexible/expandable private households
+  stage3_flexible:
+    description: "Expandable patterns (>=0, >=2) and emergency households"
+    enabled: true
+    priority: 3
+
+    # Allocation settings
+    allow_partial_households: true
+    use_expandable_patterns: true     # Use households with >= in composition
+
+    # Emergency household creation
+    create_emergency_households: true
+    emergency_household_pattern: "0 >=0 >=0 >=0"  # Flexible adult household
+    emergency_household_max_size: 7
+
+    # Promotion system (convert non-expandable → expandable if needed)
+    enable_household_promotion: true
+    promotion_trigger_threshold: 0.90  # Promote if >90% of expandable households full
+    max_promotions_per_area: 100       # Limit to prevent runaway promotion
+
+# Unallocated people handling
+unallocated_handling:
+  max_unallocated_percentage: 0.05   # Warn if >5% people unallocated
+  fail_on_high_unallocated: false    # Don't fail, just warn
+
+  # What to do with remaining unallocated people
+  create_emergency_households: true
+  emergency_household_pattern: "0 >=0 >=0 >=0"
+  emergency_household_max_size: 7
+
+  # Logging
+  log_unallocated_people: true
+  export_unallocated_list: true      # Export list of unallocated person IDs
+
+# Allocation round settings
+allocation_rounds:
+  # For stage 3 flexible allocation (iterate through age groups)
+  rounds:
+    - category: "kid"
+      max_per_household: 4
+      allocation_order: 1
+
+    - category: "young_adult"
+      max_per_household: 4
+      allocation_order: 2
+
+    - category: "adult"
+      max_per_household: 4
+      allocation_order: 3
+
+    - category: "elder"
+      max_per_household: 4
+      allocation_order: 4
+
+  # Overcrowding detection
+  overcrowding_threshold: 4          # Promote more households if avg > 4 per age group
+  enable_second_round_allocation: true  # Do second pass after promotion
+
+# Validation and reporting
+validation:
+  check_age_constraints: true
+  check_biological_plausibility: true
+  check_household_size_limits: true
+
+  # Strict validation settings
+  fail_on_age_violation: false       # Don't fail, just log
+  fail_on_biological_violation: false
+  fail_on_size_violation: false
+
+  # Logging detail level
+  log_level: "info"                  # "debug", "info", "warning", "error"
+  log_mismatches: true
+  log_demotions: true
+  log_promotions: true
+
+# Reconciliation reporting
+reporting:
+  generate_reconciliation_report: true
+  export_format: "json"               # "json", "csv", or "both"
+  report_output_dir: "output/reconciliation"
+
+  # What to include in report
+  include_summary_stats: true
+  include_detailed_mismatches: true
+  include_unallocated_breakdown: true
+  include_stage_breakdown: true
+
+  # Report naming
+  report_filename_template: "reconciliation_report_{timestamp}.{format}"
+
+# Performance optimization
+performance:
+  use_caching: true
+  cache_household_lookups: true
+  cache_area_lookups: true
+  parallel_processing: false         # Future: parallelize by area

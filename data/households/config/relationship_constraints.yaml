@@ -1,0 +1,76 @@
+# Relationship Constraints Configuration
+# Generic constraints for parent-child, partner, and multi-generational relationships
+# All constraints are culture-neutral and configurable
+
+# Parent-Child Relationships
+# "primary_parent" and "secondary_parent" are generic terms (not gender-specific)
+parent_child:
+  primary_parent:
+    min_age_difference: 15        # Minimum realistic age gap (parent - child)
+    max_age_difference: 50        # Maximum realistic age gap
+    preferred_age_difference: 25  # Most common age gap
+    biological_constraint: true    # Enforce biological plausibility
+
+  secondary_parent:
+    min_age_difference: 16
+    max_age_difference: 60
+    preferred_age_difference: 27
+    biological_constraint: true
+
+  # Emergency fallback (less strict constraints for edge cases)
+  emergency:
+    min_age_difference: 12        # Absolute minimum (e.g., teen parents)
+    max_age_difference: 70        # Extended for grandparent scenarios
+    allow_biological_violation: false  # Still respect basic biology
+
+# Partner/Couple Relationships
+partners:
+  min_age_difference: -10         # Negative = younger partner allowed
+  max_age_difference: 20          # Positive = older partner
+  preferred_age_difference: 2     # Most common (slightly older partner)
+
+  # Sex/gender preferences (configurable for different cultures/times)
+  opposite_sex_preference: 0.95   # 95% of couples are opposite sex
+  same_sex_allowed: true          # Allow same-sex couples
+
+  # Strict matching for certain household types
+  strict_opposite_sex_for:
+    - "couple"                    # 2-person couple households
+    - "elderly_couple"            # Elderly couples
+
+# Multi-generational Relationships
+grandparent_grandchild:
+  min_age_difference: 40
+  max_age_difference: 80
+  preferred_age_difference: 50
+
+# Sibling Relationships (for future expansion)
+siblings:
+  max_age_difference: 20
+  min_age_difference: 0
+  typical_gap: 3                  # Average spacing between siblings
+
+# Age difference probability distributions
+# Used for compatibility matching when creating households
+age_difference_distributions:
+  # Load from external CSV files (optional)
+  use_external_data: true
+
+  couples_age_difference_file: "couples_age_difference.csv"
+  # Expected format: age_difference,probability
+  # Example: -5,0.02  (5 years younger partner, 2% probability)
+  #          0,0.15   (same age, 15% probability)
+  #          2,0.25   (2 years older, 25% probability)
+
+  parent_child_age_difference_file: "parent_kid_age_difference.csv"
+  # Expected format: age_difference,0,1,2,3,4 or more
+  # (Different probabilities based on number of children)
+
+  # Fallback to uniform distribution if files not found
+  fallback_to_defaults: true
+
+# Validation settings
+validation:
+  enforce_constraints: true       # Strictly enforce constraints
+  log_violations: true            # Log when constraints are violated
+  allow_emergency_fallback: true  # Use emergency constraints if strict fails

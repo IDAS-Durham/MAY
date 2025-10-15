@@ -1,0 +1,72 @@
+# June Zero Configuration File
+
+geography:
+  # Path to geography data files
+  data_dir: "data/geography"
+
+  # Load all geographical units (ignores all filters below if true)
+  load_all: true
+
+  # ========================================
+  # FILTER - Specify which geographical units to load
+  # ========================================
+
+  filter:
+    # Level to filter on: LGU, MGU, or SGU
+    # Leave as null to load all units
+    level: MGU
+
+    # Codes to filter (for small lists, comma-separated)
+    codes: []
+
+    # Or specify a file path with codes (for large lists)
+    # File should have one code per line
+    file: filters/example_mgu.txt
+
+# ========================================
+# POPULATION
+# ========================================
+
+population:
+  # Path to population data files
+  data_dir: "data/population"
+
+  # Demographics files (matrix format: rows=geo_units, columns=ages)
+  demographics_male_file: "demographics_male.csv"
+  demographics_female_file: "demographics_female.csv"
+
+# ========================================
+# EXAMPLES
+# ========================================
+
+# Example 1: Load only London LGU and all its children
+# filter:
+#   level: LGU
+#   codes: [London]
+#   file: null
+
+# Example 2: Load specific MGUs from a file (for large lists)
+# filter:
+#   level: MGU
+#   codes: []
+#   file: filters/my_mgus.txt
+
+# Example 3: Load specific MGUs inline (for small lists)
+# filter:
+#   level: MGU
+#   codes: [E02000173, E02000187, E02000414]
+#   file: null
+
+# Example 4: Load specific SGUs and their parent hierarchy
+# filter:
+#   level: SGU
+#   codes: [E00004320, E00004321, E00004326]
+#   file: null
+
+# Example 5: Load all units (set load_all to true OR set level to null)
+# load_all: true
+# OR
+# filter:
+#   level: null
+#   codes: []
+#   file: null

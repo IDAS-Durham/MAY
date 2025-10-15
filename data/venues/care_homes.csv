@@ -1,0 +1,4 @@
+name,geo_unit,latitude,longitude,resident_capacity,staff_count,dementia_care
+Riverside Care Home,E02000520,51.5117,-0.4323,60,45,yes
+Sunset Care Home,E02000522,51.5045,-0.4747,80,55,yes
+Oakwood Care Home,E02000414,51.5900,-0.0800,50,38,no
