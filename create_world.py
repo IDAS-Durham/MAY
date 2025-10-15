@@ -8,7 +8,6 @@ import yaml
 from config_loader import setup_geography
 from geography import VenueManager
 from population import PopulationManager
-from households import HouseholdDistributor
 from world import World
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -215,47 +214,10 @@ def main():
     # Generate population
     population.generate_population()
 
-    # Distribute people into households
-    logger.info("")
-    logger.info("Distributing population into households...")
-    household_config = config.get("households", {})
-    distributor = HouseholdDistributor(
-        geography=geo,
-        config_dir=household_config.get("config_dir", "data/households/config"),
-        household_data_file=household_config.get("data_file", "data/households/households.csv")
-    )
-
-    # Load household composition data
-    distributor.load_household_data()
-
-    # Add all people to the distributor's pool
-    logger.info("Adding people to household allocation pool...")
-    for person in population.get_all_people():
-        area_code = person.geographical_unit.name
-        distributor.add_person_to_pool(person, area_code)
-
-    # Run Stage 1 allocation
-    logger.info("Running Stage 1: Exact private households...")
-    distributor.stage1_allocate()
-
-    # Pick one SGU and print detailed household inspection
-    if distributor.households:
-        # Get the first SGU that has households
-        sgu_with_households = None
-        counter = 0
-        for household in distributor.households:
-            counter += 1
-            if household.geographical_unit and counter == 27:
-                sgu_with_households = household.geographical_unit.name
-                break
-
-        if sgu_with_households:
-            distributor.print_detailed_sgu_households(sgu_with_households)
-
     # Create World object
     logger.info("")
     logger.info("Creating World object...")
-    world = World(geography=geo, population=population, venues=venues, households=distributor)
+    world = World(geography=geo, population=population, venues=venues)
     logger.info(world)
 
     logger.info("")
@@ -264,9 +226,6 @@ def main():
     logger.info(f"Geography: {len(world.geography.get_all_units())} units")
     logger.info(f"Venues: {len(world.venues.get_all_venues())} venues across {len(venues.get_venue_types())} types")
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
-    logger.info(f"Households: {len(world.households.households)} households")
-    logger.info(f"  - People allocated: {len(world.households.allocated_people):,} ({len(world.households.allocated_people)/len(world.population.get_all_people())*100:.1f}%)")
-    logger.info(f"  - Average household size: {sum(h.size() for h in world.households.households) / max(len(world.households.households), 1):.2f}")
     logger.info("=" * 60)
 
     # Show examples of what was created
