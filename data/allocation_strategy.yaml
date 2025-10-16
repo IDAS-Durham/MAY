@@ -1,0 +1,206 @@
+# Unified Allocation Strategy Configuration
+#
+# This file defines the COMPLETE allocation order for both households and venues.
+# Steps are executed sequentially in the order defined here.
+
+enabled: true
+
+# =============================================
+# ALLOCATION STEPS
+# =============================================
+# Steps are executed in order. Each step can be either:
+#   - type: "household" - Allocate people to households
+#   - type: "venue" - Allocate people to venues
+#
+# The system automatically handles:
+#   - Marking people as allocated
+#   - Refreshing pools between steps
+#   - Tracking statistics
+
+steps:
+  # =============================================
+  # Step 1: Families with Children (Households)
+  # =============================================
+  - name: "Families with Children"
+    type: "household"
+    description: "Allocate families with kids first (highest priority)"
+
+    patterns:
+      - ">=2 >=0 2 0"   # 2+ kids, 2 adults
+      - "1 >=0 2 0"     # 1 kid, 2 adults
+      - ">=2 >=0 1 0"   # 2+ kids, 1 adult (single parent)
+      - "1 >=0 1 0"     # 1 kid, 1 adult (single parent)
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 2: Elderly to Care Homes (Venues)
+  # =============================================
+  - name: "Elderly to Care Homes"
+    type: "venue"
+    description: "Allocate very elderly (75+) to care homes"
+
+    venue_type: "care_home"
+    capacity_property: "capacity"
+
+    eligibility:
+      min_age: 75
+      max_age: null
+      sex: null
+
+    strategy: "oldest_first"  # Prioritize oldest
+    max_allocations: null
+
+  # =============================================
+  # Step 3: Students to Dormitories (Venues)
+  # =============================================
+  - name: "Students to Dormitories"
+    type: "venue"
+    description: "Allocate young adults (18-24) to student dorms"
+
+    venue_type: "student_dorms"
+    capacity_property: "n_total"
+
+    eligibility:
+      min_age: 18
+      max_age: 24
+
+    strategy: "random"
+    max_allocations: null
+
+  # =============================================
+  # Step 4: Elderly Couples (Households)
+  # =============================================
+  - name: "Elderly Couples"
+    type: "household"
+    description: "Allocate remaining elderly to household couples"
+
+    patterns:
+      - "0 0 0 2"       # 2 old adults
+      - "0 0 0 >=3"     # 3+ old adults
+
+    max_households: null
+    refresh_pools: true  # Refresh to exclude care home residents
+    enable_demotion: null
+
+  # =============================================
+  # Step 5: Young Adult Households
+  # =============================================
+  - name: "Young Adult Households"
+    type: "household"
+    description: "Allocate young adults to shared households"
+
+    patterns:
+      - "0 >=0 0 0"     # Young adults only (any number)
+
+    max_households: null
+    refresh_pools: true  # Refresh to exclude dorm residents
+    enable_demotion: null
+
+  # =============================================
+  # Step 6: Adult-Only Households
+  # =============================================
+  - name: "Adult-Only Households"
+    type: "household"
+    description: "Allocate adult couples and singles"
+
+    patterns:
+      - "0 0 2 0"       # 2 adults
+      - "0 0 1 0"       # 1 adult
+      - "0 >=1 2 0"     # Young adults + 2 adults
+      - "0 >=1 1 0"     # Young adults + 1 adult
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 7: Mixed/Flexible Households
+  # =============================================
+  - name: "Mixed Households"
+    type: "household"
+    description: "Allocate remaining people to flexible households"
+
+    patterns:
+      - "1 >=0 >=0 >=0"   # 1 kid, any other combo
+      - ">=2 >=0 >=0 >=0" # 2+ kids, any other combo
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 8: Final Cleanup (Households)
+  # =============================================
+  - name: "Final Cleanup"
+    type: "household"
+    description: "Allocate all remaining people to any compatible household"
+
+    patterns: null  # All remaining patterns
+    max_households: null
+    refresh_pools: true  # Good practice before final round
+    enable_demotion: null
+
+# =============================================
+# CONFIGURATION OPTIONS
+# =============================================
+
+# For household steps:
+#   - patterns: List of household composition patterns, or null for "all"
+#   - max_households: Limit number of households (null = no limit)
+#   - refresh_pools: Rebuild person pools (true/false)
+#   - enable_demotion: Override global demotion setting (null = use global)
+
+# For venue steps:
+#   - venue_type: Type of venue (must match venue data)
+#   - capacity_property: Property name for capacity in venue data
+#   - eligibility: Criteria for who can be allocated
+#     - min_age: Minimum age
+#     - max_age: Maximum age (null = no limit)
+#     - sex: Filter by sex (null = any, "male"/"female")
+#   - strategy: Allocation strategy ("random", "oldest_first", "youngest_first")
+#   - max_allocations: Limit number of people (null = fill capacity)
+
+# =============================================
+# TIPS
+# =============================================
+
+# When to use refresh_pools=true:
+#   - After a venue allocation step
+#   - Before final cleanup
+#   - When you want to ensure pools only contain unallocated people
+
+# Allocation order matters:
+#   - Earlier steps have first pick of people
+#   - Put high-priority allocations first
+#   - Venue allocations "remove" people from household pool
+
+# Example ordering strategies:
+#   1. Priority-based: families → elderly → venues → adults → cleanup
+#   2. Venue-first: venues → households with remaining
+#   3. Interleaved: some households → venues → more households
+
+# =============================================
+# ALTERNATIVE SIMPLE CONFIGURATION
+# =============================================
+
+# Simple 3-step allocation:
+#
+# steps:
+#   - name: "High Priority Households"
+#     type: "household"
+#     patterns: [">=2 >=0 2 0", "0 0 0 2"]
+#
+#   - name: "Venues"
+#     type: "venue"
+#     venue_type: "care_home"
+#     capacity_property: "capacity"
+#     eligibility: {min_age: 75}
+#     strategy: "oldest_first"
+#
+#   - name: "Remaining Households"
+#     type: "household"
+#     patterns: null
+#     refresh_pools: true

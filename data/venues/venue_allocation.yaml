@@ -1,0 +1,147 @@
+# Venue Allocation Configuration
+#
+# This file defines how to allocate people to venues (care homes, dorms, etc.)
+# Works with any venue type that has a capacity property.
+
+# List of venue types to allocate
+venue_allocations:
+
+  # =============================================
+  # Care Homes - Allocate elderly residents
+  # =============================================
+  - venue_type: "care_home"
+    description: "Allocate elderly people to care homes"
+
+    # Capacity property name in the venue data
+    capacity_property: "capacity"
+
+    # Criteria for who can be allocated to this venue type
+    eligibility:
+      min_age: 75              # Minimum age
+      max_age: null            # Maximum age (null = no limit)
+      # sex: null              # Filter by sex (null = any, "male"/"female" for specific)
+      # activities: null       # Filter by activities (not implemented yet)
+
+    # Allocation strategy
+    strategy: "random"         # Options: "random", "oldest_first", "youngest_first"
+
+    # Maximum number of people to allocate (null = fill all capacity)
+    max_allocations: null
+
+    # Whether to enable this venue type allocation
+    enabled: true
+
+  # =============================================
+  # Student Dorms - Allocate young adults
+  # =============================================
+  - venue_type: "student_dorms"
+    description: "Allocate students to university dormitories"
+
+    capacity_property: "n_total"
+
+    eligibility:
+      min_age: 18
+      max_age: 24              # Traditional student age
+
+    strategy: "random"
+    max_allocations: null
+    enabled: true
+
+  # =============================================
+  # Boarding Schools - Allocate children
+  # =============================================
+  - venue_type: "boarding_school"
+    description: "Allocate children to boarding schools"
+
+    capacity_property: "capacity"
+
+    eligibility:
+      min_age: 11
+      max_age: 18
+
+    strategy: "random"
+    max_allocations: null
+    enabled: false            # Disabled by default
+
+  # =============================================
+  # Company Housing - Allocate workers
+  # =============================================
+  - venue_type: "company_housing"
+    description: "Allocate workers to company-provided housing"
+
+    capacity_property: "housing_capacity"
+
+    eligibility:
+      min_age: 18
+      max_age: 64              # Working age
+
+    strategy: "random"
+    max_allocations: null
+    enabled: false            # Disabled by default
+
+# =============================================
+# ALLOCATION STRATEGIES
+# =============================================
+#
+# Available strategies:
+#   - "random": Random selection from eligible people
+#   - "oldest_first": Prioritize oldest eligible people
+#   - "youngest_first": Prioritize youngest eligible people
+#   - "balanced": Try to balance demographics (future)
+#
+# Note: Strategies are applied AFTER eligibility filtering
+
+# =============================================
+# CAPACITY PROPERTIES
+# =============================================
+#
+# The capacity_property should match a column in your venue CSV:
+#   - care_homes.csv might have "capacity"
+#   - student_dorms.csv might have "n_total" or "beds"
+#   - companies.csv might have "housing_capacity"
+#
+# Make sure the property exists in your venue data!
+
+# =============================================
+# ELIGIBILITY CRITERIA
+# =============================================
+#
+# Supported criteria:
+#   - min_age: Minimum age (inclusive)
+#   - max_age: Maximum age (inclusive, null = no limit)
+#   - sex: Filter by sex ("male", "female", or null for any)
+#
+# Future criteria (not yet implemented):
+#   - activities: Filter by person's activities
+#   - location: Only allocate within same geographical area
+#   - household_status: Filter by current household status
+
+# =============================================
+# EXAMPLES
+# =============================================
+
+# Example 1: Multiple age groups to care homes
+# - venue_type: "care_home"
+#   capacity_property: "capacity"
+#   eligibility:
+#     min_age: 70  # Lower threshold
+#     max_age: null
+#   strategy: "oldest_first"  # Prioritize oldest
+
+# Example 2: Gender-specific housing
+# - venue_type: "mens_shelter"
+#   capacity_property: "beds"
+#   eligibility:
+#     min_age: 18
+#     max_age: null
+#     sex: "male"
+#   strategy: "random"
+
+# Example 3: Limited allocation
+# - venue_type: "care_home"
+#   capacity_property: "capacity"
+#   eligibility:
+#     min_age: 80
+#     max_age: null
+#   strategy: "random"
+#   max_allocations: 100  # Only allocate first 100 eligible people

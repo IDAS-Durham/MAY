@@ -8,6 +8,8 @@ import yaml
 from config_loader import setup_geography
 from geography import VenueManager
 from population import PopulationManager
+from household import HouseholdDistributor
+from allocation_strategy import execute_allocation_strategy
 from world import World
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -128,8 +130,10 @@ def print_world_examples(world):
     logger.info("")
     logger.info("4. Household Examples:")
     if world.households and world.households.households:
+        total_pop = len(population.get_all_people())
+        allocation_rate = (len(world.households.allocated_people) / total_pop * 100) if total_pop > 0 else 0
         logger.info(f"   Total households: {len(world.households.households)}")
-        logger.info(f"   Allocation rate: {len(world.households.allocated_people) / max(sum(len(p) for p in world.households.person_pool_by_area.values()), 1) * 100:.1f}%")
+        logger.info(f"   People allocated: {len(world.households.allocated_people):,} / {total_pop:,} ({allocation_rate:.1f}%)")
         logger.info("")
         logger.info("   Example households:")
         for household in world.households.households[:5]:
@@ -216,10 +220,46 @@ def main():
     # Generate population
     population.generate_population()
 
+    # Distribute households
+    logger.info("")
+    logger.info("Distributing households...")
+    household_config = config.get("households", {})
+    households = HouseholdDistributor(
+        geography=geo,
+        population=population,
+        data_dir=household_config.get("data_dir", "data/households"),
+        config_file=household_config.get("config_file", "households_config.yaml")
+    )
+
+    # Load household data
+    household_data_file = household_config.get("data_file", "households.csv")
+    households.load_household_data(household_data_file)
+
+    # Distribute households and venues based on configuration mode
+    strategy_file = household_config.get("strategy_file")
+    rounds_file = household_config.get("rounds_file")
+
+    if strategy_file:
+        # Mode 1: Unified strategy (households + venues in order)
+        logger.info(f"Using unified allocation strategy from {strategy_file}")
+        execute_allocation_strategy(geo, population, venues, households, strategy_file)
+    elif rounds_file:
+        # Mode 2: Multi-round households only (no venue integration)
+        logger.info(f"Using multi-round household allocation from {rounds_file}")
+        households.distribute_households_from_yaml(rounds_file)
+    else:
+        # Mode 3: Single-pass allocation (original simple mode)
+        logger.info("Using single-pass household allocation")
+        households.distribute_households()
+
+    # Export household allocations
+    export_file = household_config.get("export_file", "household_allocations.csv")
+    households.export_households_to_csv(export_file)
+
     # Create World object
     logger.info("")
     logger.info("Creating World object...")
-    world = World(geography=geo, population=population, venues=venues)
+    world = World(geography=geo, population=population, venues=venues, households=households)
     logger.info(world)
 
     logger.info("")
@@ -231,7 +271,7 @@ def main():
     logger.info("=" * 60)
 
     # Show examples of what was created
-    print_world_examples(world)
+    #print_world_examples(world)
 
     return world
 

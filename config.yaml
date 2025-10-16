@@ -44,6 +44,41 @@ venues:
   config_file: "venues_config.yaml"
 
 # ========================================
+# HOUSEHOLDS
+# ========================================
+
+households:
+  # Path to household data files
+  data_dir: "data/households"
+
+  # Household composition data file (CSV with patterns like ">=2 >=0 2 0")
+  data_file: "households.csv"
+
+  # Configuration file for age categories and demotion rules
+  config_file: "households_config.yaml"
+
+  # =============================================
+  # ALLOCATION MODE (choose one)
+  # =============================================
+
+  # Option 1: Unified strategy (RECOMMENDED - controls everything in one place)
+  #   - Defines both household AND venue allocations in order
+  #   - File: data/allocation_strategy.yaml
+  strategy_file: "allocation_strategy.yaml"
+
+  # Option 2: Multi-round households only (household rounds, no venue integration)
+  #   - Only household allocation rounds
+  #   - File: data/households/allocation_rounds.yaml
+  #   - Set strategy_file to null to use this
+  # rounds_file: "allocation_rounds.yaml"
+
+  # Option 3: Single-pass allocation (original simple mode)
+  #   - Set both strategy_file and rounds_file to null
+
+  # Export file for household allocations (automatically created after distribution)
+  export_file: "household_allocations.csv"
+
+# ========================================
 # EXAMPLES
 # ========================================
 

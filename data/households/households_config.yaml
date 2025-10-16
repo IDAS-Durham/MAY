@@ -1,0 +1,87 @@
+# Household Configuration
+# This file defines age categories and rules for household composition
+
+# Age categories used in household composition
+# Each category defines:
+#   - name: Human-readable name
+#   - min_age: Minimum age (inclusive)
+#   - max_age: Maximum age (inclusive, null means no upper limit)
+#   - symbol: Symbol used in composition strings (e.g., "K", "YA", "A", "OA")
+
+age_categories:
+  - name: "Kids"
+    symbol: "K"
+    min_age: 0
+    max_age: 17
+
+  - name: "Young Adults"
+    symbol: "YA"
+    min_age: 18
+    max_age: 24
+
+  - name: "Adults"
+    symbol: "A"
+    min_age: 25
+    max_age: 64
+
+  - name: "Old Adults"
+    symbol: "OA"
+    min_age: 65
+    max_age: null  # No upper limit
+
+# Composition pattern format
+# Patterns follow the format: "<kids> <young_adults> <adults> <old_adults>"
+# Each field can be:
+#   - A number: exact count (e.g., "2")
+#   - ">=N": N or more (e.g., ">=2")
+#
+# Example patterns:
+#   "2 0 2 0"      -> exactly 2 kids, 0 young adults, 2 adults, 0 old adults
+#   ">=2 >=0 2 0"  -> 2+ kids, any young adults, 2 adults, 0 old adults
+#   "1 >=0 1 0"    -> 1 kid, any young adults, 1 adult, 0 old adults
+#   "0 >=0 0 0"    -> singles/couples with no specific age requirement
+
+# Demotion rules
+# When there aren't enough people in a category to fill household requirements,
+# we can "demote" household patterns to require fewer people.
+#
+# Demotion priority:
+#   1. Reduce ">=N" constraints to smaller values (e.g., ">=2" -> ">=1" -> ">=0")
+#   2. Reduce exact counts (e.g., "2" -> "1" -> "0")
+#
+# The system will automatically attempt demotions in order until it finds
+# a viable household composition or exhausts all options.
+
+demotion:
+  # Enable automatic demotion when population doesn't match household data
+  enabled: true
+
+  # Maximum number of demotion attempts per household pattern
+  max_attempts: 10
+
+  # Minimum household size to attempt (households smaller than this are discarded)
+  min_household_size: 1
+
+  # Priority order for demotion (which category to demote first)
+  # Higher priority = demote first
+  priority:
+    Kids: 1           # Demote kids count first
+    Young Adults: 2   # Then young adults
+    Old Adults: 3     # Then old adults
+    Adults: 4         # Demote adults last (most stable category)
+
+# Allocation strategy
+allocation:
+  # Strategy for selecting people to assign to households
+  # Options:
+  #   - "random": Randomly select from available people
+  #   - "age_sorted": Sort by age and allocate in order
+  #   - "balanced": Try to balance age distributions
+  strategy: "random"
+
+  # Whether to allow partial household allocation
+  # If false, households that can't be fully filled are skipped
+  allow_partial: false
+
+  # Random seed for reproducibility (null = use global seed)
+  seed: null

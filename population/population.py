@@ -272,6 +272,21 @@ class PopulationManager:
         """
         return [p for p in self.people if p.has_activity(activity)]
 
+    def get_people_by_area(self, area_code):
+        """
+        Get all people in a specific geographical unit.
+
+        Args:
+            area_code (str): Name/code of the geographical unit
+
+        Returns:
+            list: List of Person objects in this area
+        """
+        unit = self.geography.get_unit(area_code)
+        if unit is None:
+            return []
+        return unit.people if hasattr(unit, 'people') else []
+
     def get_statistics(self):
         """
         Get basic statistics about the population.
