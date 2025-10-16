@@ -15,11 +15,12 @@ class Person:
         geographical_unit (GeographicalUnit): SGU where person lives
         activities (list): List of activity names this person can do
         properties (dict): Extensible dictionary for additional attributes
+        activity_map (dict):
     """
 
     _id_counter = 0
 
-    def __init__(self, age, sex, geographical_unit=None, activities=None, properties=None):
+    def __init__(self, age: float, sex: str, geographical_unit: "GeographicalUnit"=None, activities: list[str]=None, properties: dict=None, activity_map: dict[str,tuple[int,int,str]]={}):
         """
         Initialize a Person.
 
@@ -27,8 +28,13 @@ class Person:
             age (int): Age in years
             sex (str): Sex category
             geographical_unit (GeographicalUnit, optional): SGU where person lives
-            activities (list, optional): List of activity names
+            activities (list[str], optional): List of activity names
             properties (dict, optional): Additional attributes
+            activity_map (dict[str,tuple[int,int,str]], optional):
+              Dictionary mapping an activity name (key being the activity name as a str matching that in self.activities),
+              to a tuple (id of the venue, index of the subgroup for that activity and venue, name of the subgroup).
+              Default = {}.
+        
         """
         self.id = Person._id_counter
         Person._id_counter += 1
@@ -38,6 +44,7 @@ class Person:
         self.geographical_unit = geographical_unit
         self.activities = activities if activities is not None else []
         self.properties = properties if properties is not None else {}
+        self.activity_map = activity_map
 
     @classmethod
     def reset_counter(cls):
