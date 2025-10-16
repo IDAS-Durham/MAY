@@ -88,7 +88,7 @@ def print_world_examples(world):
     logger.info("")
     logger.info("2. Venue Examples:")
     venue_types = venues.get_venue_types()
-    for vtype in sorted(venue_types)[:3]:  # Show first 3 types
+    for vtype in sorted(venue_types)[:10]:  # Show first 3 types
         venues_of_type = venues.get_venues_by_type(vtype)
         if venues_of_type:
             example_venue = venues_of_type[0]
@@ -231,7 +231,7 @@ def main():
     logger.info("=" * 60)
 
     # Show examples of what was created
-    #print_world_examples(world)
+    print_world_examples(world)
 
     return world
 

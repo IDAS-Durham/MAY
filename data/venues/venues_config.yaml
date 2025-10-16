@@ -10,13 +10,11 @@
 #   - properties: Optional metadata about this venue type
 
 venue_types:
-  # Healthcare venues
   hospital:
     enabled: true
     filename: hospitals.csv
     description: "Healthcare facilities providing medical treatment"
 
-  # Education venues
   school:
     enabled: true
     filename: schools.csv
@@ -27,23 +25,30 @@ venue_types:
     filename: universities.csv
     description: "Higher education institutions"
 
-  # Residential care
   care_home:
     enabled: true
     filename: care_homes.csv
     description: "Residential care facilities for elderly or disabled persons"
 
-  # Correctional facilities
   prison:
     enabled: false
     filename: prisons.csv
     description: "Correctional institutions"
 
-  # Commercial venues
   company:
     enabled: true
     filename: companies.csv
     description: "Commercial workplaces and businesses"
+  
+  boarding_school:
+    enabled: true
+    filename: boarding_schools.csv
+    description: "Communal residence for school kids"
+
+  student_dorms:
+    enabled: true
+    filename: student_dorms.csv
+    description: "Communal residence for university students"
 
 # Global venue settings
 settings:
