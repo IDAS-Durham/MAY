@@ -14,7 +14,7 @@ logger = logging.getLogger("allocation_strategy")
 
 
 def execute_allocation_strategy(geography, population, venues, households,
-                                strategy_file: str = "data/allocation_strategy.yaml"):
+                                strategy_file: str = "data/households/allocation_strategy.yaml"):
     """
     Execute a unified allocation strategy from YAML configuration.
 

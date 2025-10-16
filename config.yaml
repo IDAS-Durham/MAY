@@ -63,8 +63,8 @@ households:
 
   # Option 1: Unified strategy (RECOMMENDED - controls everything in one place)
   #   - Defines both household AND venue allocations in order
-  #   - File: data/allocation_strategy.yaml
-  strategy_file: "allocation_strategy.yaml"
+  #   - File: data/households/allocation_strategy.yaml
+  strategy_file: "households/allocation_strategy.yaml"
 
   # Option 2: Multi-round households only (household rounds, no venue integration)
   #   - Only household allocation rounds
