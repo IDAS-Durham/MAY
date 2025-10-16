@@ -36,6 +36,14 @@ population:
   demographics_female_file: "demographics_female.csv"
 
 # ========================================
+# VENUES
+# ========================================
+
+venues:
+  # Path to YAML configuration file (relative to data/venues or absolute path)
+  config_file: "venues_config.yaml"
+
+# ========================================
 # EXAMPLES
 # ========================================
 

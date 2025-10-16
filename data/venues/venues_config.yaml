@@ -1,0 +1,51 @@
+# Venue Configuration for June Zero
+#
+# This file defines what venue types to load and how to load them.
+# Users can easily add, remove, or configure venue types by editing this file.
+
+# Venue types to load
+# Each venue type can specify:
+#   - enabled: Whether to load this venue type (default: true)
+#   - filename: CSV file to load from (default: {venue_type}s.csv)
+#   - properties: Optional metadata about this venue type
+
+venue_types:
+  # Healthcare venues
+  hospital:
+    enabled: true
+    filename: hospitals.csv
+    description: "Healthcare facilities providing medical treatment"
+
+  # Education venues
+  school:
+    enabled: true
+    filename: schools.csv
+    description: "Educational institutions for primary and secondary education"
+
+  university:
+    enabled: true
+    filename: universities.csv
+    description: "Higher education institutions"
+
+  # Residential care
+  care_home:
+    enabled: true
+    filename: care_homes.csv
+    description: "Residential care facilities for elderly or disabled persons"
+
+  # Correctional facilities
+  prison:
+    enabled: false
+    filename: prisons.csv
+    description: "Correctional institutions"
+
+  # Commercial venues
+  company:
+    enabled: true
+    filename: companies.csv
+    description: "Commercial workplaces and businesses"
+
+# Global venue settings
+settings:
+  # Filter venues to only include those in loaded geographical units
+  filter_by_geography: true

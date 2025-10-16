@@ -195,7 +195,9 @@ def main():
     logger.info("")
     logger.info("Loading venues...")
     venues = VenueManager(geography=geo, data_dir="data/venues")
-    venues.load_from_csv()
+    venue_config = config.get("venues", {})
+    yaml_config_file = venue_config.get("config_file", "venues_config.yaml")
+    venues.load_from_yaml_config(yaml_config_file)
 
     # Load population
     logger.info("")

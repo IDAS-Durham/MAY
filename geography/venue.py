@@ -6,6 +6,7 @@ Venues are places where people live, work, learn, or receive services.
 import logging
 import pandas as pd
 import os
+import yaml
 
 logger = logging.getLogger("venue")
 
@@ -158,57 +159,81 @@ class VenueManager:
         else:
             logger.info(f"Created {venues_created} {venue_type} venues")
 
-    def load_from_csv(self, venue_types=None):
+    def load_from_yaml_config(self, config_file="venues_config.yaml"):
         """
-        Load venues from multiple CSV files.
+        Load venues from a YAML configuration file.
 
-        Each venue type has its own CSV file with type-specific columns.
-        For example:
-        - hospitals.csv for hospital venues
-        - schools.csv for school venues
-        - prisons.csv for prison venues
+        The YAML file defines which venue types to load and their settings.
 
-        Only venues in loaded geographical units will be created if filter_by_geography=True.
+        Example YAML structure:
+        ```yaml
+        venue_types:
+          hospital:
+            enabled: true
+            filename: hospitals.csv
+            description: "Healthcare facilities"
+          school:
+            enabled: false
+            filename: schools.csv
+
+        settings:
+          filter_by_geography: true
+        ```
 
         Args:
-            venue_types: List of venue types to load. If None, attempts to load all
-                        CSV files in data_dir (excluding those starting with '_')
+            config_file: Path to YAML config file (can be absolute or relative to data_dir)
         """
-        if venue_types is None:
-            # Auto-discover CSV files in data directory
-            if not os.path.exists(self.data_dir):
-                logger.warning(f"Venue directory not found: {self.data_dir}")
-                return
+        # Try to find config file
+        config_path = config_file
+        if not os.path.isabs(config_path):
+            # Try relative to data_dir
+            config_path = os.path.join(self.data_dir, config_file)
 
-            csv_files = [f for f in os.listdir(self.data_dir)
-                        if f.endswith('.csv') and not f.startswith('_')]
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Venue config file not found: {config_path}")
 
-            if not csv_files:
-                logger.warning(f"No venue CSV files found in {self.data_dir}")
-                return
+        # Load YAML configuration
+        logger.info(f"Loading venue configuration from {config_path}")
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
 
-            # Infer venue types from filenames (singularize)
-            venue_types = []
-            for filename in csv_files:
-                # companies.csv -> company, universities.csv -> university
-                # hospitals.csv -> hospital, schools.csv -> school
-                venue_type = filename.replace('.csv', '')
+        if not config:
+            logger.warning(f"Empty configuration file: {config_path}")
+            return
 
-                # Handle common irregular plurals
-                if venue_type.endswith('ies'):
-                    venue_type = venue_type[:-3] + 'y'  # companies -> company
-                elif venue_type.endswith('s'):
-                    venue_type = venue_type[:-1]  # hospitals -> hospital
+        # Parse settings if provided
+        settings = config.get('settings', {})
+        if 'filter_by_geography' in settings:
+            self.filter_by_geography = settings['filter_by_geography']
+            self._loaded_geo_units = set(self.geography.get_all_units().keys())
 
-                venue_types.append((venue_type, filename))
+        # Load venue types
+        venue_types_config = config.get('venue_types', {})
+        if not venue_types_config:
+            logger.warning("No venue types defined in configuration file")
+            return
 
-            logger.info(f"Auto-discovered {len(venue_types)} venue types: {[vt[0] for vt in venue_types]}")
-        else:
-            # Use provided venue types
-            venue_types = [(vt, None) for vt in venue_types]
+        enabled_types = []
+        disabled_types = []
 
-        # Load each venue type
-        for venue_type, filename in venue_types:
+        for venue_type, type_config in venue_types_config.items():
+            # Check if enabled (default: true)
+            if not type_config.get('enabled', True):
+                disabled_types.append(venue_type)
+                continue
+
+            # Get filename (default: {venue_type}s.csv)
+            filename = type_config.get('filename', f"{venue_type}s.csv")
+
+            enabled_types.append((venue_type, filename))
+
+        if disabled_types:
+            logger.info(f"Skipping disabled venue types: {disabled_types}")
+
+        logger.info(f"Loading {len(enabled_types)} venue types from YAML config")
+
+        # Load each enabled venue type
+        for venue_type, filename in enabled_types:
             self.load_venue_type_from_csv(venue_type, filename)
 
         logger.info(f"Total venues created: {len(self.venues)}")

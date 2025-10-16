@@ -64,12 +64,22 @@ All other columns become properties specific to that venue type. Examples:
 
 To add a new venue type:
 
-1. Create a new CSV file: `{type}s.csv`
-2. Include required columns: `name`, `geo_unit`
-3. Add optional coordinates: `latitude`, `longitude`
-4. Add any type-specific columns you need
+1. Create a new CSV file: `{type}s.csv` with your venue data
+2. Add the venue type to `venues_config.yaml`:
 
-The VenueManager will automatically discover and load the file.
+```yaml
+venue_types:
+  # ... existing types ...
+
+  factory:
+    enabled: true
+    filename: factories.csv
+    description: "Manufacturing facilities"
+```
+
+3. Include required columns: `name`, `geo_unit`
+4. Add optional coordinates: `latitude`, `longitude`
+5. Add any type-specific columns you need
 
 ## Example
 
@@ -82,8 +92,36 @@ Textile Mill,E02000187,51.5320,-0.1350,textiles,180,8000
 
 This creates venues of type "factory" with properties: `production_type`, `worker_count`, `area_sqm`.
 
-## Usage
+## Configuration
 
+Venues are defined through a YAML configuration file. This provides:
+- Clear documentation of which venue types are enabled
+- Easy enabling/disabling of venue types
+- Better control over venue loading
+- Single source of truth for venue configuration
+
+**venues_config.yaml**:
+```yaml
+venue_types:
+  hospital:
+    enabled: true
+    filename: hospitals.csv
+    description: "Healthcare facilities"
+
+  school:
+    enabled: true
+    filename: schools.csv
+    description: "Educational institutions"
+
+  company:
+    enabled: false  # Temporarily disabled
+    filename: companies.csv
+
+settings:
+  filter_by_geography: true
+```
+
+**Usage**:
 ```python
 from geography import Geography, VenueManager
 
@@ -91,12 +129,15 @@ from geography import Geography, VenueManager
 geo = Geography(data_dir="data/geography")
 geo.load_from_csv()
 
-# Load all venues (auto-discovers all CSV files)
+# Load venues from YAML config
 venues = VenueManager(geography=geo, data_dir="data/venues")
-venues.load_from_csv()
+venues.load_from_yaml_config("venues_config.yaml")
+```
 
-# Or load specific types
-venues.load_from_csv(venue_types=["hospital", "school"])
+The main `config.yaml` file specifies which YAML configuration to use:
+```yaml
+venues:
+  config_file: "venues_config.yaml"
 ```
 
 ## Notes
