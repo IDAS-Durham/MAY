@@ -1770,6 +1770,145 @@ class HouseholdDistributor:
 
         return stats
 
+    def promote_with_rules(self,
+                          promotion_rules: List[Dict],
+                          refresh_pools: bool = False,
+                          round_name: Optional[str] = None):
+        """
+        Promote households according to specific rules.
+
+        Each rule specifies:
+          - source_pattern: Original pattern to match (e.g., "0 0 2 0")
+          - target_pattern: Promoted pattern (e.g., "0 >=0 2 0")
+          - accept_categories: Which categories can be added
+          - max_to_add: Maximum people to add to this household
+
+        Args:
+            promotion_rules: List of promotion rule dicts
+            refresh_pools: If True, refresh person pools
+            round_name: Optional name for this round
+
+        Returns:
+            dict: Statistics about this promotion allocation
+        """
+        self.current_round += 1
+        round_label = round_name or f"Rule-Based Promotion Round {self.current_round}"
+
+        logger.info("=" * 60)
+        logger.info(f"Starting rule-based promotion: {round_label}")
+        logger.info("=" * 60)
+        logger.info(f"Number of promotion rules: {len(promotion_rules)}")
+        logger.info("")
+
+        # Refresh pools if requested
+        if refresh_pools:
+            self._prepare_person_pools(refresh=True)
+
+        # Track statistics
+        people_added = 0
+        households_promoted_count = 0
+        promoted_households = set()
+
+        # Process each rule
+        for rule_idx, rule in enumerate(promotion_rules):
+            source_pattern = rule.get('source_pattern')
+            target_pattern = rule.get('target_pattern')
+            accept_categories = rule.get('accept_categories', [])
+            max_to_add = rule.get('max_to_add')
+
+            if not source_pattern or not target_pattern:
+                logger.warning(f"Rule {rule_idx}: Missing source_pattern or target_pattern, skipping")
+                continue
+
+            logger.info(f"Rule {rule_idx + 1}: {source_pattern} → {target_pattern} (categories: {accept_categories})")
+
+            # Find households matching source pattern
+            for household in self.households:
+                actual_pattern = household.properties.get('actual_pattern', '')
+
+                if actual_pattern != source_pattern:
+                    continue
+
+                area_code = household.geographical_unit.name
+
+                if area_code not in self.person_pool_by_area:
+                    continue
+
+                pools = self.person_pool_by_area[area_code]
+
+                # Try to add people from each accepted category
+                added_to_this_household = 0
+
+                for category_name in accept_categories:
+                    cat_idx = self.category_name_to_idx.get(category_name)
+                    if cat_idx is None:
+                        continue
+
+                    available_people = pools[cat_idx]
+                    if not available_people:
+                        continue
+
+                    # Determine how many we can add
+                    if max_to_add is not None:
+                        can_add = min(max_to_add - added_to_this_household, len(available_people))
+                    else:
+                        can_add = len(available_people)
+
+                    if can_add <= 0:
+                        continue
+
+                    # Promote household if this is the first person we're adding
+                    if added_to_this_household == 0 and household.id not in promoted_households:
+                        household.properties['actual_pattern'] = target_pattern
+                        households_promoted_count += 1
+                        promoted_households.add(household.id)
+                        logger.debug(f"  Promoted household {household.id}: {source_pattern} → {target_pattern}")
+
+                    # Add people
+                    for _ in range(can_add):
+                        if not available_people:
+                            break
+                        if max_to_add is not None and added_to_this_household >= max_to_add:
+                            break
+
+                        person = available_people.pop(0)
+                        household.add_resident(person)
+                        self.allocated_people.add(person.id)
+                        added_to_this_household += 1
+                        people_added += 1
+
+                if added_to_this_household > 0:
+                    logger.debug(f"  Added {added_to_this_household} people to household {household.id}")
+
+        # Statistics
+        stats = {
+            'round_name': round_label,
+            'round_number': self.current_round,
+            'people_added': people_added,
+            'households_promoted': households_promoted_count,
+            'total_people_allocated': len(self.allocated_people),
+            'total_people_remaining': len(self.population.get_all_people()) - len(self.allocated_people)
+        }
+
+        # Get remaining people by category
+        remaining_by_category = self.get_available_people_by_category()
+
+        # Log summary
+        logger.info("=" * 60)
+        logger.info(f"{round_label} complete!")
+        logger.info(f"  Households promoted: {households_promoted_count:,}")
+        logger.info(f"  People added: {people_added:,}")
+        logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
+        logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
+        logger.info("")
+        logger.info("  Remaining by category:")
+        for cat_name in [cat.name for cat in self.age_categories]:
+            count = remaining_by_category.get(cat_name, 0)
+            logger.info(f"    {cat_name}: {count:,}")
+        logger.info("=" * 60)
+
+        return stats
+
     def _sample_from_distribution(self, distribution_config: Dict) -> int:
         """
         Sample a number from a configured distribution.

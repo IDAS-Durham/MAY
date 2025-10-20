@@ -243,7 +243,7 @@ steps:
     refresh_pools: false 
 
   # =============================================
-  # Step 12: Add Young Adults to Families (Household Excess)
+  # Step 13: Add Young Adults to Families (Household Excess)
   # =============================================
   - name: "Add Young Adults to Families"
     type: "household_excess"
@@ -269,7 +269,7 @@ steps:
     refresh_pools: false 
 
   # =============================================
-  # Step 12: Add Young Adults to multigenerational families (Household Excess)
+  # Step 14: Add Young Adults to multigenerational families (Household Excess)
   # =============================================
   - name: "Add Young Adults to multi-generational Families"
     type: "household_excess"
@@ -295,7 +295,7 @@ steps:
     refresh_pools: false 
 
   # =============================================
-  # Step 12: Add Elderly to multi-generational families (Household Excess)
+  # Step 15: Add Elderly to multi-generational families (Household Excess)
   # =============================================
   - name: "Add Elderly to multi-generational Families"
     type: "household_excess"
@@ -321,7 +321,7 @@ steps:
     refresh_pools: false 
 
   # =============================================
-  # Step 12: Add Eldelery to multi elderly households (Household Excess)
+  # Step 16: Add Eldelery to multi elderly households (Household Excess)
   # =============================================
   - name: "Add Elderly to multi elderly households"
     type: "household_excess"
@@ -345,7 +345,7 @@ steps:
     max_per_household: null  # No hard limit (constraints handle max)
     refresh_pools: false 
   # =============================================
-  # Step 12: Add Adults to multi-generational families (Household Excess)
+  # Step 17: Add Adults to multi-generational families (Household Excess)
   # =============================================
   - name: "Add Adults to multi-generational Families"
     type: "household_excess"
@@ -370,7 +370,7 @@ steps:
     max_per_household: null  # No hard limit (constraints handle max)
     refresh_pools: false 
   # =============================================
-  # Step 6: Flexible Households (Households)
+  # Step 18: Flexible Households (Households)
   # =============================================
   - name: "Flexible households"
     type: "household"
@@ -438,6 +438,32 @@ steps:
 
     max_per_household: null  # No hard limit (constraints handle max)
     refresh_pools: false 
+  
+  # Controlled promotion with specific rules
+  - name: "Promote households for specific categories"
+    type: "household_promotion"
+    description: "Promote household patterns with controlled rules"
+
+    promotion_rules:
+      # Allow couples to accept young adults (roommates/adult children)
+      - source_pattern: "0 0 2 0"
+        target_pattern: ">=0 >=0 2 0"
+        accept_categories: ["Kids", "Young Adults"]
+        max_to_add: 3
+
+      # Allow single adults to become multi-adult households
+      - source_pattern: "0 0 1 0"
+        target_pattern: ">=0 >=0 2 0"
+        accept_categories: ["Kids", "Young Adults", "Adults"]
+        max_to_add: 4
+
+      # Allow elderly couples to accept more elderly
+      - source_pattern: "0 0 0 1"
+        target_pattern: "0 0 0 2"
+        accept_categories: ["Old Adults"]
+        max_to_add: 1
+
+    refresh_pools: true
 
   # Final desperation round - allocate ALL remaining Young Adults
   - name: "Overflow remaining Young Adults"
@@ -466,7 +492,7 @@ steps:
       "1 >=0 >=0 >=0": 1.0
       ">=2 >=0 >=0 >=0": 1.0
 
-    refresh_pools: true
+    refresh_pools: false
 
   # Final desperation round - allocate ALL remaining Young Adults
   - name: "Overflow remaining Adults"
@@ -485,7 +511,7 @@ steps:
       "1 >=0 >=0 >=0": 1.0
       ">=2 >=0 >=0 >=0": 1.0
 
-    refresh_pools: true
+    refresh_pools: false
 
   # Final desperation round - allocate ALL remaining Young Adults
   - name: "Overflow remaining Old Adults"
@@ -504,7 +530,7 @@ steps:
       "1 >=0 >=0 >=0": 1.0
       ">=2 >=0 >=0 >=0": 1.0
 
-    refresh_pools: true
+    refresh_pools: false
   # Final step: Promote households to accommodate ALL remaining people
   - name: "Promote and allocate all remaining"
     type: "household_promotion"
@@ -516,7 +542,7 @@ steps:
       - "Adults"
       - "Old Adults"
 
-    refresh_pools: true
+    refresh_pools: false
 
 
 # =============================================

@@ -321,9 +321,8 @@ def _execute_household_promotion_step(step_config: Dict, households) -> Dict:
     """
     Execute a household promotion allocation step.
 
-    This step promotes existing households to allow more people by converting exact
-    counts to flexible (>=) constraints, then adds ALL remaining people of specified
-    categories.
+    This step promotes existing households according to specific rules,
+    allowing controlled acceptance of remaining people.
 
     Args:
         step_config: Configuration dict for this step
@@ -332,23 +331,33 @@ def _execute_household_promotion_step(step_config: Dict, households) -> Dict:
     Returns:
         dict: Statistics for this step
     """
-    target_categories = step_config.get('target_categories', [])
+    promotion_rules = step_config.get('promotion_rules', [])
+    target_categories = step_config.get('target_categories', [])  # Fallback to simple mode
     refresh_pools = step_config.get('refresh_pools', False)
     round_name = step_config.get('name', 'Household Promotion Round')
 
-    if not target_categories:
-        logger.error("No 'target_categories' specified for household_promotion step")
+    if not promotion_rules and not target_categories:
+        logger.error("No 'promotion_rules' or 'target_categories' specified for household_promotion step")
         return {
             'people_added': 0,
             'households_promoted': 0,
-            'error': "Missing 'target_categories' parameter"
+            'error': "Missing 'promotion_rules' or 'target_categories' parameter"
         }
 
-    stats = households.promote_and_allocate(
-        target_categories=target_categories,
-        refresh_pools=refresh_pools,
-        round_name=round_name
-    )
+    if promotion_rules:
+        # Rule-based promotion (controlled)
+        stats = households.promote_with_rules(
+            promotion_rules=promotion_rules,
+            refresh_pools=refresh_pools,
+            round_name=round_name
+        )
+    else:
+        # Simple promotion (all categories)
+        stats = households.promote_and_allocate(
+            target_categories=target_categories,
+            refresh_pools=refresh_pools,
+            round_name=round_name
+        )
 
     return stats
 
