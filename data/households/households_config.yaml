@@ -63,12 +63,98 @@ demotion:
   min_household_size: 1
 
   # Priority order for demotion (which category to demote first)
-  # Higher priority = demote first
+  # LOWER NUMBER = DEMOTE FIRST (when that category is scarce)
+  # Strategy: Demote scarce/flexible categories first, preserve essential ones
   priority:
-    Kids: 1           # Demote kids count first
-    Young Adults: 2   # Then young adults
+    Kids: 1           # Demote kids first (often scarce, flexible count)
+    Young Adults: 2   # Then young adults (moderately flexible)
+    Old Adults: 3     # Then old adults (moderately essential)
+    Adults: 4         # Demote adults LAST (essential for supervision/stability)
+
+  # Validation rules for demoted patterns
+  # Rules define constraints that must be satisfied for a pattern to be valid
+  # Each rule is evaluated during demotion, and invalid patterns are rejected
+  #
+  # Rule format:
+  #   - condition: Defines when the rule applies
+  #   - requirement: What must be true when condition is met
+  #
+  # Supported operators in conditions/requirements:
+  #   - ">=": greater than or equal
+  #   - ">": greater than
+  #   - "==": equal to
+  #   - "<=": less than or equal
+  #   - "<": less than
+  #
+  # Special values:
+  #   - Use category names: Kids, Young Adults, Adults, Old Adults
+  #
+  # Example: "If Kids >= 1, then Adults must be >= 1"
+  #   This ensures children are never left without adult supervision
+  validation_rules:
+    - name: "Kids require adult supervision"
+      description: "If there are kids in the household, there must be at least one adult"
+      condition:
+        category: "Kids"
+        operator: ">="
+        value: 1
+      requirement:
+        category: "Adults"
+        operator: ">="
+        value: 1
+
+    # Example: Add more rules as needed
+    # - name: "Old adults should have care"
+    #   description: "If 2+ old adults, ensure at least 1 regular adult for care"
+    #   condition:
+    #     category: "Old Adults"
+    #     operator: ">="
+    #     value: 2
+    #   requirement:
+    #     category: "Adults"
+    #     operator: ">="
+    #     value: 1
+
+# Promotion rules
+# When there are leftover people after all allocations,
+# we can "promote" existing household patterns to allow more people.
+#
+# Promotion converts fixed counts to flexible (>=) constraints:
+#   - "0" -> ">=0" (allow any number)
+#   - "0" -> ">=1" (require at least 1)
+#   - "1" -> ">=1" (allow 1 or more)
+#
+# This allows filling existing households beyond their original pattern
+# while maintaining geographical constraints.
+
+promotion:
+  # Enable automatic promotion to accommodate leftover people
+  enabled: true
+
+  # Maximum number of promotion attempts per household
+  max_attempts: 4
+
+  # Priority order for promotion (which category to promote first)
+  # LOWER NUMBER = PROMOTE FIRST (to accommodate leftover people)
+  # Strategy: Promote flexible/scarce categories first
+  priority:
+    Young Adults: 1   # Promote young adults first (often leftover)
+    Adults: 2         # Then adults
     Old Adults: 3     # Then old adults
-    Adults: 4         # Demote adults last (most stable category)
+    Kids: 4           # Promote kids last (need supervision)
+
+  # Validation rules for promoted patterns (same format as demotion)
+  validation_rules:
+    - name: "Kids require adult supervision"
+      description: "If there are kids in the household, there must be at least one adult"
+      condition:
+        category: "Kids"
+        operator: ">="
+        value: 1
+      requirement:
+        category: "Adults"
+        operator: ">="
+        value: 1
 
 # Allocation strategy
 allocation:

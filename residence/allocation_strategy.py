@@ -8,12 +8,12 @@ import os
 import logging
 import yaml
 from typing import Dict, List
-from venue_allocator import _allocate_to_venue_type
+from .venue_allocator import _allocate_to_venue_type
 
 logger = logging.getLogger("allocation_strategy")
 
 
-def execute_allocation_strategy(geography, population, venues, households,
+def execute_allocation_strategy(population, venues, households,
                                 strategy_file: str = "data/households/allocation_strategy.yaml"):
     """
     Execute a unified allocation strategy from YAML configuration.
@@ -22,7 +22,6 @@ def execute_allocation_strategy(geography, population, venues, households,
     sequence defined in the YAML file.
 
     Args:
-        geography: Geography object
         population: PopulationManager
         venues: VenueManager
         households: HouseholdDistributor
@@ -68,7 +67,7 @@ def execute_allocation_strategy(geography, population, venues, households,
         step_type = step_config.get('type')
         step_name = step_config.get('name', f'Step {step_number}')
 
-        if step_type not in ['household', 'venue']:
+        if step_type not in ['household', 'venue', 'household_excess', 'household_overflow', 'household_promotion']:
             logger.warning(f"Unknown step type '{step_type}' for step '{step_name}', skipping")
             continue
 
@@ -86,6 +85,12 @@ def execute_allocation_strategy(geography, population, venues, households,
             stats = _execute_household_step(step_config, households)
         elif step_type == 'venue':
             stats = _execute_venue_step(step_config, population, venues, households)
+        elif step_type == 'household_excess':
+            stats = _execute_household_excess_step(step_config, households)
+        elif step_type == 'household_overflow':
+            stats = _execute_household_overflow_step(step_config, households)
+        elif step_type == 'household_promotion':
+            stats = _execute_household_promotion_step(step_config, households)
 
         all_stats[step_name] = {
             'type': step_type,
@@ -104,6 +109,8 @@ def execute_allocation_strategy(geography, population, venues, households,
 
     total_household_alloc = 0
     total_venue_alloc = 0
+    total_excess_alloc = 0
+    total_overflow_alloc = 0
 
     for step_name, stats in all_stats.items():
         logger.info(f"{stats['step_number']}. {step_name} ({stats['type']}):")
@@ -122,11 +129,34 @@ def execute_allocation_strategy(geography, population, venues, households,
             logger.info(f"   People: {allocated:,}")
             total_venue_alloc += allocated
 
+        elif stats['type'] == 'household_excess':
+            people_added = stats.get('people_added', 0)
+            households_modified = stats.get('households_modified', 0)
+            logger.info(f"   Households modified: {households_modified:,}")
+            logger.info(f"   People added: {people_added:,}")
+            total_excess_alloc += people_added
+
+        elif stats['type'] == 'household_overflow':
+            people_added = stats.get('people_added', 0)
+            households_modified = stats.get('households_modified', 0)
+            logger.info(f"   Households modified: {households_modified:,}")
+            logger.info(f"   People added (overflow): {people_added:,}")
+            total_overflow_alloc += people_added
+
+        elif stats['type'] == 'household_promotion':
+            people_added = stats.get('people_added', 0)
+            households_promoted = stats.get('households_promoted', 0)
+            logger.info(f"   Households promoted: {households_promoted:,}")
+            logger.info(f"   People added (promotion): {people_added:,}")
+            total_overflow_alloc += people_added  # Count with overflow
+
         logger.info("")
 
     logger.info("Overall Totals:")
     logger.info(f"  Total households: {len(households.households):,}")
-    logger.info(f"  People in households: {total_household_alloc:,}")
+    logger.info(f"  People in households (initial): {total_household_alloc:,}")
+    logger.info(f"  People added to households (excess): {total_excess_alloc:,}")
+    logger.info(f"  People added to households (overflow): {total_overflow_alloc:,}")
     logger.info(f"  People in venues: {total_venue_alloc:,}")
     logger.info(f"  Total allocated: {len(households.allocated_people):,}")
     logger.info(f"  Remaining unallocated: {households.get_available_people_count():,}")
@@ -154,7 +184,33 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
     max_households = step_config.get('max_households')
     refresh_pools = step_config.get('refresh_pools', False)
     enable_demotion = step_config.get('enable_demotion')
+    max_household_size = step_config.get('max_household_size')
+    allocate_flexible = step_config.get('allocate_flexible', False)
     round_name = step_config.get('name', 'Household Round')
+
+    # Process patterns to extract assumptions
+    # Patterns can be either:
+    #   - Simple strings: "0 >=0 0 0"
+    #   - Dicts with pattern and assumption: {pattern: "0 >=0 0 0", assumption: "0 2 0 0"}
+    pattern_list = None
+    pattern_assumptions = {}
+
+    if patterns is not None:
+        pattern_list = []
+        for p in patterns:
+            if isinstance(p, dict):
+                # New format with assumption
+                pattern_str = p.get('pattern')
+                assumption_str = p.get('assumption')
+
+                if pattern_str:
+                    pattern_list.append(pattern_str)
+                    if assumption_str:
+                        pattern_assumptions[pattern_str] = assumption_str
+                        logger.info(f"  Pattern '{pattern_str}' has assumption: '{assumption_str}'")
+            else:
+                # Old format (simple string)
+                pattern_list.append(p)
 
     # Temporarily override demotion if specified
     original_demotion = None
@@ -164,8 +220,11 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
 
     try:
         stats = households.distribute_households_round(
-            pattern_filter=patterns,
+            pattern_filter=pattern_list,
+            pattern_assumptions=pattern_assumptions,
             max_households=max_households,
+            max_household_size=max_household_size,
+            allocate_flexible=allocate_flexible,
             refresh_pools=refresh_pools,
             round_name=round_name
         )
@@ -174,6 +233,124 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
         # Restore original demotion setting
         if original_demotion is not None:
             households.config['demotion']['enabled'] = original_demotion
+
+
+def _execute_household_excess_step(step_config: Dict, households) -> Dict:
+    """
+    Execute a household excess allocation step.
+
+    This step adds people to existing households created in previous steps.
+
+    Args:
+        step_config: Configuration dict for this step
+        households: HouseholdDistributor
+
+    Returns:
+        dict: Statistics for this step
+    """
+    target_patterns = step_config.get('target_patterns', [])
+    add_category = step_config.get('add_category')
+    constraints = step_config.get('constraints')
+    max_per_household = step_config.get('max_per_household')
+    add_distribution = step_config.get('add_distribution')
+    refresh_pools = step_config.get('refresh_pools', False)
+    round_name = step_config.get('name', 'Household Excess Round')
+
+    if not add_category:
+        logger.error("No 'add_category' specified for household_excess step")
+        return {
+            'people_added': 0,
+            'households_modified': 0,
+            'error': "Missing 'add_category' parameter"
+        }
+
+    stats = households.allocate_excess_to_households(
+        target_patterns=target_patterns,
+        add_category=add_category,
+        constraints=constraints,
+        max_per_household=max_per_household,
+        add_distribution=add_distribution,
+        refresh_pools=refresh_pools,
+        round_name=round_name
+    )
+
+    return stats
+
+
+def _execute_household_overflow_step(step_config: Dict, households) -> Dict:
+    """
+    Execute a household overflow allocation step.
+
+    This step adds ALL remaining people from a category to existing households,
+    IGNORING max household size constraints. People are distributed balancedly
+    across eligible households with optional pattern biasing.
+
+    Args:
+        step_config: Configuration dict for this step
+        households: HouseholdDistributor
+
+    Returns:
+        dict: Statistics for this step
+    """
+    target_patterns = step_config.get('target_patterns', [])
+    add_category = step_config.get('add_category')
+    pattern_bias = step_config.get('pattern_bias', {})  # e.g., {"0 >=0 0 0": 2.0}
+    refresh_pools = step_config.get('refresh_pools', False)
+    round_name = step_config.get('name', 'Household Overflow Round')
+
+    if not add_category:
+        logger.error("No 'add_category' specified for household_overflow step")
+        return {
+            'people_added': 0,
+            'households_modified': 0,
+            'error': "Missing 'add_category' parameter"
+        }
+
+    stats = households.allocate_overflow_to_households(
+        target_patterns=target_patterns,
+        add_category=add_category,
+        pattern_bias=pattern_bias,
+        refresh_pools=refresh_pools,
+        round_name=round_name
+    )
+
+    return stats
+
+
+def _execute_household_promotion_step(step_config: Dict, households) -> Dict:
+    """
+    Execute a household promotion allocation step.
+
+    This step promotes existing households to allow more people by converting exact
+    counts to flexible (>=) constraints, then adds ALL remaining people of specified
+    categories.
+
+    Args:
+        step_config: Configuration dict for this step
+        households: HouseholdDistributor
+
+    Returns:
+        dict: Statistics for this step
+    """
+    target_categories = step_config.get('target_categories', [])
+    refresh_pools = step_config.get('refresh_pools', False)
+    round_name = step_config.get('name', 'Household Promotion Round')
+
+    if not target_categories:
+        logger.error("No 'target_categories' specified for household_promotion step")
+        return {
+            'people_added': 0,
+            'households_promoted': 0,
+            'error': "Missing 'target_categories' parameter"
+        }
+
+    stats = households.promote_and_allocate(
+        target_categories=target_categories,
+        refresh_pools=refresh_pools,
+        round_name=round_name
+    )
+
+    return stats
 
 
 def _execute_venue_step(step_config: Dict, population, venues, households) -> Dict:

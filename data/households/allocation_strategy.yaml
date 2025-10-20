@@ -36,7 +36,87 @@ steps:
     enable_demotion: null
 
   # =============================================
-  # Step 2: Elderly to Care Homes (Venues)
+  # Step 2: Mixed/Flexible Households
+  # =============================================
+  - name: "Multi-generational Households"
+    type: "household"
+    description: "Multi-generational households"
+
+    patterns:
+      - pattern: ">=2 >=0 >=0 >=0"
+        assumption: "2 0 1 1"
+      - pattern: "1 >=0 >=0 >=0"
+        assumption: "1 0 1 1"
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 3: Families with Young Adults (no kids) (Households)
+  # =============================================
+  - name: "Families with YA no kids"
+    type: "household"
+    description: "Allocate families with Young Adults, no kids"
+
+    patterns:
+      - "0 >=1 2 0"
+      - "0 >=1 1 0"
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+
+  # =============================================
+  # Step 4: Elderly Couples (Households)
+  # =============================================
+  - name: "Elderly households"
+    type: "household"
+    description: "Allocate elderly to elderly-only households"
+
+    patterns:
+      - "0 0 0 2"       # 2 old adults
+      - "0 0 0 1"
+
+    max_households: null
+    refresh_pools: false  # Refresh to exclude care home residents
+    enable_demotion: null
+
+   # =============================================
+  # Step 5: Adult-Only Households
+  # =============================================
+  - name: "Adult-Only Households"
+    type: "household"
+    description: "Allocate adult couples and singles"
+
+    patterns:
+      - "0 0 2 0"       # 2 adults
+      - "0 0 1 0"       # 1 adult
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+
+  # =============================================
+  # Step 6: Young Adult Pairs (Households)
+  # =============================================
+  - name: "Young Adult Pairs (with assumption)"
+    type: "household"
+    description: "Allocate young adults to paired households"
+
+    patterns:
+      - pattern: "0 >=0 0 0"     # Flexible young adults (any number)
+        assumption: "0 2 0 0"    # Assume pairs of 2 young adults
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+
+  # =============================================
+  # Step 7: Elderly to Care Homes (Venues)
   # =============================================
   - name: "Elderly to Care Homes"
     type: "venue"
@@ -46,7 +126,7 @@ steps:
     capacity_property: "capacity"
 
     eligibility:
-      min_age: 75
+      min_age: 65
       max_age: null
       sex: null
 
@@ -54,7 +134,7 @@ steps:
     max_allocations: null
 
   # =============================================
-  # Step 3: Students to Dormitories (Venues)
+  # Step 8: Students to Dormitories (Venues)
   # =============================================
   - name: "Students to Dormitories"
     type: "venue"
@@ -71,14 +151,13 @@ steps:
     max_allocations: null
 
   # =============================================
-  # Step 4: Elderly Couples (Households)
+  # Step 9: Multi-Elderly  (Households)
   # =============================================
-  - name: "Elderly Couples"
+  - name: "Multi-elderly"
     type: "household"
-    description: "Allocate remaining elderly to household couples"
+    description: "Allocate remaining elderly to multi-elderly household"
 
     patterns:
-      - "0 0 0 2"       # 2 old adults
       - "0 0 0 >=3"     # 3+ old adults
 
     max_households: null
@@ -86,62 +165,359 @@ steps:
     enable_demotion: null
 
   # =============================================
-  # Step 5: Young Adult Households
+  # Step 10: Add Excess Kids to Families (Household Excess)
   # =============================================
-  - name: "Young Adult Households"
+  - name: "Add Excess kids to Family households"
+    type: "household_excess"
+    description: "Add remaining kids to existing kids households"
+
+    target_patterns:
+      - ">=2 >=0 2 0"
+      - ">=2 >=0 1 0"
+      - ">=2 >=0 >=0 >=0"
+
+    add_category: "Kids"
+
+    constraints:
+      - category_sum: ["Kids"]
+        max: 4
+
+    add_distribution:
+      type: "poisson"
+      mean: 2
+      min: 0     
+      max: 4     
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: true  # Refresh to get remaining young adults after dorm allocation
+
+  # =============================================
+  # Step 11: Add Young Adults to Young Adult households (Household Excess)
+  # =============================================
+  - name: "Add Young Adults to Young Adults households"
+    type: "household_excess"
+    description: "Add remaining young adults to existing young adult households"
+
+    target_patterns:
+      - "0 >=0 0 0"
+
+    add_category: "Young Adults"
+
+    constraints:
+      - category_sum: ["Young Adults"]
+        max: 6
+
+    add_distribution:
+      type: "poisson"
+      mean: 4
+      min: 0     
+      max: 6   
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: true  # Refresh to get remaining young adults after dorm allocation
+
+  # =============================================
+  # Step 12: Add Young Adults to Families without Kids (Household Excess)
+  # =============================================
+  - name: "Add Young Adults to Families without Kids"
+    type: "household_excess"
+    description: "Add remaining young adults to existing family households without kids"
+
+    target_patterns:
+      - "0 >=1 2 0"
+      - "0 >=1 1 0"
+
+    add_category: "Young Adults"
+
+    constraints:
+      - category_sum: ["Young Adults"]
+        max: 4
+
+    add_distribution:
+      type: "poisson"
+      mean: 2
+      min: 0  
+      max: 8    
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+
+  # =============================================
+  # Step 12: Add Young Adults to Families (Household Excess)
+  # =============================================
+  - name: "Add Young Adults to Families"
+    type: "household_excess"
+    description: "Add remaining young adults to existing family households"
+
+    target_patterns:
+      - ">=2 >=0 2 0"   # Families with 2+ kids, 2 adults
+      - "1 >=0 2 0"     # Families with 1 kid, 2 adults
+
+    add_category: "Young Adults"
+
+    constraints:
+      - category_sum: ["Kids", "Young Adults"]
+        max: 8
+
+    add_distribution:
+      type: "poisson"
+      mean: 2
+      min: 0     
+      max: 8     
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+
+  # =============================================
+  # Step 12: Add Young Adults to multigenerational families (Household Excess)
+  # =============================================
+  - name: "Add Young Adults to multi-generational Families"
+    type: "household_excess"
+    description: "Add remaining young adults to existing multi generational family households"
+
+    target_patterns:
+      - "1 >=0 >=0 >=0"
+      - ">=2 >=0 >=0 >=0"
+
+    add_category: "Young Adults"
+
+    constraints:
+      - category_sum: ["Kids", "Young Adults"]
+        max: 6
+
+    add_distribution:
+      type: "poisson"
+      mean: 3
+      min: 0  
+      max: 4   
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+
+  # =============================================
+  # Step 12: Add Elderly to multi-generational families (Household Excess)
+  # =============================================
+  - name: "Add Elderly to multi-generational Families"
+    type: "household_excess"
+    description: "Add remaining old adults to existing multi generational family households"
+
+    target_patterns:
+      - "1 >=0 >=0 >=0"
+      - ">=2 >=0 >=0 >=0"
+
+    add_category: "Old Adults"
+
+    constraints:
+      - category_sum: ["Old Adults"]
+        max: 2
+
+    add_distribution:
+      type: "poisson"
+      mean: 1
+      min: 0  
+      max: 2  
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+
+  # =============================================
+  # Step 12: Add Eldelery to multi elderly households (Household Excess)
+  # =============================================
+  - name: "Add Elderly to multi elderly households"
+    type: "household_excess"
+    description: "Add remaining old adults to existing multi elderly households"
+
+    target_patterns:
+      - "0 0 0 >=3"
+
+    add_category: "Old Adults"
+
+    constraints:
+      - category_sum: ["Old Adults"]
+        max: 8
+
+    add_distribution:
+      type: "poisson"
+      mean: 6
+      min: 0      
+      max: 8  
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+  # =============================================
+  # Step 12: Add Adults to multi-generational families (Household Excess)
+  # =============================================
+  - name: "Add Adults to multi-generational Families"
+    type: "household_excess"
+    description: "Add remaining adults to existing multi generational family households"
+
+    target_patterns:
+      - "1 >=0 >=0 >=0"
+      - ">=2 >=0 >=0 >=0"
+
+    add_category: "Adults"
+
+    constraints:
+      - category_sum: ["Adults"]
+        max: 2
+
+    add_distribution:
+      type: "poisson"
+      mean: 1
+      min: 0
+      max: 2      
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+  # =============================================
+  # Step 6: Flexible Households (Households)
+  # =============================================
+  - name: "Flexible households"
     type: "household"
-    description: "Allocate young adults to shared households"
+    description: "Allocate anything (but kids) to flexible households"
 
     patterns:
-      - "0 >=0 0 0"     # Young adults only (any number)
+      - pattern: "0 >=0 >=0 >=0"
 
     max_households: null
-    refresh_pools: true  # Refresh to exclude dorm residents
-    enable_demotion: null
-
-  # =============================================
-  # Step 6: Adult-Only Households
-  # =============================================
-  - name: "Adult-Only Households"
-    type: "household"
-    description: "Allocate adult couples and singles"
-
-    patterns:
-      - "0 0 2 0"       # 2 adults
-      - "0 0 1 0"       # 1 adult
-      - "0 >=1 2 0"     # Young adults + 2 adults
-      - "0 >=1 1 0"     # Young adults + 1 adult
-
-    max_households: null
+    max_household_size: 10
+    allocate_flexible: true  # Randomly allocate people to flexible (>=) categories
     refresh_pools: false
     enable_demotion: null
 
-  # =============================================
-  # Step 7: Mixed/Flexible Households
-  # =============================================
-  - name: "Mixed Households"
-    type: "household"
-    description: "Allocate remaining people to flexible households"
+  - name: "Add Adults to flexible households"
+    type: "household_excess"
+    description: "Add Adults to flexible households"
 
-    patterns:
-      - "1 >=0 >=0 >=0"   # 1 kid, any other combo
-      - ">=2 >=0 >=0 >=0" # 2+ kids, any other combo
+    target_patterns:
+      - "0 >=0 >=0 >=0"
 
-    max_households: null
-    refresh_pools: false
-    enable_demotion: null
+    add_category: "Adults"
 
-  # =============================================
-  # Step 8: Final Cleanup (Households)
-  # =============================================
-  - name: "Final Cleanup"
-    type: "household"
-    description: "Allocate all remaining people to any compatible household"
+    constraints:
+      - category_sum: ["Young Adults", "Adults", "Old Adults"]
+        max: 10
 
-    patterns: null  # All remaining patterns
-    max_households: null
-    refresh_pools: true  # Good practice before final round
-    enable_demotion: null
+    add_distribution: null  
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+  
+  - name: "Add Old Adults to flexible households"
+    type: "household_excess"
+    description: "Add Old Adults to flexible households"
+
+    target_patterns:
+      - "0 >=0 >=0 >=0"
+
+    add_category: "Old Adults"
+
+    constraints:
+      - category_sum: ["Young Adults", "Adults", "Old Adults"]
+        max: 10
+
+    add_distribution: null  
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+
+  - name: "Add YA to flexible households"
+    type: "household_excess"
+    description: "Add YA to flexible households"
+
+    target_patterns:
+      - "0 >=0 >=0 >=0"
+
+    add_category: "Young Adults"
+
+    constraints:
+      - category_sum: ["Young Adults", "Adults", "Old Adults"]
+        max: 10
+
+    add_distribution: null  
+
+    max_per_household: null  # No hard limit (constraints handle max)
+    refresh_pools: false 
+
+  # Final desperation round - allocate ALL remaining Young Adults
+  - name: "Overflow remaining Young Adults"
+    type: "household_overflow"
+    description: "Distribute ALL remaining Young Adults balancedly across flexible households"
+
+    target_patterns:
+      - "0 >=0 >=0 >=0"   # Flexible households
+      - "0 >=0 0 0"
+      - "0 >=1 2 0"       # Some other pattern
+      - "0 >=1 1 0"
+      - "2 >=0 2 0"
+      - "2 >=0 1 0"
+      - "1 >=0 >=0 >=0"
+      - ">=2 >=0 >=0 >=0"
+
+    add_category: "Young Adults"
+
+    pattern_bias:
+      "0 >=0 >=0 >=0": 2.0
+      "0 >=0 0 0": 5.0
+      "0 >=1 2 0": 1.0  
+      "0 >=1 1 0": 1.0
+      "2 >=0 2 0": 1.0
+      "2 >=0 1 0": 1.0
+      "1 >=0 >=0 >=0": 1.0
+      ">=2 >=0 >=0 >=0": 1.0
+
+    refresh_pools: true
+
+  # Final desperation round - allocate ALL remaining Young Adults
+  - name: "Overflow remaining Adults"
+    type: "household_overflow"
+    description: "Distribute ALL remaining Adults balancedly across flexible households"
+
+    target_patterns:
+      - "0 >=0 >=0 >=0"   # Flexible households
+      - "1 >=0 >=0 >=0"
+      - ">=2 >=0 >=0 >=0"
+
+    add_category: "Adults"
+
+    pattern_bias:
+      "0 >=0 >=0 >=0": 10.0
+      "1 >=0 >=0 >=0": 1.0
+      ">=2 >=0 >=0 >=0": 1.0
+
+    refresh_pools: true
+
+  # Final desperation round - allocate ALL remaining Young Adults
+  - name: "Overflow remaining Old Adults"
+    type: "household_overflow"
+    description: "Distribute ALL remaining Old Adults balancedly across flexible households"
+
+    target_patterns:
+      - "0 >=0 >=0 >=0"   # Flexible households
+      - "1 >=0 >=0 >=0"
+      - ">=2 >=0 >=0 >=0"
+
+    add_category: "Old Adults"
+
+    pattern_bias:
+      "0 >=0 >=0 >=0": 10.0
+      "1 >=0 >=0 >=0": 1.0
+      ">=2 >=0 >=0 >=0": 1.0
+
+    refresh_pools: true
+  # Final step: Promote households to accommodate ALL remaining people
+  - name: "Promote and allocate all remaining"
+    type: "household_promotion"
+    description: "Promote household patterns and allocate ALL remaining people"
+
+    target_categories:
+      - "Kids"
+      - "Young Adults"
+      - "Adults"
+      - "Old Adults"
+
+    refresh_pools: true
+
 
 # =============================================
 # CONFIGURATION OPTIONS
@@ -149,6 +525,8 @@ steps:
 
 # For household steps:
 #   - patterns: List of household composition patterns, or null for "all"
+#     Can be simple strings: "0 >=0 0 0"
+#     Or dicts with assumptions: {pattern: "0 >=0 0 0", assumption: "0 2 0 0"}
 #   - max_households: Limit number of households (null = no limit)
 #   - refresh_pools: Rebuild person pools (true/false)
 #   - enable_demotion: Override global demotion setting (null = use global)
@@ -162,6 +540,30 @@ steps:
 #     - sex: Filter by sex (null = any, "male"/"female")
 #   - strategy: Allocation strategy ("random", "oldest_first", "youngest_first")
 #   - max_allocations: Limit number of people (null = fill capacity)
+
+# For household_excess steps:
+#   - target_patterns: List of original patterns to target for adding people
+#   - add_category: Name of age category to add (e.g., "Young Adults", "Kids")
+#   - constraints: List of constraint dicts (optional)
+#     - category_sum: List of categories to sum together
+#       max: Maximum allowed sum
+#     - category: Single category name
+#       max: Maximum allowed count
+#     - household_size: true
+#       max: Maximum household size
+#   - add_distribution: Distribution for how many to add per household (optional)
+#     Types:
+#       - type: "weighted"
+#         probabilities: {0: 0.4, 1: 0.35, 2: 0.20, 3: 0.05}
+#       - type: "poisson"
+#         mean: 3.5    # Lambda parameter (controls peak/mode)
+#         min: 0       # Minimum value (default 0, set to 1 for zero-truncated)
+#         max: 6       # Maximum value (cap, default 10)
+#       - type: "normal"
+#         mean: 1.5
+#         std: 0.7
+#   - max_per_household: Max people to add per household (null = no limit)
+#   - refresh_pools: Rebuild person pools (true/false)
 
 # =============================================
 # TIPS

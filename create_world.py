@@ -237,20 +237,11 @@ def main():
 
     # Distribute households and venues based on configuration mode
     strategy_file = household_config.get("strategy_file")
-    rounds_file = household_config.get("rounds_file")
 
     if strategy_file:
         # Mode 1: Unified strategy (households + venues in order)
         logger.info(f"Using unified allocation strategy from {strategy_file}")
-        execute_allocation_strategy(geo, population, venues, households, strategy_file)
-    elif rounds_file:
-        # Mode 2: Multi-round households only (no venue integration)
-        logger.info(f"Using multi-round household allocation from {rounds_file}")
-        households.distribute_households_from_yaml(rounds_file)
-    else:
-        # Mode 3: Single-pass allocation (original simple mode)
-        logger.info("Using single-pass household allocation")
-        households.distribute_households()
+        execute_allocation_strategy(population, venues, households, strategy_file)
 
     # Export household allocations
     export_file = household_config.get("export_file", "household_allocations.csv")
