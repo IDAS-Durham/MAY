@@ -43,6 +43,9 @@ venues:
   # Path to YAML configuration file (relative to data/venues or absolute path)
   config_file: "venues_config.yaml"
 
+  # Export file for venue allocations (automatically created after allocation)
+  export_file: "venue_allocations.csv"
+
 # ========================================
 # HOUSEHOLDS
 # ========================================

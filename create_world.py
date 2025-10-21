@@ -247,6 +247,10 @@ def main():
     export_file = household_config.get("export_file", "household_allocations.csv")
     households.export_households_to_csv(export_file)
 
+    # Export venue allocations
+    venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
+    venues.export_venues_to_csv(venue_export_file)
+
     # Create World object
     logger.info("")
     logger.info("Creating World object...")

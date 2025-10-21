@@ -384,7 +384,10 @@ def _execute_venue_step(step_config: Dict, population, venues, households) -> Di
         'capacity_property': step_config.get('capacity_property', 'capacity'),
         'eligibility': step_config.get('eligibility', {}),
         'strategy': step_config.get('strategy', 'random'),
-        'max_allocations': step_config.get('max_allocations')
+        'max_allocations': step_config.get('max_allocations'),
+        # Attribute-aware allocation settings
+        'allocation_mode': step_config.get('allocation_mode', 'simple'),
+        'use_attribute_capacities': step_config.get('use_attribute_capacities', False)
     }
 
     # Use the existing venue allocator function

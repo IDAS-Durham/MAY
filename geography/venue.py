@@ -24,6 +24,78 @@ class Venue:
         self.coordinates = coordinates  # Optional (latitude, longitude) tuple
         self.properties = {}            # Extensible dict for venue-specific data
 
+    def get_capacity_for_attributes(self, capacity_config, **attributes):
+        """
+        Get capacity for specific attributes (e.g., age and sex).
+
+        This method looks up the appropriate capacity column based on the
+        provided attributes and the capacity_config from venues_config.yaml.
+
+        Args:
+            capacity_config: Capacity configuration dict from VenueManager
+            **attributes: Attribute filters (e.g., age=85, sex="male")
+
+        Returns:
+            int: Capacity for this attribute combination, or 0 if not found
+
+        Example:
+            venue.get_capacity_for_attributes(config, age=85, sex="male")
+            # Returns value from 'age_85_94_male' column
+        """
+        if not capacity_config:
+            return 0
+
+        # Get attribute capacities config
+        attr_capacities = capacity_config.get('attribute_capacities', {})
+        if not attr_capacities:
+            return 0
+
+        column_mappings = attr_capacities.get('column_mappings', {})
+        if not column_mappings:
+            return 0
+
+        # Find matching column
+        for column_name, criteria in column_mappings.items():
+            match = True
+
+            # Check each attribute provided by caller
+            for attr_name, attr_value in attributes.items():
+                # Handle age -> age_band mapping
+                if attr_name == 'age' and 'age_band' in criteria:
+                    min_val, max_val = criteria['age_band']
+                    if not (min_val <= attr_value <= max_val):
+                        match = False
+                        break
+
+                # Direct attribute match
+                elif attr_name in criteria:
+                    criterion = criteria[attr_name]
+
+                    # Handle range (list format)
+                    if isinstance(criterion, list):
+                        min_val, max_val = criterion
+                        if not (min_val <= attr_value <= max_val):
+                            match = False
+                            break
+
+                    # Handle categorical (exact match)
+                    else:
+                        if criterion != attr_value:
+                            match = False
+                            break
+
+                # Attribute not relevant for this column, skip
+                # (e.g., checking 'age' but column only has 'sex')
+                else:
+                    continue
+
+            if match:
+                # Found matching column, return its value
+                capacity = self.properties.get(column_name, 0)
+                return int(capacity) if capacity else 0
+
+        return 0
+
     def __repr__(self):
         geo_name = self.geographical_unit.name if self.geographical_unit else "None"
         return f"<Venue #{self.id}: {self.name} ({self.type}) in {geo_name}>"
@@ -46,6 +118,9 @@ class VenueManager:
 
         # Get set of loaded geographical unit names for filtering
         self._loaded_geo_units = set(self.geography.get_all_units().keys())
+
+        # Store capacity configurations by venue type
+        self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
     def _generate_id(self):
         """
@@ -225,6 +300,11 @@ class VenueManager:
             # Get filename (default: {venue_type}s.csv)
             filename = type_config.get('filename', f"{venue_type}s.csv")
 
+            # Store capacity_config if present
+            if 'capacity_config' in type_config:
+                self.capacity_configs[venue_type] = type_config['capacity_config']
+                logger.info(f"  Loaded capacity_config for {venue_type}")
+
             enabled_types.append((venue_type, filename))
 
         if disabled_types:
@@ -262,6 +342,104 @@ class VenueManager:
     def get_venue_types(self):
         """Get list of all venue types"""
         return list(self.venues_by_type.keys())
+
+    def get_capacity_config(self, venue_type):
+        """
+        Get capacity configuration for a venue type.
+
+        Args:
+            venue_type: Type of venue (e.g., "care_home")
+
+        Returns:
+            dict: Capacity configuration or None if not defined
+        """
+        return self.capacity_configs.get(venue_type)
+
+    def export_venues_to_csv(self, output_file: str = "venue_allocations.csv"):
+        """
+        Export all venue allocation data to a CSV file.
+
+        Creates a detailed CSV with:
+        - Venue ID
+        - Venue name
+        - Venue type
+        - Geographical unit
+        - Capacity information
+        - Number of residents allocated
+        - Breakdown by attribute slots (for attribute-aware venues)
+        - List of residents with age and sex
+
+        Args:
+            output_file: Path to output CSV file
+
+        Returns:
+            str: Path to created CSV file
+        """
+        logger.info(f"Exporting venue allocation data to {output_file}...")
+
+        rows = []
+        for venue in self.get_all_venues_list():
+            # Get basic info
+            residents = venue.properties.get('residents', [])
+
+            # Get capacity info
+            capacity_config = self.get_capacity_config(venue.type)
+            total_capacity = venue.properties.get('capacity', 0)
+
+            # Prepare resident details
+            resident_details = []
+            for person in residents:
+                resident_details.append(f"Person_{person.id}(age={person.age},sex={person.sex})")
+            residents_str = "; ".join(resident_details) if resident_details else ""
+
+            # Calculate age/sex breakdown
+            age_sex_breakdown = {}
+            for person in residents:
+                key = f"age_{person.age}_{person.sex}"
+                age_sex_breakdown[key] = age_sex_breakdown.get(key, 0) + 1
+
+            breakdown_str = ", ".join([f"{k}: {v}" for k, v in sorted(age_sex_breakdown.items())])
+
+            # For attribute-aware venues, get slot-level stats
+            slot_stats = {}
+            if capacity_config and 'attribute_capacities' in capacity_config:
+                column_mappings = capacity_config.get('attribute_capacities', {}).get('column_mappings', {})
+                for slot_name in column_mappings.keys():
+                    slot_residents = venue.properties.get(f'residents_{slot_name}', [])
+                    slot_capacity = venue.properties.get(slot_name, 0)
+                    if slot_capacity:
+                        slot_stats[slot_name] = f"{len(slot_residents)}/{slot_capacity}"
+
+            slot_stats_str = ", ".join([f"{k}: {v}" for k, v in sorted(slot_stats.items())])
+
+            # Create row
+            row = {
+                'venue_id': venue.id,
+                'venue_name': venue.name,
+                'venue_type': venue.type,
+                'geo_unit': venue.geographical_unit.name if venue.geographical_unit else 'None',
+                'total_capacity': total_capacity,
+                'num_residents': len(residents),
+                'capacity_used_pct': f"{(len(residents) / total_capacity * 100):.1f}" if total_capacity > 0 else "0.0",
+                'age_sex_breakdown': breakdown_str,
+                'attribute_slots': slot_stats_str if slot_stats_str else "N/A",
+                'residents': residents_str
+            }
+            rows.append(row)
+
+        # Create DataFrame and export
+        import pandas as pd
+        import os
+        df = pd.DataFrame(rows)
+
+        # Sort by venue type and ID
+        df = df.sort_values(['venue_type', 'venue_id'])
+
+        output_path = os.path.join(self.data_dir, output_file)
+        df.to_csv(output_path, index=False)
+
+        logger.info(f"Exported {len(rows)} venues to {output_path}")
+        return output_path
 
     def _log_summary(self):
         """Log summary statistics about venues"""
