@@ -60,3 +60,7 @@ Thumbs.db
 
 # Temporary files
 cw.txt
+
+# Debug scripts
+debug_scripts/
+
