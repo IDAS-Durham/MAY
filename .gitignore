@@ -64,3 +64,7 @@ cw.txt
 # Debug scripts
 debug_scripts/
 
+# Generated allocation files
+data/households/household_allocations.csv
+data/venues/venue_allocations.csv
+
