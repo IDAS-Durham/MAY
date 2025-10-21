@@ -384,7 +384,14 @@ class VenueManager:
 
             # Get capacity info
             capacity_config = self.get_capacity_config(venue.type)
-            total_capacity = venue.properties.get('capacity', 0)
+
+            # Get total capacity from the correct column based on venue type
+            if capacity_config and 'total_capacity_column' in capacity_config:
+                capacity_column = capacity_config['total_capacity_column']
+                total_capacity = venue.properties.get(capacity_column, 0)
+            else:
+                # Fallback to 'capacity' for venues without capacity_config
+                total_capacity = venue.properties.get('capacity', 0)
 
             # Prepare resident details
             resident_details = []

@@ -79,7 +79,7 @@ venue_types:
             sex: "female"
 
       # Fallback behavior when specific slots are full
-      fallback_strategy: "flexible"  # or "strict", "total_capacity"
+      fallback_strategy: "strict"  # or "strict", "total_capacity"
       # - "flexible": Allow overflow into other age/sex slots
       # - "strict": Only allocate to exact matches
       # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
