@@ -4,6 +4,9 @@ Person class for June Zero.
 Represents an individual agent with age, sex, geographical unit, and activities.
 """
 
+from collections import defaultdict
+from typing import DefaultDict, Optional
+
 class Person:
     """
     Represents an individual person in the simulation.
@@ -15,12 +18,12 @@ class Person:
         geographical_unit (GeographicalUnit): SGU where person lives
         activities (list): List of activity names this person can do
         properties (dict): Extensible dictionary for additional attributes
-        activity_map (dict):
+        activity_map (defaultdict):
     """
 
     _id_counter = 0
 
-    def __init__(self, age: float, sex: str, geographical_unit: "GeographicalUnit"=None, activities: list[str]=None, properties: dict=None, activity_map: dict[str,tuple[int,int,str]]={}):
+    def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"=None], activities: Optional[list[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
         """
         Initialize a Person.
 
@@ -44,7 +47,8 @@ class Person:
         self.geographical_unit = geographical_unit
         self.activities = activities if activities is not None else []
         self.properties = properties if properties is not None else {}
-        self.activity_map = activity_map
+        if activity_map is None:
+            self.activity_map = defaultdict([])
 
     @classmethod
     def reset_counter(cls):

@@ -1,26 +1,27 @@
 from abstract_set import AbstractSet
 
 class Subset(AbstractSet):
-    """A group within a group. For example, children in a household. """
+    """A subset of people within a particular Venue. For example, children in a household."""
 #    external = False
-    __slots__ = ("venue", "subset_type", "people")
+    __slots__ = ("venue", "subset_type", "people_present")
 
-    def __init__(self, venue: "Venue", subset_index: int, subset_name: str = None, people: list["Person"]=[]):
+    def __init__(self, venue: "Venue", subset_index: int, subset_name: str = None, people_present: list["Person"]=[], members: set["Person"]={}):
         """
         Args:
           venue (Venue): the location in which this subset is situated.
           subset_index (int): index of the subset within the Venue's contact matrix.
           subset_name (str, optional): the string denoting which subset this is within the Venue. Default is str(subset_index).
-          people (list[Person], optional): an optional list of people to immediately put in the subset. Default is []. 
+          people_present (list[Person], optional): an optional list of people to immediately put in the subset. Default is [].
+          members (set[Person], optional): an optional set of the people who might go to the subset if their activity comes up.
         """
         self.venue = venue
         self.subset_index = subset_index
-        self.people = people
+        self.people_present = people_present
         if subset_name is None:
             self.subset_name = str(self.subset_index)
 
     def _collate(self, attribute: str, ifnot=False) -> list[Person]:
-        """Collates Persons from self.people that have a particular attribute == True.
+        """Collates Persons from self.people_present that have a particular attribute == True.
 
         Requires that the attribute called for is truthy (a boolean). 
 
@@ -29,12 +30,12 @@ class Subset(AbstractSet):
             ifnot (bool, optional): if True, looks for people where the attribute is False. 
 
         Returns:
-            (list[Person]) : a list of people filtered so the given attribute is True/False. 
+            (list[Person]) : a list of people_present filtered so the given attribute is True/False. 
         """
         if ifnot:
-            return [person for person in self.people if not getattr(person, attribute)]
+            return [person for person in self.people_present if not getattr(person, attribute)]
         else:
-            return [person for person in self.people if getattr(person, attribute)]
+            return [person for person in self.people_present if getattr(person, attribute)]
 
     @property
     def size_collated(self, attribute, ifnot=False) -> int:
@@ -73,13 +74,13 @@ class Subset(AbstractSet):
     #     return self._collate("in_hospital")
 
     def __contains__(self, item):
-        return item in self.people
+        return item in self.people_present
 
     def __iter__(self):
-        return iter(self.people)
+        return iter(self.people_present)
 
     def __len__(self):
-        return len(self.people)
+        return len(self.people_present)
 
     def __eq__(self, other):
         if not self.size() == other.size():
@@ -90,14 +91,14 @@ class Subset(AbstractSet):
             return False
         if not self.subset_index == other.subset_index:
             return False
-        for p, p2 in zip(self.people, other.people):
+        for p, p2 in zip(self.people_present, other.people_present):
             if not p == p2:
                 return False
         return True
 
     def clear(self):
         """ """
-        self.people = []
+        self.people_present = []
 
     def append(self, person: "Person"):
         """Add a person to this subset
@@ -106,18 +107,18 @@ class Subset(AbstractSet):
             person (Person): 
         
         """
-        self.people.append(person)
+        self.people_present.append(person)
         person.busy = True
 
-    def extend(self, people: list["Person"]):
-        """Add a list of people to the subset
+    def extend(self, people_present: list["Person"]):
+        """Add a list of people_present to the subset
 
         Args:
-            people (list[Person]): 
+            people_present (list[Person]): 
         
         """
-        self.people.extend(person)
-        for person in people:
+        self.people_present.extend(person)
+        for person in people_present:
             person.busy = True
 
     def remove(self, person: "Person"):
@@ -127,9 +128,16 @@ class Subset(AbstractSet):
             person (Person): 
         
         """
-        self.people.remove(person)
+        self.people_present.remove(person)
         person.busy = False
 
     def __getitem__(self, item):
-        return list(self.people)[item]
+        return list(self.people_present)[item]
 
+    def add_member(self, person: "Person"):
+        """ Add a person's membership to this subset"""
+        self.members.add(person)
+
+    def remove_member(self, person: "Person"):
+        """ Add a person's membership to this subset"""
+        self.members.remove(person)

@@ -4,16 +4,19 @@ import numpy as np
 import random
 from collections import defaultdict
 
+import SubsetDistributor
+from MAY.population import Subset
+
 logger = logging.getLogger(__name__)
 
 
 class Distributor:
-    """Class to distributor a list of people across instances of a Venue class.
+    """Class to distribute a list of people across instances of a Venue class with a particular type.
 
     This is the parent class to specific classes for distributing people across households, schools, etc. It should be instantiated with a single instance of VenueManager that has been initialised for a GeographyUnit. Thus, it is assumed that all venues in VenueManager.venues_by_type are fair game. The distributor does not attept to sort venues within VenueManager (yet). 
     """
     def __init__(self,
-                 activity: str,
+                 venue_type: str,
                  venue_manager: "VenueManager",
                  people: list["Person"]):
         """
@@ -31,43 +34,60 @@ class Distributor:
         
         """
         self.id = id(self)
-        self.activity = activity
+        self.venue_type = venue_type
         self.venue_manager = venue_manager
         self.people = people
-        self.__get_subset_list()
+        self.potential_venues = self.__decide_potential_venues()        
+        
+        self._get_subset_dist()
+        self._create_subsets_if_necessary()
 
-    def __get_subset_list(self):
+    def _get_subset_dist(self):
         example_venue           = self.venue_manager.venues_by_type[venue_type][0]
-        self._venue_subsets = example_venue.properties['subsets']
-        self._venue_has_capacity_by_subset = defaultdict([True]*len(example_venue_subsets))
+        self.subset_distributor = SubsetDistributor(self.venue_type,
+                                                    example_venue.properties['subsets'])
+        self._venue_has_membership_capacity_by_subset = defaultdict([True]*self.subset_distributor.n_subsets)
 
+    def __decide_potential_venues(self):
+        return self.venue_manager.get_venues_by_type(venue_type)        
+
+    def _create_subsets_if_necessary(self):
+        """Goes through each venue and checks there is a Subset for each subset name. 
+
+        This can probably be improved to make it not use loops,
+        but it is only done once per venue so for now not worrying about it. 
+        """
+        for venue in self.potential_venues:
+            if not venue.subsets: # if venue.subsets is an empty dictionary
+                self.subset_distributor.generate_empty_subsets(venue)
+                
     def assign_people_venues(self,
                              activity: str,
                              venue_type: str,
+                             available_venue_indices: list[int] = None
                              **kwargs):
-        """Assigns people from self.people to do an activity (if they have it) at a particular venue type (if there is capacity). 
+        """Assigns people from self.people to do an activity (if they have it) at a particular venue type (if there is membership_capacity). 
 
         """
-        potential_venues = self.venue_manager.get_venues_by_type(venue_type)
-        available_venue_indices = list(range(len(potential_venues)))        
+        if availabe_venue_indices is None:
+            self.available_venue_indices = list(range(len(self.potential_venues)))
+        else:
+            self.available_venue_indices = available_venue_indices
         for person in self.people:
             if person.has_activity(activity):
-                self.find_venues(person,
-                                 self.activity,
-                                 potential_venues,
-                                 available_venue_indices,
-                                 **kwargs)
+                self.find_venues_for_person(person,
+                                            self.activity,
+                                            self.potential_venues,
+                                            **kwargs)
             else: continue
-            
 
-    def find_venues(self,
-                    person: "Person",
-                    activity: str,
-                    venue_list: list["Venue"],
-                    available_venue_indices: list[int],
-                    maxiter: int = 100,
-                    randomize: bool = True,
-                    **kwargs):
+    def find_venues_for_person(self,
+                               person: "Person",
+                               activity: str,
+                               venue_list: list["Venue"],
+                               maxiter: int = 100,
+                               randomize: bool = True,
+                               **kwargs):
         """Assigns a person a venue from a list, and a subset for that venue.
 
         Args:
@@ -79,9 +99,9 @@ class Distributor:
 
         """
         if randomize:
-            random.shuffle(available_venue_indices)
+            random.shuffle(self.available_venue_indices)
 
-        for ii, trial_venue_index in enumerate(available_venue_indices):
+        for ii, trial_venue_index in enumerate(self.available_venue_indices):
             if ii > maxiter:
                 logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
                 self._deal_with_no_venue(person, activity)                
@@ -91,78 +111,61 @@ class Distributor:
                 logger.warning("Could not find a venue for person {}".format(person.id))
                 self._deal_with_no_venue(person, activity)
                 
-                
             try:
-                trial_subset_index, trial_subset = self._assign_subset(trial_venue,
-                                                                    activity,
-                                                                    subsets,
-                                                                    person)
-                if trial_subset == 'No subset available':
+                trial_subset_index, trial_subset_name = self.subset_distributor.find_subset_for_person(
+                    self._venue_has_membership_capacity_by_subset[trail_venue.id],
+                    person,
+                )
+                if trial_subset_name == 'No subset available':
                     # Try a new venue
                     continue
                 else:
-                    # Assign venue and subset as the person's location and subset for the specified activity. 
-                    person.activity_map[activity] = (trial_venue.id, trial_subset_index, trial_subset)
+                    # Assign venue and subset as the person's location and subset for the specified activity.
+                    subset = trial_venue.subsets[trial_subset_name]
+                    person.activity_map[activity].append(subset)
+                    subset.add_member(person)
+                    self._update_venue_membership_capacity(trial_venue_index, trial_venue, subset)
                     break
             except:
                 logger.error("Could not assign a subset to person {} for venue {} of type {} with activity {}".format(person.id, new_venue.id, new_venue.type, activity))
                 self._deal_with_no_venue(person, activity)
                 raise Exception("Failure of _assign_subset routine when assigning subset and venue for person {} to activity {}.".format(person.id, activity))
 
+    def _update_venue_membership_capacity(self, trial_venue_index, venue, subset, **kwargs):
+        """Update the venue membership_capacity after adding a person to subset membership.
+
+        Venue membership capacity is held by the object self._venue_has_membership_capacity_by_subset, which is a list of boolean
+        values where True means more members can be assigned to the venue's subset. E.g. if a venue has three subsets ['kids', 'adults', 'elderly'], then self._venue_has_membership_capacity_by_subset[venue.id] = [True,True,False] means that more members can be added to the 'kids' and 'adults' subsets, but no more can be added to the 'elderly' subset. 
+
+        Args:
+          subset (Subset): the subset that a Person has just been assigned as a member of the subset.
+
+        Examples:
+          If one wanted to limit the membership of each individual subset to 10 max.
+        
+          if len(subset.members) >= 10:
+            self._venue_has_membership_capacity_by_subset[subset.venue.id][subset.subset_index] = False
+          if not any(self._venue_has_membership_capacity_by_subset[subset.venue.id]):
+            self.available_venue_indices.remove(trial_venue_index)
+
+          Limiting the membership of all subsets to a total of 10.
+
+          total=0
+          for s in subset.venue.subsets:
+            total += len(s.members)
+          if total >= 10:
+            self._venue_has_membership_capacity_by_subset[subset.venue.id] = [False]*self.subset_distributor.n_subsets
+            self.available_venue_indices.remove(trial_venue_index)
+        
+        """
+        pass
+        
     def _deal_with_no_venue(person: "Person", activity: str):
         """Deal with a person who we could find no venue for their activity. 
 
         """
         raise NotImplementedError("Not yet decided how to deal with people who have no venue to go to")
-                
-    def _assign_subset(self,
-                        venue: "Venue",
-                        activity: str,
-                        person: "Person",
-                        **kwargs) -> subset_str:
-        """Takes a person and assigns them into a particular subset within the venue.
 
-        This will be filled in with a series of criteria, specific to each kind of venue, that decides how to allocate a Person object into a specific subset within the venue. 
-
-        Args:
-          venue (Venue): the venue which is being populated.
-          activity (str): the 
-          person (Person): the person to be assigned a subset.
-
-        Returns:
-          subset_str (str): the label of the subset within the Venue that the Person should be assigned to (pending capacity). Returns "No subset available" if no subset is available for the person at the venue. 
-
-        Examples:
-          subsets = ['kid', 'young_adult', 'adult', 'old']
-          if len(subsets) == 0:
-              return 'No subset available'
-          try:
-              if person.age < 15 and self.does_venue_have_capacity(venue.id, 'kid'):
-                  return 'kid'
-              elif person.age < 25 and self.does_venue_have_capacity(venue.id, 'young_adult'):
-                  return 'young_adult'        
-              elif person.age < 60 and self.does_venue_have_capacity(venue.id, 'adult'):
-                  return 'adult'
-              elif self.does_venue_have_capacity(venue.id, 'old'):
-                  return 'old'
-              else:
-                  return 'No subset available'
-          except:
-              return 'No subset available'
-
-        """
-        subsets = ['kid', 'young_adult', 'adult', 'old']
-        if len(subsets) == 0:
-            return -1, 'No subset available'
-        try:
-            rindex = random.randint(0, len(subsets)-1)
-            if self._venue_has_capacity_by_subset[venue.id][rindex]:
-                #subset_str = random.choice(subsets, weights=None)
-                return rindex, subsets[rindex]
-            else:
-                return -1, 'No subset available'
-        except:
-            return -1, 'No subset available'
         
 
 
