@@ -1,4 +1,4 @@
-from abstract_set import AbstractSet
+from .abstract_set import AbstractSet
 
 class Subset(AbstractSet):
     """A subset of people within a particular Venue. For example, children in a household."""
@@ -20,7 +20,7 @@ class Subset(AbstractSet):
         if subset_name is None:
             self.subset_name = str(self.subset_index)
 
-    def _collate(self, attribute: str, ifnot=False) -> list[Person]:
+    def _collate(self, attribute: str, ifnot=False) -> list["Person"]:
         """Collates Persons from self.people_present that have a particular attribute == True.
 
         Requires that the attribute called for is truthy (a boolean). 

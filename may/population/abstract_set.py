@@ -8,7 +8,7 @@ class AbstractSet(ABC):
     e.g. in how they behave, or in how susceptible they are to the disease. 
     """
     @abstractmethod
-    def _collate(self, attribute: str, ifnot=False) -> list[Person]:
+    def _collate(self, attribute: str, ifnot=False) -> list["Person"]:
         """Collates Persons from the set that have a particular attribute == True.
 
         Requires that the attribute called for is truthy (a boolean). 

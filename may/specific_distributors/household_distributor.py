@@ -3,11 +3,11 @@ import pandas as pd
 import numpy as np
 import random
 from collections import defaultdict
-from distributors import Distributor
 
-import SubsetDistributor
-
-from MAY.population import Subset
+from may.distributor import Distributor
+from may.distributor import SubsetDistributor
+from may.population import Subset
+from may.specific_distributors.household_subset_distributor import HouseholdSubsetDistributor
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,9 @@ class HouseholdDistributor(Distributor):
     #     first_run_available_venues = 
     
     def _get_subset_dist(self):
-        example_venue           = self.venue_manager.venues_by_type[venue_type][0]
+        example_venue           = self.venue_manager.venues_by_type[self.venue_type][0]
         self.subset_distributor = HouseholdSubsetDistributor(self.venue_type, ['kids','independent children','adults','elderly'])
-        self._venue_has_membership_capacity_by_subset = defaultdict([True]*self.subset_distributor.n_subsets)
+        self._venue_has_membership_capacity_by_subset = defaultdict(lambda: [True]*self.subset_distributor.n_subsets)
     
     def _update_venue_membership_capacity(self, trial_venue_index, venue, subset, **kwargs):
         """ Called after a person is successfully assigned a subset, or once at the beginning. 
@@ -32,7 +32,7 @@ class HouseholdDistributor(Distributor):
         subsets = ['kids', 'independent children', 'adults', elderly']
         
         """
-        match venue.properties['composition']:
+        match venue.properties['composition'].strip():
             case '0 0 0 2':
                 if len(subset.members) >= 2:
                     self._venue_has_membership_capacity_by_subset[venue.id] = [False]*self.subset_distributor.n_subsets
@@ -129,6 +129,9 @@ class HouseholdDistributor(Distributor):
                 self._venue_has_membership_capacity_by_subset[venue.id][0] = False
                 self._venue_has_membership_capacity_by_subset[venue.id][1] = False
                 self._venue_has_membership_capacity_by_subset[venue.id][2] = False
+
+            case _:
+                raise KeyError("Column title {} is not found within the list of programmed household types. See household_distributor.py".format(venue.properties['composition'].strip()))
 
         # Removes the venue from the list of potential venues if it has no membership capacity. 
         if not any(self._venue_has_membership_capacity_by_subset[venue.id]):

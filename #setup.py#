@@ -1,0 +1,4 @@
+from os.path import abspath, dirname, join
+from glob import glob
+
+this_dir = abspath(dirname(__file__))

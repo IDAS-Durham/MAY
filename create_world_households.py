@@ -9,6 +9,7 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World
+from may.specific_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -88,17 +89,17 @@ def print_world_examples(world):
     logger.info("")
     logger.info("2. Venue Examples:")
     venue_types = venues.get_venue_types()
-    for vtype in sorted(venue_types)[:3]:  # Show first 3 types
+    for vtype in sorted(venue_types):  # Show all types
         venues_of_type = venues.get_venues_by_type(vtype)
         if venues_of_type:
-            example_venue = venues_of_type[0]
+            example_venue = random.choice(venues_of_type)
             logger.info(f"   {vtype.capitalize()}: {example_venue.name}")
             logger.info(f"   - Located in: {example_venue.geographical_unit.name} ({example_venue.geographical_unit.level})")
             if example_venue.coordinates:
                 logger.info(f"   - Coordinates: {example_venue.coordinates}")
             if example_venue.properties:
                 # Show first 2 properties
-                props = list(example_venue.properties.items())[:2]
+                props = list(example_venue.properties.items())
                 for key, value in props:
                     logger.info(f"   - {key}: {value}")
 
@@ -142,9 +143,11 @@ def print_world_examples(world):
 
     logger.info("")
     logger.info("5. Query Examples:")
-    logger.info("   # Get all hospitals")
-    all_hospitals = venues.get_venues_by_type("hospital")
-    logger.info(f"   venues.get_venues_by_type('hospital') -> {len(all_hospitals)} hospitals")
+    for key in venues.get_venue_types():
+        logger.info("")
+        logger.info("   # Get all {}s".format(key))
+        all_hospitals = venues.get_venues_by_type(key)
+        logger.info(f"   venues.get_venues_by_type({key}) -> {len(all_hospitals)} {key}s")
 
     logger.info("")
     logger.info("   # Get venues in a specific area")
@@ -212,7 +215,18 @@ def main():
     population.load_demographics_from_csv(male_file, female_file)
 
     # Generate population
-    population.generate_population()
+    population.generate_population(activities=['home'])
+
+    # Create Households
+    logger.info("Loading households...")
+    household_manager = HouseholdManager(geography=geo, data_dir='data/households', filter_by_geography=True)
+    household_manager.load_venue_type_from_csv('household', 'households.csv')
+
+    # Extend the venues object to add the households on. 
+    venues.extend(household_manager)
+    # Distribute people to Households
+    #household_distributor = HouseholdDistributor('household', venues, population.people)
+    #household_distributor.assign_people_venues('home', 'household')
 
     # Create World object
     logger.info("")

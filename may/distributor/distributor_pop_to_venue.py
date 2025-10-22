@@ -4,8 +4,8 @@ import numpy as np
 import random
 from collections import defaultdict
 
-import SubsetDistributor
-from MAY.population import Subset
+from .distributor_venue_to_subsets import SubsetDistributor
+from may.population import Subset
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,8 @@ class Distributor:
     def __init__(self,
                  venue_type: str,
                  venue_manager: "VenueManager",
-                 people: list["Person"]):
+                 people: list["Person"],
+                 **kwargs):
         """
         Args:
           venue_type (str):
@@ -37,19 +38,20 @@ class Distributor:
         self.venue_type = venue_type
         self.venue_manager = venue_manager
         self.people = people
-        self.potential_venues = self.__decide_potential_venues()        
+        self.potential_venues = self.__decide_potential_venues()
+        self.unallocated_people = []
         
         self._get_subset_dist()
         self._create_subsets_if_necessary()
 
     def _get_subset_dist(self):
-        example_venue           = self.venue_manager.venues_by_type[venue_type][0]
+        example_venue           = self.potential_venues[0] # just the first potential venue
         self.subset_distributor = SubsetDistributor(self.venue_type,
                                                     example_venue.properties['subsets'])
-        self._venue_has_membership_capacity_by_subset = defaultdict([True]*self.subset_distributor.n_subsets)
+        self._venue_has_membership_capacity_by_subset = defaultdict(lambda: [True]*self.subset_distributor.n_subsets)
 
     def __decide_potential_venues(self):
-        return self.venue_manager.get_venues_by_type(venue_type)        
+        return self.venue_manager.get_venues_by_type(self.venue_type)
 
     def _create_subsets_if_necessary(self):
         """Goes through each venue and checks there is a Subset for each subset name. 
@@ -64,19 +66,19 @@ class Distributor:
     def assign_people_venues(self,
                              activity: str,
                              venue_type: str,
-                             available_venue_indices: list[int] = None
+                             available_venue_indices: list[int] = None,
                              **kwargs):
         """Assigns people from self.people to do an activity (if they have it) at a particular venue type (if there is membership_capacity). 
 
         """
-        if availabe_venue_indices is None:
+        if available_venue_indices is None:
             self.available_venue_indices = list(range(len(self.potential_venues)))
         else:
             self.available_venue_indices = available_venue_indices
         for person in self.people:
             if person.has_activity(activity):
                 self.find_venues_for_person(person,
-                                            self.activity,
+                                            activity,
                                             self.potential_venues,
                                             **kwargs)
             else: continue
@@ -98,13 +100,12 @@ class Distributor:
           randomize (bool, optional): whether the order of potential venues trialed should be randomized for each person.
 
         """
+        
+        available_indices_this_time = self.available_venue_indices[:maxiter]
         if randomize:
-            random.shuffle(self.available_venue_indices)
+            random.shuffle(available_indices_this_time)
 
-        for ii, trial_venue_index in enumerate(self.available_venue_indices):
-            if ii > maxiter:
-                logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
-                self._deal_with_no_venue(person, activity)                
+        for ii, trial_venue_index in enumerate(available_indices_this_time):
             try:
                 trial_venue = venue_list[trial_venue_index]
             except:
@@ -116,6 +117,7 @@ class Distributor:
                     self._venue_has_membership_capacity_by_subset[trail_venue.id],
                     person,
                 )
+                print(trial_subset_index, trial_subset_name)
                 if trial_subset_name == 'No subset available':
                     # Try a new venue
                     continue
@@ -127,9 +129,13 @@ class Distributor:
                     self._update_venue_membership_capacity(trial_venue_index, trial_venue, subset)
                     break
             except:
-                logger.error("Could not assign a subset to person {} for venue {} of type {} with activity {}".format(person.id, new_venue.id, new_venue.type, activity))
-                self._deal_with_no_venue(person, activity)
+                logger.error("Could not assign a subset to person {} for venue {} of type {} with activity {}".format(person.id, trial_venue.id, trial_venue.type, activity))
+                #self._deal_with_no_venue(person, activity)
                 raise Exception("Failure of _assign_subset routine when assigning subset and venue for person {} to activity {}.".format(person.id, activity))
+        # If exhausted the loop. 
+        logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
+        self._deal_with_no_venue(person, activity)
+                
 
     def _update_venue_membership_capacity(self, trial_venue_index, venue, subset, **kwargs):
         """Update the venue membership_capacity after adding a person to subset membership.
@@ -160,11 +166,13 @@ class Distributor:
         """
         pass
         
-    def _deal_with_no_venue(person: "Person", activity: str):
+    def _deal_with_no_venue(self, person: "Person", *args):
         """Deal with a person who we could find no venue for their activity. 
 
         """
-        raise NotImplementedError("Not yet decided how to deal with people who have no venue to go to")
+        self.unallocated_people.append(person)
+        print("Didn't allocate Person {} for activity {}".format(person.id, args[0]))
+        #raise NotImplementedError("Not yet decided how to deal with people who have no venue to go to")
 
         
 

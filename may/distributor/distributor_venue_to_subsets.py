@@ -1,6 +1,6 @@
 
 
-import Subset
+from may.population import Subset
 from typing import Optional
 
 class SubsetDistributor:
@@ -27,7 +27,7 @@ class SubsetDistributor:
         self.venue_type = venue_type
         self.subset_names = subset_names
         self.properties = properties
-        self.n_subsets = len(self.subsets)
+        self.n_subsets = len(self.subset_names)
 
 
     def generate_empty_subsets(self,
@@ -39,7 +39,7 @@ class SubsetDistributor:
     def find_subset_for_person(self,
                                venue_has_capacity: list[bool],
                                person: "Person",
-                               **kwargs) -> int, subset_name, Optional["Subset"]:
+                               **kwargs) -> (int, str, Optional["Subset"]):
         """Takes a person and assigns them into a particular subset within the venue.
 
         This will be filled in with a series of criteria, specific to each kind of venue, that decides how to allocate a Person object into a specific subset within the venue. 
@@ -58,7 +58,7 @@ class SubsetDistributor:
           subset_name (str): the label of the subset within the Venue that the Person should be assigned to (pending capacity). Returns "No subset available" if no subset is available for the person at the venue. 
 
         Examples:
-          self.subsets = ['kid', 'young_adult', 'adult', 'old']
+          self.subset_names = ['kid', 'young_adult', 'adult', 'old']
           venue_has_capacity = [True, True, True, True]
           if person.age < 15 and venue_has_capacity[0]:
               return 'kid'

@@ -23,7 +23,7 @@ class Person:
 
     _id_counter = 0
 
-    def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"=None], activities: Optional[list[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
+    def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"]=None, activities: Optional[list[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
         """
         Initialize a Person.
 
@@ -48,7 +48,7 @@ class Person:
         self.activities = activities if activities is not None else []
         self.properties = properties if properties is not None else {}
         if activity_map is None:
-            self.activity_map = defaultdict([])
+            self.activity_map = defaultdict(list)
 
     @classmethod
     def reset_counter(cls):

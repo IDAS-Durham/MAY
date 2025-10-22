@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 import os
 from collections import defaultdict
+from .venue import Venue
 
 logger = logging.getLogger("venuemanager")
 
@@ -14,7 +15,7 @@ class VenueManager:
         self.data_dir = data_dir
         self.venues = {}                # All venues by name: {name: Venue}
         self.venues_by_id = {}          # All venues by ID: {id: Venue}
-        self.venues_by_type = defaultdict([])        # Venues grouped by type: {type: [Venue, ...]}
+        self.venues_by_type = defaultdict(list)        # Venues grouped by type: {type: [Venue, ...]}
         self.filter_by_geography = filter_by_geography  # Only load venues in loaded geo units
 
         # ID counter for generating unique IDs
@@ -30,12 +31,17 @@ class VenueManager:
         Returns:
             Unique integer ID
         """
-        id = self._next_id
         self._next_id += 1
-        return id
+        return self._next_id
 
-    def initialise_venue(self, **kwargs):
-        """Initialises and returns a new Venue object given a set of kwargs. """
+    def initialise_venue(self,
+                         name: str,
+                         venue_type: str,
+                         geo_unit: "GeographicalUnit",
+                         coordinates: tuple[float,float],
+                         property_cols,
+                         row):
+        """Initialises and returns a new Venue object given a set of arguments."""
         venue = Venue(
             name=name,
             venue_type=venue_type,
@@ -48,11 +54,10 @@ class VenueManager:
                 venue.properties[prop_col] = row[prop_col]
         return venue
 
-
     def add_venue(self, venue, geo_unit):
         """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
-        self.venues[name] = venue
-        self.venues_by_id[venue_id] = venue
+        self.venues[venue.name] = venue
+        self.venues_by_id[venue.id] = venue
         # Group by type
         self.venues_by_type[venue.type].append(venue)
 
@@ -64,7 +69,7 @@ class VenueManager:
         required_cols = ['name', 'geo_unit']
         for col in required_cols:
             if col not in venue_df.columns:
-                raise ValueError(f"Missing required column '{col}' in {filename}")
+                raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
 
         # Optional coordinate columns
         has_coords = 'latitude' in venue_df.columns and 'longitude' in venue_df.columns
@@ -146,7 +151,7 @@ class VenueManager:
         venue_df = pd.read_csv(venue_path)
         logger.info(f"Loading {venue_type} venues from {venue_path}")
 
-        self.load_venue_type_from_df(self, venue_type, venue_df)
+        self.load_venue_type_from_df(venue_type, venue_df)
 
 
     def load_from_csv(self, venue_types=None):
@@ -155,9 +160,9 @@ class VenueManager:
 
         Each venue type has its own CSV file with type-specific columns.
         For example:
-        - hospitals.csv for hospital venues
-        - schools.csv for school venues
-        - prisons.csv for prison venues
+          hospitals.csv for hospital venues
+          schools.csv for school venues
+          prisons.csv for prison venues
 
         Only venues in loaded geographical units will be created if filter_by_geography=True.
 
@@ -204,6 +209,18 @@ class VenueManager:
 
         logger.info(f"Total venues created: {len(self.venues)}")
         self._log_summary()
+
+    def extend(self, other: "VenueManager"):
+        """Adds all the venues from another instance of the VenueManager class into this instance.
+
+        Created so that if multiple VenueManager child classes are made (e.g. to change the specifics of how they load venues)
+        it is easy to combine them into one single object at the end. 
+        """
+        # Should add something to check that self.geography and other.geography are equal.
+        self.venues.update(other.venues)
+        self.venues_by_id.update(other.venues)
+        for venue_type, venue_list in other.venues_by_type.items():
+            self.venues_by_type[venue_type] = self.venues_by_type.get(venue_type, []) + venue_list
 
     def get_venue(self, name):
         """Get a venue by its name"""
