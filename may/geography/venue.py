@@ -34,8 +34,9 @@ class Venue:
                  venue_type,
                  geographical_unit,
                  coordinates=None,
+                 properties: dict={},
                  subsets: dict[str,"Subset"] = {},
-                 properties: dict={}):
+                 ):
         self.id = id(self)              # Unique numeric ID (generated)
         self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
         self.type = venue_type          # Type of venue (e.g., "hospital", "school")

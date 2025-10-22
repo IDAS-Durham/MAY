@@ -39,19 +39,15 @@ class VenueManager:
                          venue_type: str,
                          geo_unit: "GeographicalUnit",
                          coordinates: tuple[float,float],
-                         property_cols,
-                         row):
+                         properties):
         """Initialises and returns a new Venue object given a set of arguments."""
         venue = Venue(
             name=name,
             venue_type=venue_type,
             geographical_unit=geo_unit,
-            coordinates=coordinates
+            coordinates=coordinates,
+            properties=properties
         )
-        # Add additional properties
-        for prop_col in property_cols:
-            if pd.notna(row[prop_col]):
-                venue.properties[prop_col] = row[prop_col]
         return venue
 
     def add_venue(self, venue, geo_unit):
@@ -77,6 +73,8 @@ class VenueManager:
         # Get additional property columns
         reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
         property_cols = [col for col in venue_df.columns if col not in reserved_cols]
+        print("property_cols = ",property_cols)
+        properties={}
 
         # Create venues
         venues_created = 0
@@ -102,13 +100,19 @@ class VenueManager:
             if has_coords and pd.notna(row['latitude']) and pd.notna(row['longitude']):
                 coordinates = (row['latitude'], row['longitude'])
 
+            # Add additional properties
+            properties = {}
+            for prop_col in property_cols:
+                if pd.notna(row[prop_col]):
+                    properties[prop_col] = row[prop_col]
+                
             # Generate ID and create venue
             venue = self.initialise_venue(name=name,
                                           venue_type=venue_type,
                                           geo_unit=geo_unit,
                                           coordinates=coordinates,
-                                          property_cols=property_cols,
-                                          row=row)
+                                          properties=properties,
+                                          )
             
             # Store venue
             self.add_venue(venue, geo_unit)

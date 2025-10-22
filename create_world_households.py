@@ -225,8 +225,8 @@ def main():
     # Extend the venues object to add the households on. 
     venues.extend(household_manager)
     # Distribute people to Households
-    #household_distributor = HouseholdDistributor('household', venues, population.people)
-    #household_distributor.assign_people_venues('home', 'household')
+    household_distributor = HouseholdDistributor('household', venues, population.people)
+    household_distributor.assign_people_venues('home', 'household')
 
     # Create World object
     logger.info("")
