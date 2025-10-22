@@ -166,6 +166,10 @@ def execute_allocation_strategy(population, venues, households,
     logger.info(f"  Allocation rate: {alloc_pct:.1f}%")
     logger.info("=" * 60)
 
+    # Print relationship rules statistics
+    logger.info("")
+    households.relationship_rules.print_statistics()
+
     return all_stats
 
 

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from geography.geography import GeographicalUnit, Geography
 from population.person import Person
 from population.population import PopulationManager
+from residence.relationship_rules import RelationshipRulesValidator
 
 logger = logging.getLogger("household")
 
@@ -372,6 +373,13 @@ class HouseholdDistributor:
         self.current_round: int = 0
         self.pools_prepared: bool = False
 
+        # Initialize relationship rules validator
+        rules_config_path = os.path.join(data_dir, "relationship_rules.yaml")
+        self.relationship_rules = RelationshipRulesValidator(
+            age_categories=self.age_categories,
+            config_file=rules_config_path
+        )
+
         logger.info(f"Initialized HouseholdDistributor with {len(self.age_categories)} age categories")
         for cat in self.age_categories:
             logger.info(f"  - {cat}")
@@ -485,6 +493,239 @@ class HouseholdDistributor:
                           for pools in self.person_pool_by_area.values())
         logger.info(f"Prepared person pools for {len(self.person_pool_by_area)} areas ({total_people} total people)")
         self.pools_prepared = True
+
+    def _allocate_household_with_rules(self, area_code: str, pattern: CompositionPattern,
+                                       max_size: Optional[int] = None,
+                                       allocate_flexible: bool = False,
+                                       target_size: Optional[int] = None) -> Tuple[Optional[Household], Optional[int]]:
+        """
+        Allocate a household using relationship rules.
+
+        This method follows the role-based selection order defined in relationship_rules.yaml:
+        1. Select people for each role in order (e.g., kids first, then adults)
+        2. Apply age difference constraints between roles
+        3. Apply couple matching constraints within roles
+
+        Args:
+            area_code: SGU code
+            pattern: Composition pattern to match
+            max_size: Maximum household size (optional)
+            allocate_flexible: If True, allocate people to flexible (>=) categories
+            target_size: Target household size for balanced distribution (optional)
+
+        Returns:
+            Tuple of (Household object if successful or None, failed_category_idx or None)
+        """
+        # Check if relationship rules apply to this pattern
+        rule = self.relationship_rules.get_rule_for_pattern(pattern.original_pattern)
+
+        if not rule:
+            # No rules for this pattern, use default allocation
+            return self._allocate_household(area_code, pattern, max_size, allocate_flexible, target_size)
+
+        # Log first time we apply rules for this pattern
+        if not hasattr(self, '_logged_rules'):
+            self._logged_rules = set()
+        if pattern.original_pattern not in self._logged_rules:
+            logger.info(f"✓ Applying relationship rules for pattern: '{pattern.original_pattern}'")
+            self._logged_rules.add(pattern.original_pattern)
+
+        if area_code not in self.person_pool_by_area:
+            return (None, None)
+
+        pools = self.person_pool_by_area[area_code]
+
+        # Detailed logging for ALL households in one specific geo unit
+        if not hasattr(self, '_detailed_log_area'):
+            self._detailed_log_area = area_code
+            self._detailed_log_household_count = 0
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info(f"DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
+            logger.info("=" * 80)
+            logger.info("")
+
+        if area_code == self._detailed_log_area:
+            self._detailed_log_household_count += 1
+            logger.info("=" * 80)
+            logger.info(f"HOUSEHOLD #{self._detailed_log_household_count} - Pattern '{pattern.original_pattern}'")
+            logger.info("=" * 80)
+            logger.info(f"Rule: {rule.name}")
+            logger.info(f"Selection order: {' → '.join(rule.selection_order)}")
+            logger.info("")
+            self._show_detailed_logs = True
+        else:
+            self._show_detailed_logs = False
+
+        # Track selected people by role
+        selected_by_role: Dict[str, List[Person]] = {role_name: [] for role_name in rule.roles.keys()}
+
+        # Select people for each role in order
+        for role_name in rule.selection_order:
+            role_config = rule.roles[role_name]
+            category_names = role_config['categories']
+            role_count = role_config['count']
+
+            if self._show_detailed_logs:
+                logger.info(f"Step: Selecting role '{role_name}'")
+                logger.info(f"  Categories: {category_names}")
+                logger.info(f"  Count needed: {role_count}")
+
+            # Map category names to indices
+            category_indices = []
+            for cat_name in category_names:
+                if cat_name in self.relationship_rules.category_name_to_idx:
+                    category_indices.append(self.relationship_rules.category_name_to_idx[cat_name])
+
+            # Get candidates from these categories
+            candidates = []
+            for cat_idx in category_indices:
+                candidates.extend(pools[cat_idx])
+
+            if self._show_detailed_logs:
+                logger.info(f"  Available candidates: {len(candidates)} people")
+
+            if not candidates:
+                # No people available for this role
+                if self._show_detailed_logs:
+                    logger.info(f"  ✗ FAILED: No candidates available")
+                return (None, category_indices[0] if category_indices else None)
+
+            # Check for pair_matching constraint for this role
+            pair_constraint = None
+            for constraint in rule.constraints:
+                if constraint['type'] == 'pair_matching' and constraint.get('role') == role_name:
+                    # Check if require_exact_count is specified
+                    required_count = constraint.get('require_exact_count')
+                    if required_count is None or role_count == required_count:
+                        pair_constraint = constraint
+                        break
+
+            if pair_constraint and role_count == 2:
+                # Select a compatible pair
+                # IMPORTANT: Pass existing people (e.g., children) so pair can be validated against them
+                if self._show_detailed_logs:
+                    logger.info(f"  Mode: Selecting a compatible pair")
+                    if selected_by_role:
+                        already_selected = sum(len(people) for people in selected_by_role.values())
+                        logger.info(f"  Constraints: Must validate against {already_selected} already-selected people")
+
+                pair = self.relationship_rules.select_pair(
+                    candidates,
+                    pair_constraint,
+                    existing_people_by_role=selected_by_role,
+                    constraints=rule.constraints,
+                    current_role=role_name,
+                    show_detailed_logs=self._show_detailed_logs
+                )
+                if not pair:
+                    # Couldn't find valid pair
+                    if self._show_detailed_logs:
+                        logger.info(f"  ✗ FAILED: Could not find valid pair")
+                    return (None, category_indices[0] if category_indices else None)
+
+                selected_by_role[role_name] = list(pair)
+                if self._show_detailed_logs:
+                    logger.info(f"  ✓ Selected: {pair[0]} and {pair[1]}")
+                    logger.info("")
+
+            elif role_count == "any":
+                # Determine count from pattern
+                # For "any", use minimum required from pattern
+                total_needed = 0
+                for cat_idx in category_indices:
+                    min_count = pattern.get_min_count(cat_idx)
+                    total_needed += min_count
+
+                # Select people one by one with constraints
+                for i in range(total_needed):
+                    person = self.relationship_rules.select_person_with_constraint(
+                        candidates=candidates,
+                        existing_people_by_role=selected_by_role,
+                        constraints=rule.constraints,
+                        current_role=role_name
+                    )
+
+                    if not person:
+                        return (None, category_indices[0] if category_indices else None)
+
+                    selected_by_role[role_name].append(person)
+                    # Remove from candidates
+                    candidates = [p for p in candidates if p.id != person.id]
+
+            else:
+                # Select specific number of people
+                if self._show_detailed_logs:
+                    logger.info(f"  Mode: Selecting {role_count} person(s) individually")
+
+                for i in range(role_count):
+                    person = self.relationship_rules.select_person_with_constraint(
+                        candidates=candidates,
+                        existing_people_by_role=selected_by_role,
+                        constraints=rule.constraints,
+                        current_role=role_name
+                    )
+
+                    if not person:
+                        if self._show_detailed_logs:
+                            logger.info(f"  ✗ FAILED: Could not find valid person {i+1}/{role_count}")
+                        return (None, category_indices[0] if category_indices else None)
+
+                    selected_by_role[role_name].append(person)
+                    if self._show_detailed_logs:
+                        logger.info(f"  ✓ Selected person {i+1}/{role_count}: {person}")
+                    # Remove from candidates
+                    candidates = [p for p in candidates if p.id != person.id]
+
+                if self._show_detailed_logs:
+                    logger.info("")
+
+        # Collect all selected people
+        all_selected = []
+        for people_list in selected_by_role.values():
+            all_selected.extend(people_list)
+
+        if not all_selected:
+            return (None, None)
+
+        # Remove selected people from pools
+        selected_ids = {p.id for p in all_selected}
+        for cat_idx in range(len(self.age_categories)):
+            pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
+
+        # Create household
+        unit = self.geography.get_unit(area_code)
+        household = Household(
+            id=len(self.households),
+            geographical_unit=unit,
+            properties={
+                'original_pattern': pattern.original_pattern,
+                'actual_pattern': pattern.to_string()
+            }
+        )
+        household._age_categories = self.age_categories
+
+        # Add residents
+        for person in all_selected:
+            household.add_resident(person)
+            self.allocated_people.add(person.id)
+
+        if self._show_detailed_logs:
+            logger.info("FINAL HOUSEHOLD COMPOSITION:")
+            logger.info(f"  Household ID: {household.id}")
+            logger.info(f"  Geo Unit: {area_code}")
+            logger.info(f"  Pattern: {pattern.original_pattern}")
+            logger.info(f"  Total members: {len(all_selected)}")
+            logger.info("")
+            for role_name, people in selected_by_role.items():
+                if people:
+                    logger.info(f"  {role_name}:")
+                    for person in people:
+                        logger.info(f"    - {person}")
+            logger.info("=" * 80)
+            logger.info("")
+
+        return (household, None)
 
     def _allocate_household(self, area_code: str, pattern: CompositionPattern,
                             max_size: Optional[int] = None,
@@ -675,8 +916,13 @@ class HouseholdDistributor:
 
         for attempt in range(max_attempts + 1):
             # Try to allocate with current pattern
-            household, failed_category_idx = self._allocate_household(area_code, current_pattern, max_size, allocate_flexible, target_size)
+            # First try with relationship rules if available
+            household, failed_category_idx = self._allocate_household_with_rules(
+                area_code, current_pattern, max_size, allocate_flexible, target_size
+            )
 
+            # If rules-based allocation returned None and called the fallback,
+            # the fallback already tried regular allocation, so we're done
             if household:
                 if attempt > 0:
                     logger.debug(f"    Succeeded after {attempt} demotion(s): {current_pattern.to_string()}")
@@ -784,6 +1030,9 @@ class HouseholdDistributor:
         logger.info(f"  People allocated: {len(self.allocated_people):,}")
         logger.info(f"  People unallocated: {len(self.population.get_all_people()) - len(self.allocated_people):,}")
         logger.info("=" * 60)
+
+        # Print relationship rules statistics
+        self.relationship_rules.print_statistics()
 
     def _calculate_balanced_distribution(self, area_code: str, pattern: CompositionPattern,
                                          num_households: int, max_household_size: Optional[int]) -> List[int]:
@@ -1812,15 +2061,18 @@ class HouseholdDistributor:
         # Process each rule
         for rule_idx, rule in enumerate(promotion_rules):
             source_pattern = rule.get('source_pattern')
-            target_pattern = rule.get('target_pattern')
+            target_pattern_str = rule.get('target_pattern')
             accept_categories = rule.get('accept_categories', [])
             max_to_add = rule.get('max_to_add')
 
-            if not source_pattern or not target_pattern:
+            if not source_pattern or not target_pattern_str:
                 logger.warning(f"Rule {rule_idx}: Missing source_pattern or target_pattern, skipping")
                 continue
 
-            logger.info(f"Rule {rule_idx + 1}: {source_pattern} → {target_pattern} (categories: {accept_categories})")
+            # Parse target pattern to understand constraints
+            target_pattern = CompositionPattern.from_string(target_pattern_str)
+
+            logger.info(f"Rule {rule_idx + 1}: {source_pattern} → {target_pattern_str} (categories: {accept_categories})")
 
             # Find households matching source pattern
             for household in self.households:
@@ -1848,24 +2100,40 @@ class HouseholdDistributor:
                     if not available_people:
                         continue
 
-                    # Determine how many we can add
-                    if max_to_add is not None:
-                        can_add = min(max_to_add - added_to_this_household, len(available_people))
-                    else:
-                        can_add = len(available_people)
+                    # Get current count in this category
+                    current_composition = household.get_composition()
+                    current_count = current_composition.get(category_name, 0)
 
-                    if can_add <= 0:
+                    # Get max allowed from target pattern
+                    max_allowed = target_pattern.get_max_count(cat_idx)
+
+                    # Determine how many we can add to this category
+                    if max_allowed is not None:
+                        # Exact or fixed requirement - can only add up to max_allowed
+                        category_can_add = max(0, max_allowed - current_count)
+                    else:
+                        # Flexible (>=) requirement - no upper limit for this category
+                        category_can_add = len(available_people)
+
+                    # Also respect max_to_add limit
+                    if max_to_add is not None:
+                        category_can_add = min(category_can_add, max_to_add - added_to_this_household)
+
+                    # Also respect available people
+                    category_can_add = min(category_can_add, len(available_people))
+
+                    if category_can_add <= 0:
                         continue
 
                     # Promote household if this is the first person we're adding
                     if added_to_this_household == 0 and household.id not in promoted_households:
-                        household.properties['actual_pattern'] = target_pattern
+                        household.properties['actual_pattern'] = target_pattern_str
                         households_promoted_count += 1
                         promoted_households.add(household.id)
-                        logger.debug(f"  Promoted household {household.id}: {source_pattern} → {target_pattern}")
+                        logger.debug(f"  Promoted household {household.id}: {source_pattern} → {target_pattern_str}")
 
                     # Add people
-                    for _ in range(can_add):
+                    for _ in range(category_can_add):
                         if not available_people:
                             break
                         if max_to_add is not None and added_to_this_household >= max_to_add:

@@ -1,0 +1,240 @@
+# Relationship Rules Configuration
+#
+# FULLY GENERIC pattern-based relationship rules.
+# No hardcoded concepts - everything is expressed as mathematical constraints
+# between category indices and roles.
+
+enabled: true
+
+# =============================================
+# PATTERN-BASED RELATIONSHIP RULES
+# =============================================
+
+rules:
+  # Rule 1: Families with 2 adults and kids
+  - name: "Two-adult family with kids"
+    patterns:
+      - ">=2 >=0 2 0"
+      - "1 >=0 2 0"
+
+    roles:
+      role_A:
+        categories: ["Kids"]  # Use category names from households_config.yaml
+        count: "any"
+
+      role_B:
+        categories: ["Adults"]
+        count: 2
+
+    selection_order:
+      - role_A
+      - role_B
+
+    constraints:
+      # role_B must be appropriately older than role_A
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_B"
+        role_2: "role_A"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 70
+
+      # role_B (2 people) should be a compatible pair
+      - type: "pair_matching"
+        role: "role_B"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 25
+
+  # Rule 2: Single-adult families with kids
+  - name: "Single-adult family with kids"
+    patterns:
+      - ">=2 >=0 1 0"
+      - "1 >=0 1 0"
+
+    roles:
+      role_A:
+        categories: ["Kids"]
+        count: "any"
+
+      role_B:
+        categories: ["Adults"]
+        count: 1
+
+    selection_order:
+      - role_A
+      - role_B
+
+    constraints:
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_B"
+        role_2: "role_A"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 70
+
+  # Rule 3: Adult pairs (no kids)
+  - name: "Adult pair"
+    patterns:
+      - "0 0 2 0"
+
+    roles:
+      role_A:
+        categories: ["Adults"]
+        count: 2
+
+    selection_order:
+      - role_A
+
+    constraints:
+      - type: "pair_matching"
+        role: "role_A"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 25
+
+  # Rule 4: Elderly pairs
+  - name: "Elderly pair"
+    patterns:
+      - "0 0 0 2"
+
+    roles:
+      role_A:
+        categories: ["Old Adults"]
+        count: 2
+
+    selection_order:
+      - role_A
+
+    constraints:
+      - type: "pair_matching"
+        role: "role_A"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 25
+
+  # Rule 5: Multi-generational families
+  - name: "Multi-generational household"
+    patterns:
+      - ">=2 >=0 >=0 >=0"
+      - "1 >=0 >=0 >=0"
+
+    roles:
+      role_A:
+        categories: ["Kids"]
+        count: "any"
+
+      role_B:
+        categories: ["Adults"]
+        count: "any"
+
+      role_C:
+        categories: ["Old Adults"]
+        count: "any"
+
+    selection_order:
+      - role_A
+      - role_B
+      - role_C
+
+    constraints:
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_B"
+        role_2: "role_A"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 70
+
+      - type: "pair_matching"
+        role: "role_B"
+        require_exact_count: 2
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 25
+
+# =============================================
+# CONSTRAINT TYPES
+# =============================================
+#
+# 1. numerical_attribute_difference
+#    Validates: (role_1[attribute] - role_2[attribute]) is within [min_difference, max_difference]
+#
+#    When selecting a person for role_1 with existing people in role_2:
+#      - Check against the MINIMUM value in role_2 for min_difference
+#      - Check against the MAXIMUM value in role_2 for max_difference
+#
+#    Parameters:
+#      - attribute: Name of the numerical attribute to compare (e.g., "age", "income")
+#      - role_1: First role name
+#      - role_2: Second role name
+#      - min_difference: Minimum value for (attribute_1 - attribute_2)
+#      - max_difference: Maximum value for (attribute_1 - attribute_2), default
+#      - max_difference_by_categorical_attribute: (optional) Override max based on a categorical attribute
+#          - attribute: Name of categorical attribute (e.g., "sex", "occupation")
+#          - values: Dict mapping category values to max_difference overrides
+#
+# 2. pair_matching
+#    Selects 2 people from a role to form a compatible pair based on attributes
+#    Can be used for: romantic partners, roommates, business partners, siblings, etc.
+#
+#    Parameters:
+#      - role: Role name
+#      - require_exact_count: Only apply if role has exactly N people (optional)
+#      - categorical_attribute: (optional) Constraints on a categorical attribute
+#          - attribute: Name of categorical attribute (e.g., "sex", "religion", "occupation")
+#          - same_category_probability: Probability of matching categories (0.0-1.0)
+#      - numerical_attribute: (optional) Constraints on a numerical attribute
+#          - attribute: Name of numerical attribute (e.g., "age", "income", "education_years")
+#          - mean_difference: Target mean difference
+#          - std_difference: Standard deviation of difference
+#          - max_absolute_difference: Hard limit on |value_1 - value_2|
+
+# =============================================
+# SELECTION STRATEGY
+# =============================================
+selection_strategy:
+  max_attempts: 50
+  use_best_candidate: true
+  penalty_mode: "squared"
+  log_violations: false
+  log_best_candidates: false
+
+# =============================================
+# STATISTICS
+# =============================================
+track_statistics: true
