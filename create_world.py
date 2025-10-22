@@ -88,7 +88,7 @@ def print_world_examples(world):
     logger.info("")
     logger.info("2. Venue Examples:")
     venue_types = venues.get_venue_types()
-    for vtype in sorted(venue_types)[:3]:  # Show first 3 types
+    for vtype in sorted(venue_types):  # Show first 3 types
         venues_of_type = venues.get_venues_by_type(vtype)
         if venues_of_type:
             example_venue = venues_of_type[0]
@@ -98,7 +98,7 @@ def print_world_examples(world):
                 logger.info(f"   - Coordinates: {example_venue.coordinates}")
             if example_venue.properties:
                 # Show first 2 properties
-                props = list(example_venue.properties.items())[:2]
+                props = list(example_venue.properties.items())
                 for key, value in props:
                     logger.info(f"   - {key}: {value}")
 
@@ -229,7 +229,7 @@ def main():
     logger.info("=" * 60)
 
     # Show examples of what was created
-    #print_world_examples(world)
+    print_world_examples(world)
 
     return world
 
