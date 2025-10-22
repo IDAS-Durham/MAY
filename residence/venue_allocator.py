@@ -3,6 +3,9 @@ Generic venue allocator with YAML configuration.
 
 Allocates people to venues (care homes, dorms, company housing, etc.)
 based on flexible YAML-defined criteria.
+
+Venue allocations are configured in allocation_strategy.yaml as part of
+the unified household + venue allocation strategy.
 """
 
 import os
@@ -12,84 +15,6 @@ import random
 from typing import List, Optional, Dict
 
 logger = logging.getLogger("venue_allocator")
-
-
-def allocate_people_to_venues(geography, population, venues, household_distributor,
-                               config_file: str = "data/venues/venue_allocation.yaml"):
-    """
-    Allocate people to venues based on YAML configuration.
-
-    This is a completely generic function that works with any venue type.
-    Configuration is defined in venue_allocation.yaml.
-
-    Args:
-        geography: Geography object
-        population: PopulationManager
-        venues: VenueManager
-        household_distributor: HouseholdDistributor (to mark people as allocated)
-        config_file: Path to YAML configuration file
-
-    Returns:
-        dict: Statistics about allocation for each venue type
-    """
-    logger.info("=" * 60)
-    logger.info("Starting venue allocation from YAML configuration")
-    logger.info("=" * 60)
-
-    # Load configuration
-    logger.info(f"Loading venue allocation config from {config_file}")
-    with open(config_file, 'r') as f:
-        config = yaml.safe_load(f)
-
-    venue_allocations = config.get('venue_allocations', [])
-    if not venue_allocations:
-        logger.warning("No venue allocations defined in config")
-        return {}
-
-    # Track overall statistics
-    all_stats = {}
-
-    # Process each venue type
-    for allocation_config in venue_allocations:
-        venue_type = allocation_config.get('venue_type')
-        enabled = allocation_config.get('enabled', True)
-
-        if not enabled:
-            logger.info(f"Skipping {venue_type} (disabled in config)")
-            continue
-
-        logger.info("")
-        logger.info(f"Processing {venue_type}...")
-
-        stats = _allocate_to_venue_type(
-            venue_type=venue_type,
-            allocation_config=allocation_config,
-            population=population,
-            venues=venues,
-            household_distributor=household_distributor
-        )
-
-        all_stats[venue_type] = stats
-
-    # Print overall summary
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info("VENUE ALLOCATION SUMMARY")
-    logger.info("=" * 60)
-
-    total_allocated = 0
-    for venue_type, stats in all_stats.items():
-        logger.info(f"{venue_type}:")
-        logger.info(f"  Venues: {stats['venues']}")
-        logger.info(f"  Allocated: {stats['allocated']} people")
-        logger.info(f"  Capacity used: {stats['capacity_used']}/{stats['total_capacity']} ({stats.get('capacity_pct', 0):.1f}%)")
-        total_allocated += stats['allocated']
-
-    logger.info("")
-    logger.info(f"Total people allocated to venues: {total_allocated}")
-    logger.info("=" * 60)
-
-    return all_stats
 
 
 def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,

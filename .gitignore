@@ -67,4 +67,8 @@ debug_scripts/
 # Generated allocation files
 data/households/household_allocations.csv
 data/venues/venue_allocations.csv
-
+data/venues/care_homes_ew.csv
+data/households/household_composition_ew.csv
+data/population/sampled_single_year_female_ew.csv
+data/population/sampled_single_year_male_ew.csv
+stuff_for_carehomes
