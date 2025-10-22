@@ -6,7 +6,7 @@ class HouseholdSubsetDistributor(SubsetDistributor):
     def find_subset_for_person(self,
                                venue_has_capacity: list[bool],
                                person: "Person",
-                               **kwargs) -> (int, str, Optional["Subset"]):
+                               **kwargs) -> (int, str):
         """Takes a person and assigns them into a particular subset within the venue.
 
         This will be filled in with a series of criteria, specific to each kind of venue, that decides how to allocate a Person object into a specific subset within the venue. 

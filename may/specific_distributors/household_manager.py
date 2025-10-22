@@ -29,9 +29,9 @@ class HouseholdManager(VenueManager):
             name,
             venue_type = venue_type,
             geographical_unit=geo_unit,
+            properties = {'composition':composition},
             **kwargs
         )
-        newvenue.properties['venue_subtype'] = composition
         return newvenue
     
     def load_venue_type_from_df(self, venue_type, df):

@@ -73,7 +73,6 @@ class VenueManager:
         # Get additional property columns
         reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
         property_cols = [col for col in venue_df.columns if col not in reserved_cols]
-        print("property_cols = ",property_cols)
         properties={}
 
         # Create venues

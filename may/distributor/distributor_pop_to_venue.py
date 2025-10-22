@@ -77,11 +77,13 @@ class Distributor:
             self.available_venue_indices = available_venue_indices
         for person in self.people:
             if person.has_activity(activity):
-                self.find_venues_for_person(person,
-                                            activity,
-                                            self.potential_venues,
-                                            **kwargs)
-            else: continue
+                if not self.find_venues_for_person(person,
+                                                   activity,
+                                                   self.potential_venues,
+                                                   **kwargs):
+                    self._deal_with_no_venue(person, activity)
+
+        print("Number of unallocated folk: {}".format(len(self.unallocated_people)))
 
     def find_venues_for_person(self,
                                person: "Person",
@@ -114,10 +116,10 @@ class Distributor:
                 
             try:
                 trial_subset_index, trial_subset_name = self.subset_distributor.find_subset_for_person(
-                    self._venue_has_membership_capacity_by_subset[trail_venue.id],
+                    self._venue_has_membership_capacity_by_subset[trial_venue.id],
                     person,
                 )
-                print(trial_subset_index, trial_subset_name)
+
                 if trial_subset_name == 'No subset available':
                     # Try a new venue
                     continue
@@ -125,16 +127,17 @@ class Distributor:
                     # Assign venue and subset as the person's location and subset for the specified activity.
                     subset = trial_venue.subsets[trial_subset_name]
                     person.activity_map[activity].append(subset)
+                    person.properties['housed']=True
                     subset.add_member(person)
                     self._update_venue_membership_capacity(trial_venue_index, trial_venue, subset)
-                    break
+                    return True
             except:
                 logger.error("Could not assign a subset to person {} for venue {} of type {} with activity {}".format(person.id, trial_venue.id, trial_venue.type, activity))
                 #self._deal_with_no_venue(person, activity)
                 raise Exception("Failure of _assign_subset routine when assigning subset and venue for person {} to activity {}.".format(person.id, activity))
         # If exhausted the loop. 
-        logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
-        self._deal_with_no_venue(person, activity)
+        #logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
+        return False
                 
 
     def _update_venue_membership_capacity(self, trial_venue_index, venue, subset, **kwargs):
@@ -171,7 +174,7 @@ class Distributor:
 
         """
         self.unallocated_people.append(person)
-        print("Didn't allocate Person {} for activity {}".format(person.id, args[0]))
+        #logger.warning("Didn't allocate Person {} for activity {}".format(person.id, args[0]))
         #raise NotImplementedError("Not yet decided how to deal with people who have no venue to go to")
 
         

@@ -10,10 +10,7 @@ from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World
 from may.specific_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
-
-if os.environ.get('PYTHONHASHSEED') is None:
-    os.environ['PYTHONHASHSEED'] = '0'
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+from may.stats import StatMakerVenues, StatMaker
 
 logger = logging.getLogger("create_world")
 logging.basicConfig(
@@ -27,22 +24,26 @@ logging.basicConfig(
 # Suppress numexpr logging
 logging.getLogger('numexpr').setLevel(logging.WARNING)
 
-def set_random_seed(seed=999):
-    """
-    Sets global seeds for testing in numpy, random, and numbaised numpy.
-    """
+# if os.environ.get('PYTHONHASHSEED') is None:
+#     os.environ['PYTHONHASHSEED'] = '0'
+#     os.execv(sys.executable, [sys.executable] + sys.argv)
 
-    @nb.njit(cache=True)
-    def set_seed_numba(seed):
-        random.seed(seed)
-        return np.random.seed(seed)
+# def set_random_seed(seed=999):
+#     """
+#     Sets global seeds for testing in numpy, random, and numbaised numpy.
+#     """
 
-    np.random.seed(seed)
-    set_seed_numba(seed)
-    random.seed(seed)
-    return
+#     @nb.njit(cache=True)
+#     def set_seed_numba(seed):
+#         random.seed(seed)
+#         return np.random.seed(seed)
 
-set_random_seed(0)
+#     np.random.seed(seed)
+#     set_seed_numba(seed)
+#     random.seed(seed)
+#     return
+
+#set_random_seed(0)
 
 
 def print_world_examples(world):
@@ -124,30 +125,39 @@ def print_world_examples(world):
         logger.info("   Example people:")
         for person in random.choices(population.get_all_people(), k=5):
             logger.info(f"   {person}")
-            logger.info(f"     - Activities: {', '.join(person.activities)}")
+            logger.info(f"    - Activities: {', '.join(person.activities)}")
+            logger.info(f"    - Activity map:")
+            for activity, place in person.activity_map.items():
+                logger.info(f"        ~ {activity} : {place} ")
+            logger.info(f"    - Properties:")                
+            for prop, propy in person.properties.items():
+                logger.info(f"        ~ {prop} : {propy} ")
+            
 
     logger.info("")
     logger.info("4. Household Examples:")
-    if world.households and world.households.households:
-        logger.info(f"   Total households: {len(world.households.households)}")
-        logger.info(f"   Allocation rate: {len(world.households.allocated_people) / max(sum(len(p) for p in world.households.person_pool_by_area.values()), 1) * 100:.1f}%")
-        logger.info("")
-        logger.info("   Example households:")
-        for household in random.choices(world.households.households, k=5):
-            composition = household.get_composition()
-            logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
-            logger.info(f"     - Size: {household.size()} people")
-            logger.info(f"     - Composition: {composition}")
-            if household.properties.get('original_pattern'):
-                logger.info(f"     - Pattern: {household.properties['original_pattern']}")
+    venue_stats = StatMakerVenues(venues)
+    venue_stats.print_lots_of_stats('household')
+    # if world.households and world.households.households:
+    #     logger.info(f"   Total households: {len(world.households.households)}")
+    #     logger.info(f"   Allocation rate: {len(world.households.allocated_people) / max(sum(len(p) for p in world.households.person_pool_by_area.values()), 1) * 100:.1f}%")
+    #     logger.info("")
+    #     logger.info("   Example households:")
+    #     for household in random.choices(world.households.households, k=5):
+    #         composition = household.get_composition()
+    #         logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
+    #         logger.info(f"     - Size: {household.size()} people")
+    #         logger.info(f"     - Composition: {composition}")
+    #         if household.properties.get('original_pattern'):
+    #             logger.info(f"     - Pattern: {household.properties['original_pattern']}")
 
     logger.info("")
     logger.info("5. Query Examples:")
     for key in venues.get_venue_types():
         logger.info("")
         logger.info("   # Get all {}s".format(key))
-        all_hospitals = venues.get_venues_by_type(key)
-        logger.info(f"   venues.get_venues_by_type({key}) -> {len(all_hospitals)} {key}s")
+        all_venues = venues.get_venues_by_type(key)
+        logger.info(f"   venues.get_venues_by_type({key}) -> {len(all_venues)} {key}s")
 
     logger.info("")
     logger.info("   # Get venues in a specific area")
@@ -164,13 +174,19 @@ def print_world_examples(world):
     logger.info(f"   population.get_people_by_activity('work') -> {len(workers)} people")
 
     logger.info("")
-    logger.info("   # Get person's household")
-    if world.households and world.households.allocated_people:
-        example_person_id = next(iter(world.households.allocated_people))
-        example_person = next((p for p in population.get_all_people() if p.id == example_person_id), None)
-        if example_person and hasattr(example_person, 'residence') and example_person.residence:
-            logger.info(f"   person.residence -> Household {example_person.residence.id}")
-            logger.info(f"      Size: {example_person.residence.size()}, Composition: {example_person.residence.get_composition()}")
+    logger.info("   # Get people by housed or not")
+    housed = population.get_people_by_activity("home")
+    logger.info(f"   population.get_people_by_activity('home') -> {len(housed)} people with 'home' set")
+    
+
+    # logger.info("")
+    # logger.info("   # Get person's household")
+    # if world.households and world.households.allocated_people:
+    #     example_person_id = next(iter(world.households.allocated_people))
+    #     example_person = next((p for p in population.get_all_people() if p.id == example_person_id), None)
+    #     if example_person and hasattr(example_person, 'residence') and example_person.residence:
+    #         logger.info(f"   person.residence -> Household {example_person.residence.id}")
+    #         logger.info(f"      Size: {example_person.residence.size()}, Composition: {example_person.residence.get_composition()}")
 
     logger.info("")
     logger.info("=" * 60)

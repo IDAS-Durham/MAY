@@ -5,7 +5,7 @@ class Subset(AbstractSet):
 #    external = False
     __slots__ = ("venue", "subset_type", "people_present")
 
-    def __init__(self, venue: "Venue", subset_index: int, subset_name: str = None, people_present: list["Person"]=[], members: set["Person"]={}):
+    def __init__(self, venue: "Venue", subset_index: int, subset_name: str = None, people_present: list["Person"]=[], members: set["Person"]=set()):
         """
         Args:
           venue (Venue): the location in which this subset is situated.
@@ -19,6 +19,7 @@ class Subset(AbstractSet):
         self.people_present = people_present
         if subset_name is None:
             self.subset_name = str(self.subset_index)
+        self.members=members
 
     def _collate(self, attribute: str, ifnot=False) -> list["Person"]:
         """Collates Persons from self.people_present that have a particular attribute == True.
@@ -82,6 +83,9 @@ class Subset(AbstractSet):
     def __len__(self):
         return len(self.people_present)
 
+    def __str__(self):
+        return "Class : {} , subset_name : {}, id : {}, venue.id : {}, venue_name : {}, subset_membership : {}, members_present : {}".format(type(self), self.subset_name, self.id, self.venue.id, self.venue.name, len(self.members), len(self))
+    
     def __eq__(self, other):
         if not self.size() == other.size():
             return False
@@ -141,3 +145,11 @@ class Subset(AbstractSet):
     def remove_member(self, person: "Person"):
         """ Add a person's membership to this subset"""
         self.members.remove(person)
+
+    @property
+    def num_members(self):
+        return len(self.members)
+
+    @property
+    def num_present(self):
+        return len(self.people_present)    
