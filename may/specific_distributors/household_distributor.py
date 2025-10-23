@@ -29,7 +29,7 @@ class HouseholdDistributor(Distributor):
         )
 
         # Maximum threshold per household (first pass)
-        self.backup_venue_capacity_threshold = 8
+        self.backup_venue_capacity_threshold = 5
 
         # Composition-specific thresholds (first pass)
         self.composition_thresholds = {
@@ -37,30 +37,30 @@ class HouseholdDistributor(Distributor):
             '0 0 2 0': 2,    # Strict: cannot expand
             '0 0 0 1': 1,    # Strict: cannot expand
             '0 0 1 0': 1,    # Strict: cannot expand
-            '0 >=1 2 0': 6,  # Can expand ind children
-            '1 >=0 2 0': 6,  # Can expand ind children
-            '>=2 >=0 2 0': 8,  # Can expand kids and ind children
-            '0 >=1 1 0': 5,
-            '1 >=0 1 0': 5,
-            '>=2 >=0 1 0': 8,
-            '1 >=0 >=0 >=0': 8,   # Very flexible
-            '>=2 >=0 >=0 >=0': 10,  # Very flexible
-            '0 >=0 0 0': 6,
-            '0 >=0 >=0 >=0': 8,
-            '0 0 0 >=3': 6,
+            '0 >=1 2 0': 4,  # Can expand ind children
+            '1 >=0 2 0': 4,  # Can expand ind children
+            '>=2 >=0 2 0': 5,  # Can expand kids and ind children
+            '0 >=1 1 0': 4,
+            '1 >=0 1 0': 4,
+            '>=2 >=0 1 0': 4,
+            '1 >=0 >=0 >=0': 3,   # Very flexible
+            '>=2 >=0 >=0 >=0': 4,  # Very flexible
+            '0 >=0 0 0': 3,
+            '0 >=0 >=0 >=0': 3,
+            '0 0 0 >=3': 5,
         }
 
         # Expanded thresholds for second pass (allow more people)
         self.expanded_thresholds = {
             '0 >=1 2 0': 6,  # More ind children
             '1 >=0 2 0': 8,
-            '>=2 >=0 2 0': 15,  # More kids and ind children
-            '>=2 >=0 1 0': 12,
-            '1 >=0 >=0 >=0': 15,   # Much larger
-            '>=2 >=0 >=0 >=0': 20,  # Much larger
-            '0 >=0 0 0': 10,
-            '0 >=0 >=0 >=0': 15,
-            '0 0 0 >=3': 40,
+            '>=2 >=0 2 0': 12,  # More kids and ind children
+            '>=2 >=0 1 0': 10,
+            '1 >=0 >=0 >=0': 10,   # Much larger
+            '>=2 >=0 >=0 >=0': 10,  # Much larger
+            '0 >=0 0 0': 12,
+            '0 >=0 >=0 >=0': 12,
+            '0 0 0 >=3': 12,
         }
 
         # NEW: Track why each venue was closed
@@ -68,6 +68,9 @@ class HouseholdDistributor(Distributor):
 
         # NEW: Track which venues were closed due to threshold
         self._threshold_closed_venues = set()  # venue indices that can be reopened
+
+        # Track whether to use expanded thresholds (for second pass)
+        self.use_expanded_threshold = False
 
     
     def _update_venue_membership_capacity(self, trial_venue_index, venue, *args, **kwargs):
@@ -136,12 +139,12 @@ class HouseholdDistributor(Distributor):
                 #     composition_full = True
 
             case '>=2 >=0 2 0':
-                if venue.subsets['adults'].num_members >= 2:
-                    self._venue_has_membership_capacity_by_subset[venue.id][2] = False
+                if venue.subsets['kids'].num_members >= 3 and bool(random.getrandbits(1)):
+                    self._venue_has_membership_capacity_by_subset[venue.id][0] = False                
                 if venue.subsets['independent children'].num_members >= 1 and bool(random.getrandbits(1)):
                     self._venue_has_membership_capacity_by_subset[venue.id][1] = False
-                if venue.subsets['kids'].num_members >= 2 and bool(random.getrandbits(1)):
-                    self._venue_has_membership_capacity_by_subset[venue.id][0] = False
+                if venue.subsets['adults'].num_members >= 2:
+                    self._venue_has_membership_capacity_by_subset[venue.id][2] = False
                 self._venue_has_membership_capacity_by_subset[venue.id][3] = False
                 # if venue.subsets['adults'].num_members >= 2 and venue.subsets['kids'].num_members >= 2:
                 #     composition_full = True
@@ -149,7 +152,7 @@ class HouseholdDistributor(Distributor):
             case '0 >=1 1 0':
                 if venue.subsets['adults'].num_members >= 1:
                     self._venue_has_membership_capacity_by_subset[venue.id][2] = False
-                if venue.subsets['independent children'].num_members >= 1 and bool(random.getrandbits(1)):
+                if venue.subsets['independent children'].num_members >= 2 and bool(random.getrandbits(1)):
                     self._venue_has_membership_capacity_by_subset[venue.id][1] = False
                 self._venue_has_membership_capacity_by_subset[venue.id][0] = False
                 self._venue_has_membership_capacity_by_subset[venue.id][3] = False
@@ -159,7 +162,7 @@ class HouseholdDistributor(Distributor):
             case '1 >=0 1 0':
                 if venue.subsets['adults'].num_members >= 1:
                     self._venue_has_membership_capacity_by_subset[venue.id][2] = False
-                if venue.subsets['independent children'].num_members >= 1 and bool(random.getrandbits(1)):
+                if venue.subsets['independent children'].num_members >= 2 and bool(random.getrandbits(1)):
                     self._venue_has_membership_capacity_by_subset[venue.id][1] = False
                 if venue.subsets['kids'].num_members >= 1:
                     self._venue_has_membership_capacity_by_subset[venue.id][0] = False
@@ -168,12 +171,12 @@ class HouseholdDistributor(Distributor):
                 #     composition_full = True
 
             case '>=2 >=0 1 0':
-                if venue.subsets['adults'].num_members >= 1:
-                    self._venue_has_membership_capacity_by_subset[venue.id][2] = False
+                if venue.subsets['kids'].num_members >= 3 and bool(random.getrandbits(1)):
+                    self._venue_has_membership_capacity_by_subset[venue.id][0] = False                
                 if venue.subsets['independent children'].num_members >= 1 and bool(random.getrandbits(1)):
                     self._venue_has_membership_capacity_by_subset[venue.id][1] = False
-                if venue.subsets['kids'].num_members >= 2 and bool(random.getrandbits(1)):
-                    self._venue_has_membership_capacity_by_subset[venue.id][0] = False
+                if venue.subsets['adults'].num_members >= 1:
+                    self._venue_has_membership_capacity_by_subset[venue.id][2] = False
                 self._venue_has_membership_capacity_by_subset[venue.id][3] = False
                 # if venue.subsets['adults'].num_members >= 1 and venue.subsets['kids'].num_members >= 2:
                 #     composition_full = True
@@ -213,9 +216,7 @@ class HouseholdDistributor(Distributor):
         # ========================================
 
         # Determine which threshold to use (first pass vs expanded)
-        use_expanded = kwargs.get('use_expanded_threshold', False)
-
-        if use_expanded:
+        if self.use_expanded_threshold:
             threshold = self.expanded_thresholds.get(
                 composition,
                 self.backup_venue_capacity_threshold * 2  # Double the default for expansion
@@ -225,18 +226,22 @@ class HouseholdDistributor(Distributor):
                 composition,
                 self.backup_venue_capacity_threshold
             )
-
+        
         if venue.num_members >= threshold and not composition_full:
             # Closed due to THRESHOLD, not composition
-            logger.debug(f"Venue {venue.name} reached threshold ({total_members}/{threshold})")
+            logger.debug(f"Venue {venue.name} reached threshold ({venue.num_members}/{threshold})")
             self._venue_has_membership_capacity_by_subset[venue.id] = [False] * self.subset_distributor.n_subsets
             self._venue_closed_reason[venue.id] = 'threshold'
             self._threshold_closed_venues.add(trial_venue_index)
-            self.available_venue_indices.remove(trial_venue_index)            
+            if trial_venue_index in self.available_venue_indices:
+                self.available_venue_indices.remove(trial_venue_index)
+                self._search_index -=1
         elif composition_full or not any(self._venue_has_membership_capacity_by_subset[venue.id]):
             # Closed due to COMPOSITION constraints
             self._venue_closed_reason[venue.id] = 'composition'
-            self.available_venue_indices.remove(trial_venue_index)
+            if trial_venue_index in self.available_venue_indices:
+                self.available_venue_indices.remove(trial_venue_index)
+                self._search_index -=1
 
 
     def reopen_threshold_closed_venues(self):
@@ -266,13 +271,19 @@ class HouseholdDistributor(Distributor):
                 if venue_idx not in self.available_venue_indices:
                     self.available_venue_indices.append(venue_idx)
                     reopened_count += 1
-                    logger.info(f"Reopened venue {venue.name} for expansion (current: {venue.num_members})")
+                    logger.debug(f"Reopened venue {venue.name} for expansion (current: {venue.num_members})")
 
         # Clear the threshold-closed set (they've been processed)
         self._threshold_closed_venues.clear()
 
         return reopened_count
 
+    def sort_by_membership(self):
+        membership = np.zeros(len(self.available_venue_indices))
+        for i,vindex in enumerate(self.available_venue_indices):
+            membership[i] = self.potential_venues[vindex].num_members
+        self.available_venue_indices = [self.available_venue_indices[i] for i in np.argsort(membership)]
+    
     def assign_people_venues_with_expansion(self, activity: str, venue_type: str, **kwargs):
         """
         Two-pass assignment:
@@ -285,6 +296,8 @@ class HouseholdDistributor(Distributor):
         logger.info("FIRST PASS: Assigning with strict composition thresholds")
         logger.info("="*70)
 
+        self.use_expanded_threshold=False
+        
         self.assign_people_venues(activity, venue_type, **kwargs)
 
         first_pass_unallocated = len(self.unallocated_people)
@@ -301,17 +314,24 @@ class HouseholdDistributor(Distributor):
             logger.info(f"Reopened {reopened} flexible households for expansion")
 
             if reopened > 0:
-                # Reassign unallocated people with expanded thresholds
                 remaining_people = self.unallocated_people.copy()
                 self.unallocated_people = []
-                self.people = remaining_people
-
-                # Use expanded thresholds for this pass
-                self.assign_people_venues(activity, venue_type, use_expanded_threshold=True, **kwargs)
+                self.sort_by_membership()
+                # Use expanded thresholds for this pass.
+                # Only assign remaining people.
+                self.use_expanded_threshold=True
+                self.assign_people_venues(activity,
+                                          venue_type,
+                                          people=remaining_people,
+                                          available_venue_indices=self.available_venue_indices,
+                                          randomize_venue_order=False,
+                                          maxiter=2000,
+                                          **kwargs)
 
                 second_pass_unallocated = len(self.unallocated_people)
-                logger.info(f"After second pass: {second_pass_unallocated} people unallocated")
                 logger.info(f"Second pass allocated: {first_pass_unallocated - second_pass_unallocated} additional people")
+                logger.info(f"After second pass: {second_pass_unallocated} people unallocated")
+
 
             
     # def _get_subset_dist(self):

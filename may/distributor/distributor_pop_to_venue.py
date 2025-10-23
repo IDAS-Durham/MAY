@@ -68,28 +68,31 @@ class Distributor:
                              venue_type: str,
                              available_venue_indices: list[int] = None,
                              randomize_venue_order=True,
+                             people: list["Person"]=None,
                              **kwargs):
         """Assigns people from self.people to do an activity (if they have it) at a particular venue type (if there is membership_capacity). 
 
         """
+        people = people if people is not None else self.people
         if available_venue_indices is None:
             self.available_venue_indices = list(range(len(self.potential_venues)))
         else:
             self.available_venue_indices = available_venue_indices
         if randomize_venue_order: random.shuffle(self.available_venue_indices)
+        self._search_index=-1
         
-        
-        # Initialize the correct membership capacities for households. 
-        for i, venue in enumerate(self.potential_venues):
+        # Initialize the correct membership capacities for households.
+        for venue_idx in self.available_venue_indices:
+            venue=self.potential_venues[venue_idx]
             for subset in venue.subsets.values():
-                self._update_venue_membership_capacity(i, venue, subset)
+                self._update_venue_membership_capacity(venue_idx, venue, subset)
         logger.info("Set venue capacities. Starting allocation...")
         # Start allocating people
-        self.search_index=-1
+
         total_allocated=0
-        total_people=len(self.people)
+        total_people=len(people)
         printed=set()
-        for person in self.people:
+        for person in people:
             if person.has_activity(activity):
                 if self.find_venues_for_person(person,
                                                activity,
@@ -110,7 +113,7 @@ class Distributor:
                                person: "Person",
                                activity: str,
                                venue_list: list["Venue"],
-                               maxiter: int=100,
+                               maxiter: int=500,
                                **kwargs):
         """Assigns a person a venue from a list, and a subset for that venue.
 
@@ -125,11 +128,11 @@ class Distributor:
         i=0
         while i <= maxiter:
             i+=1
-            self.search_index+=1
-            if self.search_index >= len(self.available_venue_indices):
-                self.search_index = 0
+            self._search_index+=1
+            if self._search_index >= len(self.available_venue_indices):
+                self._search_index = 0
                 
-            trial_venue_index=self.available_venue_indices[self.search_index]
+            trial_venue_index=self.available_venue_indices[self._search_index]
             try:
                 trial_venue = venue_list[trial_venue_index]
             except:
@@ -150,7 +153,10 @@ class Distributor:
                     person.activity_map[activity].append(subset)
                     person.properties['housed']=True
                     subset.add_member(person)
-                    self._update_venue_membership_capacity(trial_venue_index, trial_venue, subset)
+                    self._update_venue_membership_capacity(trial_venue_index,
+                                                           trial_venue,
+                                                           subset,
+                                                           **kwargs)
                     return True
             except:
                 logger.error("Could not assign a subset to person {} for venue {} of type {} with activity {}".format(person.id, trial_venue.id, trial_venue.type, activity))
@@ -159,7 +165,7 @@ class Distributor:
             
             
         # If exhausted the loop. 
-        #logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
+        logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
         return False
 
     def _update_venue_membership_capacity(self, trial_venue_index, venue, subset, **kwargs):

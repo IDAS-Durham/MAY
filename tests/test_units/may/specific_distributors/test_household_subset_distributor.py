@@ -9,13 +9,11 @@ class TestHouseholdSubsetDistributor:
 
     @pytest.fixture
     def distributor(self):
-        """Create a HouseholdSubsetDistributor instance for testing."""
         subset_names = ['kids', 'independent children', 'adults', 'elderly']
         return HouseholdSubsetDistributor('household', subset_names)
 
     @pytest.fixture
     def mock_geo_unit(self):
-        """Create a mock geographical unit for testing."""
         return GeographicalUnit(id=0, name="TestSGU", level="SGU")
 
     def test_initialization(self, distributor):

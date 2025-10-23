@@ -271,7 +271,7 @@ def main():
     venues.extend(household_manager)
     # Distribute people to Households
     household_distributor = HouseholdDistributor('household', venues, population.people) #WithReopening
-    household_distributor.assign_people_venues('home', 'household')
+    household_distributor.assign_people_venues_with_expansion('home', 'household')
 
     logger.info("Distributing pop to households took {}s".format(datetime.now()-laptime))
     laptime = datetime.now()
