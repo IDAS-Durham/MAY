@@ -191,6 +191,10 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
     max_household_size = step_config.get('max_household_size')
     allocate_flexible = step_config.get('allocate_flexible', False)
     round_name = step_config.get('name', 'Household Round')
+    rule_name = step_config.get('rule')  # Optional: explicit rule to apply
+
+    if rule_name:
+        logger.info(f"  Using explicit relationship rule: '{rule_name}'")
 
     # Process patterns to extract assumptions
     # Patterns can be either:
@@ -230,7 +234,8 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
             max_household_size=max_household_size,
             allocate_flexible=allocate_flexible,
             refresh_pools=refresh_pools,
-            round_name=round_name
+            round_name=round_name,
+            rule_name=rule_name
         )
         return stats
     finally:

@@ -54,7 +54,7 @@ rules:
           attribute: "age"
           mean_difference: 3.0
           std_difference: 5.0
-          max_absolute_difference: 25
+          max_absolute_difference: 19
 
   # Rule 2: Single-adult families with kids
   - name: "Single-adult family with kids"
@@ -130,7 +130,7 @@ rules:
           attribute: "age"
           mean_difference: 3.0
           std_difference: 5.0
-          max_absolute_difference: 25
+          max_absolute_difference: 19
 
   # Rule 4: Single-adult families with young adults
   - name: "Single-adult family with young adults"
@@ -186,7 +186,7 @@ rules:
           attribute: "age"
           mean_difference: 3.0
           std_difference: 5.0
-          max_absolute_difference: 25
+          max_absolute_difference: 19
 
   # Rule 6: Elderly pairs
   - name: "Elderly pair"
@@ -211,7 +211,7 @@ rules:
           attribute: "age"
           mean_difference: 3.0
           std_difference: 5.0
-          max_absolute_difference: 25
+          max_absolute_difference: 19
 
   # Rule 7: Multi-generational families
   - name: "Multi-generational household"
@@ -260,7 +260,7 @@ rules:
           attribute: "age"
           mean_difference: 3.0
           std_difference: 5.0
-          max_absolute_difference: 25
+          max_absolute_difference: 19
 
       # role_C (Old Adults) must be appropriately older than role_B (Adults)
       - type: "numerical_attribute_difference"

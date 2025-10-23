@@ -19,15 +19,30 @@ enabled: true
 
 steps:
   # =============================================
-  # Step 1: Families with Children (Households)
+  # Step 1a: Two-Adult Families with Children
   # =============================================
-  - name: "Families with Children"
+  - name: "Two-Adult Families with Children"
     type: "household"
-    description: "Allocate families with kids first (highest priority)"
+    description: "Allocate two-adult families with kids (highest priority)"
+    rule: "Two-adult family with kids"  # Use relationship rules
 
     patterns:
       - ">=2 >=0 2 0"   # 2+ kids, 2 adults
       - "1 >=0 2 0"     # 1 kid, 2 adults
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 1b: Single-Parent Families with Children
+  # =============================================
+  - name: "Single-Parent Families with Children"
+    type: "household"
+    description: "Allocate single-parent families with kids"
+    rule: "Single-adult family with kids"  # Use relationship rules
+
+    patterns:
       - ">=2 >=0 1 0"   # 2+ kids, 1 adult (single parent)
       - "1 >=0 1 0"     # 1 kid, 1 adult (single parent)
 
@@ -41,6 +56,7 @@ steps:
   - name: "Multi-generational Households"
     type: "household"
     description: "Multi-generational households"
+    rule: "Multi-generational household"  # Explicitly specify which relationship rule to use
 
     patterns:
       - pattern: ">=2 >=0 >=0 >=0"
@@ -53,14 +69,29 @@ steps:
     enable_demotion: null
 
   # =============================================
-  # Step 3: Families with Young Adults (no kids) (Households)
+  # Step 3a: Two-Adult Families with Young Adults (no kids)
   # =============================================
-  - name: "Families with YA no kids"
+  - name: "Two-Adult Families with YA, no kids"
     type: "household"
-    description: "Allocate families with Young Adults, no kids"
+    description: "Allocate two-adult families with Young Adults, no kids"
+    rule: "Two-adult family with young adults"  # Use relationship rules
 
     patterns:
       - "0 >=1 2 0"
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 3b: Single-Adult Families with Young Adults (no kids)
+  # =============================================
+  - name: "Single-Adult Families with YA, no kids"
+    type: "household"
+    description: "Allocate single-adult families with Young Adults, no kids"
+    rule: "Single-adult family with young adults"  # Use relationship rules
+
+    patterns:
       - "0 >=1 1 0"
 
     max_households: null
@@ -69,29 +100,57 @@ steps:
 
 
   # =============================================
-  # Step 4: Elderly Couples (Households)
+  # Step 4a: Elderly Couples
   # =============================================
-  - name: "Elderly households"
+  - name: "Elderly Couples"
     type: "household"
-    description: "Allocate elderly to elderly-only households"
+    description: "Allocate elderly couples"
+    rule: "Elderly pair"  # Use relationship rules
 
     patterns:
       - "0 0 0 2"       # 2 old adults
-      - "0 0 0 1"
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 4b: Elderly Singles
+  # =============================================
+  - name: "Elderly Singles"
+    type: "household"
+    description: "Allocate single elderly (simple allocation, no rules)"
+
+    patterns:
+      - "0 0 0 1"       # 1 old adult
 
     max_households: null
     refresh_pools: false
     enable_demotion: null
 
    # =============================================
-  # Step 5: Adult-Only Households
+  # Step 5a: Adult Couples
   # =============================================
-  - name: "Adult-Only Households"
+  - name: "Adult Couples"
     type: "household"
-    description: "Allocate adult couples and singles"
+    description: "Allocate adult couples"
+    rule: "Adult pair"  # Use relationship rules
 
     patterns:
       - "0 0 2 0"       # 2 adults
+
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  # =============================================
+  # Step 5b: Adult Singles
+  # =============================================
+  - name: "Adult Singles"
+    type: "household"
+    description: "Allocate single adults (simple allocation, no rules)"
+
+    patterns:
       - "0 0 1 0"       # 1 adult
 
     max_households: null

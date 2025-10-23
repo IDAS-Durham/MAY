@@ -537,7 +537,8 @@ class HouseholdDistributor:
     def _allocate_household_with_rules(self, area_code: str, pattern: CompositionPattern,
                                        max_size: Optional[int] = None,
                                        allocate_flexible: bool = False,
-                                       target_size: Optional[int] = None) -> Tuple[Optional[Household], Optional[int]]:
+                                       target_size: Optional[int] = None,
+                                       rule_name: Optional[str] = None) -> Tuple[Optional[Household], Optional[int]]:
         """
         Allocate a household using relationship rules.
 
@@ -552,23 +553,39 @@ class HouseholdDistributor:
             max_size: Maximum household size (optional)
             allocate_flexible: If True, allocate people to flexible (>=) categories
             target_size: Target household size for balanced distribution (optional)
+            rule_name: Optional rule name to use (overrides auto-matching)
 
         Returns:
             Tuple of (Household object if successful or None, failed_category_idx or None)
         """
-        # Check if relationship rules apply to this pattern
-        rule = self.relationship_rules.get_rule_for_pattern(pattern.original_pattern)
+        # If no rule is specified, use simple allocation (no rules)
+        if not rule_name:
+            return self._allocate_household(area_code, pattern, max_size, allocate_flexible, target_size)
 
+        # Get pattern to match (for logging)
+        pattern_to_match = getattr(pattern, 'census_pattern', pattern.original_pattern)
+
+        # Use explicitly specified rule
+        rule = self.relationship_rules.get_rule_by_name(rule_name)
         if not rule:
-            # No rules for this pattern, use default allocation
+            logger.warning(f"Rule '{rule_name}' not found, falling back to simple allocation")
             return self._allocate_household(area_code, pattern, max_size, allocate_flexible, target_size)
 
         # Log first time we apply rules for this pattern
         if not hasattr(self, '_logged_rules'):
             self._logged_rules = set()
-        if pattern.original_pattern not in self._logged_rules:
-            logger.info(f"✓ Applying relationship rules for pattern: '{pattern.original_pattern}'")
-            self._logged_rules.add(pattern.original_pattern)
+
+        # Create a unique key for logging (pattern + rule_name if specified)
+        log_key = f"{pattern_to_match}_{rule_name}" if rule_name else pattern_to_match
+
+        if log_key not in self._logged_rules:
+            if rule_name:
+                logger.info(f"✓ Applying explicit rule '{rule_name}' to pattern: '{pattern.original_pattern}'")
+            elif hasattr(pattern, 'census_pattern'):
+                logger.info(f"✓ Applying relationship rules for pattern: '{pattern.census_pattern}' (using assumption: '{pattern.original_pattern}')")
+            else:
+                logger.info(f"✓ Applying relationship rules for pattern: '{pattern.original_pattern}'")
+            self._logged_rules.add(log_key)
 
         if area_code not in self.person_pool_by_area:
             return (None, None)
@@ -590,7 +607,11 @@ class HouseholdDistributor:
         self._household_counts_by_area_log[area_code] += 1
         logger.info("=" * 80)
         logger.info(f"GEO UNIT: {area_code} - HOUSEHOLD #{self._household_counts_by_area_log[area_code]}")
-        logger.info(f"Pattern: '{pattern.original_pattern}'")
+        if hasattr(pattern, 'census_pattern'):
+            logger.info(f"Census Pattern: '{pattern.census_pattern}'")
+            logger.info(f"Assumption: '{pattern.original_pattern}'")
+        else:
+            logger.info(f"Pattern: '{pattern.original_pattern}'")
         logger.info("=" * 80)
         logger.info(f"Rule: {rule.name}")
         logger.info(f"Selection order: {' → '.join(rule.selection_order)}")
@@ -837,103 +858,198 @@ class HouseholdDistributor:
 
         # BALANCED DISTRIBUTION: Use proportional allocation when target_size is specified
         if allocate_flexible and target_size is not None:
+            print(f"\n=== BALANCED DISTRIBUTION MODE ===")
+            print(f"Target size: {target_size}")
+
             # First pass: allocate exact counts for fixed categories
             fixed_total = 0
             flexible_categories = []
 
+            print(f"\n--- FIRST PASS: Categorizing fixed vs flexible ---")
             for cat_idx in range(len(self.age_categories)):
                 min_count = pattern.get_min_count(cat_idx)
                 max_count = pattern.get_max_count(cat_idx)
                 available = len(pools[cat_idx])
 
+                cat_name = self.age_categories[cat_idx].name
+                print(f"\nCategory {cat_idx} ({cat_name}):")
+                print(f"  min_count: {min_count}, max_count: {max_count}, available: {available}")
+
                 # Check minimum availability
                 if available < min_count:
+                    print(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
                     return (None, cat_idx)
 
                 if max_count is not None:
                     # Fixed category - allocate exactly
+                    print(f"  → FIXED category: allocating exactly {max_count}")
                     selections.append((cat_idx, max_count))
                     fixed_total += max_count
                 else:
                     # Flexible category - defer allocation
+                    print(f"  → FLEXIBLE category: deferring (min: {min_count}, available: {available})")
                     flexible_categories.append((cat_idx, min_count, available))
+
+            print(f"\n--- FIRST PASS COMPLETE ---")
+            print(f"Fixed total: {fixed_total}")
+            print(f"Flexible categories: {len(flexible_categories)}")
 
             # Second pass: distribute remaining capacity proportionally across flexible categories
             remaining_capacity = target_size - fixed_total
+            print(f"\n--- SECOND PASS: Proportional allocation ---")
+            print(f"Remaining capacity: {remaining_capacity} (target: {target_size} - fixed: {fixed_total})")
 
             if remaining_capacity < 0:
                 # Can't meet target - fixed categories already exceed it
+                print(f"✗ ERROR: Fixed categories ({fixed_total}) exceed target size ({target_size})")
                 return (None, None)
 
             # Calculate proportional allocation based on availability
             total_available = sum(avail for _, _, avail in flexible_categories)
+            print(f"Total available in flexible categories: {total_available}")
+
+            # Track allocations with their proportions for remainder distribution
+            flexible_allocations = []
 
             for cat_idx, min_count, available in flexible_categories:
+                cat_name = self.age_categories[cat_idx].name
+                print(f"\nCategory {cat_idx} ({cat_name}):")
+                print(f"  min: {min_count}, available: {available}")
+
                 if total_available > 0:
                     # Proportional share of remaining capacity
                     proportion = available / total_available
                     allocated = int(remaining_capacity * proportion)
+                    print(f"  proportion: {proportion:.3f} ({available}/{total_available})")
+                    print(f"  raw allocation: {allocated} ({remaining_capacity} * {proportion:.3f})")
+
                     # Ensure we meet minimum and don't exceed available
                     allocated = max(min_count, min(allocated, available))
+                    print(f"  initial allocation: {allocated} (after min/max constraints)")
                 else:
+                    proportion = 0
                     allocated = min_count
+                    print(f"  total_available=0, using min_count: {allocated}")
 
+                flexible_allocations.append((cat_idx, allocated, available, proportion))
+
+            # Calculate shortfall and distribute remainder
+            current_total = sum(alloc for _, alloc, _, _ in flexible_allocations)
+            shortfall = remaining_capacity - current_total
+            print(f"\nShortfall check: allocated {current_total}, need {remaining_capacity}, shortfall: {shortfall}")
+
+            if shortfall > 0:
+                print(f"Distributing {shortfall} remaining slots...")
+                # Sort by proportion (highest first) to prioritize categories with more availability
+                flexible_allocations.sort(key=lambda x: x[3], reverse=True)
+
+                for i, (cat_idx, allocated, available, proportion) in enumerate(flexible_allocations):
+                    if shortfall == 0:
+                        break
+
+                    # How many more can this category take?
+                    can_take = available - allocated
+                    if can_take > 0:
+                        give = min(can_take, shortfall)
+                        cat_name = self.age_categories[cat_idx].name
+                        print(f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})")
+                        flexible_allocations[i] = (cat_idx, allocated + give, available, proportion)
+                        shortfall -= give
+
+            # Add all flexible allocations to selections
+            for cat_idx, allocated, _, _ in flexible_allocations:
                 selections.append((cat_idx, allocated))
 
             # Sort selections by category index to maintain order
             selections.sort(key=lambda x: x[0])
 
             total_selected = sum(count for _, count in selections)
+            print(f"\n--- SECOND PASS COMPLETE ---")
+            print(f"Total selected: {total_selected}")
+            print(f"Selections: {selections}")
 
         else:
             # ORIGINAL LOGIC: Sequential allocation
+            print(f"\n=== ORIGINAL SEQUENTIAL ALLOCATION MODE ===")
+            if max_size:
+                print(f"Max size constraint: {max_size}")
+            else:
+                print("No max size constraint")
+
             # PHASE 1: Check if ALL categories can be fulfilled (don't modify pools yet!)
             total_selected = 0
+            print(f"\n--- SEQUENTIAL ALLOCATION PHASE ---")
+
             for cat_idx in range(len(self.age_categories)):
                 min_count = pattern.get_min_count(cat_idx)
                 max_count = pattern.get_max_count(cat_idx)
-
                 available = len(pools[cat_idx])
+
+                cat_name = self.age_categories[cat_idx].name
+                print(f"\nCategory {cat_idx} ({cat_name}):")
+                print(f"  min: {min_count}, max: {max_count}, available: {available}")
+                print(f"  total_selected so far: {total_selected}")
 
                 # Check if we have enough people
                 if available < min_count:
                     # Can't fulfill - return failure with the category that caused it
+                    print(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
                     return (None, cat_idx)
 
                 # Decide how many to take
                 if max_count is not None:
                     # Exact count specified
                     count = max_count
+                    print(f"  → EXACT count specified: {count}")
                 else:
                     # Flexible (>=) category
+                    print(f"  → FLEXIBLE category (min: {min_count})")
                     if allocate_flexible and available > min_count:
                         # RANDOM ALLOCATION: Randomly allocate between min and available
                         # But respect max_size if specified
                         max_allocatable = available
+                        print(f"    allocate_flexible=True, available > min_count")
+                        print(f"    initial max_allocatable: {max_allocatable}")
+
                         if max_size is not None:
                             remaining_capacity = max_size - total_selected
                             max_allocatable = min(max_allocatable, remaining_capacity)
+                            print(f"    remaining_capacity: {remaining_capacity}")
+                            print(f"    adjusted max_allocatable: {max_allocatable}")
 
                         # Random count between min and max_allocatable
                         if max_allocatable > min_count:
                             count = random.randint(min_count, max_allocatable)
+                            print(f"    random allocation: {count} (range: {min_count}-{max_allocatable})")
                         else:
                             count = min_count
+                            print(f"    max_allocatable <= min_count, using min: {count}")
                     else:
                         # Take minimum required
                         count = min_count
+                        print(f"    taking minimum: {count}")
 
                 # Apply max_size constraint if specified
                 if max_size is not None:
                     remaining_capacity = max_size - total_selected
+                    original_count = count
                     count = min(count, remaining_capacity)
+                    if count != original_count:
+                        print(f"  max_size constraint applied: {original_count} → {count}")
 
                     # If this brings us below minimum, we can't fulfill the pattern
                     if count < min_count:
+                        print(f"  ✗ CONSTRAINT VIOLATION: count ({count}) < min_count ({min_count})")
                         return (None, cat_idx)
 
                 total_selected += count
                 selections.append((cat_idx, count))
+                print(f"  ✓ Allocated: {count}")
+                print(f"  new total_selected: {total_selected}")
+
+            print(f"\n--- SEQUENTIAL ALLOCATION COMPLETE ---")
+            print(f"Total selected: {total_selected}")
+            print(f"Selections: {selections}")
 
         # PHASE 2: All checks passed! Now actually take people from pools
         selected_people = []
@@ -984,7 +1100,8 @@ class HouseholdDistributor:
     def _attempt_with_demotion(self, area_code: str, pattern: CompositionPattern,
                                max_attempts: int, max_size: Optional[int] = None,
                                allocate_flexible: bool = False,
-                               target_size: Optional[int] = None) -> Optional[Household]:
+                               target_size: Optional[int] = None,
+                               rule_name: Optional[str] = None) -> Optional[Household]:
         """
         Attempt to allocate a household, using intelligent demotion if necessary.
 
@@ -998,6 +1115,7 @@ class HouseholdDistributor:
             max_attempts: Maximum demotion attempts
             max_size: Maximum household size (optional)
             allocate_flexible: If True, allocate people to flexible (>=) categories randomly
+            rule_name: Optional relationship rule name to apply (overrides auto-matching)
 
         Returns:
             Household object if successful, None otherwise
@@ -1021,7 +1139,7 @@ class HouseholdDistributor:
             # Try to allocate with current pattern
             # First try with relationship rules if available
             household, failed_category_idx = self._allocate_household_with_rules(
-                area_code, current_pattern, max_size, allocate_flexible, target_size
+                area_code, current_pattern, max_size, allocate_flexible, target_size, rule_name
             )
 
             # If rules-based allocation returned None and called the fallback,
@@ -1194,10 +1312,20 @@ class HouseholdDistributor:
 
         pools = self.person_pool_by_area[area_code]
 
-        # Count total available people in ALL categories (not just flexible)
+        # Count total available people in ELIGIBLE categories only
+        # (categories where the pattern allows at least 1 person)
         total_available = 0
         for cat_idx in range(len(self.age_categories)):
-            total_available += len(pools[cat_idx])
+            max_count = pattern.get_max_count(cat_idx)
+            pool_size = len(pools[cat_idx])
+            # Only count if category allows people (max_count is None or > 0)
+            if max_count is None or max_count > 0:
+                total_available += pool_size
+                if pool_size > 0:
+                    logger.debug(f"  Category {self.age_categories[cat_idx].name}: {pool_size} available (max_count={max_count})")
+            else:
+                if pool_size > 0:
+                    logger.debug(f"  Category {self.age_categories[cat_idx].name}: {pool_size} available but EXCLUDED by pattern (max_count={max_count})")
 
         # Strategy: Fill households to capacity to allocate as many people as possible
         if max_household_size:
@@ -1234,7 +1362,8 @@ class HouseholdDistributor:
                                    max_household_size: Optional[int] = None,
                                    allocate_flexible: bool = False,
                                    refresh_pools: bool = False,
-                                   round_name: Optional[str] = None):
+                                   round_name: Optional[str] = None,
+                                   rule_name: Optional[str] = None):
         """
         Distribute households in a single round with optional filtering.
 
@@ -1267,6 +1396,8 @@ class HouseholdDistributor:
             refresh_pools: If True, refresh person pools to exclude already allocated people.
                          Use this when coming back after other allocation operations.
             round_name: Optional name for this round (for logging)
+            rule_name: Optional relationship rule name to apply (overrides auto-matching).
+                      Example: "Two-adult family with kids"
 
         Returns:
             dict: Statistics about this round's allocation
@@ -1316,7 +1447,11 @@ class HouseholdDistributor:
                 if actual_pattern_str != pattern_str:
                     logger.debug(f"Using assumption for pattern '{pattern_str}': '{actual_pattern_str}'")
 
+                # Create pattern from assumption, but preserve census pattern for rule matching
                 pattern = CompositionPattern.from_string(actual_pattern_str)
+                # Store the census pattern so rules can match against it
+                if actual_pattern_str != pattern_str:
+                    pattern.census_pattern = pattern_str
 
                 # Validate max_household_size against pattern minimum
                 if max_household_size is not None:
@@ -1346,9 +1481,9 @@ class HouseholdDistributor:
                     target_size = balanced_sizes[i] if balanced_sizes and i < len(balanced_sizes) else None
 
                     if demotion_enabled:
-                        household = self._attempt_with_demotion(area_code, pattern, max_attempts, max_household_size, allocate_flexible, target_size)
+                        household = self._attempt_with_demotion(area_code, pattern, max_attempts, max_household_size, allocate_flexible, target_size, rule_name)
                     else:
-                        household, _ = self._allocate_household(area_code, pattern, max_household_size, allocate_flexible, target_size)
+                        household, _ = self._allocate_household_with_rules(area_code, pattern, max_household_size, allocate_flexible, target_size, rule_name)
 
                     if household:
                         # Get the actual pattern that was used (may have been demoted)

@@ -125,6 +125,25 @@ class RelationshipRulesValidator:
 
         return None
 
+    def get_rule_by_name(self, rule_name: str) -> Optional[RelationshipRule]:
+        """
+        Get relationship rule by name.
+
+        Args:
+            rule_name: Name of the rule (e.g., "Two-adult family with kids")
+
+        Returns:
+            RelationshipRule or None if rule not found
+        """
+        if not self.enabled:
+            return None
+
+        for rule in self.rules:
+            if rule.name == rule_name:
+                return rule
+
+        return None
+
     def validate_numerical_attribute_difference_constraint(self,
                                           person1: Person,
                                           people2: List[Person],
