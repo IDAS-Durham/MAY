@@ -2,5 +2,3 @@
 # One code per line, comments allowed (lines starting with #)
 
 E02000173
-E02000187
-E02000414

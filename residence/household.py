@@ -236,6 +236,46 @@ class CompositionPattern:
         # Couldn't demote further
         return None
 
+    def demote_to_count(self, cat_idx: int, target_count: int) -> Optional['CompositionPattern']:
+        """
+        Demote a specific category directly to a target count.
+
+        This is more efficient than calling demote_once multiple times,
+        as it jumps directly to the available count.
+
+        Args:
+            cat_idx: Category index to demote
+            target_count: Target count to demote to (usually the available count)
+
+        Returns:
+            New CompositionPattern with the category set to >=target_count, or None if can't demote
+        """
+        if cat_idx >= len(self.requirements):
+            return None
+
+        operator, current_count = self.requirements[cat_idx]
+
+        # Only demote if target is less than current
+        # For "gte" operator, demote to >=target_count
+        # For "exact" operator, demote to target_count (exact)
+        if operator == "gte" and target_count < current_count:
+            new_requirements = list(self.requirements)
+            new_requirements[cat_idx] = ("gte", target_count)
+            return CompositionPattern(
+                original_pattern=self.original_pattern,
+                requirements=new_requirements
+            )
+        elif operator == "exact" and target_count < current_count:
+            new_requirements = list(self.requirements)
+            new_requirements[cat_idx] = ("exact", target_count)
+            return CompositionPattern(
+                original_pattern=self.original_pattern,
+                requirements=new_requirements
+            )
+
+        # No demotion needed or possible
+        return None
+
     def promote_once(self, priority_order: List[int]) -> Optional['CompositionPattern']:
         """
         Attempt to promote this pattern by relaxing requirements to allow more people.
@@ -535,27 +575,27 @@ class HouseholdDistributor:
 
         pools = self.person_pool_by_area[area_code]
 
-        # Detailed logging for ALL households in one specific geo unit
-        if not hasattr(self, '_detailed_log_area'):
-            self._detailed_log_area = area_code
-            self._detailed_log_household_count = 0
+        # Detailed logging for ALL households in ALL geo units
+        if not hasattr(self, '_household_counts_by_area_log'):
+            self._household_counts_by_area_log = {}
+
+        if area_code not in self._household_counts_by_area_log:
+            self._household_counts_by_area_log[area_code] = 0
             logger.info("")
             logger.info("=" * 80)
-            logger.info(f"DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
+            logger.info(f"STARTING DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
             logger.info("=" * 80)
             logger.info("")
 
-        if area_code == self._detailed_log_area:
-            self._detailed_log_household_count += 1
-            logger.info("=" * 80)
-            logger.info(f"HOUSEHOLD #{self._detailed_log_household_count} - Pattern '{pattern.original_pattern}'")
-            logger.info("=" * 80)
-            logger.info(f"Rule: {rule.name}")
-            logger.info(f"Selection order: {' → '.join(rule.selection_order)}")
-            logger.info("")
-            self._show_detailed_logs = True
-        else:
-            self._show_detailed_logs = False
+        self._household_counts_by_area_log[area_code] += 1
+        logger.info("=" * 80)
+        logger.info(f"GEO UNIT: {area_code} - HOUSEHOLD #{self._household_counts_by_area_log[area_code]}")
+        logger.info(f"Pattern: '{pattern.original_pattern}'")
+        logger.info("=" * 80)
+        logger.info(f"Rule: {rule.name}")
+        logger.info(f"Selection order: {' → '.join(rule.selection_order)}")
+        logger.info("")
+        self._show_detailed_logs = True
 
         # Track selected people by role
         selected_by_role: Dict[str, List[Person]] = {role_name: [] for role_name in rule.roles.keys()}
@@ -587,6 +627,22 @@ class HouseholdDistributor:
 
             if not candidates:
                 # No people available for this role
+                # Check if this role allows 0 people (e.g., role_count == "any" with min=0)
+                if role_count == "any":
+                    # Calculate minimum needed from pattern
+                    total_needed = 0
+                    for cat_idx in category_indices:
+                        min_count = pattern.get_min_count(cat_idx)
+                        total_needed += min_count
+
+                    if total_needed == 0:
+                        # Pattern allows 0 people for this role - skip it
+                        if self._show_detailed_logs:
+                            logger.info(f"  → Pattern allows 0 people for this role, skipping")
+                            logger.info("")
+                        continue
+
+                # If we get here, the role requires people but none are available
                 if self._show_detailed_logs:
                     logger.info(f"  ✗ FAILED: No candidates available")
                 return (None, category_indices[0] if category_indices else None)
@@ -643,7 +699,8 @@ class HouseholdDistributor:
                         candidates=candidates,
                         existing_people_by_role=selected_by_role,
                         constraints=rule.constraints,
-                        current_role=role_name
+                        current_role=role_name,
+                        show_detailed_logs=self._show_detailed_logs
                     )
 
                     if not person:
@@ -663,7 +720,8 @@ class HouseholdDistributor:
                         candidates=candidates,
                         existing_people_by_role=selected_by_role,
                         constraints=rule.constraints,
-                        current_role=role_name
+                        current_role=role_name,
+                        show_detailed_logs=self._show_detailed_logs
                     )
 
                     if not person:
@@ -749,6 +807,32 @@ class HouseholdDistributor:
             return (None, None)
 
         pools = self.person_pool_by_area[area_code]
+
+        # Detailed logging for ALL households in ALL geo units (NO RULES version)
+        if not hasattr(self, '_household_counts_by_area_log'):
+            self._household_counts_by_area_log = {}
+
+        if area_code not in self._household_counts_by_area_log:
+            self._household_counts_by_area_log[area_code] = 0
+            logger.info("")
+            logger.info("=" * 80)
+            logger.info(f"STARTING DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
+            logger.info("=" * 80)
+            logger.info("")
+
+        self._household_counts_by_area_log[area_code] += 1
+        logger.info("=" * 80)
+        logger.info(f"GEO UNIT: {area_code} - HOUSEHOLD #{self._household_counts_by_area_log[area_code]}")
+        logger.info(f"Pattern: '{pattern.original_pattern}'")
+        logger.info("=" * 80)
+        logger.info(f"Allocation mode: Simple (no constraints)")
+        if max_size:
+            logger.info(f"Max household size: {max_size}")
+        if target_size:
+            logger.info(f"Target household size: {target_size}")
+        logger.info(f"Allocate flexible: {allocate_flexible}")
+        logger.info("")
+
         selections = []  # Store planned selections: (cat_idx, count)
 
         # BALANCED DISTRIBUTION: Use proportional allocation when target_size is specified
@@ -853,14 +937,26 @@ class HouseholdDistributor:
 
         # PHASE 2: All checks passed! Now actually take people from pools
         selected_people = []
+        logger.info("ALLOCATION DECISIONS:")
         for cat_idx, count in selections:
+            cat = self.age_categories[cat_idx]
+            logger.info(f"  {cat.name} (age {cat.min_age}-{cat.max_age if cat.max_age else '∞'}): {count} people")
             if count > 0:
                 selected = pools[cat_idx][:count]
                 selected_people.extend(selected)
                 pools[cat_idx] = pools[cat_idx][count:]
+                for person in selected:
+                    logger.info(f"    - {person}")
 
         if not selected_people:
+            logger.info("  ✗ FAILED: No people selected")
+            logger.info("")
             return (None, None)
+
+        logger.info("")
+        logger.info("FINAL HOUSEHOLD COMPOSITION:")
+        logger.info(f"  Total members: {len(selected_people)}")
+        logger.info(f"  Pattern: {pattern.original_pattern}")
 
         # Create household
         unit = self.geography.get_unit(area_code)
@@ -878,6 +974,10 @@ class HouseholdDistributor:
         for person in selected_people:
             household.add_resident(person)
             self.allocated_people.add(person.id)
+
+        logger.info(f"  ✓ Household {household.id} created successfully")
+        logger.info("=" * 80)
+        logger.info("")
 
         return (household, None)
 
@@ -915,6 +1015,9 @@ class HouseholdDistributor:
         last_failed_category = None
 
         for attempt in range(max_attempts + 1):
+            if attempt > 0:
+                logger.info(f"  ⚠️  DEMOTION ATTEMPT #{attempt}: Trying pattern '{current_pattern.to_string()}'")
+
             # Try to allocate with current pattern
             # First try with relationship rules if available
             household, failed_category_idx = self._allocate_household_with_rules(
@@ -925,16 +1028,24 @@ class HouseholdDistributor:
             # the fallback already tried regular allocation, so we're done
             if household:
                 if attempt > 0:
-                    logger.debug(f"    Succeeded after {attempt} demotion(s): {current_pattern.to_string()}")
+                    logger.info(f"  ✓ Succeeded after {attempt} demotion(s) with pattern: {current_pattern.to_string()}")
+                    logger.info("")
                 return household
 
             # Store which category failed
             last_failed_category = failed_category_idx
 
+            if failed_category_idx is not None:
+                cat = self.age_categories[failed_category_idx]
+                logger.info(f"  ✗ ALLOCATION FAILED: Category '{cat.name}' (idx {failed_category_idx}) has insufficient people")
+            else:
+                logger.info(f"  ✗ ALLOCATION FAILED: No specific category identified")
+
             # Check minimum size
             min_size = self.config['demotion']['min_household_size']
             if current_pattern.min_household_size() < min_size:
-                logger.debug(f"    Pattern too small after demotion: {current_pattern.to_string()}")
+                logger.info(f"  ✗ Pattern too small after demotion (min size {min_size}): {current_pattern.to_string()}")
+                logger.info("")
                 return None
 
             # Try to demote
@@ -943,18 +1054,41 @@ class HouseholdDistributor:
                 new_pattern = None
 
                 if failed_category_idx is not None:
-                    # Try demoting the failed category first
+                    # Check how many people are available in this category to jump directly
+                    available_count = 0
+                    if area_code in self.person_pool_by_area:
+                        pools = self.person_pool_by_area[area_code]
+                        if failed_category_idx < len(pools):
+                            available_count = len(pools[failed_category_idx])
+
+                    # Try demoting the failed category directly to available count
                     cat_name = self.age_categories[failed_category_idx].name
-                    logger.debug(f"    Attempting intelligent demotion: {cat_name} (category {failed_category_idx}) caused failure")
-                    new_pattern = current_pattern.demote_once([failed_category_idx])
+                    logger.info(f"  → Attempting intelligent demotion: Reducing '{cat_name}' (category {failed_category_idx})")
+                    logger.info(f"  → Available {cat_name}: {available_count} people")
+
+                    # Demote directly to available count instead of one-by-one
+                    new_pattern = current_pattern.demote_to_count(failed_category_idx, available_count)
+
+                    # If demote_to_count doesn't exist, fall back to demote_once
+                    if new_pattern is None:
+                        new_pattern = current_pattern.demote_once([failed_category_idx])
 
                 # If intelligent demotion didn't work, try fallback priority order
                 if new_pattern is None:
-                    logger.debug(f"    Intelligent demotion failed, trying fallback priority order")
+                    logger.info(f"  → Intelligent demotion failed, trying fallback priority order")
                     new_pattern = current_pattern.demote_once(fallback_priority)
 
                 if new_pattern is None:
-                    logger.debug(f"    Cannot demote further: {current_pattern.to_string()}")
+                    logger.info(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
+                    logger.info("")
+                    return None
+
+                # Check if the demoted pattern would result in an empty household
+                min_size = self.config['demotion']['min_household_size']
+                if new_pattern.min_household_size() < min_size:
+                    logger.info(f"  ✗ Demoted pattern too small (min size {min_size}): '{new_pattern.to_string()}'")
+                    logger.info(f"  ✗ Skipping allocation attempt - would result in empty household")
+                    logger.info("")
                     return None
 
                 # Validate the new pattern against demotion rules
@@ -962,12 +1096,16 @@ class HouseholdDistributor:
                 if validation_rules and not new_pattern.validate_against_rules(
                     validation_rules, self.category_name_to_idx
                 ):
-                    logger.debug(f"    Demoted pattern violates validation rules: {new_pattern.to_string()}")
+                    logger.info(f"  ✗ Demoted pattern violates validation rules: {new_pattern.to_string()}")
+                    logger.info("")
                     return None
 
+                logger.info(f"  → Demoted pattern: '{current_pattern.to_string()}' → '{new_pattern.to_string()}'")
+                logger.info("")
                 current_pattern = new_pattern
             else:
-                logger.debug(f"    Max demotion attempts reached: {current_pattern.to_string()}")
+                logger.info(f"  ✗ Max demotion attempts ({max_attempts}) reached")
+                logger.info("")
                 return None
 
         return None

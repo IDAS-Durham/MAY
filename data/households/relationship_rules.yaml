@@ -88,7 +88,82 @@ rules:
             female: 50
             male: 70
 
-  # Rule 3: Adult pairs (no kids)
+  # Rule 3: Two-adult families with young adults
+  - name: "Two-adult family with young adults"
+    patterns:
+      - "0 >=1 2 0"
+
+    roles:
+      role_A:
+        categories: ["Young Adults"]
+        count: "any"
+
+      role_B:
+        categories: ["Adults"]
+        count: 2
+
+    selection_order:
+      - role_A
+      - role_B
+
+    constraints:
+      # role_B must be appropriately older than role_A
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_B"
+        role_2: "role_A"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 70
+
+      # role_B (2 people) should be a compatible pair
+      - type: "pair_matching"
+        role: "role_B"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 25
+
+  # Rule 4: Single-adult families with young adults
+  - name: "Single-adult family with young adults"
+    patterns:
+      - "0 >=1 1 0"
+
+    roles:
+      role_A:
+        categories: ["Young Adults"]
+        count: "any"
+
+      role_B:
+        categories: ["Adults"]
+        count: 1
+
+    selection_order:
+      - role_A
+      - role_B
+
+    constraints:
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_B"
+        role_2: "role_A"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 70
+
+  # Rule 5: Adult pairs (no kids)
   - name: "Adult pair"
     patterns:
       - "0 0 2 0"
@@ -113,7 +188,7 @@ rules:
           std_difference: 5.0
           max_absolute_difference: 25
 
-  # Rule 4: Elderly pairs
+  # Rule 6: Elderly pairs
   - name: "Elderly pair"
     patterns:
       - "0 0 0 2"
@@ -138,7 +213,7 @@ rules:
           std_difference: 5.0
           max_absolute_difference: 25
 
-  # Rule 5: Multi-generational families
+  # Rule 7: Multi-generational families
   - name: "Multi-generational household"
     patterns:
       - ">=2 >=0 >=0 >=0"
@@ -187,6 +262,19 @@ rules:
           std_difference: 5.0
           max_absolute_difference: 25
 
+      # role_C (Old Adults) must be appropriately older than role_B (Adults)
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_C"
+        role_2: "role_B"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 70
+
 # =============================================
 # CONSTRAINT TYPES
 # =============================================
@@ -229,10 +317,10 @@ rules:
 # =============================================
 selection_strategy:
   max_attempts: 50
-  use_best_candidate: true
+  use_best_candidate: false
   penalty_mode: "squared"
-  log_violations: false
-  log_best_candidates: false
+  log_violations: true
+  log_best_candidates: true
 
 # =============================================
 # STATISTICS

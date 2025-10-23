@@ -128,7 +128,8 @@ class RelationshipRulesValidator:
     def validate_numerical_attribute_difference_constraint(self,
                                           person1: Person,
                                           people2: List[Person],
-                                          constraint: Dict) -> Tuple[bool, float]:
+                                          constraint: Dict,
+                                          log_rejection: bool = False) -> Tuple[bool, float]:
         """
         Validate numerical attribute difference constraint between person1 and people in people2.
 
@@ -148,6 +149,7 @@ class RelationshipRulesValidator:
             person1: Person from role_1
             people2: List of people from role_2
             constraint: Constraint dict
+            log_rejection: If True, log when validation fails (for debugging)
 
         Returns:
             Tuple of (is_valid, penalty_score)
@@ -178,6 +180,8 @@ class RelationshipRulesValidator:
 
         if diff_max < min_diff:
             penalty = min_diff - diff_max
+            if log_rejection:
+                logger.info(f"      ✗ Rejected: {person1} - too young (diff={diff_max} < min={min_diff})")
             return (False, penalty)
 
         # Check against person with MIN attribute value in people2 for max constraint
@@ -187,8 +191,8 @@ class RelationshipRulesValidator:
 
         if diff_min > max_diff:
             penalty = diff_min - max_diff
-            if self.selection_strategy.get('log_violations', False):
-                logger.debug(f"{attribute.capitalize()} violation: person1 {attribute}={person1_value} is {diff_min} more than min person ({min_value}), max={max_diff}")
+            if log_rejection:
+                logger.info(f"      ✗ Rejected: {person1} - too old (diff={diff_min} > max={max_diff}, penalty={penalty})")
             return (False, penalty)
 
         return (True, 0.0)
@@ -269,7 +273,8 @@ class RelationshipRulesValidator:
                                      existing_people_by_role: Dict[str, List[Person]],
                                      constraints: List[Dict],
                                      current_role: str,
-                                     required_sex: Optional[str] = None) -> Optional[Person]:
+                                     required_sex: Optional[str] = None,
+                                     show_detailed_logs: bool = False) -> Optional[Person]:
         """
         Select a person from candidates that satisfies all constraints.
 
@@ -283,6 +288,7 @@ class RelationshipRulesValidator:
             constraints: List of constraint dicts to validate
             current_role: Name of role being filled
             required_sex: Required sex (None = any)
+            show_detailed_logs: If True, log detailed selection process
 
         Returns:
             Selected person or None
@@ -306,8 +312,12 @@ class RelationshipRulesValidator:
         ]
 
         # Try random selection up to max_attempts
+        candidates_tested = 0
+        candidates_rejected = 0
+
         for attempt in range(min(max_attempts, len(candidates))):
             candidate = random.choice(candidates)
+            candidates_tested += 1
 
             # Validate all relevant constraints
             all_valid = True
@@ -316,17 +326,26 @@ class RelationshipRulesValidator:
                 people_2 = existing_people_by_role.get(role_2, [])
 
                 is_valid, penalty = self.validate_numerical_attribute_difference_constraint(
-                    candidate, people_2, constraint
+                    candidate, people_2, constraint, log_rejection=show_detailed_logs
                 )
 
                 if not is_valid:
                     all_valid = False
+                    candidates_rejected += 1
                     break
 
             if all_valid:
+                if show_detailed_logs:
+                    if candidates_rejected > 0:
+                        logger.info(f"  ✓ Selected (tested {candidates_tested} candidates, rejected {candidates_rejected}): {candidate}")
+                    else:
+                        logger.info(f"  ✓ Selected on first try: {candidate}")
                 return candidate
 
         # No valid candidate found, use best candidate if enabled
+        if self.selection_strategy.get('log_violations', False):
+            logger.warning(f"No valid candidate found for {current_role} after {max_attempts} attempts. use_best_candidate={use_best}")
+
         if use_best:
             best_candidate = None
             best_penalty = float('inf')
@@ -351,12 +370,14 @@ class RelationshipRulesValidator:
                 self.stats['best_candidate_selections'] += 1
                 self.stats['violations']['numerical_attribute_difference'] += 1
 
-                if self.selection_strategy.get('log_best_candidates', False):
-                    logger.debug(f"Using best candidate for {current_role}: "
-                               f"age={best_candidate.age}, sex={best_candidate.sex}, "
-                               f"penalty={best_penalty:.2f}")
+                logger.error(f"⚠️  USING BEST CANDIDATE (VIOLATES CONSTRAINTS) for {current_role}: "
+                           f"age={best_candidate.age}, sex={best_candidate.sex}, "
+                           f"penalty={best_penalty:.2f}")
 
                 return best_candidate
+
+        if self.selection_strategy.get('log_violations', False):
+            logger.warning(f"Returning None for {current_role} - no valid candidates and use_best_candidate=False")
 
         return None
 
@@ -426,9 +447,13 @@ class RelationshipRulesValidator:
 
         # Try to find a valid couple
         attempts_made = 0
+        candidates_tested = 0
+        candidates_rejected = 0
+
         for attempt in range(min(max_attempts, len(candidates))):
             # Select first person randomly
             first_person = random.choice(candidates)
+            candidates_tested += 1
 
             # Validate first person against existing people (e.g., children)
             first_valid = True
@@ -436,11 +461,13 @@ class RelationshipRulesValidator:
                 role_2 = rel_constraint.get('role_2')
                 people_2 = existing_people_by_role.get(role_2, [])
                 if people_2:
+                    # Only log rejections if detailed logging is enabled
                     is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                        first_person, people_2, rel_constraint
+                        first_person, people_2, rel_constraint, log_rejection=show_detailed_logs
                     )
                     if not is_valid:
                         first_valid = False
+                        candidates_rejected += 1
                         break
 
             if not first_valid:
@@ -473,12 +500,16 @@ class RelationshipRulesValidator:
             # Try to find valid partner
             for partner_attempt in range(min(max_attempts, len(remaining))):
                 candidate = random.choice(remaining)
+                candidates_tested += 1
 
                 # Validate partner against first person (couple numerical attribute difference)
                 is_valid, penalty = self.validate_couple_numerical_attribute_difference(
                     first_person, candidate, constraint
                 )
                 if not is_valid:
+                    candidates_rejected += 1
+                    if show_detailed_logs:
+                        logger.info(f"      ✗ Rejected: Partner pair has age difference too large")
                     continue
 
                 # Validate partner against existing people (e.g., children)
@@ -488,10 +519,11 @@ class RelationshipRulesValidator:
                     people_2 = existing_people_by_role.get(role_2, [])
                     if people_2:
                         is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                            candidate, people_2, rel_constraint
+                            candidate, people_2, rel_constraint, log_rejection=show_detailed_logs
                         )
                         if not is_valid:
                             partner_valid = False
+                            candidates_rejected += 1
                             break
 
                 if partner_valid:
@@ -503,12 +535,18 @@ class RelationshipRulesValidator:
                             val1 = getattr(first_person, num_attr)
                             val2 = getattr(candidate, num_attr)
                             diff = abs(val1 - val2)
-                            logger.info(f"    ✓ Found valid pair after {attempts_made + 1} attempts")
+                            if candidates_rejected > 0:
+                                logger.info(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
+                            else:
+                                logger.info(f"    ✓ Found valid pair on first try")
                             logger.info(f"      Partner 1: {first_person} ({num_attr} {val1})")
                             logger.info(f"      Partner 2: {candidate} ({num_attr} {val2})")
                             logger.info(f"      {num_attr.capitalize()} difference: {diff}")
                         else:
-                            logger.info(f"    ✓ Found valid pair after {attempts_made + 1} attempts")
+                            if candidates_rejected > 0:
+                                logger.info(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
+                            else:
+                                logger.info(f"    ✓ Found valid pair on first try")
                             logger.info(f"      Partner 1: {first_person}")
                             logger.info(f"      Partner 2: {candidate}")
 
