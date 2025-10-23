@@ -1,32 +1,10 @@
-"""
-Venue management for June Zero.
-Venues are places where people live, work, learn, or receive services.
-"""
-
 import logging
 import pandas as pd
 import os
+from collections import defaultdict
+from .venue import Venue
 
-logger = logging.getLogger("venue")
-
-
-class Venue:
-    """
-    Represents a place where people live, work, learn, or receive services.
-    Generic design that works for any geography, past or present.
-    """
-    def __init__(self, id, name, venue_type, geographical_unit, coordinates=None):
-        self.id = id                    # Unique numeric ID (generated)
-        self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
-        self.type = venue_type          # Type of venue (e.g., "hospital", "school")
-        self.geographical_unit = geographical_unit  # Reference to GeographicalUnit
-        self.coordinates = coordinates  # Optional (latitude, longitude) tuple
-        self.properties = {}            # Extensible dict for venue-specific data
-
-    def __repr__(self):
-        geo_name = self.geographical_unit.name if self.geographical_unit else "None"
-        return f"<Venue #{self.id}: {self.name} ({self.type}) in {geo_name}>"
-
+logger = logging.getLogger("venuemanager")
 
 class VenueManager:
     """
@@ -37,7 +15,7 @@ class VenueManager:
         self.data_dir = data_dir
         self.venues = {}                # All venues by name: {name: Venue}
         self.venues_by_id = {}          # All venues by ID: {id: Venue}
-        self.venues_by_type = {}        # Venues grouped by type: {type: [Venue, ...]}
+        self.venues_by_type = defaultdict(list)        # Venues grouped by type: {type: [Venue, ...]}
         self.filter_by_geography = filter_by_geography  # Only load venues in loaded geo units
 
         # ID counter for generating unique IDs
@@ -53,9 +31,83 @@ class VenueManager:
         Returns:
             Unique integer ID
         """
-        id = self._next_id
         self._next_id += 1
-        return id
+        return self._next_id
+
+    def add_venue(self, venue, geo_unit):
+        """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
+        self.venues[venue.name] = venue
+        self.venues_by_id[venue.id] = venue
+        # Group by type
+        self.venues_by_type[venue.type].append(venue)
+
+        # Add venue to its geographical unit
+        geo_unit.add_venue(venue)       
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['name', 'geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+                raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+
+        # Optional coordinate columns
+        has_coords = 'latitude' in venue_df.columns and 'longitude' in venue_df.columns
+
+        # Get additional property columns
+        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
+        property_cols = [col for col in venue_df.columns if col not in reserved_cols]
+        properties={}
+
+        # Create venues
+        venues_created = 0
+        venues_skipped = 0
+        for _, row in venue_df.iterrows():
+            name = row['name']
+            geo_unit_name = row['geo_unit']
+
+            # Check if geo unit is in loaded geography
+            if self.filter_by_geography and geo_unit_name not in self._loaded_geo_units:
+                venues_skipped += 1
+                continue
+
+            # Get geographical unit
+            geo_unit = self.geography.get_unit(geo_unit_name)
+            if not geo_unit:
+                logger.warning(f"Geographical unit '{geo_unit_name}' not found for venue '{name}'. Skipping.")
+                venues_skipped += 1
+                continue
+
+            # Get coordinates if provided
+            coordinates = None
+            if has_coords and pd.notna(row['latitude']) and pd.notna(row['longitude']):
+                coordinates = (row['latitude'], row['longitude'])
+
+            # Add additional properties
+            properties = {}
+            for prop_col in property_cols:
+                if pd.notna(row[prop_col]):
+                    properties[prop_col] = row[prop_col]
+                
+            # Generate ID and create venue
+            venue = Venue(name=name,
+                          venue_type=venue_type,
+                          geographical_unit=geo_unit,
+                          coordinates=coordinates,
+                          properties=properties,
+                          )
+            
+            # Store venue
+            self.add_venue(venue, geo_unit)
+
+            venues_created += 1
+
+        if venues_skipped > 0:
+            logger.info(f"Created {venues_created} {venue_type} venues ({venues_skipped} skipped due to geography filter)")
+        else:
+            logger.info(f"Created {venues_created} {venue_type} venues")
+        
 
     def load_venue_type_from_csv(self, venue_type, filename=None):
         """
@@ -87,76 +139,8 @@ class VenueManager:
         venue_df = pd.read_csv(venue_path)
         logger.info(f"Loading {venue_type} venues from {venue_path}")
 
-        # Required columns
-        required_cols = ['name', 'geo_unit']
-        for col in required_cols:
-            if col not in venue_df.columns:
-                raise ValueError(f"Missing required column '{col}' in {filename}")
+        self.load_venue_type_from_df(venue_type, venue_df)
 
-        # Optional coordinate columns
-        has_coords = 'latitude' in venue_df.columns and 'longitude' in venue_df.columns
-
-        # Get additional property columns
-        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
-        property_cols = [col for col in venue_df.columns if col not in reserved_cols]
-
-        # Create venues
-        venues_created = 0
-        venues_skipped = 0
-        for _, row in venue_df.iterrows():
-            name = row['name']
-            geo_unit_name = row['geo_unit']
-
-            # Check if geo unit is in loaded geography
-            if self.filter_by_geography and geo_unit_name not in self._loaded_geo_units:
-                venues_skipped += 1
-                continue
-
-            # Get geographical unit
-            geo_unit = self.geography.get_unit(geo_unit_name)
-            if not geo_unit:
-                logger.warning(f"Geographical unit '{geo_unit_name}' not found for venue '{name}'. Skipping.")
-                venues_skipped += 1
-                continue
-
-            # Get coordinates if provided
-            coordinates = None
-            if has_coords and pd.notna(row['latitude']) and pd.notna(row['longitude']):
-                coordinates = (row['latitude'], row['longitude'])
-
-            # Generate ID and create venue
-            venue_id = self._generate_id()
-            venue = Venue(
-                id=venue_id,
-                name=name,
-                venue_type=venue_type,
-                geographical_unit=geo_unit,
-                coordinates=coordinates
-            )
-
-            # Add additional properties
-            for prop_col in property_cols:
-                if pd.notna(row[prop_col]):
-                    venue.properties[prop_col] = row[prop_col]
-
-            # Store venue
-            self.venues[name] = venue
-            self.venues_by_id[venue_id] = venue
-
-            # Group by type
-            if venue_type not in self.venues_by_type:
-                self.venues_by_type[venue_type] = []
-            self.venues_by_type[venue_type].append(venue)
-
-            # Add venue to its geographical unit
-            geo_unit.add_venue(venue)
-
-            venues_created += 1
-
-        if venues_skipped > 0:
-            logger.info(f"Created {venues_created} {venue_type} venues ({venues_skipped} skipped due to geography filter)")
-        else:
-            logger.info(f"Created {venues_created} {venue_type} venues")
 
     def load_from_csv(self, venue_types=None):
         """
@@ -164,9 +148,9 @@ class VenueManager:
 
         Each venue type has its own CSV file with type-specific columns.
         For example:
-        - hospitals.csv for hospital venues
-        - schools.csv for school venues
-        - prisons.csv for prison venues
+          hospitals.csv for hospital venues
+          schools.csv for school venues
+          prisons.csv for prison venues
 
         Only venues in loaded geographical units will be created if filter_by_geography=True.
 
@@ -213,6 +197,22 @@ class VenueManager:
 
         logger.info(f"Total venues created: {len(self.venues)}")
         self._log_summary()
+
+    def extend(self, other: "VenueManager"):
+        """Adds all the venues from another instance of the VenueManager class into this instance.
+
+        Created so that if multiple VenueManager child classes are made (e.g. to change the specifics of how they load venues)
+        it is easy to combine them into one single object at the end.
+
+        Args:
+          other (VenueManager): another instance of the VenueManager class. 
+        
+        """
+        # Should add something to check that self.geography and other.geography are equal.
+        self.venues.update(other.venues)
+        self.venues_by_id.update(other.venues)
+        for venue_type, venue_list in other.venues_by_type.items():
+            self.venues_by_type[venue_type] = self.venues_by_type.get(venue_type, []) + venue_list
 
     def get_venue(self, name):
         """Get a venue by its name"""

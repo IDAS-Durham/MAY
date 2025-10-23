@@ -9,10 +9,11 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World
+from may.specific_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
+from may.stats import StatMakerVenues, StatMaker
 
-if os.environ.get('PYTHONHASHSEED') is None:
-    os.environ['PYTHONHASHSEED'] = '0'
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+from datetime import datetime
+
 
 logger = logging.getLogger("create_world")
 logging.basicConfig(
@@ -26,22 +27,26 @@ logging.basicConfig(
 # Suppress numexpr logging
 logging.getLogger('numexpr').setLevel(logging.WARNING)
 
-def set_random_seed(seed=999):
-    """
-    Sets global seeds for testing in numpy, random, and numbaised numpy.
-    """
+# if os.environ.get('PYTHONHASHSEED') is None:
+#     os.environ['PYTHONHASHSEED'] = '0'
+#     os.execv(sys.executable, [sys.executable] + sys.argv)
 
-    @nb.njit(cache=True)
-    def set_seed_numba(seed):
-        random.seed(seed)
-        return np.random.seed(seed)
+# def set_random_seed(seed=999):
+#     """
+#     Sets global seeds for testing in numpy, random, and numbaised numpy.
+#     """
 
-    np.random.seed(seed)
-    set_seed_numba(seed)
-    random.seed(seed)
-    return
+#     @nb.njit(cache=True)
+#     def set_seed_numba(seed):
+#         random.seed(seed)
+#         return np.random.seed(seed)
 
-set_random_seed(0)
+#     np.random.seed(seed)
+#     set_seed_numba(seed)
+#     random.seed(seed)
+#     return
+
+#set_random_seed(0)
 
 
 def print_world_examples(world):
@@ -88,10 +93,10 @@ def print_world_examples(world):
     logger.info("")
     logger.info("2. Venue Examples:")
     venue_types = venues.get_venue_types()
-    for vtype in sorted(venue_types):  # Show first 3 types
+    for vtype in sorted(venue_types):  # Show all types
         venues_of_type = venues.get_venues_by_type(vtype)
         if venues_of_type:
-            example_venue = venues_of_type[0]
+            example_venue = random.choice(venues_of_type)
             logger.info(f"   {vtype.capitalize()}: {example_venue.name}")
             logger.info(f"   - Located in: {example_venue.geographical_unit.name} ({example_venue.geographical_unit.level})")
             if example_venue.coordinates:
@@ -123,28 +128,48 @@ def print_world_examples(world):
         logger.info("   Example people:")
         for person in random.choices(population.get_all_people(), k=5):
             logger.info(f"   {person}")
-            logger.info(f"     - Activities: {', '.join(person.activities)}")
+            logger.info(f"    - Activities: {', '.join(person.activities)}")
+            logger.info(f"    - Activity map:")
+            for activity, place in person.activity_map.items():
+                logger.info(f"        ~ {activity} : {place} ")
+            logger.info(f"    - Properties:")                
+            for prop, propy in person.properties.items():
+                logger.info(f"        ~ {prop} : {propy} ")
+            
 
     logger.info("")
     logger.info("4. Household Examples:")
-    if world.households and world.households.households:
-        logger.info(f"   Total households: {len(world.households.households)}")
-        logger.info(f"   Allocation rate: {len(world.households.allocated_people) / max(sum(len(p) for p in world.households.person_pool_by_area.values()), 1) * 100:.1f}%")
-        logger.info("")
-        logger.info("   Example households:")
-        for household in random.choices(world.households.households, k=5):
-            composition = household.get_composition()
-            logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
-            logger.info(f"     - Size: {household.size()} people")
-            logger.info(f"     - Composition: {composition}")
-            if household.properties.get('original_pattern'):
-                logger.info(f"     - Pattern: {household.properties['original_pattern']}")
+    venue_stats = StatMakerVenues(venues)
+    venue_stats.print_lots_of_stats('household')
+    venue_stats.print_examples('household')
+    venue_stats.print_extremes('household')
+
+    number_of_empty_houses = 0
+    for v in venues.get_venues_by_type('household'):
+        if v.num_members == 0:
+            number_of_empty_houses += 1
+    logger.info(f"Number of empty houses = {number_of_empty_houses} out of {len(venues.get_venues_by_type('household'))}")
+
+    # if world.households and world.households.households:
+    #     logger.info(f"   Total households: {len(world.households.households)}")
+    #     logger.info(f"   Allocation rate: {len(world.households.allocated_people) / max(sum(len(p) for p in world.households.person_pool_by_area.values()), 1) * 100:.1f}%")
+    #     logger.info("")
+    #     logger.info("   Example households:")
+    #     for household in random.choices(world.households.households, k=5):
+    #         composition = household.get_composition()
+    #         logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
+    #         logger.info(f"     - Size: {household.size()} people")
+    #         logger.info(f"     - Composition: {composition}")
+    #         if household.properties.get('original_pattern'):
+    #             logger.info(f"     - Pattern: {household.properties['original_pattern']}")
 
     logger.info("")
     logger.info("5. Query Examples:")
-    logger.info("   # Get all hospitals")
-    all_hospitals = venues.get_venues_by_type("hospital")
-    logger.info(f"   venues.get_venues_by_type('hospital') -> {len(all_hospitals)} hospitals")
+    for key in venues.get_venue_types():
+        logger.info("")
+        logger.info("   # Get all {}s".format(key))
+        all_venues = venues.get_venues_by_type(key)
+        logger.info(f"   venues.get_venues_by_type({key}) -> {len(all_venues)} {key}s")
 
     logger.info("")
     logger.info("   # Get venues in a specific area")
@@ -161,19 +186,26 @@ def print_world_examples(world):
     logger.info(f"   population.get_people_by_activity('work') -> {len(workers)} people")
 
     logger.info("")
-    logger.info("   # Get person's household")
-    if world.households and world.households.allocated_people:
-        example_person_id = next(iter(world.households.allocated_people))
-        example_person = next((p for p in population.get_all_people() if p.id == example_person_id), None)
-        if example_person and hasattr(example_person, 'residence') and example_person.residence:
-            logger.info(f"   person.residence -> Household {example_person.residence.id}")
-            logger.info(f"      Size: {example_person.residence.size()}, Composition: {example_person.residence.get_composition()}")
+    logger.info("   # Get people by housed or not")
+    housed = population.get_people_by_activity("home")
+    logger.info(f"   population.get_people_by_activity('home') -> {len(housed)} people with 'home' set")
+    
+
+    # logger.info("")
+    # logger.info("   # Get person's household")
+    # if world.households and world.households.allocated_people:
+    #     example_person_id = next(iter(world.households.allocated_people))
+    #     example_person = next((p for p in population.get_all_people() if p.id == example_person_id), None)
+    #     if example_person and hasattr(example_person, 'residence') and example_person.residence:
+    #         logger.info(f"   person.residence -> Household {example_person.residence.id}")
+    #         logger.info(f"      Size: {example_person.residence.size()}, Composition: {example_person.residence.get_composition()}")
 
     logger.info("")
     logger.info("=" * 60)
 
 
 def main():
+    starttime = datetime.now()
     """
     Main entry point for world creation.
     """
@@ -191,12 +223,17 @@ def main():
     # Load the geography data
     geo.load_from_csv()
 
+    logger.info("Setting up Geography took {}s".format(datetime.now()-starttime))
+    laptime = datetime.now()
+    
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
     venues = VenueManager(geography=geo, data_dir="data/venues")
     venues.load_from_csv()
-
+    logger.info("Loading venues took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Load population
     logger.info("")
     logger.info("Loading population...")
@@ -205,20 +242,49 @@ def main():
         geography=geo,
         data_dir=pop_config.get("data_dir", "data/population")
     )
-
+    logger.info("Loading population took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Load demographic data
     male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
     female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
     population.load_demographics_from_csv(male_file, female_file)
 
+    logger.info("Loading demographic data took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Generate population
-    population.generate_population()
+    population.generate_population(activities=['home'])
 
+    logger.info("Creating population took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
+    # Create Households
+    logger.info("Loading households...")
+    household_manager = HouseholdManager(geography=geo, data_dir='data/households', filter_by_geography=True)
+    household_manager.load_venue_type_from_csv('household', 'households.csv')
+
+    logger.info("Loading and creating household data took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+
+    # Extend the venues object to add the households on. 
+    venues.extend(household_manager)
+    # Distribute people to Households
+    household_distributor = HouseholdDistributor('household', venues, population.people)
+    # Use multi-pass assignment (configurable in household_distributor._post_init)
+    household_distributor.assign_people_venues_multi_pass('home', 'household')
+
+    logger.info("Distributing pop to households took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Create World object
     logger.info("")
     logger.info("Creating World object...")
     world = World(geography=geo, population=population, venues=venues)
     logger.info(world)
+
+    logger.info("Creating world took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
 
     logger.info("")
     logger.info("=" * 60)
@@ -230,6 +296,8 @@ def main():
 
     # Show examples of what was created
     print_world_examples(world)
+
+    logger.info("Script completed in {}s".format(datetime.now()-starttime))
 
     return world
 
