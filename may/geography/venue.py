@@ -34,16 +34,16 @@ class Venue:
                  venue_type,
                  geographical_unit,
                  coordinates=None,
-                 properties: dict={},
-                 subsets: dict[str,"Subset"] = {},
+                 properties: dict=None,
+                 subsets: dict[str,"Subset"] = None,
                  ):
         self.id = id(self)              # Unique numeric ID (generated)
         self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
         self.type = venue_type          # Type of venue (e.g., "hospital", "school")
         self.geographical_unit = geographical_unit  # Reference to GeographicalUnit
         self.coordinates = coordinates  # Optional (latitude, longitude) tuple
-        self.subsets = subsets # dict(subset_name, Subset object)
-        self.properties = properties
+        self.properties = properties if properties is not None else {}
+        self.subsets = subsets if subsets is not None else {} # dict(subset_name, Subset object)        
 
     def __repr__(self):
         geo_name = self.geographical_unit.name if self.geographical_unit else "None"
@@ -60,3 +60,10 @@ class Venue:
         if not (self.properties == other.properties):
             return False
         return True
+
+    @property
+    def num_members(self):
+        total=0
+        for subset in self.subsets.values():
+            total += subset.num_members
+        return total

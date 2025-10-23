@@ -92,7 +92,7 @@ class VenueManager:
             # Generate ID and create venue
             venue = Venue(name=name,
                           venue_type=venue_type,
-                          geo_unit=geo_unit,
+                          geographical_unit=geo_unit,
                           coordinates=coordinates,
                           properties=properties,
                           )

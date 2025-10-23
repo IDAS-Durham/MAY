@@ -12,6 +12,9 @@ from may.world import World
 from may.specific_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
 from may.stats import StatMakerVenues, StatMaker
 
+from datetime import datetime
+
+
 logger = logging.getLogger("create_world")
 logging.basicConfig(
     level=logging.INFO,
@@ -138,6 +141,15 @@ def print_world_examples(world):
     logger.info("4. Household Examples:")
     venue_stats = StatMakerVenues(venues)
     venue_stats.print_lots_of_stats('household')
+    venue_stats.print_examples('household')
+    venue_stats.print_extremes('household')
+
+    number_of_empty_houses = 0
+    for v in venues.get_venues_by_type('household'):
+        if v.num_members == 0:
+            number_of_empty_houses += 1
+    logger.info(f"Number of empty houses = {number_of_empty_houses} out of {len(venues.get_venues_by_type('household'))}")
+
     # if world.households and world.households.households:
     #     logger.info(f"   Total households: {len(world.households.households)}")
     #     logger.info(f"   Allocation rate: {len(world.households.allocated_people) / max(sum(len(p) for p in world.households.person_pool_by_area.values()), 1) * 100:.1f}%")
@@ -193,6 +205,7 @@ def print_world_examples(world):
 
 
 def main():
+    starttime = datetime.now()
     """
     Main entry point for world creation.
     """
@@ -210,12 +223,17 @@ def main():
     # Load the geography data
     geo.load_from_csv()
 
+    logger.info("Setting up Geography took {}s".format(datetime.now()-starttime))
+    laptime = datetime.now()
+    
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
     venues = VenueManager(geography=geo, data_dir="data/venues")
     venues.load_from_csv()
-
+    logger.info("Loading venues took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Load population
     logger.info("")
     logger.info("Loading population...")
@@ -224,31 +242,48 @@ def main():
         geography=geo,
         data_dir=pop_config.get("data_dir", "data/population")
     )
-
+    logger.info("Loading population took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Load demographic data
     male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
     female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
     population.load_demographics_from_csv(male_file, female_file)
 
+    logger.info("Loading demographic data took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Generate population
     population.generate_population(activities=['home'])
 
+    logger.info("Creating population took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Create Households
     logger.info("Loading households...")
     household_manager = HouseholdManager(geography=geo, data_dir='data/households', filter_by_geography=True)
     household_manager.load_venue_type_from_csv('household', 'households.csv')
 
+    logger.info("Loading and creating household data took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+
     # Extend the venues object to add the households on. 
     venues.extend(household_manager)
     # Distribute people to Households
-    household_distributor = HouseholdDistributor('household', venues, population.people)
+    household_distributor = HouseholdDistributor('household', venues, population.people) #WithReopening
     household_distributor.assign_people_venues('home', 'household')
 
+    logger.info("Distributing pop to households took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
+    
     # Create World object
     logger.info("")
     logger.info("Creating World object...")
     world = World(geography=geo, population=population, venues=venues)
     logger.info(world)
+
+    logger.info("Creating world took {}s".format(datetime.now()-laptime))
+    laptime = datetime.now()
 
     logger.info("")
     logger.info("=" * 60)
@@ -260,6 +295,8 @@ def main():
 
     # Show examples of what was created
     print_world_examples(world)
+
+    logger.info("Script completed in {}s".format(datetime.now()-starttime))
 
     return world
 

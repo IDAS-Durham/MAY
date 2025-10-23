@@ -41,10 +41,10 @@ class Distributor:
         self.potential_venues = self.__decide_potential_venues()
         self.unallocated_people = []
         
-        self._get_subset_dist()
+        self._post_init()
         self._create_subsets_if_necessary()
 
-    def _get_subset_dist(self):
+    def _post_init(self):
         example_venue           = self.potential_venues[0] # just the first potential venue
         self.subset_distributor = SubsetDistributor(self.venue_type,
                                                     example_venue.properties['subsets'])
@@ -67,6 +67,7 @@ class Distributor:
                              activity: str,
                              venue_type: str,
                              available_venue_indices: list[int] = None,
+                             randomize_venue_order=True,
                              **kwargs):
         """Assigns people from self.people to do an activity (if they have it) at a particular venue type (if there is membership_capacity). 
 
@@ -75,25 +76,41 @@ class Distributor:
             self.available_venue_indices = list(range(len(self.potential_venues)))
         else:
             self.available_venue_indices = available_venue_indices
+        if randomize_venue_order: random.shuffle(self.available_venue_indices)
+        
+        
+        # Initialize the correct membership capacities for households. 
+        for i, venue in enumerate(self.potential_venues):
+            for subset in venue.subsets.values():
+                self._update_venue_membership_capacity(i, venue, subset)
+        logger.info("Set venue capacities. Starting allocation...")
+        # Start allocating people
+        self.search_index=-1
         total_allocated=0
+        total_people=len(self.people)
+        printed=set()
         for person in self.people:
             if person.has_activity(activity):
                 if self.find_venues_for_person(person,
                                                activity,
                                                self.potential_venues,
                                                **kwargs):
-                    total_allocated+=1
+                    total_allocated += 1
+                    percent=int(total_allocated/total_people*100)
+                    milestone = (percent // 10) * 10
+                    if milestone not in printed and milestone % 10 == 0:
+                        logger.info(f"{milestone}% complete")
+                        printed.add(milestone)                    
                 else:
                     self._deal_with_no_venue(person, activity)
-        print(f"Allocated {total_allocated} people to households")
-        print("Number of unallocated folk: {}".format(len(self.unallocated_people)))
+        logger.info(f"Allocated {total_allocated} people to households")
+        logger.info("Number of unallocated folk: {}".format(len(self.unallocated_people)))
 
     def find_venues_for_person(self,
                                person: "Person",
                                activity: str,
                                venue_list: list["Venue"],
-                               maxiter: int = 100,
-                               randomize: bool = True,
+                               maxiter: int=100,
                                **kwargs):
         """Assigns a person a venue from a list, and a subset for that venue.
 
@@ -105,12 +122,14 @@ class Distributor:
           randomize (bool, optional): whether the order of potential venues trialed should be randomized for each person.
 
         """
-        
-        available_indices_this_time = self.available_venue_indices[:maxiter]
-        if randomize:
-            random.shuffle(available_indices_this_time)
-
-        for ii, trial_venue_index in enumerate(available_indices_this_time):
+        i=0
+        while i <= maxiter:
+            i+=1
+            self.search_index+=1
+            if self.search_index >= len(self.available_venue_indices):
+                self.search_index = 0
+                
+            trial_venue_index=self.available_venue_indices[self.search_index]
             try:
                 trial_venue = venue_list[trial_venue_index]
             except:
@@ -122,7 +141,6 @@ class Distributor:
                     self._venue_has_membership_capacity_by_subset[trial_venue.id],
                     person,
                 )
-
                 if trial_subset_name == 'No subset available':
                     # Try a new venue
                     continue
@@ -138,10 +156,11 @@ class Distributor:
                 logger.error("Could not assign a subset to person {} for venue {} of type {} with activity {}".format(person.id, trial_venue.id, trial_venue.type, activity))
                 #self._deal_with_no_venue(person, activity)
                 raise Exception("Failure of _assign_subset routine when assigning subset and venue for person {} to activity {}.".format(person.id, activity))
+            
+            
         # If exhausted the loop. 
         #logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
         return False
-                
 
     def _update_venue_membership_capacity(self, trial_venue_index, venue, subset, **kwargs):
         """Update the venue membership_capacity after adding a person to subset membership.

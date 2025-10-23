@@ -41,11 +41,11 @@ class HouseholdSubsetDistributor(SubsetDistributor):
         """
         if person.age < 18 and venue_has_capacity[0]:
             return 0, 'kids'
-        elif person.age <= 25 and venue_has_capacity[1]:
+        elif 18 <= person.age < 25 and venue_has_capacity[1]:
             return 1, 'independent children'        
-        elif person.age < 60 and venue_has_capacity[2]:
+        elif 25 <= person.age < 60 and venue_has_capacity[2]:
             return 2, 'adults'
-        elif venue_has_capacity[3]:
+        elif 60 <= person.age and venue_has_capacity[3]:
             return 3, 'elderly'
         else:
             return -1, 'No subset available'

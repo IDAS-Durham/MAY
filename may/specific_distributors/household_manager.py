@@ -56,16 +56,15 @@ class HouseholdManager(VenueManager):
                 if pd.notna(row[composition]):
                     for i in range(row[composition]):
                         venue = Venue(
-                            str(self._generate_id()),
+                            name=str(venues_created+1),
                             venue_type = venue_type,
                             geographical_unit=geo_unit,
                             properties = {'composition':composition},
-                            
                         )
                         venue.subsets = {'kids' : Subset(venue, 0, 'kids'),
-                                         'independent children' : Subset(venue, 0, 'independent children'),
-                                         'adults' : Subset(venue, 0, 'adults'),
-                                         'elderly' : Subset(venue, 0, 'elderly')}
+                                         'independent children' : Subset(venue, 1, 'independent children'),
+                                         'adults' : Subset(venue, 2, 'adults'),
+                                         'elderly' : Subset(venue, 3, 'elderly')}
                         self.add_venue(venue, geo_unit)
                         venues_created += 1
 

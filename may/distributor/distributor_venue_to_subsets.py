@@ -9,8 +9,8 @@ class SubsetDistributor:
     """
     def __init__(self,
                  venue_type: str,
-                 subset_names: list[str] = ['everyone'],
-                 properties: dict={},
+                 subset_names: list[str] = None,
+                 properties: dict=None,
                  ):
         """
         Args:
@@ -25,8 +25,8 @@ class SubsetDistributor:
 
         """
         self.venue_type = venue_type
-        self.subset_names = subset_names
-        self.properties = properties
+        self.subset_names = subset_names if subset_names is not None else ['everyone']
+        self.properties = properties if properties is not None else {}
         self.n_subsets = len(self.subset_names)
 
 

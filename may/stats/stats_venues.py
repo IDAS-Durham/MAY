@@ -32,9 +32,13 @@ class StatMakerVenues(StatMaker):
         return (stat_id, stats_label, my_stats)
 
     def print_venue_comp(self, example_venue):
-        logger.info("    Venue:  {}   ,    {}".format(example_venue.id, example_venue.name))            
+        logger.info("    Venue: {} , {}".format(example_venue.id, example_venue.name))
+        if example_venue.properties:
+            props = list(example_venue.properties.items())
+            for key, value in props:
+                logger.info(f"      - {key}: {value}")
         for key, subset in example_venue.subsets.items():
-            logger.info("        - {}  {}".format(key, subset.num_members))
+            logger.info("      - subset id({}), {} :  {}".format(id(subset), key, subset.num_members))
 
     
     def get_example_membership(self, venue_type: str, n_examples=3, stats_label: str=None):
@@ -71,8 +75,12 @@ class StatMakerVenues(StatMaker):
         logger.info(f"Statistics on total membership for {venue_type}\n")
         for key, value in my_stats.items():
             logger.info(f"  {key}  =  {value}")
+
+    def print_examples(self, venue_type):
         logger.info(f"Example {venue_type} types:")            
         self.get_example_membership(venue_type)
+        
+    def print_extremes(self, venue_type):
         logger.info(f"Extreme {venue_type} types:")
         self.get_extreme_membership(venue_type)
-    
+

@@ -9,8 +9,8 @@ class Subset(AbstractSet):
                  venue: "Venue",
                  subset_index: int,
                  subset_name: str = None,
-                 people_present: list["Person"]=[],
-                 members: set["Person"]=set(),
+                 people_present: list["Person"]=None,
+                 members: set["Person"]=None,
                  ):
         """
         Args:
@@ -22,10 +22,9 @@ class Subset(AbstractSet):
         """
         self.venue = venue
         self.subset_index = subset_index
-        self.people_present = people_present
-        if subset_name is None:
-            self.subset_name = str(self.subset_index)
-        self.members=members
+        self.people_present = people_present if people_present is not None else []
+        self.subset_name = subset_name if subset_name is not None else str(self.subset_index)
+        self.members= members if members is not None else set()
 
     def _collate(self, attribute: str, ifnot=False) -> list["Person"]:
         """Collates Persons from self.people_present that have a particular attribute == True.
