@@ -163,9 +163,8 @@ class Distributor:
                 #self._deal_with_no_venue(person, activity)
                 raise Exception("Failure of _assign_subset routine when assigning subset and venue for person {} to activity {}.".format(person.id, activity))
             
-            
         # If exhausted the loop. 
-        logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
+        #logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
         return False
 
     def _update_venue_membership_capacity(self, trial_venue_index, venue, subset, **kwargs):

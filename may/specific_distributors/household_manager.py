@@ -10,7 +10,15 @@ from may.population import Subset
 
 
 class HouseholdManager(VenueManager):
-    """Designed to read and interpret the household composition document. 
+    """A specialised VenueManager subclass designed to read and interpret the household composition document.
+
+    methods:
+      load_venue_type_from_df:
+        Designed to interpret the typical households.csv document style. 
+    
+        Args:
+          venue_type (str): the type of venue being loaded. 
+          df (pd.DataFrame): the pandas dataframe read in using methods in VenueManager class. 
     
     """
     def load_venue_type_from_df(self, venue_type, df):

@@ -45,6 +45,7 @@ class VenueManager:
         geo_unit.add_venue(venue)       
 
     def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
         # Required columns
         required_cols = ['name', 'geo_unit']
         for col in required_cols:
@@ -201,7 +202,11 @@ class VenueManager:
         """Adds all the venues from another instance of the VenueManager class into this instance.
 
         Created so that if multiple VenueManager child classes are made (e.g. to change the specifics of how they load venues)
-        it is easy to combine them into one single object at the end. 
+        it is easy to combine them into one single object at the end.
+
+        Args:
+          other (VenueManager): another instance of the VenueManager class. 
+        
         """
         # Should add something to check that self.geography and other.geography are equal.
         self.venues.update(other.venues)

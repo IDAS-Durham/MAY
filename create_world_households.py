@@ -270,8 +270,9 @@ def main():
     # Extend the venues object to add the households on. 
     venues.extend(household_manager)
     # Distribute people to Households
-    household_distributor = HouseholdDistributor('household', venues, population.people) #WithReopening
-    household_distributor.assign_people_venues_with_expansion('home', 'household')
+    household_distributor = HouseholdDistributor('household', venues, population.people)
+    # Use multi-pass assignment (configurable in household_distributor._post_init)
+    household_distributor.assign_people_venues_multi_pass('home', 'household')
 
     logger.info("Distributing pop to households took {}s".format(datetime.now()-laptime))
     laptime = datetime.now()
