@@ -75,14 +75,17 @@ class Distributor:
             self.available_venue_indices = list(range(len(self.potential_venues)))
         else:
             self.available_venue_indices = available_venue_indices
+        total_allocated=0
         for person in self.people:
             if person.has_activity(activity):
-                if not self.find_venues_for_person(person,
-                                                   activity,
-                                                   self.potential_venues,
-                                                   **kwargs):
+                if self.find_venues_for_person(person,
+                                               activity,
+                                               self.potential_venues,
+                                               **kwargs):
+                    total_allocated+=1
+                else:
                     self._deal_with_no_venue(person, activity)
-
+        print(f"Allocated {total_allocated} people to households")
         print("Number of unallocated folk: {}".format(len(self.unallocated_people)))
 
     def find_venues_for_person(self,

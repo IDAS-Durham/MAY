@@ -6,34 +6,13 @@ from collections import defaultdict
 logger = logging.getLogger("HouseholdCreator")
 
 from may.geography import VenueManager, Venue
+from may.population import Subset
 
 
 class HouseholdManager(VenueManager):
     """Designed to read and interpret the household composition document. 
     
     """
-
-    def initialise_venue(self,
-                         venue_type: str,
-                         composition: str,
-                         geo_unit,
-                         **kwargs):
-        """Does the job of a CompositionManager
-        
-        Args:
-          composition (str): The column label for the household composition.
-        
-        """
-        name=str(self._generate_id())
-        newvenue = Venue(
-            name,
-            venue_type = venue_type,
-            geographical_unit=geo_unit,
-            properties = {'composition':composition},
-            **kwargs
-        )
-        return newvenue
-    
     def load_venue_type_from_df(self, venue_type, df):
         # Required columns
         required_cols = ['geo_unit']
@@ -76,7 +55,17 @@ class HouseholdManager(VenueManager):
             for composition in household_composition_cols:
                 if pd.notna(row[composition]):
                     for i in range(row[composition]):
-                        venue = self.initialise_venue(venue_type, composition, geo_unit)
+                        venue = Venue(
+                            str(self._generate_id()),
+                            venue_type = venue_type,
+                            geographical_unit=geo_unit,
+                            properties = {'composition':composition},
+                            
+                        )
+                        venue.subsets = {'kids' : Subset(venue, 0, 'kids'),
+                                         'independent children' : Subset(venue, 0, 'independent children'),
+                                         'adults' : Subset(venue, 0, 'adults'),
+                                         'elderly' : Subset(venue, 0, 'elderly')}
                         self.add_venue(venue, geo_unit)
                         venues_created += 1
 
@@ -87,7 +76,7 @@ class HouseholdManager(VenueManager):
         
 
         
-    
+
 
     
 

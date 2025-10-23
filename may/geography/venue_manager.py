@@ -34,22 +34,6 @@ class VenueManager:
         self._next_id += 1
         return self._next_id
 
-    def initialise_venue(self,
-                         name: str,
-                         venue_type: str,
-                         geo_unit: "GeographicalUnit",
-                         coordinates: tuple[float,float],
-                         properties):
-        """Initialises and returns a new Venue object given a set of arguments."""
-        venue = Venue(
-            name=name,
-            venue_type=venue_type,
-            geographical_unit=geo_unit,
-            coordinates=coordinates,
-            properties=properties
-        )
-        return venue
-
     def add_venue(self, venue, geo_unit):
         """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
         self.venues[venue.name] = venue
@@ -106,12 +90,12 @@ class VenueManager:
                     properties[prop_col] = row[prop_col]
                 
             # Generate ID and create venue
-            venue = self.initialise_venue(name=name,
-                                          venue_type=venue_type,
-                                          geo_unit=geo_unit,
-                                          coordinates=coordinates,
-                                          properties=properties,
-                                          )
+            venue = Venue(name=name,
+                          venue_type=venue_type,
+                          geo_unit=geo_unit,
+                          coordinates=coordinates,
+                          properties=properties,
+                          )
             
             # Store venue
             self.add_venue(venue, geo_unit)

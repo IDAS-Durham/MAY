@@ -5,7 +5,13 @@ class Subset(AbstractSet):
 #    external = False
     __slots__ = ("venue", "subset_type", "people_present")
 
-    def __init__(self, venue: "Venue", subset_index: int, subset_name: str = None, people_present: list["Person"]=[], members: set["Person"]=set()):
+    def __init__(self,
+                 venue: "Venue",
+                 subset_index: int,
+                 subset_name: str = None,
+                 people_present: list["Person"]=[],
+                 members: set["Person"]=set(),
+                 ):
         """
         Args:
           venue (Venue): the location in which this subset is situated.
@@ -67,7 +73,6 @@ class Subset(AbstractSet):
     def dead(self):
         """ """
         return self._collate("dead")
-
     
     # @property
     # def in_hospital(self):
