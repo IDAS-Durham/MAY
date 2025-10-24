@@ -200,7 +200,7 @@ class RelationshipRulesValidator:
         if diff_max < min_diff:
             penalty = min_diff - diff_max
             if log_rejection:
-                logger.info(f"      ✗ Rejected: {person1} - too young (diff={diff_max} < min={min_diff})")
+                logger.debug(f"      ✗ Rejected: {person1} - too young (diff={diff_max} < min={min_diff})")
             return (False, penalty)
 
         # Check against person with MIN attribute value in people2 for max constraint
@@ -211,7 +211,7 @@ class RelationshipRulesValidator:
         if diff_min > max_diff:
             penalty = diff_min - max_diff
             if log_rejection:
-                logger.info(f"      ✗ Rejected: {person1} - too old (diff={diff_min} > max={max_diff}, penalty={penalty})")
+                logger.debug(f"      ✗ Rejected: {person1} - too old (diff={diff_min} > max={max_diff}, penalty={penalty})")
             return (False, penalty)
 
         return (True, 0.0)
@@ -356,14 +356,14 @@ class RelationshipRulesValidator:
             if all_valid:
                 if show_detailed_logs:
                     if candidates_rejected > 0:
-                        logger.info(f"  ✓ Selected (tested {candidates_tested} candidates, rejected {candidates_rejected}): {candidate}")
+                        logger.debug(f"  ✓ Selected (tested {candidates_tested} candidates, rejected {candidates_rejected}): {candidate}")
                     else:
-                        logger.info(f"  ✓ Selected on first try: {candidate}")
+                        logger.debug(f"  ✓ Selected on first try: {candidate}")
                 return candidate
 
         # No valid candidate found, use best candidate if enabled
         if self.selection_strategy.get('log_violations', False):
-            logger.warning(f"No valid candidate found for {current_role} after {max_attempts} attempts. use_best_candidate={use_best}")
+            logger.debug(f"No valid candidate found for {current_role} after {max_attempts} attempts. use_best_candidate={use_best}")
 
         if use_best:
             best_candidate = None
@@ -389,14 +389,14 @@ class RelationshipRulesValidator:
                 self.stats['best_candidate_selections'] += 1
                 self.stats['violations']['numerical_attribute_difference'] += 1
 
-                logger.error(f"⚠️  USING BEST CANDIDATE (VIOLATES CONSTRAINTS) for {current_role}: "
+                logger.debug(f"⚠️  USING BEST CANDIDATE (VIOLATES CONSTRAINTS) for {current_role}: "
                            f"age={best_candidate.age}, sex={best_candidate.sex}, "
                            f"penalty={best_penalty:.2f}")
 
                 return best_candidate
 
         if self.selection_strategy.get('log_violations', False):
-            logger.warning(f"Returning None for {current_role} - no valid candidates and use_best_candidate=False")
+            logger.debug(f"Returning None for {current_role} - no valid candidates and use_best_candidate=False")
 
         return None
 
@@ -444,7 +444,7 @@ class RelationshipRulesValidator:
 
         if show_detailed_logs:
             pair_type = f"same-{cat_attribute}" if is_same_category else f"different-{cat_attribute}"
-            logger.info(f"    Pair type: {pair_type} (prob={same_category_prob*100:.0f}%)")
+            logger.debug(f"    Pair type: {pair_type} (prob={same_category_prob*100:.0f}%)")
 
         # Get relevant numerical_attribute_difference constraints for this role
         relevant_constraints = [
@@ -459,19 +459,32 @@ class RelationshipRulesValidator:
                 if people_2:
                     attribute = rc.get('attribute', 'age')
                     values = [getattr(p, attribute) for p in people_2]
-                    logger.info(f"    {attribute.capitalize()} constraints: Both partners must be {rc.get('min_difference')}-{rc.get('max_difference')} {attribute} units older than {role_2} ({attribute}s: {values})")
+                    logger.debug(f"    {attribute.capitalize()} constraints: Both partners must be {rc.get('min_difference')}-{rc.get('max_difference')} {attribute} units older than {role_2} ({attribute}s: {values})")
 
         max_attempts = self.selection_strategy.get('max_attempts', 50)
         use_best = self.selection_strategy.get('use_best_candidate', True)
+
+        # Pre-shuffle candidates once to avoid repeated random.choice() overhead
+        shuffled_candidates = candidates.copy()
+        random.shuffle(shuffled_candidates)
+
+        # Pre-group candidates by categorical attribute for faster filtering
+        candidates_by_cat = {}
+        for p in candidates:
+            cat_val = getattr(p, cat_attribute)
+            if cat_val not in candidates_by_cat:
+                candidates_by_cat[cat_val] = []
+            candidates_by_cat[cat_val].append(p)
 
         # Try to find a valid couple
         attempts_made = 0
         candidates_tested = 0
         candidates_rejected = 0
+        first_person = None
+        remaining = []
 
-        for attempt in range(min(max_attempts, len(candidates))):
-            # Select first person randomly
-            first_person = random.choice(candidates)
+        # Iterate through shuffled candidates instead of random.choice()
+        for first_person in shuffled_candidates[:min(max_attempts, len(shuffled_candidates))]:
             candidates_tested += 1
 
             # Validate first person against existing people (e.g., children)
@@ -492,9 +505,6 @@ class RelationshipRulesValidator:
             if not first_valid:
                 continue
 
-            # Filter remaining candidates
-            remaining = [p for p in candidates if p.id != first_person.id]
-
             # Determine required categorical attribute value for second person
             first_cat_value = getattr(first_person, cat_attribute)
             if is_same_category:
@@ -506,19 +516,25 @@ class RelationshipRulesValidator:
                     required_cat_value = 'male' if first_cat_value == 'female' else 'female'
                 else:
                     # For non-binary categorical attributes, we can't easily determine "opposite"
-                    # So we just select a different value
-                    all_cat_values = list(set([getattr(p, cat_attribute) for p in candidates]))
+                    # Use pre-computed categorical values from candidates_by_cat
+                    all_cat_values = list(candidates_by_cat.keys())
                     other_values = [v for v in all_cat_values if v != first_cat_value]
                     required_cat_value = random.choice(other_values) if other_values else first_cat_value
 
-            # Filter by categorical attribute
-            remaining = [p for p in remaining if getattr(p, cat_attribute) == required_cat_value]
+            # Use pre-grouped candidates by categorical attribute
+            remaining = candidates_by_cat.get(required_cat_value, [])
+            # Remove first person from remaining
+            remaining = [p for p in remaining if p.id != first_person.id]
+
             if not remaining:
                 continue
 
-            # Try to find valid partner
-            for partner_attempt in range(min(max_attempts, len(remaining))):
-                candidate = random.choice(remaining)
+            # Shuffle remaining candidates once and iterate
+            shuffled_remaining = remaining.copy()
+            random.shuffle(shuffled_remaining)
+
+            # Try to find valid partner - iterate through shuffled list
+            for candidate in shuffled_remaining[:min(max_attempts, len(shuffled_remaining))]:
                 candidates_tested += 1
 
                 # Validate partner against first person (couple numerical attribute difference)
@@ -528,7 +544,7 @@ class RelationshipRulesValidator:
                 if not is_valid:
                     candidates_rejected += 1
                     if show_detailed_logs:
-                        logger.info(f"      ✗ Rejected: Partner pair has age difference too large")
+                        logger.debug(f"      ✗ Rejected: Partner pair has age difference too large")
                     continue
 
                 # Validate partner against existing people (e.g., children)
@@ -555,19 +571,19 @@ class RelationshipRulesValidator:
                             val2 = getattr(candidate, num_attr)
                             diff = abs(val1 - val2)
                             if candidates_rejected > 0:
-                                logger.info(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
+                                logger.debug(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
                             else:
-                                logger.info(f"    ✓ Found valid pair on first try")
-                            logger.info(f"      Partner 1: {first_person} ({num_attr} {val1})")
-                            logger.info(f"      Partner 2: {candidate} ({num_attr} {val2})")
-                            logger.info(f"      {num_attr.capitalize()} difference: {diff}")
+                                logger.debug(f"    ✓ Found valid pair on first try")
+                            logger.debug(f"      Partner 1: {first_person} ({num_attr} {val1})")
+                            logger.debug(f"      Partner 2: {candidate} ({num_attr} {val2})")
+                            logger.debug(f"      {num_attr.capitalize()} difference: {diff}")
                         else:
                             if candidates_rejected > 0:
-                                logger.info(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
+                                logger.debug(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
                             else:
-                                logger.info(f"    ✓ Found valid pair on first try")
-                            logger.info(f"      Partner 1: {first_person}")
-                            logger.info(f"      Partner 2: {candidate}")
+                                logger.debug(f"    ✓ Found valid pair on first try")
+                            logger.debug(f"      Partner 1: {first_person}")
+                            logger.debug(f"      Partner 2: {candidate}")
 
                     if self.track_statistics:
                         # Track numerical attribute differences
@@ -589,7 +605,7 @@ class RelationshipRulesValidator:
             attempts_made += 1
 
         # No valid pair found, use best candidate
-        if use_best:
+        if use_best and first_person is not None and remaining:
             best_partner = None
             best_penalty = float('inf')
 
@@ -634,38 +650,38 @@ class RelationshipRulesValidator:
         if not self.track_statistics:
             return
 
-        logger.info("=" * 60)
-        logger.info("RELATIONSHIP RULES STATISTICS")
-        logger.info("=" * 60)
+        logger.debug("=" * 60)
+        logger.debug("RELATIONSHIP RULES STATISTICS")
+        logger.debug("=" * 60)
 
         # Best candidate selections
         if self.stats['best_candidate_selections'] > 0:
-            logger.info(f"Best candidate selections: {self.stats['best_candidate_selections']:,}")
+            logger.debug(f"Best candidate selections: {self.stats['best_candidate_selections']:,}")
 
         # Pair types
         total_pairs = self.stats['same_category_pairs'] + self.stats['different_category_pairs']
         if total_pairs > 0:
-            logger.info(f"Pairs created: {total_pairs:,}")
-            logger.info(f"  Same-category: {self.stats['same_category_pairs']:,} "
+            logger.debug(f"Pairs created: {total_pairs:,}")
+            logger.debug(f"  Same-category: {self.stats['same_category_pairs']:,} "
                        f"({100*self.stats['same_category_pairs']/total_pairs:.1f}%)")
-            logger.info(f"  Different-category: {self.stats['different_category_pairs']:,} "
+            logger.debug(f"  Different-category: {self.stats['different_category_pairs']:,} "
                        f"({100*self.stats['different_category_pairs']/total_pairs:.1f}%)")
 
         # Numerical attribute differences
         if self.stats['numerical_attribute_differences']:
             import statistics as stats_module
-            logger.info(f"Partner numerical attribute differences:")
-            logger.info(f"  Mean: {stats_module.mean(self.stats['numerical_attribute_differences']):.1f}")
-            logger.info(f"  Median: {stats_module.median(self.stats['numerical_attribute_differences']):.1f}")
-            logger.info(f"  Range: {min(self.stats['numerical_attribute_differences'])}-"
+            logger.debug(f"Partner numerical attribute differences:")
+            logger.debug(f"  Mean: {stats_module.mean(self.stats['numerical_attribute_differences']):.1f}")
+            logger.debug(f"  Median: {stats_module.median(self.stats['numerical_attribute_differences']):.1f}")
+            logger.debug(f"  Range: {min(self.stats['numerical_attribute_differences'])}-"
                        f"{max(self.stats['numerical_attribute_differences'])}")
 
         # Violations
         total_violations = sum(self.stats['violations'].values())
         if total_violations > 0:
-            logger.info(f"Rule violations (resolved with best candidate):")
+            logger.debug(f"Rule violations (resolved with best candidate):")
             for violation_type, count in self.stats['violations'].items():
                 if count > 0:
-                    logger.info(f"  {violation_type}: {count:,}")
+                    logger.debug(f"  {violation_type}: {count:,}")
 
-        logger.info("=" * 60)
+        logger.debug("=" * 60)

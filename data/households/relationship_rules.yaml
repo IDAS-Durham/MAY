@@ -1,10 +1,32 @@
 # Relationship Rules Configuration
 #
-# FULLY GENERIC pattern-based relationship rules.
-# No hardcoded concepts - everything is expressed as mathematical constraints
-# between category indices and roles.
+# Pattern-based relationship rules.
+# Rules expressed as constraints between category indices and roles.
 
 enabled: true
+
+# =============================================
+# SELECTION STRATEGY
+# =============================================
+selection_strategy:
+  max_attempts: 10
+  use_best_candidate: true
+  penalty_mode: "squared"
+  log_violations: true
+  log_best_candidates: true
+
+  # Backtracking: Retry with different first-role selection before demotion
+  backtracking:
+    enabled: true               # Enable backtracking before demotion
+    max_backtracks: 3           # Max backtrack attempts before falling back to demotion
+    strategy: "first_role"      # Always backtrack to first role when a later role fails
+    log_backtracks: true        # Log backtracking attempts
+    avoid_duplicates: true      # Don't retry same first-role person/people
+
+# =============================================
+# STATISTICS
+# =============================================
+track_statistics: true
 
 # =============================================
 # PATTERN-BASED RELATIONSHIP RULES
@@ -19,7 +41,7 @@ rules:
 
     roles:
       role_A:
-        categories: ["Kids"]  # Use category names from households_config.yaml
+        categories: ["Kids"]
         count: "any"
 
       role_B:
@@ -42,7 +64,7 @@ rules:
           attribute: "sex"
           values:
             female: 50
-            male: 70
+            male: 55
 
       # role_B (2 people) should be a compatible pair
       - type: "pair_matching"
@@ -86,7 +108,7 @@ rules:
           attribute: "sex"
           values:
             female: 50
-            male: 70
+            male: 55
 
   # Rule 3: Two-adult families with young adults
   - name: "Two-adult family with young adults"
@@ -118,7 +140,7 @@ rules:
           attribute: "sex"
           values:
             female: 50
-            male: 70
+            male: 55
 
       # role_B (2 people) should be a compatible pair
       - type: "pair_matching"
@@ -161,7 +183,7 @@ rules:
           attribute: "sex"
           values:
             female: 50
-            male: 70
+            male: 55
 
   # Rule 5: Adult pairs (no kids)
   - name: "Adult pair"
@@ -248,7 +270,7 @@ rules:
           attribute: "sex"
           values:
             female: 50
-            male: 70
+            male: 55
 
       - type: "pair_matching"
         role: "role_B"
@@ -273,7 +295,7 @@ rules:
           attribute: "sex"
           values:
             female: 50
-            male: 70
+            male: 55
 
 # =============================================
 # CONSTRAINT TYPES
@@ -312,17 +334,4 @@ rules:
 #          - std_difference: Standard deviation of difference
 #          - max_absolute_difference: Hard limit on |value_1 - value_2|
 
-# =============================================
-# SELECTION STRATEGY
-# =============================================
-selection_strategy:
-  max_attempts: 50
-  use_best_candidate: false
-  penalty_mode: "squared"
-  log_violations: true
-  log_best_candidates: true
 
-# =============================================
-# STATISTICS
-# =============================================
-track_statistics: true

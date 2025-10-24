@@ -439,8 +439,9 @@ class VenueManager:
         import os
         df = pd.DataFrame(rows)
 
-        # Sort by venue type and ID
-        df = df.sort_values(['venue_type', 'venue_id'])
+        # Sort by venue type and ID (only if DataFrame has data)
+        if not df.empty:
+            df = df.sort_values(['venue_type', 'venue_id'])
 
         output_path = os.path.join(self.data_dir, output_file)
         df.to_csv(output_path, index=False)

@@ -1,5 +1,7 @@
+import cProfile
 import os
 import logging
+import pstats
 import random
 import sys
 import numpy as np
@@ -18,7 +20,7 @@ if os.environ.get('PYTHONHASHSEED') is None:
 
 logger = logging.getLogger("create_world")
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -181,6 +183,8 @@ def main():
     """
     Main entry point for world creation.
     """
+
+
     logger.info("=" * 60)
     logger.info("June Zero - World Creation")
     logger.info("=" * 60)
@@ -272,4 +276,18 @@ def main():
 
 
 if __name__ == "__main__":
+
+
+    profiler = cProfile.Profile()
+    profiler.enable()
+    
     world = main()
+
+    try:
+        profiler.disable()
+        stats = pstats.Stats(profiler).sort_stats('cumulative')
+        profile_filename = 'simulation_profile.stats'
+        stats.dump_stats(profile_filename)
+        logger.info(f"Performance profiling data saved to {profile_filename}")
+    except Exception as e:
+        logger.error(f"Failed to save profiling data: {e}")

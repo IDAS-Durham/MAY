@@ -192,9 +192,13 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
     allocate_flexible = step_config.get('allocate_flexible', False)
     round_name = step_config.get('name', 'Household Round')
     rule_name = step_config.get('rule')  # Optional: explicit rule to apply
+    demotion_rules = step_config.get('demotion_rules', {})  # Optional: pattern -> rule mapping for demotions
 
     if rule_name:
         logger.info(f"  Using explicit relationship rule: '{rule_name}'")
+
+    if demotion_rules:
+        logger.info(f"  Demotion rules configured: {len(demotion_rules)} pattern(s)")
 
     # Process patterns to extract assumptions
     # Patterns can be either:
@@ -235,7 +239,8 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
             allocate_flexible=allocate_flexible,
             refresh_pools=refresh_pools,
             round_name=round_name,
-            rule_name=rule_name
+            rule_name=rule_name,
+            demotion_rules=demotion_rules
         )
         return stats
     finally:

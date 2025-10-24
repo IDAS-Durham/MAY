@@ -72,3 +72,6 @@ data/households/household_composition_ew.csv
 data/population/sampled_single_year_female_ew.csv
 data/population/sampled_single_year_male_ew.csv
 stuff_for_carehomes
+profile_analyzer.py
+profile_bottlenecks.txt
+simulation_profile.stats

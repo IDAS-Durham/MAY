@@ -1,6 +1,6 @@
 # Unified Allocation Strategy Configuration
 #
-# This file defines the COMPLETE allocation order for both households and venues.
+# This file defines the complete allocation order for both households and venues.
 # Steps are executed sequentially in the order defined here.
 
 enabled: true
@@ -23,16 +23,21 @@ steps:
   # =============================================
   - name: "Two-Adult Families with Children"
     type: "household"
-    description: "Allocate two-adult families with kids (highest priority)"
-    rule: "Two-adult family with kids"  # Use relationship rules
+    description: "Allocate two-adult families with kids"
+    rule: "Two-adult family with kids"
 
     patterns:
-      - ">=2 >=0 2 0"   # 2+ kids, 2 adults
-      - "1 >=0 2 0"     # 1 kid, 2 adults
+      - ">=2 >=0 2 0"
+      - "1 >=0 2 0"
 
     max_households: null
     refresh_pools: false
     enable_demotion: null
+
+    # When pattern demotes, switch to these rules
+    demotion_rules:
+      ">=2 >=0 1 0": "Single-adult family with kids"
+      "1 >=0 1 0": "Single-adult family with kids"
 
   # =============================================
   # Step 1b: Single-Parent Families with Children
@@ -40,11 +45,11 @@ steps:
   - name: "Single-Parent Families with Children"
     type: "household"
     description: "Allocate single-parent families with kids"
-    rule: "Single-adult family with kids"  # Use relationship rules
+    rule: "Single-adult family with kids"
 
     patterns:
-      - ">=2 >=0 1 0"   # 2+ kids, 1 adult (single parent)
-      - "1 >=0 1 0"     # 1 kid, 1 adult (single parent)
+      - ">=2 >=0 1 0"
+      - "1 >=0 1 0"
 
     max_households: null
     refresh_pools: false
@@ -56,7 +61,7 @@ steps:
   - name: "Multi-generational Households"
     type: "household"
     description: "Multi-generational households"
-    rule: "Multi-generational household"  # Explicitly specify which relationship rule to use
+    rule: "Multi-generational household"
 
     patterns:
       - pattern: ">=2 >=0 >=0 >=0"
@@ -82,6 +87,10 @@ steps:
     max_households: null
     refresh_pools: false
     enable_demotion: null
+
+    # When pattern demotes, switch to these rules
+    demotion_rules:
+      "0 >=1 1 0": "Single-adult family with young adults"
 
   # =============================================
   # Step 3b: Single-Adult Families with Young Adults (no kids)
