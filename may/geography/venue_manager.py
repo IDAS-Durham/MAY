@@ -16,6 +16,7 @@ class VenueManager:
         self.venues = {}                # All venues by name: {name: Venue}
         self.venues_by_id = {}          # All venues by ID: {id: Venue}
         self.venues_by_type = defaultdict(list)        # Venues grouped by type: {type: [Venue, ...]}
+
         self.filter_by_geography = filter_by_geography  # Only load venues in loaded geo units
 
         # ID counter for generating unique IDs
@@ -40,7 +41,6 @@ class VenueManager:
         self.venues_by_id[venue.id] = venue
         # Group by type
         self.venues_by_type[venue.type].append(venue)
-
         # Add venue to its geographical unit
         geo_unit.add_venue(venue)       
 

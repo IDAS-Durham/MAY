@@ -58,3 +58,4 @@ class StatMaker:
             "cv": np.std(arr, ddof=1) / np.mean(arr) if np.mean(arr) != 0 else np.inf
         }
 
+
