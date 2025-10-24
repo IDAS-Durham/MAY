@@ -8,7 +8,7 @@ from may.distributor import Distributor
 from may.distributor import DistributorMultiPass
 from may.distributor import SubsetDistributor
 from may.population import Subset
-from may.specific_distributors.household_subset_distributor import HouseholdSubsetDistributor
+from .household_subset_distributor import HouseholdSubsetDistributor
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,10 @@ class HouseholdDistributor(DistributorMultiPass):
             '0 0 1 0': 1,    # Strict: cannot expand
             '0 >=1 2 0': 3,  # Can expand ind children
             '1 >=0 2 0': 3,  # Can expand ind children
-            '>=2 >=0 2 0': 4,  # Can expand kids and ind children
+            '>=2 >=0 2 0': 7,  # Can expand kids and ind children
             '0 >=1 1 0': 2,
             '1 >=0 1 0': 2,
-            '>=2 >=0 1 0': 3,
+            '>=2 >=0 1 0': 4,
             '1 >=0 >=0 >=0': 2,   # Very flexible
             '>=2 >=0 >=0 >=0': 2,  # Very flexible
             '0 >=0 0 0': 1,

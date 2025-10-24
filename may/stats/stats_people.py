@@ -40,7 +40,7 @@ class StatMakerPop(StatMaker):
         logger.info(f"    Number       age < 18 : {breakdown[0]}")
         logger.info(f"    Number 18 <= age < 25 : {breakdown[1]}")
         logger.info(f"    Number 25 <= age < 60 : {breakdown[2]}")
-        logger.info(f"    Number 60 <= age      : {breakdown[3]}")        
+        logger.info(f"    Number 60 <= Age      : {breakdown[3]}")        
 
     def get_age_stats(self):
         ages = np.zeros(len(self.people))

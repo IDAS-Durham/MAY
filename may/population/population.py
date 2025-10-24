@@ -37,6 +37,9 @@ class PopulationManager:
         # Precise demographics: geo_unit -> age -> sex -> count
         self.precise_demographics = {}
 
+    def __len__(self):
+        return len(self.people)
+
     def load_demographics_from_csv(self, male_file="demographics_male.csv",
                                      female_file="demographics_female.csv"):
         """

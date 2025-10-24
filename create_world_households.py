@@ -9,7 +9,7 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World
-from may.specific_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
+from world_specific_code.specific_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
 from may.stats import StatMakerVenues, StatMaker
 
 from datetime import datetime
@@ -187,8 +187,11 @@ def print_world_examples(world):
 
     logger.info("")
     logger.info("   # Get people by housed or not")
-    housed = population.get_people_by_activity("home")
-    logger.info(f"   population.get_people_by_activity('home') -> {len(housed)} people with 'home' set")
+    n=0
+    for p in population.get_people_by_activity("home"):
+        if p.activity_map['home']:
+            n+=1
+    logger.info(f"   population.get_people_by_activity('home') -> {n} people out of {len(population)} with 'home' activity set")
     
 
     # logger.info("")
