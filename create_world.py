@@ -11,7 +11,7 @@ from config_loader import setup_geography
 from geography import VenueManager
 from population import PopulationManager
 from residence.allocation_strategy import execute_allocation_strategy
-from residence.household import HouseholdDistributor
+from residence.household_distributor import HouseholdDistributor
 from world import World
 
 if os.environ.get('PYTHONHASHSEED') is None:
