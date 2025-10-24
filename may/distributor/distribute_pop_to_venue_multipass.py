@@ -140,7 +140,11 @@ class DistributorMultiPass(Distributor):
                 
         return reopened_count
 
-    def assign_people_venues_multi_pass(self, activity: str, venue_type: str, **kwargs):
+    def assign_people_venues_multi_pass(self,
+                                        activity: str,
+                                        venue_type: str,
+                                        people=None,
+                                        **kwargs):
         """
         Multi-pass assignment with configurable number of passes.
 
@@ -157,9 +161,12 @@ class DistributorMultiPass(Distributor):
             The activity the Person is undertaking when visiting this type of venue.
           venue_type (str):
             Label for the type of venue.
+          people (list[Person]):
+            A list of people to assign. 
           
         """
-        initial_people_count = len(self.people)
+        people = people if people is not None else self.people
+        initial_people_count = len(people)
         logger.debug("="*70)
         logger.debug(f"MULTI-PASS ASSIGNMENT: {self.num_passes} passes configured")
         logger.debug(f"Total people to allocate: {initial_people_count}")
@@ -184,6 +191,7 @@ class DistributorMultiPass(Distributor):
                 # First pass: use all people
                 self.assign_people_venues(activity,
                                           venue_type,
+                                          people=people,
                                           maxiter=10,
                                           **kwargs)
             else:
@@ -200,7 +208,7 @@ class DistributorMultiPass(Distributor):
                                           **kwargs)
 
             unallocated_count = len(self.unallocated_people)
-            allocated_this_pass = len(self.people) if pass_num == 0 else len(remaining_people)
+            allocated_this_pass = len(people) if pass_num == 0 else len(remaining_people)
             allocated_this_pass = allocated_this_pass - unallocated_count
 
             logger.debug(f"Pass {pass_num + 1} results:")
@@ -241,5 +249,5 @@ class DistributorMultiPass(Distributor):
                 my_statmaker.get_age_group_breakdown()
                 morestats = my_statmaker.get_age_stats()
                 for key, val in morestats.items():
-                    logger.warning(f"    {key} : {val}")
+                    logger.info(f"    {key} : {val}")
         logger.debug("="*70)            

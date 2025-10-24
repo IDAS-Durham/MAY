@@ -133,7 +133,7 @@ class Distributor:
                     # milestone = (percent // 10) * 10
                     # if milestone not in printed and milestone % 10 == 0:
                     #     logger.debug(f"{milestone}% complete")
-                    #     printed.add(milestone)                    
+                    #     printed.add(milestone)
                 else:
                     self._deal_with_no_venue(person, activity)
         logger.debug(f"Allocated {total_allocated} people to households")
@@ -171,6 +171,7 @@ class Distributor:
                 
             try:
                 trial_subset_index, trial_subset_name = self.subset_distributor.find_subset_for_person(
+                    activity,
                     self._venue_has_membership_capacity_by_subset[trial_venue.id],
                     person,
                 )

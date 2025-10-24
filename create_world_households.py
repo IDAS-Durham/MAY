@@ -9,7 +9,8 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World
-from world_specific_code.specific_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
+from world_specific_code.household_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
+from world_specific_code.care_home_distributor import CareHomeDistributor, CareHomeSubsetDistributor
 from may.stats import StatMakerVenues, StatMaker
 
 from datetime import datetime
@@ -233,7 +234,15 @@ def main():
     logger.info("")
     logger.info("Loading venues...")
     venues = VenueManager(geography=geo, data_dir="data/venues")
-    venues.load_from_csv()
+    for venue_type, phile in [('care_home', 'msoa_care_homes.csv'),
+                              ('hospital', 'hospitals.csv'),
+                              ('company', 'companies.csv'),
+                              ('prison', 'prisons.csv'),
+                              ('university', 'universities.csv'),
+                              ('school', 'schools.csv'),
+                              ('student_dorm', 'msoa_student_dorms.csv')]:
+        venues.load_venue_type_from_csv(venue_type, filename=None)
+    #venues.load_from_csv()
     logger.info("Loading venues took {}s".format(datetime.now()-laptime))
     laptime = datetime.now()
     
@@ -278,18 +287,50 @@ def main():
     logger.info("Allocating people to households geo-unit by geo-unit...")
     i, printed, num_geo_units = 0, set(), len(smallest_geo_unit_dict)
     for geo_unit in smallest_geo_unit_dict.values():
-        peeps, potential_households = geo_unit.people, geo_unit.get_venues_by_type('household')
+        peeps, potential_venues = geo_unit.people, geo_unit.get_venues_by_type('household')
         # Distribute people to Households
-        household_distributor = HouseholdDistributor('household', venues, peeps, potential_venues=potential_households)
+        household_distributor = HouseholdDistributor(
+            'household',
+            venues,
+            peeps,
+            potential_venues=potential_venues
+        )
+        household_distributor.num_passes = 6
+        
         # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
         household_distributor.assign_people_venues_multi_pass('home', 'household')
+
+        still_unallocated = household_distributor.unallocated_people.copy()
+        care_home_distributor = CareHomeDistributor(
+            'care_home',
+            venues,
+            still_unallocated,
+            potential_venues=geo_unit.get_venues_by_type('care_home')
+        )
+        care_home_distributor.assign_people_venues(
+            'home',
+            'care_home',
+            people=still_unallocated
+        )
+        
+        # household_distributor.num_passes = 8
+        # household_distributor.unallocated_people = []
+        # reopened = household_distributor.reopen_threshold_closed_venues()
+        # logger.info(f"Reopened {reopened} venues")
+        # household_distributor.assign_people_venues_multi_pass(
+        #     'home',
+        #     'household',
+        #     people=care_home_distributor.unallocated_people.copy()
+        # )
+        
         i+=1
         percent=int(i/num_geo_units*100)
         milestone = (percent // 10) * 10
         if milestone not in printed and milestone % 10 == 0:
             logger.info(f"             ...{milestone}% complete")
             printed.add(milestone)                            
-        
+    
+            
     logger.info("Distributing pop to households took {}s".format(datetime.now()-laptime))
     laptime = datetime.now()
     
