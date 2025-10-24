@@ -1333,68 +1333,6 @@ class HouseholdDistributor:
 
         return None
 
-    def distribute_households(self):
-        """
-        Main method to distribute people into households.
-
-        This method:
-        1. Prepares person pools by area
-        2. Iterates through household composition data
-        3. Attempts to create households with given patterns
-        4. Uses demotion when needed to handle census obfuscation
-        """
-        logger.info("Starting household distribution...")
-
-        # Prepare pools
-        self._prepare_person_pools()
-
-        # Get config
-        demotion_enabled = self.config['demotion']['enabled']
-        max_attempts = self.config['demotion']['max_attempts']
-
-        total_requested = 0
-        total_created = 0
-        total_demoted = 0
-
-        # Iterate through each area
-        for area_code, compositions in self.household_counts_by_area.items():
-            logger.debug(f"Processing area {area_code}...")
-
-            # Iterate through each composition type in this area
-            for pattern_str, count in compositions.items():
-                total_requested += count
-                pattern = CompositionPattern.from_string(pattern_str)
-
-                # Try to create 'count' households of this type
-                for i in range(count):
-                    if demotion_enabled:
-                        household = self._attempt_with_demotion(area_code, pattern, max_attempts)
-                    else:
-                        household, _ = self._allocate_household(area_code, pattern)
-
-                    if household:
-                        self.households.append(household)
-                        total_created += 1
-
-                        # Check if we used demotion
-                        if household.properties.get('original_pattern') != pattern.to_string():
-                            total_demoted += 1
-                    else:
-                        logger.debug(f"  Failed to allocate household {i+1}/{count} of type '{pattern_str}' in {area_code}")
-
-        # Log summary
-        logger.info("=" * 60)
-        logger.info("Household distribution complete!")
-        logger.info(f"  Requested households: {total_requested:,}")
-        logger.info(f"  Created households: {total_created:,} ({100*total_created/max(total_requested,1):.1f}%)")
-        logger.info(f"  Households using demotion: {total_demoted:,} ({100*total_demoted/max(total_created,1):.1f}%)")
-        logger.info(f"  People allocated: {len(self.allocated_people):,}")
-        logger.info(f"  People unallocated: {len(self.population.get_all_people()) - len(self.allocated_people):,}")
-        logger.info("=" * 60)
-
-        # logger.debug relationship rules statistics
-        self.relationship_rules.logger.debug_statistics()
-
     def _calculate_balanced_distribution(self, area_code: str, pattern: CompositionPattern,
                                          num_households: int, max_household_size: Optional[int]) -> List[int]:
         """
@@ -1527,7 +1465,6 @@ class HouseholdDistributor:
         max_attempts = self.config['demotion']['max_attempts']
 
         # Track round statistics
-        round_start_households = len(self.households)
         round_start_allocated = len(self.allocated_people)
         total_requested = 0
         total_created = 0
@@ -1641,12 +1578,13 @@ class HouseholdDistributor:
             'total_people_remaining': len(self.population.get_all_people()) - len(self.allocated_people)
         }
 
-        # Log summary
+        # Log summary (with additional round-specific info first)
         logger.info("=" * 60)
         logger.info(f"{round_label} complete!")
         logger.info(f"  Requested households (filtered): {total_requested:,}")
         logger.info(f"  Created households: {total_created:,} ({100*total_created/max(total_requested,1):.1f}%)")
-        logger.info(f"  Households using demotion: {total_demoted:,}")
+        if total_demoted > 0:
+            logger.info(f"  Households using demotion: {total_demoted:,}")
         logger.info(f"  People allocated this round: {round_stats['people_allocated_this_round']:,}")
         logger.info(f"  Total households so far: {len(self.households):,}")
         logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
@@ -1719,108 +1657,6 @@ class HouseholdDistributor:
 
         logger.info("Allocation reset complete")
 
-    def distribute_households_from_yaml(self, rounds_config_file: str = "allocation_rounds.yaml"):
-        """
-        Execute multi-round allocation from a YAML configuration file.
-
-        The YAML file should define rounds with patterns, limits, and options.
-        See allocation_rounds.yaml for examples.
-
-        Args:
-            rounds_config_file: Path to YAML file (relative to data_dir or absolute)
-
-        Returns:
-            list: List of statistics dicts, one per round
-        """
-        # Load rounds configuration
-        if not os.path.isabs(rounds_config_file):
-            rounds_config_path = os.path.join(self.data_dir, rounds_config_file)
-        else:
-            rounds_config_path = rounds_config_file
-
-        logger.info(f"Loading allocation rounds configuration from {rounds_config_path}")
-
-        with open(rounds_config_path, 'r') as f:
-            rounds_config = yaml.safe_load(f)
-
-        # Check if multi-round is enabled
-        if not rounds_config.get('enabled', True):
-            logger.info("Multi-round allocation is disabled in config, using single-pass allocation")
-            self.distribute_households()
-            return []
-
-        # Get rounds
-        rounds = rounds_config.get('rounds', [])
-        if not rounds:
-            logger.warning("No rounds defined in config, using single-pass allocation")
-            self.distribute_households()
-            return []
-
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info(f"Starting multi-round allocation with {len(rounds)} rounds")
-        logger.info("=" * 60)
-
-        # Execute each round
-        all_stats = []
-        for i, round_config in enumerate(rounds):
-            round_name = round_config.get('name', f"Round {i+1}")
-            description = round_config.get('description')
-
-            if description:
-                logger.info("")
-                logger.info(f"Round {i+1}: {round_name}")
-                logger.info(f"  Description: {description}")
-
-            # Get round parameters
-            patterns = round_config.get('patterns')
-            max_households = round_config.get('max_households')
-            refresh_pools = round_config.get('refresh_pools', False)
-            enable_demotion = round_config.get('enable_demotion')
-
-            # Temporarily override demotion setting if specified
-            original_demotion = None
-            if enable_demotion is not None:
-                original_demotion = self.config['demotion']['enabled']
-                self.config['demotion']['enabled'] = enable_demotion
-
-            # Execute round
-            try:
-                stats = self.distribute_households_round(
-                    pattern_filter=patterns,
-                    max_households=max_households,
-                    refresh_pools=refresh_pools,
-                    round_name=round_name
-                )
-                all_stats.append(stats)
-            finally:
-                # Restore original demotion setting
-                if original_demotion is not None:
-                    self.config['demotion']['enabled'] = original_demotion
-
-        # logger.debug overall summary
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("MULTI-ROUND ALLOCATION SUMMARY")
-        logger.info("=" * 60)
-
-        for stats in all_stats:
-            logger.info("")
-            logger.info(f"{stats['round_name']}:")
-            logger.info(f"  Households created: {stats['households_created']:,}")
-            logger.info(f"  People allocated: {stats['people_allocated_this_round']:,}")
-            if stats['households_with_demotion'] > 0:
-                logger.info(f"  Households with demotion: {stats['households_with_demotion']:,}")
-
-        logger.info("")
-        logger.info("Overall Totals:")
-        logger.info(f"  Total households: {len(self.households):,}")
-        logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
-        logger.info(f"  Total people remaining: {self.get_available_people_count():,}")
-        logger.info("=" * 60)
-
-        return all_stats
-
     def _select_person_for_excess_with_rule(self, household: 'Household',
                                            candidates: List['Person'],
                                            add_category: str,
@@ -1886,6 +1722,67 @@ class HouseholdDistributor:
             elif cat.min_age <= person.age < cat.max_age:
                 return cat.name
         return "Unknown"
+
+    def _log_round_summary(self, round_label: str, stats: Dict, show_remaining: bool = True):
+        """
+        Log summary statistics for an allocation round.
+
+        Args:
+            round_label: Name of the round
+            stats: Statistics dictionary with round results
+            show_remaining: If True, show remaining people by category
+        """
+        logger.info("=" * 60)
+        logger.info(f"{round_label} complete!")
+
+        # Log round-specific metrics based on what's in stats
+        if 'households_created' in stats:
+            logger.info(f"  Households created: {stats['households_created']:,}")
+        if 'households_modified' in stats:
+            logger.info(f"  Households modified: {stats['households_modified']:,}")
+        if 'households_promoted' in stats:
+            logger.info(f"  Households promoted: {stats['households_promoted']:,}")
+        if 'people_added' in stats:
+            logger.info(f"  People added: {stats['people_added']:,}")
+        if 'people_allocated_this_round' in stats:
+            logger.info(f"  People allocated this round: {stats['people_allocated_this_round']:,}")
+        if 'households_with_demotion' in stats and stats['households_with_demotion'] > 0:
+            logger.info(f"  Households using demotion: {stats['households_with_demotion']:,}")
+
+        # Always show totals
+        logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
+        logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
+
+        # Show remaining by category if requested
+        if show_remaining:
+            remaining_by_category = self.get_available_people_by_category()
+            logger.info("")
+            logger.info("  Remaining by category:")
+            for cat_name in [cat.name for cat in self.age_categories]:
+                count = remaining_by_category.get(cat_name, 0)
+                logger.info(f"    {cat_name}: {count:,}")
+
+        logger.info("=" * 60)
+
+    def _allocate_person_to_household(self, household: Household, person: Person,
+                                      pool: Optional[List[Person]] = None):
+        """
+        Add person to household, mark as allocated, and optionally remove from pool.
+
+        Args:
+            household: Household to add person to
+            person: Person to add
+            pool: Optional pool to remove person from (modifies list in-place)
+        """
+        household.add_resident(person)
+        self.allocated_people.add(person.id)
+
+        # Remove from pool if provided
+        if pool is not None:
+            for i, p in enumerate(pool):
+                if p.id == person.id:
+                    pool.pop(i)
+                    break
 
     def allocate_excess_to_households(self,
                                       target_patterns: List[str],
@@ -2039,15 +1936,7 @@ class HouseholdDistributor:
                         person = available_people[0]  # Always take first (already shuffled)
 
                     # Add the person
-                    household.add_resident(person)
-                    self.allocated_people.add(person.id)
-
-                    # Remove the selected person from pool (modify list in-place)
-                    # Find the person in the pool and remove it
-                    for i, p in enumerate(available_people):
-                        if p.id == person.id:
-                            available_people.pop(i)
-                            break
+                    self._allocate_person_to_household(household, person, available_people)
 
                     added_to_this_household += 1
                     people_added += 1
@@ -2079,15 +1968,7 @@ class HouseholdDistributor:
                         person = available_people[0]  # Always take first (already shuffled)
 
                     # Add the person
-                    household.add_resident(person)
-                    self.allocated_people.add(person.id)
-
-                    # Remove the selected person from pool (modify list in-place)
-                    # Find the person in the pool and remove it
-                    for i, p in enumerate(available_people):
-                        if p.id == person.id:
-                            available_people.pop(i)
-                            break
+                    self._allocate_person_to_household(household, person, available_people)
 
                     added_to_this_household += 1
                     people_added += 1
@@ -2107,9 +1988,6 @@ class HouseholdDistributor:
             'total_people_remaining': len(self.population.get_all_people()) - len(self.allocated_people)
         }
 
-        # Get remaining people by category
-        remaining_by_category = self.get_available_people_by_category()
-
         # Log summary
         logger.info("=" * 60)
         logger.info(f"{round_label} complete!")
@@ -2119,6 +1997,9 @@ class HouseholdDistributor:
         logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
         logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
         logger.info("")
+
+        # Show remaining by category
+        remaining_by_category = self.get_available_people_by_category()
         logger.info("  Remaining by category:")
         for cat_name in [cat.name for cat in self.age_categories]:
             count = remaining_by_category.get(cat_name, 0)
