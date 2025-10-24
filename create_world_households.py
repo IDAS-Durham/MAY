@@ -269,11 +269,24 @@ def main():
 
     # Extend the venues object to add the households on. 
     venues.extend(household_manager)
-    # Distribute people to Households
-    household_distributor = HouseholdDistributor('household', venues, population.people)
-    # Use multi-pass assignment (configurable in household_distributor._post_init)
-    household_distributor.assign_people_venues_multi_pass('home', 'household')
-
+    # Distribute people to households by smallest geographical unit.
+    smallest_geo_unit_dict = geo.units_by_level[geo.levels[0]]
+    
+    logger.info("Allocating people to households geo-unit by geo-unit...")
+    i, printed, num_geo_units = 0, set(), len(smallest_geo_unit_dict)
+    for geo_unit in smallest_geo_unit_dict.values():
+        peeps, potential_households = geo_unit.people, geo_unit.get_venues_by_type('household')
+        # Distribute people to Households
+        household_distributor = HouseholdDistributor('household', venues, peeps, potential_venues=potential_households)
+        # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
+        household_distributor.assign_people_venues_multi_pass('home', 'household')
+        i+=1
+        percent=int(i/num_geo_units*100)
+        milestone = (percent // 10) * 10
+        if milestone not in printed and milestone % 10 == 0:
+            logger.info(f"             ...{milestone}% complete")
+            printed.add(milestone)                            
+        
     logger.info("Distributing pop to households took {}s".format(datetime.now()-laptime))
     laptime = datetime.now()
     

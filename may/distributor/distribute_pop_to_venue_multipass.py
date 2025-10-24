@@ -7,6 +7,7 @@ from collections import defaultdict
 from may.distributor import Distributor
 from .distributor_venue_to_subsets import SubsetDistributor
 from may.population import Subset
+from may.stats import StatMakerPop, StatMakerVenues
 
 logger = logging.getLogger(__name__)
 
@@ -91,13 +92,11 @@ class DistributorMultiPass(Distributor):
             self._threshold_closed_venues.add(trial_venue_index)
             if trial_venue_index in self.available_venue_indices:
                 self.available_venue_indices.remove(trial_venue_index)
-                self._search_index -=1
         elif not any(self._venue_has_membership_capacity_by_subset[venue.id]):
             # Closed due to COMPOSITION constraints
             self._venue_closed_reason[venue.id] = 'composition'
             if trial_venue_index in self.available_venue_indices:
                 self.available_venue_indices.remove(trial_venue_index)
-                self._search_index -=1
 
     def get_threshold_for_pass(self, pass_index: int) -> int:
         """
@@ -161,25 +160,24 @@ class DistributorMultiPass(Distributor):
           
         """
         initial_people_count = len(self.people)
-        logger.info("="*70)
-        logger.info(f"MULTI-PASS ASSIGNMENT: {self.num_passes} passes configured")
-        logger.info(f"Total people to allocate: {initial_people_count}")
-        logger.info("="*70)
+        logger.debug("="*70)
+        logger.debug(f"MULTI-PASS ASSIGNMENT: {self.num_passes} passes configured")
+        logger.debug(f"Total people to allocate: {initial_people_count}")
+        logger.debug("="*70)
 
         for pass_num in range(self.num_passes):
             self.current_pass = pass_num
 
-            logger.info("")
-            logger.info("="*70)
-            logger.info(f"PASS {pass_num + 1}/{self.num_passes}")
-            logger.info("="*70)
-
+            logger.debug("")
+            logger.debug(f"PASS {pass_num + 1}/{self.num_passes}")
+            logger.debug("")
+            
             # Log threshold examples for this pass
             example_compositions = ['>=2 >=0 >=0 >=0', '1 >=0 >=0 >=0', '0 >=0 >=0 >=0']
             for comp in example_compositions:
                 if comp in self.composition_thresholds:
                     threshold = self.get_threshold_for_pass(comp, pass_num)
-                    logger.info(f"  Threshold for '{comp}': {threshold}")
+                    logger.debug(f"  Threshold for '{comp}': {threshold}")
 
             # Run assignment for this pass
             if pass_num == 0:
@@ -205,34 +203,43 @@ class DistributorMultiPass(Distributor):
             allocated_this_pass = len(self.people) if pass_num == 0 else len(remaining_people)
             allocated_this_pass = allocated_this_pass - unallocated_count
 
-            logger.info(f"Pass {pass_num + 1} results:")
-            logger.info(f"  Allocated: {allocated_this_pass} people")
-            logger.info(f"  Unallocated: {unallocated_count} people")
+            logger.debug(f"Pass {pass_num + 1} results:")
+            logger.debug(f"  Allocated: {allocated_this_pass} people")
+            logger.debug(f"  Unallocated: {unallocated_count} people")
 
             # Check if we should continue to next pass
             if unallocated_count == 0:
-                logger.info(f"All people allocated after {pass_num + 1} passes!")
+                logger.debug(f"All people allocated after {pass_num + 1} passes!")
                 break
 
             if pass_num < self.num_passes - 1:
                 # Not the last pass - reopen venues for next pass
-                logger.info("")
-                logger.info(f"Preparing for pass {pass_num + 2}...")
+                logger.debug("")
+                logger.debug(f"Preparing for pass {pass_num + 2}...")
 
                 reopened = self.reopen_threshold_closed_venues()
-                logger.info(f"  Reopened {reopened} flexible households")
+                logger.debug(f"  Reopened {reopened} flexible households")
 
             else:
                 # Last pass completed
-                logger.info(f"Completed all {self.num_passes} passes")
+                logger.debug(f"Completed all {self.num_passes} passes")
 
         # Final summary
-        logger.info("")
-        logger.info("="*70)
-        logger.info("MULTI-PASS ASSIGNMENT COMPLETE")
-        logger.info("="*70)
-        logger.info(f"Total allocated: {initial_people_count - len(self.unallocated_people)}")
-        logger.info(f"Total unallocated: {len(self.unallocated_people)}")
+        logger.debug("")
+        logger.debug("MULTI-PASS ASSIGNMENT COMPLETE")
+        logger.debug("")        
+        logger.debug(f"Total allocated: {initial_people_count - len(self.unallocated_people)}")
+        logger.debug(f"Total unallocated: {len(self.unallocated_people)}")
         if initial_people_count > 0:
             allocation_rate = ((initial_people_count - len(self.unallocated_people)) / initial_people_count) * 100
-            logger.info(f"Allocation rate: {allocation_rate:.1f}%")
+            logger.debug(f"Allocation rate: {allocation_rate:.1f}%")
+            if allocation_rate < 99.999999:
+                logger.warning(f"--Low allocation rate of {allocation_rate:.1f}%")
+                logger.warning(f"--Printing stats of unallocated people: ")
+                my_statmaker = StatMakerPop(self.unallocated_people)
+                my_statmaker.get_sex_breakdown()
+                my_statmaker.get_age_group_breakdown()
+                morestats = my_statmaker.get_age_stats()
+                for key, val in morestats.items():
+                    logger.warning(f"    {key} : {val}")
+        logger.debug("="*70)            

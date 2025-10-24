@@ -19,6 +19,7 @@ class HouseholdDistributor(DistributorMultiPass):
     This is the child class to Distributor. It should be instantiated with a single instance of VenueManager that has been initialised for a GeographyUnit. Thus, it is assumed that all venues in VenueManager.venues_by_type are fair game. The distributor does not attempt to sort venues within VenueManager (yet).
     
     """
+    
     def _assign_subsets(self):
         """Called at the end of __init__ """
         example_venue = self.venue_manager.venues_by_type[self.venue_type][0]
@@ -38,7 +39,7 @@ class HouseholdDistributor(DistributorMultiPass):
 
         """        
         # Number of passes (first pass + N expansion passes)
-        self.num_passes = 4  # Configurable
+        self.num_passes = 10  # Configurable
 
         # Current pass index (0 = first pass, 1 = second pass, etc.)
         self.current_pass = 0
@@ -75,9 +76,9 @@ class HouseholdDistributor(DistributorMultiPass):
             '1 >=0 1 0': 1,        # +1 per pass
             '>=2 >=0 1 0': 2,      # +2 per pass
             '1 >=0 >=0 >=0': 2,    # +2 per pass
-            '>=2 >=0 >=0 >=0': 2,  # +2 per pass
-            '0 >=0 0 0': 2,        # +2 per pass
-            '0 >=0 >=0 >=0': 2,    # +2 per pass
+            '>=2 >=0 >=0 >=0': 3,  # +3 per pass
+            '0 >=0 0 0': 3,        # +3 per pass
+            '0 >=0 >=0 >=0': 3,    # +3 per pass
             '0 0 0 >=3': 2,        # +2 per pass
         }
 
@@ -282,13 +283,11 @@ class HouseholdDistributor(DistributorMultiPass):
             self._threshold_closed_venues.add(trial_venue_index)
             if trial_venue_index in self.available_venue_indices:
                 self.available_venue_indices.remove(trial_venue_index)
-                self._search_index -=1
         elif composition_full or not any(self._venue_has_membership_capacity_by_subset[venue.id]):
             # Closed due to COMPOSITION constraints
             self._venue_closed_reason[venue.id] = 'composition'
             if trial_venue_index in self.available_venue_indices:
                 self.available_venue_indices.remove(trial_venue_index)
-                self._search_index -=1
 
     def reopen_threshold_closed_venues(self):
         """

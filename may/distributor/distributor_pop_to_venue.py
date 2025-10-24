@@ -43,13 +43,13 @@ class Distributor:
         if potential_venues is not None:
             self.potential_venues = potential_venues
         else:
-            self.potential_venues = self.__decide_potential_venues()
+            self.potential_venues = self.__decide_potential_venues(**kwargs)
         # A list to keep track of any people for whom no venue is found in a pass. 
         self.unallocated_people = [] 
 
         self._assign_subsets()
         self._create_subsets_if_necessary()
-        self._multi_pass_config()        
+        self._multi_pass_config()
 
     def _assign_subsets(self):
         example_venue           = self.potential_venues[0] # just the first potential venue
@@ -117,27 +117,27 @@ class Distributor:
             venue=self.potential_venues[venue_idx]
             for subset in venue.subsets.values():
                 self._update_venue_membership_capacity(venue_idx, venue, subset)
-        logger.info("Set venue capacities. Starting allocation...")
+        logger.debug("Set venue capacities. Starting allocation...")
         # Start allocating people
 
         total_allocated=0
-        total_people=len(people)
-        printed=set()
+        #total_people=len(people)
+        #printed=set()
         for person in people:
             if person.has_activity(activity):
                 if self.find_venues_for_person(person,
                                                activity,
                                                **kwargs):
                     total_allocated += 1
-                    percent=int(total_allocated/total_people*100)
-                    milestone = (percent // 10) * 10
-                    if milestone not in printed and milestone % 10 == 0:
-                        logger.info(f"{milestone}% complete")
-                        printed.add(milestone)                    
+                    # percent=int(total_allocated/total_people*100)
+                    # milestone = (percent // 10) * 10
+                    # if milestone not in printed and milestone % 10 == 0:
+                    #     logger.debug(f"{milestone}% complete")
+                    #     printed.add(milestone)                    
                 else:
                     self._deal_with_no_venue(person, activity)
-        logger.info(f"Allocated {total_allocated} people to households")
-        logger.info("Number of unallocated folk: {}".format(len(self.unallocated_people)))
+        logger.debug(f"Allocated {total_allocated} people to households")
+        logger.debug("Number of unallocated folk: {}".format(len(self.unallocated_people)))
 
     def find_venues_for_person(self,
                                person: "Person",
@@ -157,9 +157,11 @@ class Distributor:
         while i <= maxiter:
             i+=1
             self._search_index+=1
+            if len(self.available_venue_indices) < 1:
+                logger.debug("Could not find a venue for person {} as no venues available".format(person.id))
+                break
             if self._search_index >= len(self.available_venue_indices):
                 self._search_index = 0
-                
             trial_venue_index=self.available_venue_indices[self._search_index]
             try:
                 trial_venue = self.potential_venues[trial_venue_index]
@@ -192,7 +194,7 @@ class Distributor:
                 raise Exception("Failure of _assign_subset routine when assigning subset and venue for person {} to activity {}.".format(person.id, activity))
             
         # If exhausted the loop. 
-        #logger.warning("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
+        logger.debug("Could not find a venue for person {} within {} iterations".format(person.id, maxiter))
         return False
 
     def _update_venue_membership_capacity(self,
