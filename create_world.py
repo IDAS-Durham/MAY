@@ -20,7 +20,7 @@ if os.environ.get('PYTHONHASHSEED') is None:
 
 logger = logging.getLogger("create_world")
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -184,7 +184,6 @@ def main():
     Main entry point for world creation.
     """
 
-
     logger.info("=" * 60)
     logger.info("June Zero - World Creation")
     logger.info("=" * 60)
@@ -276,8 +275,6 @@ def main():
 
 
 if __name__ == "__main__":
-
-
     profiler = cProfile.Profile()
     profiler.enable()
     

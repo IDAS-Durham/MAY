@@ -65,6 +65,12 @@ rules:
           values:
             female: 50
             male: 55
+        # Preferred distribution for realistic parent-child age differences
+        preferred_distribution:
+          type: "normal"
+          mean: 32          # Average parent age when child is born
+          std: 6            # Standard deviation (most parents within 32±12 years)
+          tolerance: 9      # Search window: ±9 years around sampled target (±1.5 std)
 
       # role_B (2 people) should be a compatible pair
       - type: "pair_matching"
@@ -109,6 +115,12 @@ rules:
           values:
             female: 50
             male: 55
+        # Preferred distribution for realistic parent-child age differences
+        preferred_distribution:
+          type: "normal"
+          mean: 32          # Average parent age when child is born
+          std: 6            # Standard deviation (most parents within 32±12 years)
+          tolerance: 9      # Search window: ±9 years around sampled target (±1.5 std)
 
   # Rule 3: Two-adult families with young adults
   - name: "Two-adult family with young adults"
@@ -141,6 +153,12 @@ rules:
           values:
             female: 50
             male: 55
+        # Preferred distribution for realistic parent-child age differences
+        preferred_distribution:
+          type: "normal"
+          mean: 32          # Average parent age when child is born
+          std: 6            # Standard deviation (most parents within 32±12 years)
+          tolerance: 9      # Search window: ±9 years around sampled target (±1.5 std)
 
       # role_B (2 people) should be a compatible pair
       - type: "pair_matching"
@@ -184,6 +202,12 @@ rules:
           values:
             female: 50
             male: 55
+        # Preferred distribution for realistic parent-child age differences
+        preferred_distribution:
+          type: "normal"
+          mean: 32          # Average parent age when child is born
+          std: 6            # Standard deviation (most parents within 32±12 years)
+          tolerance: 9      # Search window: ±9 years around sampled target (±1.5 std)
 
   # Rule 5: Adult pairs (no kids)
   - name: "Adult pair"
@@ -235,7 +259,41 @@ rules:
           std_difference: 5.0
           max_absolute_difference: 19
 
-  # Rule 7: Multi-generational families
+  # Rule 7: Adding young adults to existing families (for household_excess steps)
+  - name: "Add young adults to existing family"
+    patterns:
+      - "0 >=1 2 0"
+      - "0 >=1 1 0"
+      - ">=2 >=0 2 0"
+      - "1 >=0 2 0"
+
+    roles:
+      role_A:
+        categories: ["Young Adults"]
+        count: "any"
+
+      role_B:
+        categories: ["Adults"]
+        count: "any"
+
+    selection_order:
+      - role_A
+
+    constraints:
+      # Young adults must be appropriately younger than existing adults
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_A"
+        role_2: "role_B"
+        min_difference: -50  # Allow young adults to be up to 50 years younger
+        max_difference: -16  # Young adults must be at least 16 years younger
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: -16  # Female adults can have young adults up to 16 years younger (min age diff)
+            male: -16    # Male adults can have young adults up to 16 years younger
+
+  # Rule 8: Multi-generational families
   - name: "Multi-generational household"
     patterns:
       - ">=2 >=0 >=0 >=0"
@@ -271,6 +329,12 @@ rules:
           values:
             female: 50
             male: 55
+        # Preferred distribution for realistic parent-child age differences
+        preferred_distribution:
+          type: "normal"
+          mean: 32          # Average parent age when child is born
+          std: 6            # Standard deviation (most parents within 32±12 years)
+          tolerance: 9      # Search window: ±9 years around sampled target (±1.5 std)
 
       - type: "pair_matching"
         role: "role_B"
@@ -296,6 +360,12 @@ rules:
           values:
             female: 50
             male: 55
+        # Preferred distribution for grandparent-parent age differences
+        preferred_distribution:
+          type: "normal"
+          mean: 30          # Grandparents typically 30 years older than parents
+          std: 7            # Standard deviation
+          tolerance: 10     # Search window: ±10 years around sampled target
 
 # =============================================
 # CONSTRAINT TYPES

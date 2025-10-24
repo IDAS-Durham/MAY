@@ -269,6 +269,10 @@ def _execute_household_excess_step(step_config: Dict, households) -> Dict:
     add_distribution = step_config.get('add_distribution')
     refresh_pools = step_config.get('refresh_pools', False)
     round_name = step_config.get('name', 'Household Excess Round')
+    rule_name = step_config.get('rule')  # Optional: relationship rule to apply
+
+    if rule_name:
+        logger.info(f"  Using explicit relationship rule: '{rule_name}'")
 
     if not add_category:
         logger.error("No 'add_category' specified for household_excess step")
@@ -285,7 +289,8 @@ def _execute_household_excess_step(step_config: Dict, households) -> Dict:
         max_per_household=max_per_household,
         add_distribution=add_distribution,
         refresh_pools=refresh_pools,
-        round_name=round_name
+        round_name=round_name,
+        rule_name=rule_name
     )
 
     return stats

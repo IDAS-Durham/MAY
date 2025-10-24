@@ -298,8 +298,9 @@ class RelationshipRulesValidator:
         Select a person from candidates that satisfies all constraints.
 
         Implements smart selection:
-        1. Try random selection up to max_attempts
-        2. If no valid person found, use best candidate (lowest penalty)
+        1. If preferred_distribution exists, target that age range first
+        2. Try random selection up to max_attempts
+        3. If no valid person found, use best candidate (lowest penalty)
 
         Args:
             candidates: List of candidate persons
@@ -330,12 +331,58 @@ class RelationshipRulesValidator:
             if c.get('type') == 'numerical_attribute_difference' and c.get('role_1') == current_role
         ]
 
-        # Try random selection up to max_attempts
+        # OPTIMIZATION: If preferred_distribution exists, prioritize candidates near target
+        prioritized_candidates = candidates
+        for constraint in relevant_constraints:
+            pref_dist = constraint.get('preferred_distribution')
+            if pref_dist:
+                role_2 = constraint.get('role_2')
+                people_2 = existing_people_by_role.get(role_2, [])
+                if people_2:
+                    # Sample target age difference from distribution
+                    attribute = constraint.get('attribute', 'age')
+                    dist_type = pref_dist.get('type', 'normal')
+
+                    if dist_type == 'normal':
+                        mean = pref_dist.get('mean', 30)
+                        std = pref_dist.get('std', 6)
+                        target_diff = random.gauss(mean, std)
+                    else:
+                        # Fallback to uniform if unknown type
+                        min_diff = constraint.get('min_difference', 16)
+                        max_diff = constraint.get('max_difference', 50)
+                        target_diff = random.uniform(min_diff, max_diff)
+
+                    # Clamp to valid range
+                    min_diff = constraint.get('min_difference', 16)
+                    max_diff = constraint.get('max_difference', 50)
+                    target_diff = max(min_diff, min(max_diff, target_diff))
+
+                    # Calculate target attribute value
+                    reference_value = max(getattr(p, attribute) for p in people_2)
+                    target_value = reference_value + target_diff
+
+                    # Filter to candidates within window of target (±tolerance)
+                    tolerance = pref_dist.get('tolerance', std * 1.5 if dist_type == 'normal' else 10)
+                    prioritized_candidates = [
+                        p for p in prioritized_candidates
+                        if abs(getattr(p, attribute) - target_value) <= tolerance
+                    ]
+
+                    # If filtering too aggressive, fall back to all candidates
+                    if not prioritized_candidates:
+                        prioritized_candidates = candidates
+                        if show_detailed_logs:
+                            logger.debug(f"  ⚠ No candidates within ±{tolerance} of target {attribute}={target_value:.1f}, using all candidates")
+                    elif show_detailed_logs:
+                        logger.debug(f"  ℹ Prioritizing {len(prioritized_candidates)}/{len(candidates)} candidates near target {attribute}={target_value:.1f} (±{tolerance})")
+
+        # Try random selection up to max_attempts (from prioritized pool)
         candidates_tested = 0
         candidates_rejected = 0
 
-        for attempt in range(min(max_attempts, len(candidates))):
-            candidate = random.choice(candidates)
+        for attempt in range(min(max_attempts, len(prioritized_candidates))):
+            candidate = random.choice(prioritized_candidates)
             candidates_tested += 1
 
             # Validate all relevant constraints

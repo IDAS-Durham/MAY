@@ -5,7 +5,7 @@ geography:
   data_dir: "data/geography"
 
   # Load all geographical units (ignores all filters below if true)
-  load_all: true
+  load_all: false
 
   # ========================================
   # FILTER - Specify which geographical units to load

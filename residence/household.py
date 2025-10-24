@@ -1821,6 +1821,72 @@ class HouseholdDistributor:
 
         return all_stats
 
+    def _select_person_for_excess_with_rule(self, household: 'Household',
+                                           candidates: List['Person'],
+                                           add_category: str,
+                                           rule) -> Optional['Person']:
+        """
+        Select a person to add to an existing household using relationship rules.
+
+        This validates the candidate against existing household members based on
+        the relationship rule constraints (e.g., age differences).
+
+        Args:
+            household: The household to add to
+            candidates: List of candidate people to choose from
+            add_category: Category name being added (e.g., "Young Adults")
+            rule: The relationship rule to use for validation
+
+        Returns:
+            Selected person if valid candidate found, None otherwise
+        """
+        # Organize existing household members by their roles based on the rule
+        existing_people_by_role = {}
+
+        # Map each rule role to its category names
+        for role_name, role_config in rule.roles.items():
+            category_names = role_config['categories']
+            existing_people_by_role[role_name] = []
+
+            # Find all household members that belong to this role's categories
+            for resident in household.residents:
+                resident_cat_name = self._get_person_category_name(resident)
+                if resident_cat_name in category_names:
+                    existing_people_by_role[role_name].append(resident)
+
+        # Find which role the person being added belongs to
+        current_role = None
+        for role_name, role_config in rule.roles.items():
+            if add_category in role_config['categories']:
+                current_role = role_name
+                break
+
+        if not current_role:
+            # Category not in any role - just return first candidate
+            logger.debug(f"Category '{add_category}' not found in rule roles, using first candidate")
+            return candidates[0] if candidates else None
+
+        # Use relationship rules to select a valid person
+        person = self.relationship_rules.select_person_with_constraint(
+            candidates=candidates,
+            existing_people_by_role=existing_people_by_role,
+            constraints=rule.constraints,
+            current_role=current_role,
+            show_detailed_logs=False  # Keep logs minimal for performance
+        )
+
+        return person
+
+    def _get_person_category_name(self, person: 'Person') -> str:
+        """Get the category name for a person based on their age."""
+        for cat in self.age_categories:
+            if cat.max_age is None:
+                if person.age >= cat.min_age:
+                    return cat.name
+            elif cat.min_age <= person.age < cat.max_age:
+                return cat.name
+        return "Unknown"
+
     def allocate_excess_to_households(self,
                                       target_patterns: List[str],
                                       add_category: str,
@@ -1828,7 +1894,8 @@ class HouseholdDistributor:
                                       max_per_household: Optional[int] = None,
                                       add_distribution: Optional[Dict] = None,
                                       refresh_pools: bool = False,
-                                      round_name: Optional[str] = None):
+                                      round_name: Optional[str] = None,
+                                      rule_name: Optional[str] = None):
         """
         Allocate excess people to existing households created in previous steps.
 
@@ -1849,6 +1916,7 @@ class HouseholdDistributor:
                             Or: {"type": "normal", "mean": 1.5, "std": 0.7}
             refresh_pools: If True, refresh person pools to get latest unallocated people
             round_name: Optional name for this round (for logging)
+            rule_name: Optional relationship rule name to validate people against existing household members
 
         Returns:
             dict: Statistics about this excess allocation
@@ -1862,7 +1930,22 @@ class HouseholdDistributor:
         logger.info(f"Target patterns: {target_patterns}")
         logger.info(f"Adding category: {add_category}")
         logger.info(f"Constraints: {constraints}")
+        if rule_name:
+            logger.info(f"Using relationship rule: '{rule_name}'")
         logger.info("")
+
+        # Get rule if specified
+        rule = None
+        if rule_name:
+            rule = self.relationship_rules.get_rule_by_name(rule_name)
+            if not rule:
+                logger.error(f"Unknown relationship rule '{rule_name}'")
+                return {
+                    'round_name': round_label,
+                    'people_added': 0,
+                    'households_modified': 0,
+                    'error': f"Unknown relationship rule '{rule_name}'"
+                }
 
         # Refresh pools if requested
         if refresh_pools:
@@ -1942,11 +2025,29 @@ class HouseholdDistributor:
                         # Can't add more to this household due to constraints
                         break
 
+                    # Select person (with or without relationship rule validation)
+                    if rule:
+                        # Use relationship rules to validate against existing household members
+                        person = self._select_person_for_excess_with_rule(
+                            household, available_people, add_category, rule
+                        )
+                        if not person:
+                            # No valid person found for this household
+                            break
+                    else:
+                        # No rule - take first available person
+                        person = available_people[0]  # Always take first (already shuffled)
+
                     # Add the person
-                    person = available_people[0]  # Always take first (already shuffled)
                     household.add_resident(person)
                     self.allocated_people.add(person.id)
-                    pools[add_cat_idx].pop(0)  # Remove from pool
+
+                    # Remove the selected person from pool (modify list in-place)
+                    # Find the person in the pool and remove it
+                    for i, p in enumerate(available_people):
+                        if p.id == person.id:
+                            available_people.pop(i)
+                            break
 
                     added_to_this_household += 1
                     people_added += 1
@@ -1964,11 +2065,29 @@ class HouseholdDistributor:
                         # Can't add more to this household due to constraints
                         break
 
+                    # Select person (with or without relationship rule validation)
+                    if rule:
+                        # Use relationship rules to validate against existing household members
+                        person = self._select_person_for_excess_with_rule(
+                            household, available_people, add_category, rule
+                        )
+                        if not person:
+                            # No valid person found for this household
+                            break
+                    else:
+                        # No rule - take first available person
+                        person = available_people[0]  # Always take first (already shuffled)
+
                     # Add the person
-                    person = available_people[0]  # Always take first (already shuffled)
                     household.add_resident(person)
                     self.allocated_people.add(person.id)
-                    pools[add_cat_idx].pop(0)  # Remove from pool
+
+                    # Remove the selected person from pool (modify list in-place)
+                    # Find the person in the pool and remove it
+                    for i, p in enumerate(available_people):
+                        if p.id == person.id:
+                            available_people.pop(i)
+                            break
 
                     added_to_this_household += 1
                     people_added += 1
