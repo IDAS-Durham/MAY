@@ -174,7 +174,6 @@ class DistributorMultiPass(Distributor):
 
         for pass_num in range(self.num_passes):
             self.current_pass = pass_num
-
             logger.debug("")
             logger.debug(f"PASS {pass_num + 1}/{self.num_passes}")
             logger.debug("")
@@ -239,15 +238,6 @@ class DistributorMultiPass(Distributor):
         logger.debug(f"Total allocated: {initial_people_count - len(self.unallocated_people)}")
         logger.debug(f"Total unallocated: {len(self.unallocated_people)}")
         if initial_people_count > 0:
-            allocation_rate = ((initial_people_count - len(self.unallocated_people)) / initial_people_count) * 100
-            logger.debug(f"Allocation rate: {allocation_rate:.1f}%")
-            if allocation_rate < 99.999999:
-                logger.warning(f"--Low allocation rate of {allocation_rate:.1f}%")
-                logger.warning(f"--Printing stats of unallocated people: ")
-                my_statmaker = StatMakerPop(self.unallocated_people)
-                my_statmaker.get_sex_breakdown()
-                my_statmaker.get_age_group_breakdown()
-                morestats = my_statmaker.get_age_stats()
-                for key, val in morestats.items():
-                    logger.info(f"    {key} : {val}")
+            self.allocation_rate = ((initial_people_count - len(self.unallocated_people)) / initial_people_count) * 100
+            logger.debug(f"Allocation rate: {self.allocation_rate:.1f}%")
         logger.debug("="*70)            

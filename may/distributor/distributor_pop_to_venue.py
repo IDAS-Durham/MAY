@@ -45,14 +45,12 @@ class Distributor:
         else:
             self.potential_venues = self.__decide_potential_venues(**kwargs)
         # A list to keep track of any people for whom no venue is found in a pass. 
-        self.unallocated_people = [] 
+        self.unallocated_people = []
 
         self._assign_subsets()
         self._create_subsets_if_necessary()
-        self._multi_pass_config()
-
+        
     def _assign_subsets(self):
-        example_venue           = self.potential_venues[0] # just the first potential venue
         self.subset_distributor = SubsetDistributor(self.venue_type,
                                                     example_venue.properties['subsets'])
         self._venue_has_membership_capacity_by_subset = defaultdict(lambda: [True]*self.subset_distributor.n_subsets)
@@ -113,10 +111,9 @@ class Distributor:
         self._search_index=-1
         
         # Initialize the correct membership capacities for households.
-        for venue_idx in self.available_venue_indices:
+        for venue_idx in list(self.available_venue_indices):
             venue=self.potential_venues[venue_idx]
-            for subset in venue.subsets.values():
-                self._update_venue_membership_capacity(venue_idx, venue, subset)
+            self._update_venue_membership_capacity(venue_idx, venue)
         logger.debug("Set venue capacities. Starting allocation...")
         # Start allocating people
 

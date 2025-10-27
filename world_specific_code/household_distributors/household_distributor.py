@@ -63,7 +63,7 @@ class HouseholdDistributor(DistributorMultiPass):
             '>=2 >=0 >=0 >=0': 2,  # Very flexible
             '0 >=0 0 0': 1,
             '0 >=0 >=0 >=0': 1,
-            '0 0 0 >=3': 3,
+            '0 0 0 >=3': 1,
         }
 
         # Threshold INCREMENT per pass (NOT absolute values)
@@ -75,10 +75,10 @@ class HouseholdDistributor(DistributorMultiPass):
             '0 >=1 1 0': 1,        # +1 per pass
             '1 >=0 1 0': 1,        # +1 per pass
             '>=2 >=0 1 0': 2,      # +2 per pass
-            '1 >=0 >=0 >=0': 2,    # +2 per pass
+            '1 >=0 >=0 >=0': 3,    # +2 per pass
             '>=2 >=0 >=0 >=0': 3,  # +3 per pass
             '0 >=0 0 0': 3,        # +3 per pass
-            '0 >=0 >=0 >=0': 2,    # +3 per pass
+            '0 >=0 >=0 >=0': 3,    # +3 per pass
             '0 0 0 >=3': 1,        # +2 per pass
         }
 
@@ -135,7 +135,6 @@ class HouseholdDistributor(DistributorMultiPass):
           KeyError: if the composition is not recognized.
         
         """
-        subset = args[0]
         composition = venue.properties['composition'].strip()
 
         # Track if this venue hit composition constraints
