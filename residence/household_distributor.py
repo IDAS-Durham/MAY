@@ -334,6 +334,54 @@ class HouseholdDistributor:
 
         return (household, None)
 
+    def _adjust_role_count_for_pattern(self, role_count, role_name: str, category_names: List[str],
+                                       category_indices: List[int], pattern: CompositionPattern,
+                                       show_detailed_logs: bool) -> Tuple[int, bool]:
+        """
+        Adjust role count based on pattern requirements.
+
+        When a pattern has been demoted, the pattern's count takes precedence over the rule's count.
+        This ensures that demoted patterns (e.g., "2C" demoted to "1C") are allocated correctly.
+
+        Args:
+            role_count: Original count from the rule (can be int or "any")
+            role_name: Name of the role being processed
+            category_names: List of category names for this role
+            category_indices: List of category indices for this role
+            pattern: Composition pattern being allocated
+            show_detailed_logs: Whether to show detailed debug logs
+
+        Returns:
+            Tuple of (adjusted_role_count, should_skip_role):
+            - adjusted_role_count: The count to use (may be modified from original)
+            - should_skip_role: True if the role should be skipped (pattern requires 0 people)
+        """
+        # Calculate total count needed from pattern for these categories
+        pattern_count = sum(pattern.get_min_count(cat_idx) for cat_idx in category_indices)
+
+        # If role_count is numeric and pattern_count is different, use pattern_count
+        if isinstance(role_count, int) and pattern_count != role_count:
+            if show_detailed_logs:
+                logger.debug(f"Step: Selecting role '{role_name}'")
+                logger.debug(f"  Categories: {category_names}")
+                logger.debug(f"  Count needed (from rule): {role_count}")
+                logger.debug(f"  Count needed (from pattern): {pattern_count} (using pattern count)")
+            role_count = pattern_count
+
+            # If pattern requires 0 people for this role, skip it
+            if role_count == 0:
+                if show_detailed_logs:
+                    logger.debug(f"  → Pattern requires 0 people for this role, skipping")
+                    logger.debug("")
+                return (role_count, True)  # Signal to skip this role
+        else:
+            if show_detailed_logs:
+                logger.debug(f"Step: Selecting role '{role_name}'")
+                logger.debug(f"  Categories: {category_names}")
+                logger.debug(f"  Count needed: {role_count}")
+
+        return (role_count, False)  # Don't skip
+
     def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
                                        pools: Dict[int, List[Person]],
                                        backtrack_config: Dict,
@@ -385,30 +433,13 @@ class HouseholdDistributor:
                     if cat_name in self.relationship_rules.category_name_to_idx:
                         category_indices.append(self.relationship_rules.category_name_to_idx[cat_name])
 
-                # Override role_count with pattern's count if pattern has been demoted
-                # Calculate total count needed from pattern for these categories
-                pattern_count = sum(pattern.get_min_count(cat_idx) for cat_idx in category_indices)
+                # Adjust role count based on pattern requirements (e.g., after demotion)
+                role_count, should_skip = self._adjust_role_count_for_pattern(
+                    role_count, role_name, category_names, category_indices, pattern, show_detailed_logs
+                )
 
-                # If role_count is numeric and pattern_count is different, use pattern_count
-                if isinstance(role_count, int) and pattern_count != role_count:
-                    if show_detailed_logs:
-                        logger.debug(f"Step: Selecting role '{role_name}'")
-                        logger.debug(f"  Categories: {category_names}")
-                        logger.debug(f"  Count needed (from rule): {role_count}")
-                        logger.debug(f"  Count needed (from pattern): {pattern_count} (using pattern count)")
-                    role_count = pattern_count
-
-                    # If pattern requires 0 people for this role, skip it
-                    if role_count == 0:
-                        if show_detailed_logs:
-                            logger.debug(f"  → Pattern requires 0 people for this role, skipping")
-                            logger.debug("")
-                        continue
-                else:
-                    if show_detailed_logs:
-                        logger.debug(f"Step: Selecting role '{role_name}'")
-                        logger.debug(f"  Categories: {category_names}")
-                        logger.debug(f"  Count needed: {role_count}")
+                if should_skip:
+                    continue
 
                 # Get candidates from these categories
                 candidates = []
