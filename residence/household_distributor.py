@@ -461,6 +461,30 @@ class HouseholdDistributor:
             logger.debug(f"  ✗ FAILED: No candidates available")
         return False  # Cannot skip - allocation fails
 
+    def _find_pair_constraint_for_role(self, rule, role_name: str, role_count) -> Optional[Dict]:
+        """
+        Find a pair_matching constraint that applies to the given role.
+
+        Searches through rule constraints for a pair_matching constraint that:
+        1. Applies to this specific role
+        2. Has a matching require_exact_count (if specified)
+
+        Args:
+            rule: The relationship rule containing constraints
+            role_name: Name of the role to check
+            role_count: Expected count for this role (int or "any")
+
+        Returns:
+            The matching pair_matching constraint dict, or None if not found
+        """
+        for constraint in rule.constraints:
+            if constraint['type'] == 'pair_matching' and constraint.get('role') == role_name:
+                # Check if require_exact_count is specified
+                required_count = constraint.get('require_exact_count')
+                if required_count is None or role_count == required_count:
+                    return constraint
+        return None
+
     def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
                                        pools: Dict[int, List[Person]],
                                        backtrack_config: Dict,
@@ -538,14 +562,7 @@ class HouseholdDistributor:
                         break
 
                 # Check for pair_matching constraint for this role
-                pair_constraint = None
-                for constraint in rule.constraints:
-                    if constraint['type'] == 'pair_matching' and constraint.get('role') == role_name:
-                        # Check if require_exact_count is specified
-                        required_count = constraint.get('require_exact_count')
-                        if required_count is None or role_count == required_count:
-                            pair_constraint = constraint
-                            break
+                pair_constraint = self._find_pair_constraint_for_role(rule, role_name, role_count)
 
                 if pair_constraint and role_count == 2:
                     # Select a compatible pair
