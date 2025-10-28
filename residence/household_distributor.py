@@ -277,6 +277,88 @@ class HouseholdDistributor:
 
         # Get backtracking config
         backtrack_config = self.relationship_rules.selection_strategy.get('backtracking', {})
+
+        # Use backtracking algorithm to select people for all roles
+        selected_by_role, failed_cat_idx = self._select_roles_with_backtracking(
+            rule, pattern, pools, backtrack_config, self._show_detailed_logs
+        )
+
+        # Check if role selection failed
+        if selected_by_role is None:
+            return (None, failed_cat_idx)
+
+        # Collect all selected people
+        all_selected = []
+        for people_list in selected_by_role.values():
+            all_selected.extend(people_list)
+
+        if not all_selected:
+            return (None, None)
+
+        # Remove selected people from pools
+        selected_ids = {p.id for p in all_selected}
+        for cat_idx in range(len(self.age_categories)):
+            pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
+
+        # Create household
+        unit = self.geography.get_unit(area_code)
+        household = Household(
+            id=len(self.households),
+            geographical_unit=unit,
+            properties={
+                'original_pattern': pattern.original_pattern,
+                'actual_pattern': pattern.to_string()
+            }
+        )
+        household._age_categories = self.age_categories
+
+        # Add residents
+        for person in all_selected:
+            household.add_resident(person)
+            self.allocated_people.add(person.id)
+
+        if self._show_detailed_logs:
+            logger.debug("FINAL HOUSEHOLD COMPOSITION:")
+            logger.debug(f"  Household ID: {household.id}")
+            logger.debug(f"  Geo Unit: {area_code}")
+            logger.debug(f"  Pattern: {pattern.original_pattern}")
+            logger.debug(f"  Total members: {len(all_selected)}")
+            logger.debug("")
+            for role_name, people in selected_by_role.items():
+                if people:
+                    logger.debug(f"  {role_name}:")
+                    for person in people:
+                        logger.debug(f"    - {person}")
+            logger.debug("=" * 80)
+            logger.debug("")
+
+        return (household, None)
+
+    def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
+                                       pools: Dict[int, List[Person]],
+                                       backtrack_config: Dict,
+                                       show_detailed_logs: bool) -> Tuple[Optional[Dict[str, List[Person]]], Optional[int]]:
+        """
+        Select people for household roles using backtracking algorithm.
+
+        This method implements the core backtracking logic for role-based household allocation:
+        1. Iterate through roles in selection order
+        2. For each role, select people matching constraints
+        3. If a role fails, backtrack and try different people for earlier roles
+        4. Track tried combinations to avoid duplicates
+
+        Args:
+            rule: The relationship rule containing role definitions and constraints
+            pattern: Composition pattern to match
+            pools: Available people by category
+            backtrack_config: Configuration dict with 'enabled', 'max_backtracks', etc.
+            show_detailed_logs: Whether to show detailed debug logs
+
+        Returns:
+            Tuple of (selected_by_role, failed_category_idx):
+            - selected_by_role: Dict mapping role names to selected people if successful
+            - failed_category_idx: Category index that caused failure, or None if successful
+        """
         backtrack_enabled = backtrack_config.get('enabled', False)
         max_backtracks = backtrack_config.get('max_backtracks', 3)
         log_backtracks = backtrack_config.get('log_backtracks', True)
@@ -309,7 +391,7 @@ class HouseholdDistributor:
 
                 # If role_count is numeric and pattern_count is different, use pattern_count
                 if isinstance(role_count, int) and pattern_count != role_count:
-                    if self._show_detailed_logs:
+                    if show_detailed_logs:
                         logger.debug(f"Step: Selecting role '{role_name}'")
                         logger.debug(f"  Categories: {category_names}")
                         logger.debug(f"  Count needed (from rule): {role_count}")
@@ -318,12 +400,12 @@ class HouseholdDistributor:
 
                     # If pattern requires 0 people for this role, skip it
                     if role_count == 0:
-                        if self._show_detailed_logs:
+                        if show_detailed_logs:
                             logger.debug(f"  → Pattern requires 0 people for this role, skipping")
                             logger.debug("")
                         continue
                 else:
-                    if self._show_detailed_logs:
+                    if show_detailed_logs:
                         logger.debug(f"Step: Selecting role '{role_name}'")
                         logger.debug(f"  Categories: {category_names}")
                         logger.debug(f"  Count needed: {role_count}")
@@ -337,10 +419,10 @@ class HouseholdDistributor:
                 if role_index == 0 and backtrack_attempt > 0 and avoid_duplicates and tried_first_role_ids:
                     original_count = len(candidates)
                     candidates = [p for p in candidates if p.id not in tried_first_role_ids]
-                    if self._show_detailed_logs and log_backtracks:
+                    if show_detailed_logs and log_backtracks:
                         logger.debug(f"  Backtracking: Excluded {original_count - len(candidates)} already-tried candidates")
 
-                if self._show_detailed_logs:
+                if show_detailed_logs:
                     logger.debug(f"  Available candidates: {len(candidates)} people")
 
                 if not candidates:
@@ -355,13 +437,13 @@ class HouseholdDistributor:
 
                         if total_needed == 0:
                             # Pattern allows 0 people for this role - skip it
-                            if self._show_detailed_logs:
+                            if show_detailed_logs:
                                 logger.debug(f"  → Pattern allows 0 people for this role, skipping")
                                 logger.debug("")
                             continue
 
                     # If we get here, the role requires people but none are available
-                    if self._show_detailed_logs:
+                    if show_detailed_logs:
                         logger.debug(f"  ✗ FAILED: No candidates available")
                     failed_at_role_index = role_index
                     break
@@ -379,7 +461,7 @@ class HouseholdDistributor:
                 if pair_constraint and role_count == 2:
                     # Select a compatible pair
                     # IMPORTANT: Pass existing people (e.g., children) so pair can be validated against them
-                    if self._show_detailed_logs:
+                    if show_detailed_logs:
                         logger.debug(f"  Mode: Selecting a compatible pair")
                         if selected_by_role:
                             already_selected = sum(len(people) for people in selected_by_role.values())
@@ -391,17 +473,17 @@ class HouseholdDistributor:
                         existing_people_by_role=selected_by_role,
                         constraints=rule.constraints,
                         current_role=role_name,
-                        show_detailed_logs=self._show_detailed_logs
+                        show_detailed_logs=show_detailed_logs
                     )
                     if not pair:
                         # Couldn't find valid pair
-                        if self._show_detailed_logs:
+                        if show_detailed_logs:
                             logger.debug(f"  ✗ FAILED: Could not find valid pair")
                         failed_at_role_index = role_index
                         break
 
                     selected_by_role[role_name] = list(pair)
-                    if self._show_detailed_logs:
+                    if show_detailed_logs:
                         logger.debug(f"  ✓ Selected: {pair[0]} and {pair[1]}")
                         logger.debug("")
 
@@ -420,7 +502,7 @@ class HouseholdDistributor:
                             existing_people_by_role=selected_by_role,
                             constraints=rule.constraints,
                             current_role=role_name,
-                            show_detailed_logs=self._show_detailed_logs
+                            show_detailed_logs=show_detailed_logs
                         )
 
                         if not person:
@@ -433,7 +515,7 @@ class HouseholdDistributor:
 
                 else:
                     # Select specific number of people
-                    if self._show_detailed_logs:
+                    if show_detailed_logs:
                         logger.debug(f"  Mode: Selecting {role_count} person(s) individually")
 
                     for i in range(role_count):
@@ -442,22 +524,22 @@ class HouseholdDistributor:
                             existing_people_by_role=selected_by_role,
                             constraints=rule.constraints,
                             current_role=role_name,
-                            show_detailed_logs=self._show_detailed_logs
+                            show_detailed_logs=show_detailed_logs
                         )
 
                         if not person:
-                            if self._show_detailed_logs:
+                            if show_detailed_logs:
                                 logger.debug(f"  ✗ FAILED: Could not find valid person {i+1}/{role_count}")
                             failed_at_role_index = role_index
                             break
 
                         selected_by_role[role_name].append(person)
-                        if self._show_detailed_logs:
+                        if show_detailed_logs:
                             logger.debug(f"  ✓ Selected person {i+1}/{role_count}: {person}")
                         # Remove from candidates
                         candidates = [p for p in candidates if p.id != person.id]
 
-                    if self._show_detailed_logs:
+                    if show_detailed_logs:
                         logger.debug("")
 
             # Check if role selection succeeded or failed
@@ -510,52 +592,113 @@ class HouseholdDistributor:
 
             break  # Exit backtracking while loop
 
-        # Collect all selected people
-        all_selected = []
-        for people_list in selected_by_role.values():
-            all_selected.extend(people_list)
+        return (selected_by_role, None)
 
-        if not all_selected:
-            return (None, None)
+    def _allocate_sequential(self, pattern: CompositionPattern,
+                            pools: Dict[int, List[Person]],
+                            max_size: Optional[int],
+                            allocate_flexible: bool) -> Tuple[List[Tuple[int, int]], Optional[int]]:
+        """
+        Perform sequential allocation through age categories.
 
-        # Remove selected people from pools
-        selected_ids = {p.id for p in all_selected}
+        This is the original allocation strategy that processes categories sequentially,
+        taking the minimum required (or exact count if specified) from each category.
+        For flexible (>=) categories, can optionally allocate random amounts above minimum.
+
+        Args:
+            pattern: Composition pattern to match
+            pools: Available people by category
+            max_size: Maximum household size constraint (optional)
+            allocate_flexible: If True, randomly allocate to flexible categories
+
+        Returns:
+            Tuple of (selections, failed_category_idx):
+            - selections: List of (category_idx, count) tuples if successful
+            - failed_category_idx: Category index that caused failure, or None if successful
+        """
+        selections = []
+        logger.debug(f"\n=== ORIGINAL SEQUENTIAL ALLOCATION MODE ===")
+        if max_size:
+            logger.debug(f"Max size constraint: {max_size}")
+        else:
+            logger.debug("No max size constraint")
+
+        # PHASE 1: Check if ALL categories can be fulfilled (don't modify pools yet!)
+        total_selected = 0
+        logger.debug(f"\n--- SEQUENTIAL ALLOCATION PHASE ---")
+
         for cat_idx in range(len(self.age_categories)):
-            pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
+            min_count = pattern.get_min_count(cat_idx)
+            max_count = pattern.get_max_count(cat_idx)
+            available = len(pools[cat_idx])
 
-        # Create household
-        unit = self.geography.get_unit(area_code)
-        household = Household(
-            id=len(self.households),
-            geographical_unit=unit,
-            properties={
-                'original_pattern': pattern.original_pattern,
-                'actual_pattern': pattern.to_string()
-            }
-        )
-        household._age_categories = self.age_categories
+            cat_name = self.age_categories[cat_idx].name
+            logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
+            logger.debug(f"  min: {min_count}, max: {max_count}, available: {available}")
+            logger.debug(f"  total_selected so far: {total_selected}")
 
-        # Add residents
-        for person in all_selected:
-            household.add_resident(person)
-            self.allocated_people.add(person.id)
+            # Check if we have enough people
+            if available < min_count:
+                # Can't fulfill - return failure with the category that caused it
+                logger.debug(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
+                return ([], cat_idx)
 
-        if self._show_detailed_logs:
-            logger.debug("FINAL HOUSEHOLD COMPOSITION:")
-            logger.debug(f"  Household ID: {household.id}")
-            logger.debug(f"  Geo Unit: {area_code}")
-            logger.debug(f"  Pattern: {pattern.original_pattern}")
-            logger.debug(f"  Total members: {len(all_selected)}")
-            logger.debug("")
-            for role_name, people in selected_by_role.items():
-                if people:
-                    logger.debug(f"  {role_name}:")
-                    for person in people:
-                        logger.debug(f"    - {person}")
-            logger.debug("=" * 80)
-            logger.debug("")
+            # Decide how many to take
+            if max_count is not None:
+                # Exact count specified
+                count = max_count
+                logger.debug(f"  → EXACT count specified: {count}")
+            else:
+                # Flexible (>=) category
+                logger.debug(f"  → FLEXIBLE category (min: {min_count})")
+                if allocate_flexible and available > min_count:
+                    # RANDOM ALLOCATION: Randomly allocate between min and available
+                    # But respect max_size if specified
+                    max_allocatable = available
+                    logger.debug(f"    allocate_flexible=True, available > min_count")
+                    logger.debug(f"    initial max_allocatable: {max_allocatable}")
 
-        return (household, None)
+                    if max_size is not None:
+                        remaining_capacity = max_size - total_selected
+                        max_allocatable = min(max_allocatable, remaining_capacity)
+                        logger.debug(f"    remaining_capacity: {remaining_capacity}")
+                        logger.debug(f"    adjusted max_allocatable: {max_allocatable}")
+
+                    # Random count between min and max_allocatable
+                    if max_allocatable > min_count:
+                        count = random.randint(min_count, max_allocatable)
+                        logger.debug(f"    random allocation: {count} (range: {min_count}-{max_allocatable})")
+                    else:
+                        count = min_count
+                        logger.debug(f"    max_allocatable <= min_count, using min: {count}")
+                else:
+                    # Take minimum required
+                    count = min_count
+                    logger.debug(f"    taking minimum: {count}")
+
+            # Apply max_size constraint if specified
+            if max_size is not None:
+                remaining_capacity = max_size - total_selected
+                original_count = count
+                count = min(count, remaining_capacity)
+                if count != original_count:
+                    logger.debug(f"  max_size constraint applied: {original_count} → {count}")
+
+                # If this brings us below minimum, we can't fulfill the pattern
+                if count < min_count:
+                    logger.debug(f"  ✗ CONSTRAINT VIOLATION: count ({count}) < min_count ({min_count})")
+                    return ([], cat_idx)
+
+            total_selected += count
+            selections.append((cat_idx, count))
+            logger.debug(f"  ✓ Allocated: {count}")
+            logger.debug(f"  new total_selected: {total_selected}")
+
+        logger.debug(f"\n--- SEQUENTIAL ALLOCATION COMPLETE ---")
+        logger.debug(f"Total selected: {total_selected}")
+        logger.debug(f"Selections: {selections}")
+
+        return (selections, None)
 
     def _allocate_household(self, area_code: str, pattern: CompositionPattern,
                             max_size: Optional[int] = None,
@@ -601,88 +744,10 @@ class HouseholdDistributor:
             if failed_cat is not None:
                 return (None, failed_cat)
         else:
-            # ORIGINAL LOGIC: Sequential allocation
-            selections = []  # Initialize selections list
-            logger.debug(f"\n=== ORIGINAL SEQUENTIAL ALLOCATION MODE ===")
-            if max_size:
-                logger.debug(f"Max size constraint: {max_size}")
-            else:
-                logger.debug("No max size constraint")
-
-            # PHASE 1: Check if ALL categories can be fulfilled (don't modify pools yet!)
-            total_selected = 0
-            logger.debug(f"\n--- SEQUENTIAL ALLOCATION PHASE ---")
-
-            for cat_idx in range(len(self.age_categories)):
-                min_count = pattern.get_min_count(cat_idx)
-                max_count = pattern.get_max_count(cat_idx)
-                available = len(pools[cat_idx])
-
-                cat_name = self.age_categories[cat_idx].name
-                logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
-                logger.debug(f"  min: {min_count}, max: {max_count}, available: {available}")
-                logger.debug(f"  total_selected so far: {total_selected}")
-
-                # Check if we have enough people
-                if available < min_count:
-                    # Can't fulfill - return failure with the category that caused it
-                    logger.debug(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
-                    return (None, cat_idx)
-
-                # Decide how many to take
-                if max_count is not None:
-                    # Exact count specified
-                    count = max_count
-                    logger.debug(f"  → EXACT count specified: {count}")
-                else:
-                    # Flexible (>=) category
-                    logger.debug(f"  → FLEXIBLE category (min: {min_count})")
-                    if allocate_flexible and available > min_count:
-                        # RANDOM ALLOCATION: Randomly allocate between min and available
-                        # But respect max_size if specified
-                        max_allocatable = available
-                        logger.debug(f"    allocate_flexible=True, available > min_count")
-                        logger.debug(f"    initial max_allocatable: {max_allocatable}")
-
-                        if max_size is not None:
-                            remaining_capacity = max_size - total_selected
-                            max_allocatable = min(max_allocatable, remaining_capacity)
-                            logger.debug(f"    remaining_capacity: {remaining_capacity}")
-                            logger.debug(f"    adjusted max_allocatable: {max_allocatable}")
-
-                        # Random count between min and max_allocatable
-                        if max_allocatable > min_count:
-                            count = random.randint(min_count, max_allocatable)
-                            logger.debug(f"    random allocation: {count} (range: {min_count}-{max_allocatable})")
-                        else:
-                            count = min_count
-                            logger.debug(f"    max_allocatable <= min_count, using min: {count}")
-                    else:
-                        # Take minimum required
-                        count = min_count
-                        logger.debug(f"    taking minimum: {count}")
-
-                # Apply max_size constraint if specified
-                if max_size is not None:
-                    remaining_capacity = max_size - total_selected
-                    original_count = count
-                    count = min(count, remaining_capacity)
-                    if count != original_count:
-                        logger.debug(f"  max_size constraint applied: {original_count} → {count}")
-
-                    # If this brings us below minimum, we can't fulfill the pattern
-                    if count < min_count:
-                        logger.debug(f"  ✗ CONSTRAINT VIOLATION: count ({count}) < min_count ({min_count})")
-                        return (None, cat_idx)
-
-                total_selected += count
-                selections.append((cat_idx, count))
-                logger.debug(f"  ✓ Allocated: {count}")
-                logger.debug(f"  new total_selected: {total_selected}")
-
-            logger.debug(f"\n--- SEQUENTIAL ALLOCATION COMPLETE ---")
-            logger.debug(f"Total selected: {total_selected}")
-            logger.debug(f"Selections: {selections}")
+            # Use sequential allocation mode
+            selections, failed_cat = self._allocate_sequential(pattern, pools, max_size, allocate_flexible)
+            if failed_cat is not None:
+                return (None, failed_cat)
 
         # PHASE 2: All checks passed! Now actually take people from pools
         selected_people = []
