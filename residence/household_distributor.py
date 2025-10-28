@@ -17,7 +17,7 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Set
 
-from geography.geography import GeographicalUnit, Geography
+from geography.geography import Geography
 from population.person import Person
 from population.population import PopulationManager
 from residence.relationship_rules import RelationshipRulesValidator
@@ -261,20 +261,9 @@ class HouseholdDistributor:
         pools = self.person_pool_by_area[area_code]
 
         # Detailed logging for ALL households in ALL geo units
-        if not hasattr(self, '_household_counts_by_area_log'):
-            self._household_counts_by_area_log = {}
-
-        if area_code not in self._household_counts_by_area_log:
-            self._household_counts_by_area_log[area_code] = 0
-            logger.debug("")
-            logger.debug("=" * 80)
-            logger.debug(f"STARTING DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
-            logger.debug("=" * 80)
-            logger.debug("")
-
-        self._household_counts_by_area_log[area_code] += 1
+        household_num = self._setup_allocation_logging(area_code)
         logger.debug("=" * 80)
-        logger.debug(f"GEO UNIT: {area_code} - HOUSEHOLD #{self._household_counts_by_area_log[area_code]}")
+        logger.debug(f"GEO UNIT: {area_code} - HOUSEHOLD #{household_num}")
         if hasattr(pattern, 'census_pattern'):
             logger.debug(f"Census Pattern: '{pattern.census_pattern}'")
             logger.debug(f"Assumption: '{pattern.original_pattern}'")
@@ -592,20 +581,9 @@ class HouseholdDistributor:
         pools = self.person_pool_by_area[area_code]
 
         # Detailed logging for ALL households in ALL geo units (NO RULES version)
-        if not hasattr(self, '_household_counts_by_area_log'):
-            self._household_counts_by_area_log = {}
-
-        if area_code not in self._household_counts_by_area_log:
-            self._household_counts_by_area_log[area_code] = 0
-            logger.debug("")
-            logger.debug("=" * 80)
-            logger.debug(f"STARTING DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
-            logger.debug("=" * 80)
-            logger.debug("")
-
-        self._household_counts_by_area_log[area_code] += 1
+        household_num = self._setup_allocation_logging(area_code)
         logger.debug("=" * 80)
-        logger.debug(f"GEO UNIT: {area_code} - HOUSEHOLD #{self._household_counts_by_area_log[area_code]}")
+        logger.debug(f"GEO UNIT: {area_code} - HOUSEHOLD #{household_num}")
         logger.debug(f"Pattern: '{pattern.to_string()}'")
         logger.debug("=" * 80)
         logger.debug(f"Allocation mode: Simple (no constraints)")
@@ -616,122 +594,15 @@ class HouseholdDistributor:
         logger.debug(f"Allocate flexible: {allocate_flexible}")
         logger.debug("")
 
-        selections = []  # Store planned selections: (cat_idx, count)
-
-        # BALANCED DISTRIBUTION: Use proportional allocation when target_size is specified
+        # Determine allocation strategy
         if allocate_flexible and target_size is not None:
-            logger.debug(f"\n=== BALANCED DISTRIBUTION MODE ===")
-            logger.debug(f"Target size: {target_size}")
-
-            # First pass: allocate exact counts for fixed categories
-            fixed_total = 0
-            flexible_categories = []
-
-            logger.debug(f"\n--- FIRST PASS: Categorizing fixed vs flexible ---")
-            for cat_idx in range(len(self.age_categories)):
-                min_count = pattern.get_min_count(cat_idx)
-                max_count = pattern.get_max_count(cat_idx)
-                available = len(pools[cat_idx])
-
-                cat_name = self.age_categories[cat_idx].name
-                logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
-                logger.debug(f"  min_count: {min_count}, max_count: {max_count}, available: {available}")
-
-                # Check minimum availability
-                if available < min_count:
-                    logger.debug(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
-                    return (None, cat_idx)
-
-                if max_count is not None:
-                    # Fixed category - allocate exactly
-                    logger.debug(f"  → FIXED category: allocating exactly {max_count}")
-                    selections.append((cat_idx, max_count))
-                    fixed_total += max_count
-                else:
-                    # Flexible category - defer allocation
-                    logger.debug(f"  → FLEXIBLE category: deferring (min: {min_count}, available: {available})")
-                    flexible_categories.append((cat_idx, min_count, available))
-
-            logger.debug(f"\n--- FIRST PASS COMPLETE ---")
-            logger.debug(f"Fixed total: {fixed_total}")
-            logger.debug(f"Flexible categories: {len(flexible_categories)}")
-
-            # Second pass: distribute remaining capacity proportionally across flexible categories
-            remaining_capacity = target_size - fixed_total
-            logger.debug(f"\n--- SECOND PASS: Proportional allocation ---")
-            logger.debug(f"Remaining capacity: {remaining_capacity} (target: {target_size} - fixed: {fixed_total})")
-
-            if remaining_capacity < 0:
-                # Can't meet target - fixed categories already exceed it
-                logger.debug(f"✗ ERROR: Fixed categories ({fixed_total}) exceed target size ({target_size})")
-                return (None, None)
-
-            # Calculate proportional allocation based on availability
-            total_available = sum(avail for _, _, avail in flexible_categories)
-            logger.debug(f"Total available in flexible categories: {total_available}")
-
-            # Track allocations with their proportions for remainder distribution
-            flexible_allocations = []
-
-            for cat_idx, min_count, available in flexible_categories:
-                cat_name = self.age_categories[cat_idx].name
-                logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
-                logger.debug(f"  min: {min_count}, available: {available}")
-
-                if total_available > 0:
-                    # Proportional share of remaining capacity
-                    proportion = available / total_available
-                    allocated = int(remaining_capacity * proportion)
-                    logger.debug(f"  proportion: {proportion:.3f} ({available}/{total_available})")
-                    logger.debug(f"  raw allocation: {allocated} ({remaining_capacity} * {proportion:.3f})")
-
-                    # Ensure we meet minimum and don't exceed available
-                    allocated = max(min_count, min(allocated, available))
-                    logger.debug(f"  initial allocation: {allocated} (after min/max constraints)")
-                else:
-                    proportion = 0
-                    allocated = min_count
-                    logger.debug(f"  total_available=0, using min_count: {allocated}")
-
-                flexible_allocations.append((cat_idx, allocated, available, proportion))
-
-            # Calculate shortfall and distribute remainder
-            current_total = sum(alloc for _, alloc, _, _ in flexible_allocations)
-            shortfall = remaining_capacity - current_total
-            logger.debug(f"\nShortfall check: allocated {current_total}, need {remaining_capacity}, shortfall: {shortfall}")
-
-            if shortfall > 0:
-                logger.debug(f"Distributing {shortfall} remaining slots...")
-                # Sort by proportion (highest first) to prioritize categories with more availability
-                flexible_allocations.sort(key=lambda x: x[3], reverse=True)
-
-                for i, (cat_idx, allocated, available, proportion) in enumerate(flexible_allocations):
-                    if shortfall == 0:
-                        break
-
-                    # How many more can this category take?
-                    can_take = available - allocated
-                    if can_take > 0:
-                        give = min(can_take, shortfall)
-                        cat_name = self.age_categories[cat_idx].name
-                        logger.debug(f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})")
-                        flexible_allocations[i] = (cat_idx, allocated + give, available, proportion)
-                        shortfall -= give
-
-            # Add all flexible allocations to selections
-            for cat_idx, allocated, _, _ in flexible_allocations:
-                selections.append((cat_idx, allocated))
-
-            # Sort selections by category index to maintain order
-            selections.sort(key=lambda x: x[0])
-
-            total_selected = sum(count for _, count in selections)
-            logger.debug(f"\n--- SECOND PASS COMPLETE ---")
-            logger.debug(f"Total selected: {total_selected}")
-            logger.debug(f"Selections: {selections}")
-
+            # Use balanced distribution mode
+            selections, failed_cat = self._allocate_balanced_distribution(pattern, pools, target_size)
+            if failed_cat is not None:
+                return (None, failed_cat)
         else:
             # ORIGINAL LOGIC: Sequential allocation
+            selections = []  # Initialize selections list
             logger.debug(f"\n=== ORIGINAL SEQUENTIAL ALLOCATION MODE ===")
             if max_size:
                 logger.debug(f"Max size constraint: {max_size}")
@@ -1118,12 +989,7 @@ class HouseholdDistributor:
         Returns:
             dict: Statistics about this round's allocation
         """
-        self.current_round += 1
-        round_label = round_name or f"Round {self.current_round}"
-
-        logger.info("=" * 60)
-        logger.info(f"Starting household allocation: {round_label}")
-        logger.info("=" * 60)
+        round_label = self._log_round_start(round_name, "Round")
 
         # Prepare or refresh pools
         self._prepare_person_pools(refresh=refresh_pools)
@@ -1391,6 +1257,227 @@ class HouseholdDistributor:
                 return cat.name
         return "Unknown"
 
+    def _validate_category_index(self, category_name: str, log_level: str = "error") -> Optional[int]:
+        """
+        Validate and retrieve category index by name.
+
+        Args:
+            category_name: Name of the category to validate
+            log_level: Logging level for invalid category ("error", "warning", or None)
+
+        Returns:
+            Category index if valid, None otherwise
+        """
+        cat_idx = self.category_name_to_idx.get(category_name)
+        if cat_idx is None:
+            if log_level == "error":
+                logger.error(f"Unknown category '{category_name}'")
+            elif log_level == "warning":
+                logger.warning(f"Unknown category '{category_name}'")
+        return cat_idx
+
+    def _filter_households_by_patterns(self, target_patterns: List[str],
+                                       pattern_property: str = 'original_pattern') -> List[Household]:
+        """
+        Filter households by matching patterns.
+
+        Args:
+            target_patterns: List of patterns to match
+            pattern_property: Property key to check (default: 'original_pattern')
+
+        Returns:
+            List of households matching the target patterns
+        """
+        filtered = []
+        for household in self.households:
+            pattern = household.properties.get(pattern_property, '')
+            if pattern in target_patterns:
+                filtered.append(household)
+        return filtered
+
+    def _setup_allocation_logging(self, area_code: str) -> int:
+        """
+        Initialize and update allocation logging for a geographical unit.
+
+        This tracks how many households have been allocated in each area and logs
+        the start of allocation for new areas.
+
+        Args:
+            area_code: The geographical unit code
+
+        Returns:
+            The household number for this area (1-indexed)
+        """
+        # Initialize logging dict if needed
+        if not hasattr(self, '_household_counts_by_area_log'):
+            self._household_counts_by_area_log = {}
+
+        # Log start of allocation for new area
+        if area_code not in self._household_counts_by_area_log:
+            self._household_counts_by_area_log[area_code] = 0
+            logger.debug("")
+            logger.debug("=" * 80)
+            logger.debug(f"STARTING DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
+            logger.debug("=" * 80)
+            logger.debug("")
+
+        # Increment and return household count
+        self._household_counts_by_area_log[area_code] += 1
+        return self._household_counts_by_area_log[area_code]
+
+    def _allocate_balanced_distribution(self, pattern: CompositionPattern,
+                                       pools: List[List[Person]],
+                                       target_size: int) -> Tuple[Optional[List[Tuple[int, int]]], Optional[int]]:
+        """
+        Calculate balanced allocation using proportional distribution.
+
+        This method distributes people proportionally across flexible categories
+        to reach a target household size while respecting min/max constraints.
+
+        Args:
+            pattern: Composition pattern to match
+            pools: Person pools by category
+            target_size: Target household size
+
+        Returns:
+            Tuple of (selections list, failed_category_idx):
+            - On success: ([(cat_idx, count), ...], None)
+            - On failure: (None, category_idx that caused failure)
+        """
+        logger.debug(f"\n=== BALANCED DISTRIBUTION MODE ===")
+        logger.debug(f"Target size: {target_size}")
+
+        selections = []  # Store planned selections: (cat_idx, count)
+
+        # First pass: allocate exact counts for fixed categories
+        fixed_total = 0
+        flexible_categories = []
+
+        logger.debug(f"\n--- FIRST PASS: Categorizing fixed vs flexible ---")
+        for cat_idx in range(len(self.age_categories)):
+            min_count = pattern.get_min_count(cat_idx)
+            max_count = pattern.get_max_count(cat_idx)
+            available = len(pools[cat_idx])
+
+            cat_name = self.age_categories[cat_idx].name
+            logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
+            logger.debug(f"  min_count: {min_count}, max_count: {max_count}, available: {available}")
+
+            # Check minimum availability
+            if available < min_count:
+                logger.debug(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
+                return (None, cat_idx)
+
+            if max_count is not None:
+                # Fixed category - allocate exactly
+                logger.debug(f"  → FIXED category: allocating exactly {max_count}")
+                selections.append((cat_idx, max_count))
+                fixed_total += max_count
+            else:
+                # Flexible category - defer allocation
+                logger.debug(f"  → FLEXIBLE category: deferring (min: {min_count}, available: {available})")
+                flexible_categories.append((cat_idx, min_count, available))
+
+        logger.debug(f"\n--- FIRST PASS COMPLETE ---")
+        logger.debug(f"Fixed total: {fixed_total}")
+        logger.debug(f"Flexible categories: {len(flexible_categories)}")
+
+        # Second pass: distribute remaining capacity proportionally across flexible categories
+        remaining_capacity = target_size - fixed_total
+        logger.debug(f"\n--- SECOND PASS: Proportional allocation ---")
+        logger.debug(f"Remaining capacity: {remaining_capacity} (target: {target_size} - fixed: {fixed_total})")
+
+        if remaining_capacity < 0:
+            # Can't meet target - fixed categories already exceed it
+            logger.debug(f"✗ ERROR: Fixed categories ({fixed_total}) exceed target size ({target_size})")
+            return (None, None)
+
+        # Calculate proportional allocation based on availability
+        total_available = sum(avail for _, _, avail in flexible_categories)
+        logger.debug(f"Total available in flexible categories: {total_available}")
+
+        # Track allocations with their proportions for remainder distribution
+        flexible_allocations = []
+
+        for cat_idx, min_count, available in flexible_categories:
+            cat_name = self.age_categories[cat_idx].name
+            logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
+            logger.debug(f"  min: {min_count}, available: {available}")
+
+            if total_available > 0:
+                # Proportional share of remaining capacity
+                proportion = available / total_available
+                allocated = int(remaining_capacity * proportion)
+                logger.debug(f"  proportion: {proportion:.3f} ({available}/{total_available})")
+                logger.debug(f"  raw allocation: {allocated} ({remaining_capacity} * {proportion:.3f})")
+
+                # Ensure we meet minimum and don't exceed available
+                allocated = max(min_count, min(allocated, available))
+                logger.debug(f"  initial allocation: {allocated} (after min/max constraints)")
+            else:
+                proportion = 0
+                allocated = min_count
+                logger.debug(f"  total_available=0, using min_count: {allocated}")
+
+            flexible_allocations.append((cat_idx, allocated, available, proportion))
+
+        # Calculate shortfall and distribute remainder
+        current_total = sum(alloc for _, alloc, _, _ in flexible_allocations)
+        shortfall = remaining_capacity - current_total
+        logger.debug(f"\nShortfall check: allocated {current_total}, need {remaining_capacity}, shortfall: {shortfall}")
+
+        if shortfall > 0:
+            logger.debug(f"Distributing {shortfall} remaining slots...")
+            # Sort by proportion (highest first) to prioritize categories with more availability
+            flexible_allocations.sort(key=lambda x: x[3], reverse=True)
+
+            for i, (cat_idx, allocated, available, proportion) in enumerate(flexible_allocations):
+                if shortfall == 0:
+                    break
+
+                # How many more can this category take?
+                can_take = available - allocated
+                if can_take > 0:
+                    give = min(can_take, shortfall)
+                    cat_name = self.age_categories[cat_idx].name
+                    logger.debug(f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})")
+                    flexible_allocations[i] = (cat_idx, allocated + give, available, proportion)
+                    shortfall -= give
+
+        # Add all flexible allocations to selections
+        for cat_idx, allocated, _, _ in flexible_allocations:
+            selections.append((cat_idx, allocated))
+
+        # Sort selections by category index to maintain order
+        selections.sort(key=lambda x: x[0])
+
+        total_selected = sum(count for _, count in selections)
+        logger.debug(f"\n--- SECOND PASS COMPLETE ---")
+        logger.debug(f"Total selected: {total_selected}")
+        logger.debug(f"Selections: {selections}")
+
+        return (selections, None)
+
+    def _log_round_start(self, round_name: Optional[str], default_prefix: str) -> str:
+        """
+        Log the start of an allocation round with standardized formatting.
+
+        Args:
+            round_name: Custom round name (optional)
+            default_prefix: Default prefix if no custom name provided
+
+        Returns:
+            The round label used for logging
+        """
+        self.current_round += 1
+        round_label = round_name or f"{default_prefix} {self.current_round}"
+
+        logger.info("=" * 60)
+        logger.info(f"Starting {default_prefix.lower()}: {round_label}")
+        logger.info("=" * 60)
+
+        return round_label
+
     def _log_round_summary(self, round_label: str, stats: Dict, show_remaining: bool = True):
         """
         Log summary statistics for an allocation round.
@@ -1486,12 +1573,7 @@ class HouseholdDistributor:
         Returns:
             dict: Statistics about this excess allocation
         """
-        self.current_round += 1
-        round_label = round_name or f"Excess Allocation Round {self.current_round}"
-
-        logger.info("=" * 60)
-        logger.info(f"Starting excess allocation: {round_label}")
-        logger.info("=" * 60)
+        round_label = self._log_round_start(round_name, "Excess Allocation Round")
         logger.info(f"Target patterns: {target_patterns}")
         logger.info(f"Adding category: {add_category}")
         logger.info(f"Constraints: {constraints}")
@@ -1517,9 +1599,8 @@ class HouseholdDistributor:
             self._prepare_person_pools(refresh=True)
 
         # Find category index for the category to add
-        add_cat_idx = self.category_name_to_idx.get(add_category)
+        add_cat_idx = self._validate_category_index(add_category)
         if add_cat_idx is None:
-            logger.error(f"Unknown category '{add_category}'")
             return {
                 'round_name': round_label,
                 'people_added': 0,
@@ -1528,12 +1609,7 @@ class HouseholdDistributor:
             }
 
         # Filter households by target patterns
-        target_households = []
-        for household in self.households:
-            original_pattern = household.properties.get('original_pattern', '')
-            if original_pattern in target_patterns:
-                target_households.append(household)
-
+        target_households = self._filter_households_by_patterns(target_patterns)
         logger.info(f"Found {len(target_households)} households matching target patterns")
 
         if not target_households:
@@ -1703,12 +1779,7 @@ class HouseholdDistributor:
         Returns:
             dict: Statistics about this overflow allocation
         """
-        self.current_round += 1
-        round_label = round_name or f"Overflow Allocation Round {self.current_round}"
-
-        logger.info("=" * 60)
-        logger.info(f"Starting overflow allocation: {round_label}")
-        logger.info("=" * 60)
+        round_label = self._log_round_start(round_name, "Overflow Allocation Round")
         logger.info(f"Target patterns: {target_patterns}")
         logger.info(f"Adding category: {add_category}")
         logger.info(f"Pattern bias: {pattern_bias}")
@@ -1720,9 +1791,8 @@ class HouseholdDistributor:
             self._prepare_person_pools(refresh=True)
 
         # Find category index
-        add_cat_idx = self.category_name_to_idx.get(add_category)
+        add_cat_idx = self._validate_category_index(add_category)
         if add_cat_idx is None:
-            logger.error(f"Unknown category '{add_category}'")
             return {
                 'round_name': round_label,
                 'people_added': 0,
@@ -1731,15 +1801,15 @@ class HouseholdDistributor:
             }
 
         # Group households by area and pattern
+        filtered_households = self._filter_households_by_patterns(target_patterns)
         households_by_area_pattern = {}
-        for household in self.households:
+        for household in filtered_households:
+            area_code = household.geographical_unit.name
             original_pattern = household.properties.get('original_pattern', '')
-            if original_pattern in target_patterns:
-                area_code = household.geographical_unit.name
-                key = (area_code, original_pattern)
-                if key not in households_by_area_pattern:
-                    households_by_area_pattern[key] = []
-                households_by_area_pattern[key].append(household)
+            key = (area_code, original_pattern)
+            if key not in households_by_area_pattern:
+                households_by_area_pattern[key] = []
+            households_by_area_pattern[key].append(household)
 
         logger.info(f"Found {sum(len(hhs) for hhs in households_by_area_pattern.values())} eligible households across {len(households_by_area_pattern)} area-pattern combinations")
 
@@ -1895,12 +1965,7 @@ class HouseholdDistributor:
         Returns:
             dict: Statistics about this promotion allocation
         """
-        self.current_round += 1
-        round_label = round_name or f"Promotion Allocation Round {self.current_round}"
-
-        logger.info("=" * 60)
-        logger.info(f"Starting promotion allocation: {round_label}")
-        logger.info("=" * 60)
+        round_label = self._log_round_start(round_name, "Promotion Allocation Round")
         logger.info(f"Target categories: {target_categories}")
         logger.info("")
 
@@ -1938,9 +2003,9 @@ class HouseholdDistributor:
 
         # Process each target category
         for category_name in target_categories:
-            cat_idx = self.category_name_to_idx.get(category_name)
+            cat_idx = self._validate_category_index(category_name, log_level="warning")
             if cat_idx is None:
-                logger.warning(f"Unknown category '{category_name}', skipping")
+                logger.info("Skipping category")
                 continue
 
             logger.info(f"Processing category: {category_name}")
@@ -2093,12 +2158,7 @@ class HouseholdDistributor:
         Returns:
             dict: Statistics about this promotion allocation
         """
-        self.current_round += 1
-        round_label = round_name or f"Rule-Based Promotion Round {self.current_round}"
-
-        logger.info("=" * 60)
-        logger.info(f"Starting rule-based promotion: {round_label}")
-        logger.info("=" * 60)
+        round_label = self._log_round_start(round_name, "Rule-Based Promotion Round")
         logger.info(f"Number of promotion rules: {len(promotion_rules)}")
         logger.info("")
 
@@ -2145,7 +2205,7 @@ class HouseholdDistributor:
                 added_to_this_household = 0
 
                 for category_name in accept_categories:
-                    cat_idx = self.category_name_to_idx.get(category_name)
+                    cat_idx = self._validate_category_index(category_name, log_level=None)
                     if cat_idx is None:
                         continue
 
