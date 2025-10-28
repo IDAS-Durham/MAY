@@ -382,6 +382,46 @@ class HouseholdDistributor:
 
         return (role_count, False)  # Don't skip
 
+    def _prepare_role_candidates(self, pools: List[List[Person]], category_indices: List[int],
+                                 role_index: int, backtrack_attempt: int,
+                                 tried_first_role_ids: Set[int], avoid_duplicates: bool,
+                                 show_detailed_logs: bool, log_backtracks: bool) -> List[Person]:
+        """
+        Prepare candidate pool for role selection with backtracking support.
+
+        Gets candidates from specified categories and filters out already-tried candidates
+        when backtracking to avoid duplicate attempts.
+
+        Args:
+            pools: Available people by category
+            category_indices: Category indices to draw candidates from
+            role_index: Index of current role in selection order (0 = first role)
+            backtrack_attempt: Current backtracking attempt number
+            tried_first_role_ids: Set of person IDs already tried for first role
+            avoid_duplicates: Whether to avoid duplicate attempts during backtracking
+            show_detailed_logs: Whether to show detailed debug logs
+            log_backtracks: Whether to log backtracking information
+
+        Returns:
+            List of candidate people for this role
+        """
+        # Get candidates from these categories
+        candidates = []
+        for cat_idx in category_indices:
+            candidates.extend(pools[cat_idx])
+
+        # If this is the first role and we're backtracking, exclude already-tried people
+        if role_index == 0 and backtrack_attempt > 0 and avoid_duplicates and tried_first_role_ids:
+            original_count = len(candidates)
+            candidates = [p for p in candidates if p.id not in tried_first_role_ids]
+            if show_detailed_logs and log_backtracks:
+                logger.debug(f"  Backtracking: Excluded {original_count - len(candidates)} already-tried candidates")
+
+        if show_detailed_logs:
+            logger.debug(f"  Available candidates: {len(candidates)} people")
+
+        return candidates
+
     def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
                                        pools: Dict[int, List[Person]],
                                        backtrack_config: Dict,
@@ -441,20 +481,11 @@ class HouseholdDistributor:
                 if should_skip:
                     continue
 
-                # Get candidates from these categories
-                candidates = []
-                for cat_idx in category_indices:
-                    candidates.extend(pools[cat_idx])
-
-                # If this is the first role and we're backtracking, exclude already-tried people
-                if role_index == 0 and backtrack_attempt > 0 and avoid_duplicates and tried_first_role_ids:
-                    original_count = len(candidates)
-                    candidates = [p for p in candidates if p.id not in tried_first_role_ids]
-                    if show_detailed_logs and log_backtracks:
-                        logger.debug(f"  Backtracking: Excluded {original_count - len(candidates)} already-tried candidates")
-
-                if show_detailed_logs:
-                    logger.debug(f"  Available candidates: {len(candidates)} people")
+                # Prepare candidates for this role (with backtracking support)
+                candidates = self._prepare_role_candidates(
+                    pools, category_indices, role_index, backtrack_attempt,
+                    tried_first_role_ids, avoid_duplicates, show_detailed_logs, log_backtracks
+                )
 
                 if not candidates:
                     # No people available for this role
