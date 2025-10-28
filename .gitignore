@@ -61,3 +61,10 @@ Thumbs.db
 
 # Temporary files
 cw.txt
+
+# Backup emacs files
+*~
+
+# pytest_cache
+.pytest_cache
+
