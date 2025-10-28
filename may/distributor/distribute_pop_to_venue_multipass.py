@@ -140,7 +140,11 @@ class DistributorMultiPass(Distributor):
                 
         return reopened_count
 
-    def assign_people_venues_multi_pass(self, activity: str, venue_type: str, **kwargs):
+    def assign_people_venues_multi_pass(self,
+                                        activity: str,
+                                        venue_type: str,
+                                        people=None,
+                                        **kwargs):
         """
         Multi-pass assignment with configurable number of passes.
 
@@ -157,9 +161,12 @@ class DistributorMultiPass(Distributor):
             The activity the Person is undertaking when visiting this type of venue.
           venue_type (str):
             Label for the type of venue.
+          people (list[Person]):
+            A list of people to assign. 
           
         """
-        initial_people_count = len(self.people)
+        people = people if people is not None else self.people
+        initial_people_count = len(people)
         logger.debug("="*70)
         logger.debug(f"MULTI-PASS ASSIGNMENT: {self.num_passes} passes configured")
         logger.debug(f"Total people to allocate: {initial_people_count}")
@@ -167,23 +174,23 @@ class DistributorMultiPass(Distributor):
 
         for pass_num in range(self.num_passes):
             self.current_pass = pass_num
-
             logger.debug("")
             logger.debug(f"PASS {pass_num + 1}/{self.num_passes}")
             logger.debug("")
-            
+
             # Log threshold examples for this pass
-            example_compositions = ['>=2 >=0 >=0 >=0', '1 >=0 >=0 >=0', '0 >=0 >=0 >=0']
-            for comp in example_compositions:
-                if comp in self.composition_thresholds:
-                    threshold = self.get_threshold_for_pass(comp, pass_num)
-                    logger.debug(f"  Threshold for '{comp}': {threshold}")
+            # example_compositions = ['>=2 >=0 >=0 >=0', '1 >=0 >=0 >=0', '0 >=0 >=0 >=0']
+            # for comp in example_compositions:
+            #     if comp in self.composition_thresholds:
+            #         threshold = self.get_threshold_for_pass(comp, pass_num)
+            #         logger.debug(f"  Threshold for '{comp}': {threshold}")
 
             # Run assignment for this pass
             if pass_num == 0:
                 # First pass: use all people
                 self.assign_people_venues(activity,
                                           venue_type,
+                                          people=people,
                                           maxiter=10,
                                           **kwargs)
             else:
@@ -200,7 +207,7 @@ class DistributorMultiPass(Distributor):
                                           **kwargs)
 
             unallocated_count = len(self.unallocated_people)
-            allocated_this_pass = len(self.people) if pass_num == 0 else len(remaining_people)
+            allocated_this_pass = len(people) if pass_num == 0 else len(remaining_people)
             allocated_this_pass = allocated_this_pass - unallocated_count
 
             logger.debug(f"Pass {pass_num + 1} results:")
@@ -231,15 +238,8 @@ class DistributorMultiPass(Distributor):
         logger.debug(f"Total allocated: {initial_people_count - len(self.unallocated_people)}")
         logger.debug(f"Total unallocated: {len(self.unallocated_people)}")
         if initial_people_count > 0:
-            allocation_rate = ((initial_people_count - len(self.unallocated_people)) / initial_people_count) * 100
-            logger.debug(f"Allocation rate: {allocation_rate:.1f}%")
-            if allocation_rate < 99.999999:
-                logger.warning(f"--Low allocation rate of {allocation_rate:.1f}%")
-                logger.warning(f"--Printing stats of unallocated people: ")
-                my_statmaker = StatMakerPop(self.unallocated_people)
-                my_statmaker.get_sex_breakdown()
-                my_statmaker.get_age_group_breakdown()
-                morestats = my_statmaker.get_age_stats()
-                for key, val in morestats.items():
-                    logger.warning(f"    {key} : {val}")
+            self.allocation_rate = ((initial_people_count - len(self.unallocated_people)) / initial_people_count) * 100
+            logger.debug(f"Allocation rate: {self.allocation_rate:.1f}%")
+        else:
+            self.allocation_rate = 'None needed allocation'
         logger.debug("="*70)            

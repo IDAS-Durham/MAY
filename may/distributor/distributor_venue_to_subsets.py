@@ -29,14 +29,12 @@ class SubsetDistributor:
         self.properties = properties if properties is not None else {}
         self.n_subsets = len(self.subset_names)
 
-
     def generate_empty_subsets(self,
                                venue: 'Venue'):
-        venue.subsets = {}
-        for i, name in enumerate(self.subset_names):
-            venue.subsets[name] = Subset(venue, i, name)
+        venue.subsets = {name : Subset(venue, i, name) for i,name in enumerate(self.subset_names)}
 
     def find_subset_for_person(self,
+                               activity: str,
                                venue_has_capacity: list[bool],
                                person: "Person",
                                **kwargs) -> (int, str, Optional["Subset"]):

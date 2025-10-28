@@ -20,8 +20,18 @@ class Person:
         properties (dict): Extensible dictionary for additional attributes
         activity_map (defaultdict):
     """
-
+    
     _id_counter = 0
+
+    __slots__ = [
+        'id',
+        'age',
+        'sex',
+        'geographical_unit',
+        'activities',
+        'properties',
+        'activity_map',
+    ]
 
     def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"]=None, activities: Optional[list[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
         """
@@ -93,6 +103,3 @@ class Person:
         return (f"Person(id={self.id}, age={self.age}, sex={self.sex}, "
                 f"geographical_unit={geo_unit_name}, activities={self.activities})")
 
-    def __str__(self):
-        """User-friendly string representation."""
-        return f"Person {self.id} (age {self.age}, {self.sex})"

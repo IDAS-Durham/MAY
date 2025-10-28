@@ -1,5 +1,5 @@
 import pytest
-from may.specific_distributors.household_subset_distributor import HouseholdSubsetDistributor
+from world_specific_code.household_distributors import HouseholdSubsetDistributor
 from may.population import Person
 from may.geography import GeographicalUnit
 
@@ -30,7 +30,7 @@ class TestHouseholdSubsetDistributor:
             venue_has_capacity = [True, True, True, True]
 
             subset_index, subset_name = distributor.find_subset_for_person(
-                venue_has_capacity, person
+                'home', venue_has_capacity, person
             )
 
             assert subset_index == 0, f"Age {age} should map to index 0"
@@ -43,7 +43,7 @@ class TestHouseholdSubsetDistributor:
             venue_has_capacity = [True, True, True, True]
 
             subset_index, subset_name = distributor.find_subset_for_person(
-                venue_has_capacity, person
+                'home', venue_has_capacity, person
             )
 
             assert subset_index == 1, f"Age {age} should map to index 1"
@@ -56,7 +56,7 @@ class TestHouseholdSubsetDistributor:
             venue_has_capacity = [True, True, True, True]
 
             subset_index, subset_name = distributor.find_subset_for_person(
-                venue_has_capacity, person
+                'home', venue_has_capacity, person
             )
 
             assert subset_index == 2, f"Age {age} should map to index 2"
@@ -69,7 +69,7 @@ class TestHouseholdSubsetDistributor:
             venue_has_capacity = [True, True, True, True]
 
             subset_index, subset_name = distributor.find_subset_for_person(
-                venue_has_capacity, person
+                'home', venue_has_capacity, person
             )
 
             assert subset_index == 3, f"Age {age} should map to index 3"
@@ -81,7 +81,7 @@ class TestHouseholdSubsetDistributor:
         venue_has_capacity = [False, True, True, True]  # Kids subset full
 
         subset_index, subset_name = distributor.find_subset_for_person(
-            venue_has_capacity, person
+            'home', venue_has_capacity, person
         )
 
         assert subset_index == -1
@@ -93,7 +93,7 @@ class TestHouseholdSubsetDistributor:
         venue_has_capacity = [True, False, True, True]  # Independent children subset full
 
         subset_index, subset_name = distributor.find_subset_for_person(
-            venue_has_capacity, person
+            'home', venue_has_capacity, person
         )
 
         assert subset_index == -1
@@ -105,7 +105,7 @@ class TestHouseholdSubsetDistributor:
         venue_has_capacity = [True, True, False, True]  # Adults subset full
 
         subset_index, subset_name = distributor.find_subset_for_person(
-            venue_has_capacity, person
+            'home', venue_has_capacity, person
         )
 
         assert subset_index == -1
@@ -117,7 +117,7 @@ class TestHouseholdSubsetDistributor:
         venue_has_capacity = [True, True, True, False]  # Elderly subset full
 
         subset_index, subset_name = distributor.find_subset_for_person(
-            venue_has_capacity, person
+            'home', venue_has_capacity, person
         )
 
         assert subset_index == -1
@@ -137,7 +137,7 @@ class TestHouseholdSubsetDistributor:
 
         for person in test_cases:
             subset_index, subset_name = distributor.find_subset_for_person(
-                venue_has_capacity, person
+                'home', venue_has_capacity, person
             )
             assert subset_index == -1, f"Person age {person.age} should have no subset available"
             assert subset_name == 'No subset available'
@@ -148,7 +148,7 @@ class TestHouseholdSubsetDistributor:
         person_kid = Person(age=10, sex='male', geographical_unit=mock_geo_unit)
         venue_has_capacity = [True, True, True, True]
 
-        idx, name = distributor.find_subset_for_person(venue_has_capacity, person_kid)
+        idx, name = distributor.find_subset_for_person('home', venue_has_capacity, person_kid)
         assert idx == 0 and name == 'kids', "Kids should be assigned to kids subset, not others"
 
 
@@ -166,7 +166,7 @@ class TestHouseholdSubsetDistributor:
         # Test fractional ages near boundaries
         for sex in ['male', 'female']:
             person = Person(age=person_age, sex=sex, geographical_unit=mock_geo_unit)
-            idx, name = distributor.find_subset_for_person(venue_has_capacity, person)
+            idx, name = distributor.find_subset_for_person('home', venue_has_capacity, person)
             assert name == subset_name
 
     @pytest.mark.parametrize("age,expected_idx,expected_name", [
@@ -189,7 +189,7 @@ class TestHouseholdSubsetDistributor:
         venue_has_capacity = [True, True, True, True]
 
         subset_index, subset_name = distributor.find_subset_for_person(
-            venue_has_capacity, person
+            'home', venue_has_capacity, person
         )
 
         assert subset_index == expected_idx, f"Age {age} should map to index {expected_idx}"
@@ -207,7 +207,7 @@ class TestHouseholdSubsetDistributor:
         """Parametrized test for capacity constraints across age groups."""
         person = Person(age=person_age, sex='male', geographical_unit=mock_geo_unit)
 
-        subset_index, subset_name = distributor.find_subset_for_person(capacity, person)
+        subset_index, subset_name = distributor.find_subset_for_person('home', capacity, person)
 
         if expected_available:
             assert subset_index >= 0, f"Should find a subset for age {person_age} with capacity {capacity}"
@@ -224,8 +224,8 @@ class TestHouseholdSubsetDistributor:
         male_kid = Person(age=10, sex='male', geographical_unit=mock_geo_unit)
         female_kid = Person(age=10, sex='female', geographical_unit=mock_geo_unit)
 
-        idx_male, name_male = distributor.find_subset_for_person(venue_has_capacity, male_kid)
-        idx_female, name_female = distributor.find_subset_for_person(venue_has_capacity, female_kid)
+        idx_male, name_male = distributor.find_subset_for_person('home', venue_has_capacity, male_kid)
+        idx_female, name_female = distributor.find_subset_for_person('home', venue_has_capacity, female_kid)
 
         assert idx_male == idx_female == 0
         assert name_male == name_female == 'kids'
@@ -236,7 +236,7 @@ class TestHouseholdSubsetDistributor:
         venue_has_capacity = [True, True, True, True]
 
         subset_index, subset_name = distributor.find_subset_for_person(
-            venue_has_capacity, person
+            'home', venue_has_capacity, person
         )
 
         # Negative ages should be < 18, so should go to kids
@@ -249,7 +249,7 @@ class TestHouseholdSubsetDistributor:
         venue_has_capacity = [True, True, True, True]
 
         subset_index, subset_name = distributor.find_subset_for_person(
-            venue_has_capacity, person
+            'home', venue_has_capacity, person
         )
 
         assert subset_index == 3

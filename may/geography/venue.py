@@ -29,6 +29,17 @@ class Venue:
       properties (dict, optional):
         Extensible dict for venue-specific data. Default is {'subgroups':['default']}, which gives a list of the subgroup names for that specific venue. By default, the Venue object has a single subgroup called 'everyone' 
     """
+
+    __slots__ = [
+        'id',
+        'name',
+        'type',
+        'geographical_unit',
+        'coordinates',
+        'properties',
+        'subsets',
+    ]
+    
     def __init__(self,
                  name: str,
                  venue_type,

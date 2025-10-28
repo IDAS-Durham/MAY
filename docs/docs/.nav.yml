@@ -1,0 +1,7 @@
+nav:
+  - Home: index.md
+  - About: about.md
+  - MAY:
+    - Running and Simulation:
+      - "may/*.md"
+    - "*"

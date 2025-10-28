@@ -1,9 +1,9 @@
 from typing import Optional
 from may.distributor import SubsetDistributor
 
-class HouseholdSubsetDistributor(SubsetDistributor):  
-    
+class PrisonSubsetDistributor(SubsetDistributor):
     def find_subset_for_person(self,
+                               activity: str,
                                venue_has_capacity: list[bool],
                                person: "Person",
                                **kwargs) -> (int, str):
@@ -12,6 +12,7 @@ class HouseholdSubsetDistributor(SubsetDistributor):
         This will be filled in with a series of criteria, specific to each kind of venue, that decides how to allocate a Person object into a specific subset within the venue. 
 
         Args:
+          activity (str): the activity the person is going to the Venue for. 
           venue (Venue): the venue which is being populated.
           person (Person): the person to be assigned a subset.
 
@@ -24,29 +25,14 @@ class HouseholdSubsetDistributor(SubsetDistributor):
           (int): the index of the assigned subset in the list of subsets (should be the same as the index of the subset when the contact matrix is built). 
           subset_name (str): the label of the subset within the Venue that the Person should be assigned to (pending capacity). Returns "No subset available" if no subset is available for the person at the venue. 
 
-        Examples:
-          self.subsets = ['kid', 'young_adult', 'adult', 'old']
-          venue_has_capacity = [True, True, True, True]
-          if person.age < 15 and venue_has_capacity[0]:
-              return 0, 'kid'
-          elif person.age < 25 and venue_has_capacity[1]:
-              return 1, 'young_adult'        
-          elif person.age < 60 and venue_has_capacity[2]:
-              return 2, 'adult'
-          elif venue_has_capacity[3]:
-              return 3, 'old'
-          else:
-              return -1, 'No subset available'
+        age_category_capacity = [
 
+        ] # should be the same as in care_home distributor
+        
         """
-        if person.age < 18 and venue_has_capacity[0]:
-            return 0, 'kids'
-        elif 18 <= person.age < 25 and venue_has_capacity[1]:
-            return 1, 'independent children'        
-        elif 25 <= person.age < 60 and venue_has_capacity[2]:
-            return 2, 'adults'
-        elif 60 <= person.age and venue_has_capacity[3]:
-            return 3, 'elderly'
+        if activity == 'home' and person.age > 18:
+            return 0, 'prisoners'
+        elif activity == 'work' and person.age > 18:
+            return 1, 'staff'
         else:
             return -1, 'No subset available'
-

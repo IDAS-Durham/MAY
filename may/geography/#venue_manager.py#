@@ -47,7 +47,7 @@ class VenueManager:
     def load_venue_type_from_df(self, venue_type, venue_df):
         """ Creates venues from a given dataframe """
         # Required columns
-        required_cols = ['geo_unit']
+        required_cols = ['name', 'geo_unit']
         for col in required_cols:
             if col not in venue_df.columns:
                 raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
@@ -63,8 +63,8 @@ class VenueManager:
         # Create venues
         venues_created = 0
         venues_skipped = 0
-        for idx, row in venue_df.iterrows():
-            name = row.get('name', str(idx))
+        for _, row in venue_df.iterrows():
+            name = row['name']
             geo_unit_name = row['geo_unit']
 
             # Check if geo unit is in loaded geography

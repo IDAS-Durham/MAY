@@ -3,7 +3,13 @@ from .abstract_set import AbstractSet
 class Subset(AbstractSet):
     """A subset of people within a particular Venue. For example, children in a household."""
 #    external = False
-    __slots__ = ("venue", "subset_type", "people_present")
+    __slots__ = (
+        "venue",
+        "subset_index",
+        "people_present",
+        'subset_name',
+        'members'
+    )
 
     def __init__(self,
                  venue: "Venue",
