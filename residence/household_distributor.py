@@ -485,6 +485,75 @@ class HouseholdDistributor:
                     return constraint
         return None
 
+    def _handle_role_selection_failure(self, failed_at_role_index: int, rule,
+                                       selected_by_role: Dict[str, List[Person]],
+                                       backtrack_enabled: bool, backtrack_attempt: int,
+                                       max_backtracks: int, avoid_duplicates: bool,
+                                       log_backtracks: bool) -> Tuple[str, Optional[int], List[int]]:
+        """
+        Handle role selection failure and determine backtracking action.
+
+        When role selection fails, this method decides whether to:
+        1. Cannot backtrack (failed at first role) → return failure
+        2. Do backtrack (retry with different first role) → continue
+        3. Exhausted backtracks (tried too many times) → return failure
+
+        Args:
+            failed_at_role_index: Index of the role that failed
+            rule: The relationship rule
+            selected_by_role: Currently selected people by role
+            backtrack_enabled: Whether backtracking is enabled
+            backtrack_attempt: Current backtracking attempt number
+            max_backtracks: Maximum number of backtracks allowed
+            avoid_duplicates: Whether to avoid duplicate attempts
+            log_backtracks: Whether to log backtracking information
+
+        Returns:
+            Tuple of (action, failed_category_idx, tried_person_ids):
+            - action: 'cannot_backtrack', 'do_backtrack', or 'exhausted'
+            - failed_category_idx: Category index that caused failure (or None)
+            - tried_person_ids: List of person IDs to add to tried set (empty if not do_backtrack)
+        """
+        first_role_name = rule.selection_order[0]
+        failed_role_name = rule.selection_order[failed_at_role_index]
+
+        # Check if we can backtrack
+        if failed_at_role_index == 0:
+            # Failed at first role - cannot backtrack
+            if log_backtracks:
+                logger.debug(f"  ✗ Cannot backtrack: Failed at first role '{failed_role_name}'")
+            # Get category index for failure reporting
+            role_config = rule.roles[failed_role_name]
+            category_names = role_config['categories']
+            category_indices = [self.relationship_rules.category_name_to_idx[cat]
+                               for cat in category_names
+                               if cat in self.relationship_rules.category_name_to_idx]
+            return ('cannot_backtrack', category_indices[0] if category_indices else None, [])
+
+        elif backtrack_enabled and backtrack_attempt < max_backtracks:
+            # Can backtrack - get IDs to track for avoiding duplicates
+            tried_ids = []
+            if avoid_duplicates and selected_by_role.get(first_role_name):
+                tried_ids = [person.id for person in selected_by_role[first_role_name]]
+
+            if log_backtracks:
+                logger.debug(f"  ⟲ BACKTRACK #{backtrack_attempt + 1}: '{failed_role_name}' failed, "
+                           f"retrying with different '{first_role_name}'")
+                logger.debug("")
+            return ('do_backtrack', None, tried_ids)
+
+        else:
+            # Exhausted backtracks
+            if log_backtracks:
+                logger.debug(f"  ✗ Exhausted {max_backtracks} backtrack attempts")
+            # Get category index for failure reporting
+            role_config = rule.roles[failed_role_name]
+            category_names = role_config['categories']
+            category_indices = [self.relationship_rules.category_name_to_idx[cat]
+                               for cat in category_names
+                               if cat in self.relationship_rules.category_name_to_idx]
+            return ('exhausted', category_indices[0] if category_indices else None, [])
+
     def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
                                        pools: Dict[int, List[Person]],
                                        backtrack_config: Dict,
@@ -650,47 +719,22 @@ class HouseholdDistributor:
 
             # Check if role selection succeeded or failed
             if failed_at_role_index is not None:
-                # Role selection failed
-                first_role_name = rule.selection_order[0]
-                failed_role_name = rule.selection_order[failed_at_role_index]
+                # Handle the failure and determine what action to take
+                action, failed_cat_idx, tried_ids = self._handle_role_selection_failure(
+                    failed_at_role_index, rule, selected_by_role,
+                    backtrack_enabled, backtrack_attempt, max_backtracks,
+                    avoid_duplicates, log_backtracks
+                )
 
-                # Check if we can backtrack
-                if failed_at_role_index == 0:
-                    # Failed at first role - cannot backtrack
-                    if log_backtracks:
-                        logger.debug(f"  ✗ Cannot backtrack: Failed at first role '{failed_role_name}'")
-                    # Get category index for failure reporting
-                    role_config = rule.roles[failed_role_name]
-                    category_names = role_config['categories']
-                    category_indices = [self.relationship_rules.category_name_to_idx[cat]
-                                       for cat in category_names
-                                       if cat in self.relationship_rules.category_name_to_idx]
-                    return (None, category_indices[0] if category_indices else None)
-
-                elif backtrack_enabled and backtrack_attempt < max_backtracks:
-                    # Can backtrack - track what we tried for first role to avoid duplicates
-                    if avoid_duplicates and selected_by_role.get(first_role_name):
-                        for person in selected_by_role[first_role_name]:
-                            tried_first_role_ids.add(person.id)
-
+                if action == 'do_backtrack':
+                    # Track tried IDs and retry with different first role
+                    for person_id in tried_ids:
+                        tried_first_role_ids.add(person_id)
                     backtrack_attempt += 1
-                    if log_backtracks:
-                        logger.debug(f"  ⟲ BACKTRACK #{backtrack_attempt}: '{failed_role_name}' failed, "
-                                   f"retrying with different '{first_role_name}'")
-                        logger.debug("")
-                    continue  # Continue while loop - retry with different first role
-
+                    continue  # Continue while loop - retry
                 else:
-                    # Exhausted backtracks
-                    if log_backtracks:
-                        logger.debug(f"  ✗ Exhausted {max_backtracks} backtrack attempts")
-                    # Get category index for failure reporting
-                    role_config = rule.roles[failed_role_name]
-                    category_names = role_config['categories']
-                    category_indices = [self.relationship_rules.category_name_to_idx[cat]
-                                       for cat in category_names
-                                       if cat in self.relationship_rules.category_name_to_idx]
-                    return (None, category_indices[0] if category_indices else None)
+                    # Cannot backtrack or exhausted - return failure
+                    return (None, failed_cat_idx)
 
             # Role selection succeeded! Create household
             if backtrack_attempt > 0 and log_backtracks:
