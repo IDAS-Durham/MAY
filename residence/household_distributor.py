@@ -422,6 +422,45 @@ class HouseholdDistributor:
 
         return candidates
 
+    def _can_skip_role_with_no_candidates(self, role_count, category_indices: List[int],
+                                          pattern: CompositionPattern,
+                                          show_detailed_logs: bool) -> bool:
+        """
+        Check if a role with no candidates can be skipped.
+
+        When no candidates are available, some roles can be skipped if the pattern
+        allows 0 people for that role (e.g., for "any" count roles with min=0).
+
+        Args:
+            role_count: Original count from the rule (can be int or "any")
+            category_indices: Category indices for this role
+            pattern: Composition pattern being allocated
+            show_detailed_logs: Whether to show detailed debug logs
+
+        Returns:
+            True if role can be skipped (continue to next role),
+            False if allocation should fail (break)
+        """
+        # Check if this role allows 0 people (e.g., role_count == "any" with min=0)
+        if role_count == "any":
+            # Calculate minimum needed from pattern
+            total_needed = 0
+            for cat_idx in category_indices:
+                min_count = pattern.get_min_count(cat_idx)
+                total_needed += min_count
+
+            if total_needed == 0:
+                # Pattern allows 0 people for this role - can skip it
+                if show_detailed_logs:
+                    logger.debug(f"  → Pattern allows 0 people for this role, skipping")
+                    logger.debug("")
+                return True  # Can skip
+
+        # If we get here, the role requires people but none are available
+        if show_detailed_logs:
+            logger.debug(f"  ✗ FAILED: No candidates available")
+        return False  # Cannot skip - allocation fails
+
     def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
                                        pools: Dict[int, List[Person]],
                                        backtrack_config: Dict,
@@ -488,27 +527,15 @@ class HouseholdDistributor:
                 )
 
                 if not candidates:
-                    # No people available for this role
-                    # Check if this role allows 0 people (e.g., role_count == "any" with min=0)
-                    if role_count == "any":
-                        # Calculate minimum needed from pattern
-                        total_needed = 0
-                        for cat_idx in category_indices:
-                            min_count = pattern.get_min_count(cat_idx)
-                            total_needed += min_count
-
-                        if total_needed == 0:
-                            # Pattern allows 0 people for this role - skip it
-                            if show_detailed_logs:
-                                logger.debug(f"  → Pattern allows 0 people for this role, skipping")
-                                logger.debug("")
-                            continue
-
-                    # If we get here, the role requires people but none are available
-                    if show_detailed_logs:
-                        logger.debug(f"  ✗ FAILED: No candidates available")
-                    failed_at_role_index = role_index
-                    break
+                    # Check if role with no candidates can be skipped
+                    if self._can_skip_role_with_no_candidates(
+                        role_count, category_indices, pattern, show_detailed_logs
+                    ):
+                        continue  # Skip this role
+                    else:
+                        # Allocation fails
+                        failed_at_role_index = role_index
+                        break
 
                 # Check for pair_matching constraint for this role
                 pair_constraint = None
