@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import Mock
 from may.geography import GeographicalUnit, Venue
 from may.population import Person, Subset
-from may.specific_distributors import HouseholdDistributor
+from world_specific_code.household_distributors import HouseholdDistributor
 
 
 @pytest.fixture

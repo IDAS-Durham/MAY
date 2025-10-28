@@ -3,8 +3,7 @@ import random
 from unittest.mock import Mock, MagicMock, patch
 from collections import defaultdict
 
-from may.specific_distributors.household_distributor import HouseholdDistributor
-from may.specific_distributors.household_subset_distributor import HouseholdSubsetDistributor
+from world_specific_code.household_distributors import HouseholdDistributor, HouseholdSubsetDistributor
 from may.population import Person, Subset
 from may.geography import GeographicalUnit, Venue
 

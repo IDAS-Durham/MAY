@@ -177,13 +177,13 @@ class DistributorMultiPass(Distributor):
             logger.debug("")
             logger.debug(f"PASS {pass_num + 1}/{self.num_passes}")
             logger.debug("")
-            
+
             # Log threshold examples for this pass
-            example_compositions = ['>=2 >=0 >=0 >=0', '1 >=0 >=0 >=0', '0 >=0 >=0 >=0']
-            for comp in example_compositions:
-                if comp in self.composition_thresholds:
-                    threshold = self.get_threshold_for_pass(comp, pass_num)
-                    logger.debug(f"  Threshold for '{comp}': {threshold}")
+            # example_compositions = ['>=2 >=0 >=0 >=0', '1 >=0 >=0 >=0', '0 >=0 >=0 >=0']
+            # for comp in example_compositions:
+            #     if comp in self.composition_thresholds:
+            #         threshold = self.get_threshold_for_pass(comp, pass_num)
+            #         logger.debug(f"  Threshold for '{comp}': {threshold}")
 
             # Run assignment for this pass
             if pass_num == 0:
@@ -240,4 +240,6 @@ class DistributorMultiPass(Distributor):
         if initial_people_count > 0:
             self.allocation_rate = ((initial_people_count - len(self.unallocated_people)) / initial_people_count) * 100
             logger.debug(f"Allocation rate: {self.allocation_rate:.1f}%")
+        else:
+            self.allocation_rate = 'None needed allocation'
         logger.debug("="*70)            

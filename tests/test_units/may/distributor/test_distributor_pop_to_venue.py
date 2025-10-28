@@ -104,6 +104,6 @@ def test_Distributor_init():
     # given.
     venue_type, venue_manager, people =  venues, population.people
     mydist = Distributor(venue_type, venue_manager, people)
-    assert
+
 
 

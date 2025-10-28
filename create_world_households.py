@@ -12,6 +12,8 @@ from may.world import World
 from world_specific_code.household_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
 from world_specific_code.care_home_distributor import CareHomeDistributor, CareHomeSubsetDistributor
 from world_specific_code.student_dorms import StudentDormDistributor, StudentDormSubsetDistributor
+from world_specific_code.prisons import PrisonDistributor, PrisonSubsetDistributor
+
 from may.stats import StatMakerVenues, StatMaker, StatMakerPop
 
 import time
@@ -109,6 +111,10 @@ def print_world_examples(world):
                 props = list(example_venue.properties.items())
                 for key, value in props:
                     logger.info(f"   - {key}: {value}")
+            # Show membership
+            if example_venue.subsets:
+                for key, value in example_venue.subsets.items():
+                    logger.info(f"   - Number of assigned {key} =  {value.num_members}")
 
     # Example 3: Show how to query
     logger.info("")
@@ -334,10 +340,40 @@ def main():
                 still_unallocated_people,
                 potential_venues=geo_unit.get_venues_by_type('household')
             )
-            household_distributor.num_passes = 20
-            
             # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
+            # Don't do too many passes, as will go through them again after allocating to prisons. 
+            household_distributor.num_passes = 2
             household_distributor.assign_people_venues_multi_pass('home', 'household')
+            still_unallocated_people = household_distributor.unallocated_people
+        
+        # Fill prisons
+        potential_venues = geo_unit.parent.get_venues_by_type('prison')
+        if potential_venues:
+            prison_distributor = PrisonDistributor(
+                'prison',
+                venues,
+                still_unallocated_people,
+                potential_venues=potential_venues,
+            )
+            prison_distributor.assign_people_venues('home','prison')
+            still_unallocated_people = prison_distributor.unallocated_people
+
+        # Restart household distributor
+        potential_venues = geo_unit.get_venues_by_type('household')
+        if potential_venues and still_unallocated_people:
+            household_distributor = HouseholdDistributor(
+                'household',
+                venues,
+                still_unallocated_people,
+                potential_venues=geo_unit.get_venues_by_type('household')
+            )
+            # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
+            # Don't do too many passes, as will go through them again after allocating to prisons. 
+            household_distributor.num_passes = 3
+            household_distributor.assign_people_venues_multi_pass('home',
+                                                                  'household')
+            still_unallocated_people = household_distributor.unallocated_people
+
             if household_distributor.allocation_rate < 99.999999:
                 logger.info(f"--Low allocation rate of {household_distributor.allocation_rate:.1f}% in geo_unit {geo_unit.name}")
                 logger.info(f"--Printing stats of unallocated people: ")
@@ -355,7 +391,8 @@ def main():
         milestone = (percent // 10) * 10
         if milestone not in printed and milestone % 10 == 0:
             logger.info(f"             ...{milestone}% complete")
-            printed.add(milestone)                            
+            printed.add(milestone)              
+            
     
             
     logger.info("Distributing pop to venues took {:.2g}s".format(time.perf_counter()-laptime))

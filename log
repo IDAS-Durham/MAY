@@ -1,376 +1,1911 @@
-2025-10-27 16:59:06,953 - create_world - INFO - ============================================================
-2025-10-27 16:59:06,953 - create_world - INFO - June Zero - World Creation
-2025-10-27 16:59:06,953 - create_world - INFO - ============================================================
-2025-10-27 16:59:06,954 - config_loader - WARNING - Config file not found: config.yaml, using defaults
-2025-10-27 16:59:06,954 - config_loader - INFO - Loading all geographical units (no filters)
-2025-10-27 16:59:06,954 - geography - INFO - Loading geography from data/geography
-2025-10-27 16:59:06,956 - geography - INFO - Loaded hierarchy with 278 entries
-2025-10-27 16:59:06,957 - geography - INFO - Loaded 278 coordinates for SGU
-2025-10-27 16:59:06,958 - geography - INFO - Loaded 11 coordinates for MGU
-2025-10-27 16:59:06,958 - geography - WARNING - No coordinate file found for LGU
-2025-10-27 16:59:06,958 - geography - INFO - Created 290 total units
-2025-10-27 16:59:06,963 - geography - INFO - Built hierarchical relationships
-2025-10-27 16:59:06,963 - geography - INFO -   SGU: 278 units
-2025-10-27 16:59:06,963 - geography - INFO -   MGU: 11 units
-2025-10-27 16:59:06,963 - geography - INFO -   LGU: 1 units
-2025-10-27 16:59:06,963 - create_world - INFO - Setting up Geography took 0.01s
-2025-10-27 16:59:06,963 - create_world - INFO - 
-2025-10-27 16:59:06,963 - create_world - INFO - Loading venues...
-2025-10-27 16:59:06,964 - venuemanager - INFO - Loading care_home venues from data/venues/msoa_care_homes.csv
-2025-10-27 16:59:06,965 - venuemanager - INFO - Created 4 care_home venues
-2025-10-27 16:59:06,965 - venuemanager - INFO - Loading hospital venues from data/venues/hospitals.csv
-2025-10-27 16:59:06,965 - venuemanager - INFO - Created 3 hospital venues
-2025-10-27 16:59:06,966 - venuemanager - INFO - Loading company venues from data/venues/companies.csv
-2025-10-27 16:59:06,966 - venuemanager - INFO - Created 4 company venues
-2025-10-27 16:59:06,967 - venuemanager - INFO - Loading prison venues from data/venues/prisons.csv
-2025-10-27 16:59:06,967 - venuemanager - INFO - Created 2 prison venues
-2025-10-27 16:59:06,967 - venuemanager - INFO - Loading university venues from data/venues/universities.csv
-2025-10-27 16:59:06,967 - venuemanager - INFO - Created 2 university venues
-2025-10-27 16:59:06,968 - venuemanager - INFO - Loading school venues from data/venues/schools.csv
-2025-10-27 16:59:06,968 - venuemanager - INFO - Created 4 school venues
-2025-10-27 16:59:06,969 - venuemanager - INFO - Loading student_dorm venues from data/venues/msoa_student_dorms.csv
-2025-10-27 16:59:06,969 - venuemanager - INFO - Created 6 student_dorm venues
-2025-10-27 16:59:06,969 - create_world - INFO - Loading venues took 0.0057s
-2025-10-27 16:59:06,969 - create_world - INFO - 
-2025-10-27 16:59:06,969 - create_world - INFO - Loading population...
-2025-10-27 16:59:06,969 - create_world - INFO - Loading population took 2.5e-05s
-2025-10-27 16:59:06,969 - population - INFO - Loading male demographics from data/population/demographics_male.csv
-2025-10-27 16:59:06,971 - population - INFO - Loading female demographics from data/population/demographics_female.csv
-2025-10-27 16:59:07,085 - population - INFO - Loaded precise demographics for 278 geographical units
-2025-10-27 16:59:07,085 - population - INFO - Total people in demographics: 95,231
-2025-10-27 16:59:07,085 - create_world - INFO - Loading demographic data took 0.12s
-2025-10-27 16:59:07,085 - population - INFO - Generating population from precise demographics...
-2025-10-27 16:59:07,264 - population - INFO - Generated 95,231 people across 278 SGUs
-2025-10-27 16:59:07,264 - population - INFO - Average: 342.6 people per SGU
-2025-10-27 16:59:07,265 - create_world - INFO - Creating population took 0.18s
-2025-10-27 16:59:07,265 - create_world - INFO - Loading households...
-2025-10-27 16:59:07,266 - venuemanager - INFO - Loading household venues from data/households/households.csv
-2025-10-27 16:59:07,266 - HouseholdCreator - INFO - Detected 36443 households in the dataframe...
-2025-10-27 16:59:07,579 - HouseholdCreator - INFO - Created 36443 household venues
-2025-10-27 16:59:07,579 - create_world - INFO - Loading and creating household data took 0.31s
-2025-10-27 16:59:07,584 - create_world - INFO - Allocating people to venues geo-unit by geo-unit...
-2025-10-27 16:59:07,587 - create_world - INFO -              ...0% complete
-2025-10-27 16:59:07,628 - create_world - INFO -              ...10% complete
-2025-10-27 16:59:07,683 - create_world - INFO -              ...20% complete
-2025-10-27 16:59:07,737 - create_world - INFO -              ...30% complete
-2025-10-27 16:59:07,990 - create_world - INFO -              ...40% complete
-2025-10-27 16:59:08,053 - create_world - INFO -              ...50% complete
-2025-10-27 16:59:08,129 - create_world - INFO -              ...60% complete
-2025-10-27 16:59:08,286 - create_world - INFO -              ...70% complete
-2025-10-27 16:59:08,344 - create_world - INFO -              ...80% complete
-2025-10-27 16:59:08,390 - create_world - INFO - --Low allocation rate of 96.5% in geo_unit E00174672
-2025-10-27 16:59:08,390 - create_world - INFO - --Printing stats of unallocated people: 
-2025-10-27 16:59:08,390 - statsvenues - INFO -     Total 8 : 4 male, 4 female
-2025-10-27 16:59:08,391 - statsvenues - INFO -     Number       age < 18 : 0.0
-2025-10-27 16:59:08,391 - statsvenues - INFO -     Number 18 <= age < 25 : 0.0
-2025-10-27 16:59:08,391 - statsvenues - INFO -     Number 25 <= age < 60 : 0.0
-2025-10-27 16:59:08,391 - statsvenues - INFO -     Number 60 <= Age      : 8.0
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 84174 (age 61, male)
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 84175 (age 61, male)
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 84643 (age 62, female)
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 85038 (age 62, male)
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 87350 (age 67, female)
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 88034 (age 67, male)
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 93286 (age 81, female)
-2025-10-27 16:59:08,391 - create_world - INFO - Person = Person 94427 (age 86, female)
-2025-10-27 16:59:08,395 - create_world - INFO - --Low allocation rate of 99.4% in geo_unit E00174843
-2025-10-27 16:59:08,395 - create_world - INFO - --Printing stats of unallocated people: 
-2025-10-27 16:59:08,395 - statsvenues - INFO -     Total 1 : 0 male, 1 female
-2025-10-27 16:59:08,395 - statsvenues - INFO -     Number       age < 18 : 1.0
-2025-10-27 16:59:08,395 - statsvenues - INFO -     Number 18 <= age < 25 : 0.0
-2025-10-27 16:59:08,395 - statsvenues - INFO -     Number 25 <= age < 60 : 0.0
-2025-10-27 16:59:08,395 - statsvenues - INFO -     Number 60 <= Age      : 0.0
-2025-10-27 16:59:08,395 - create_world - INFO - Person = Person 19487 (age 17, female)
-2025-10-27 16:59:08,398 - create_world - INFO -              ...90% complete
-2025-10-27 16:59:08,429 - create_world - INFO - --Low allocation rate of 96.4% in geo_unit E00184479
-2025-10-27 16:59:08,429 - create_world - INFO - --Printing stats of unallocated people: 
-2025-10-27 16:59:08,429 - statsvenues - INFO -     Total 4 : 3 male, 1 female
-2025-10-27 16:59:08,429 - statsvenues - INFO -     Number       age < 18 : 0.0
-2025-10-27 16:59:08,429 - statsvenues - INFO -     Number 18 <= age < 25 : 0.0
-2025-10-27 16:59:08,429 - statsvenues - INFO -     Number 25 <= age < 60 : 3.0
-2025-10-27 16:59:08,429 - statsvenues - INFO -     Number 60 <= Age      : 1.0
-2025-10-27 16:59:08,429 - create_world - INFO - Person = Person 78414 (age 56, female)
-2025-10-27 16:59:08,429 - create_world - INFO - Person = Person 79555 (age 56, male)
-2025-10-27 16:59:08,429 - create_world - INFO - Person = Person 79556 (age 56, male)
-2025-10-27 16:59:08,429 - create_world - INFO - Person = Person 94704 (age 86, male)
-2025-10-27 16:59:08,463 - create_world - INFO -              ...100% complete
-2025-10-27 16:59:08,463 - create_world - INFO - Distributing pop to venues took 0.88s
-2025-10-27 16:59:08,463 - create_world - INFO - 
-2025-10-27 16:59:08,463 - create_world - INFO - Creating World object...
-2025-10-27 16:59:08,463 - create_world - INFO - <World: 290 units, 95,231 people, 36459 venues, no households>
-2025-10-27 16:59:08,463 - create_world - INFO - Creating world took 5.3e-05s
-2025-10-27 16:59:08,463 - create_world - INFO - 
-2025-10-27 16:59:08,463 - create_world - INFO - ============================================================
-2025-10-27 16:59:08,463 - create_world - INFO - World creation complete!
-2025-10-27 16:59:08,463 - create_world - INFO - Geography: 290 units
-2025-10-27 16:59:08,463 - create_world - INFO - Venues: 36459 venues across 8 types
-2025-10-27 16:59:08,463 - create_world - INFO - Population: 95,231 people
-2025-10-27 16:59:08,463 - create_world - INFO - ============================================================
-2025-10-27 16:59:08,463 - create_world - INFO - 
-2025-10-27 16:59:08,463 - create_world - INFO - ============================================================
-2025-10-27 16:59:08,463 - create_world - INFO - EXAMPLES
-2025-10-27 16:59:08,463 - create_world - INFO - ============================================================
-2025-10-27 16:59:08,463 - create_world - INFO - 
-2025-10-27 16:59:08,463 - create_world - INFO - 1. Geographical Hierarchy:
-2025-10-27 16:59:08,463 - create_world - INFO -    SGU Example: <SGU #0: E00004320 (0 children, 109 venues, 267 people)>
-2025-10-27 16:59:08,463 - create_world - INFO -    - Coordinates: (51.5497, -0.17438)
-2025-10-27 16:59:08,463 - create_world - INFO -    - Parent MGU: E02000173
-2025-10-27 16:59:08,463 - create_world - INFO -    - Parent LGU: London
-2025-10-27 16:59:08,463 - create_world - INFO - 
-2025-10-27 16:59:08,463 - create_world - INFO -    MGU Example: <MGU #278: E02000173 (30 children, 3 venues)>
-2025-10-27 16:59:08,463 - create_world - INFO -    - Has 30 SGU children
-2025-10-27 16:59:08,463 - create_world - INFO -    - Has 3 venues
-2025-10-27 16:59:08,463 - create_world - INFO - 
-2025-10-27 16:59:08,463 - create_world - INFO - 2. Venue Examples:
-2025-10-27 16:59:08,463 - create_world - INFO -    Care_home: 0
-2025-10-27 16:59:08,463 - create_world - INFO -    - Located in: E00010394 (SGU)
-2025-10-27 16:59:08,463 - create_world - INFO -    - id: CH_6256
-2025-10-27 16:59:08,463 - create_world - INFO -    - super_area: E02000421
-2025-10-27 16:59:08,463 - create_world - INFO -    - care_home_name: Priscilla Wakefield House
-2025-10-27 16:59:08,463 - create_world - INFO -    - address: Rangemoor Road, London N15 4NA
-2025-10-27 16:59:08,463 - create_world - INFO -    - capacity: 117.0
-2025-10-27 16:59:08,463 - create_world - INFO -    - estimated_residents_50_plus: 112
-2025-10-27 16:59:08,463 - create_world - INFO -    - estimated_female_residents: 61
-2025-10-27 16:59:08,463 - create_world - INFO -    - estimated_male_residents: 51
-2025-10-27 16:59:08,463 - create_world - INFO -    - female_percentage: 54.2
-2025-10-27 16:59:08,463 - create_world - INFO -    - male_percentage: 45.8
-2025-10-27 16:59:08,463 - create_world - INFO -    - avg_age_estimate: 78
-2025-10-27 16:59:08,463 - create_world - INFO -    - data_quality: Good
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_50_64_residents: 16
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_50_64_female: 9
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_50_64_male: 7
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_65_74_residents: 20
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_65_74_female: 11
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_65_74_male: 9
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_75_84_residents: 29
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_75_84_female: 16
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_75_84_male: 13
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_85_94_residents: 40
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_85_94_female: 22
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_85_94_male: 18
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_95_plus_residents: 7
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_95_plus_female: 4
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_95_plus_male: 3
-2025-10-27 16:59:08,463 - create_world - INFO -    - total_age_band_residents: 112
-2025-10-27 16:59:08,463 - create_world - INFO -    - age_band_data_quality: Good
-2025-10-27 16:59:08,463 - create_world - INFO -    - prop_0_15: 0.0
-2025-10-27 16:59:08,463 - create_world - INFO -    - prop_16_24: 0.0
-2025-10-27 16:59:08,463 - create_world - INFO -    - prop_25_34: 0.0
-2025-10-27 16:59:08,463 - create_world - INFO -    - prop_35_49: 0.0
-2025-10-27 16:59:08,463 - create_world - INFO -    - prop_50_64: 0.1428571428571428
-2025-10-27 16:59:08,463 - create_world - INFO -    - prop_65_99: 0.8571428571428572
-2025-10-27 16:59:08,463 - create_world - INFO -    - number_staff: 58
-2025-10-27 16:59:08,463 - create_world - INFO -    Company: Finance Ltd HQ
-2025-10-27 16:59:08,463 - create_world - INFO -    - Located in: E02000422 (MGU)
-2025-10-27 16:59:08,463 - create_world - INFO -    - Coordinates: (51.5825, -0.085)
-2025-10-27 16:59:08,463 - create_world - INFO -    - industry: finance
-2025-10-27 16:59:08,463 - create_world - INFO -    - employee_count: 95
-2025-10-27 16:59:08,463 - create_world - INFO -    - office_space_sqm: 1800
-2025-10-27 16:59:08,463 - create_world - INFO -    Hospital: Royal London Hospital
-2025-10-27 16:59:08,463 - create_world - INFO -    - Located in: E02000414 (MGU)
-2025-10-27 16:59:08,463 - create_world - INFO -    - Coordinates: (51.5179, -0.0607)
-2025-10-27 16:59:08,463 - create_world - INFO -    - beds: 800
-2025-10-27 16:59:08,464 - create_world - INFO -    - icu_beds: 80
-2025-10-27 16:59:08,464 - create_world - INFO -    - emergency_dept: yes
-2025-10-27 16:59:08,464 - create_world - INFO -    Household: 20464
-2025-10-27 16:59:08,464 - create_world - INFO -    - Located in: E00012007 (SGU)
-2025-10-27 16:59:08,464 - create_world - INFO -    - composition: 0 0 1 0
-2025-10-27 16:59:08,464 - create_world - INFO -    Prison: City Prison
-2025-10-27 16:59:08,464 - create_world - INFO -    - Located in: E02000572 (MGU)
-2025-10-27 16:59:08,464 - create_world - INFO -    - Coordinates: (51.5366, -0.1175)
-2025-10-27 16:59:08,464 - create_world - INFO -    - prisoner_capacity: 1200
-2025-10-27 16:59:08,464 - create_world - INFO -    - staff_count: 350
-2025-10-27 16:59:08,464 - create_world - INFO -    - security_level: high
-2025-10-27 16:59:08,464 - create_world - INFO -    School: Oakwood Secondary
-2025-10-27 16:59:08,464 - create_world - INFO -    - Located in: E02000420 (MGU)
-2025-10-27 16:59:08,464 - create_world - INFO -    - Coordinates: (51.5851, -0.0786)
-2025-10-27 16:59:08,464 - create_world - INFO -    - school_level: secondary
-2025-10-27 16:59:08,464 - create_world - INFO -    - student_capacity: 1200
-2025-10-27 16:59:08,464 - create_world - INFO -    - staff_count: 95
-2025-10-27 16:59:08,464 - create_world - INFO -    Student_dorm: 1
-2025-10-27 16:59:08,464 - create_world - INFO -    - Located in: E00004762 (SGU)
-2025-10-27 16:59:08,464 - create_world - INFO -    - super_area: E02000187
-2025-10-27 16:59:08,464 - create_world - INFO -    - Type: dorms
-2025-10-27 16:59:08,464 - create_world - INFO -    - n_total: 60.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - n_16_24: 55.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - n_25_34: 5.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - n_35_49: 0.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - n_50_64: 0.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - n_65_99: 0.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - prop_16_24: 0.9166666666666666
-2025-10-27 16:59:08,464 - create_world - INFO -    - prop_25_34: 0.0833333333333333
-2025-10-27 16:59:08,464 - create_world - INFO -    - prop_35_49: 0.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - prop_50_64: 0.0
-2025-10-27 16:59:08,464 - create_world - INFO -    - prop_65_99: 0.0
-2025-10-27 16:59:08,464 - create_world - INFO -    University: University College
-2025-10-27 16:59:08,464 - create_world - INFO -    - Located in: E02000173 (MGU)
-2025-10-27 16:59:08,464 - create_world - INFO -    - Coordinates: (51.5245, -0.134)
-2025-10-27 16:59:08,464 - create_world - INFO -    - student_capacity: 15000
-2025-10-27 16:59:08,464 - create_world - INFO -    - staff_count: 2500
-2025-10-27 16:59:08,464 - create_world - INFO -    - campus_area_hectares: 25
-2025-10-27 16:59:08,464 - create_world - INFO - 
-2025-10-27 16:59:08,464 - create_world - INFO - 3. Population Examples:
-2025-10-27 16:59:08,496 - create_world - INFO -    Total population: 95,231
-2025-10-27 16:59:08,496 - create_world - INFO -    Mean age: 35.6 years
-2025-10-27 16:59:08,496 - create_world - INFO -    Median age: 34.0 years
-2025-10-27 16:59:08,496 - create_world - INFO -    Sex distribution:
-2025-10-27 16:59:08,496 - create_world - INFO -      - female: 48,997 (51.5%)
-2025-10-27 16:59:08,496 - create_world - INFO -      - male: 46,234 (48.5%)
-2025-10-27 16:59:08,496 - create_world - INFO -    Activity distribution:
-2025-10-27 16:59:08,496 - create_world - INFO -      - home: 95,231
-2025-10-27 16:59:08,496 - create_world - INFO - 
-2025-10-27 16:59:08,496 - create_world - INFO -    Example people:
-2025-10-27 16:59:08,496 - create_world - INFO -    Person 35567 (age 27, male)
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activities: home
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activity map:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ home : [<may.population.subset.Subset object at 0x7f044e7e5d60>] 
-2025-10-27 16:59:08,496 - create_world - INFO -     - Properties:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ housed : True 
-2025-10-27 16:59:08,496 - create_world - INFO -    Person 39995 (age 30, male)
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activities: home
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activity map:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ home : [<may.population.subset.Subset object at 0x7f044a90b020>] 
-2025-10-27 16:59:08,496 - create_world - INFO -     - Properties:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ housed : True 
-2025-10-27 16:59:08,496 - create_world - INFO -    Person 23269 (age 20, male)
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activities: home
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activity map:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ home : [<may.population.subset.Subset object at 0x7f04499851d0>] 
-2025-10-27 16:59:08,496 - create_world - INFO -     - Properties:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ housed : True 
-2025-10-27 16:59:08,496 - create_world - INFO -    Person 41192 (age 31, female)
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activities: home
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activity map:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ home : [<may.population.subset.Subset object at 0x7f044c47d860>] 
-2025-10-27 16:59:08,496 - create_world - INFO -     - Properties:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ housed : True 
-2025-10-27 16:59:08,496 - create_world - INFO -    Person 73163 (age 51, male)
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activities: home
-2025-10-27 16:59:08,496 - create_world - INFO -     - Activity map:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ home : [<may.population.subset.Subset object at 0x7f044cee05a0>] 
-2025-10-27 16:59:08,496 - create_world - INFO -     - Properties:
-2025-10-27 16:59:08,496 - create_world - INFO -         ~ housed : True 
-2025-10-27 16:59:08,496 - create_world - INFO - 
-2025-10-27 16:59:08,496 - create_world - INFO - 4. Household Examples:
-2025-10-27 16:59:08,513 - statsvenues - INFO - 
-2025-10-27 16:59:08,513 - statsvenues - INFO - Statistics on total membership for household
+============================= test session starts ==============================
+platform linux -- Python 3.13.9, pytest-8.4.2, pluggy-1.6.0
+rootdir: /home/gavin/Documents/MAY/june_zero
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.11.0
+collected 112 items
 
-2025-10-27 16:59:08,513 - statsvenues - INFO -   mean  =  2.5863951924923856
-2025-10-27 16:59:08,513 - statsvenues - INFO -   median  =  2.0
-2025-10-27 16:59:08,513 - statsvenues - INFO -   mode  =  1
-2025-10-27 16:59:08,513 - statsvenues - INFO -   std  =  1.6334473793993511
-2025-10-27 16:59:08,513 - statsvenues - INFO -   variance  =  2.668150341266608
-2025-10-27 16:59:08,513 - statsvenues - INFO -   range  =  12
-2025-10-27 16:59:08,513 - statsvenues - INFO -   iqr  =  3.0
-2025-10-27 16:59:08,513 - statsvenues - INFO -   mad  =  1.0
-2025-10-27 16:59:08,513 - statsvenues - INFO -   min  =  0
-2025-10-27 16:59:08,513 - statsvenues - INFO -   max  =  12
-2025-10-27 16:59:08,513 - statsvenues - INFO -   q1  =  1.0
-2025-10-27 16:59:08,513 - statsvenues - INFO -   q3  =  4.0
-2025-10-27 16:59:08,513 - statsvenues - INFO -   skewness  =  0.88557610491035
-2025-10-27 16:59:08,513 - statsvenues - INFO -   kurtosis  =  0.4153622233548795
-2025-10-27 16:59:08,513 - statsvenues - INFO -   count  =  36443
-2025-10-27 16:59:08,513 - statsvenues - INFO -   sum  =  94256
-2025-10-27 16:59:08,513 - statsvenues - INFO -   cv  =  0.6315536713572669
-2025-10-27 16:59:08,513 - statsvenues - INFO - Example household types:
-2025-10-27 16:59:08,513 - statsvenues - INFO -     Venue: 139656493827664 , 5328
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - composition: >=2 >=0 2 0
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - subset id(139656549311792), kids :  3
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - subset id(139656549311712), independent children :  0
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - subset id(139656549311952), adults :  2
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - subset id(139656549311872), elderly :  0
-2025-10-27 16:59:08,513 - statsvenues - INFO -     Venue: 139656425301712 , 24696
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - composition: >=2 >=0 2 0
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - subset id(139656425239360), kids :  3
-2025-10-27 16:59:08,513 - statsvenues - INFO -       - subset id(139656425239440), independent children :  0
-2025-10-27 16:59:08,514 - statsvenues - INFO -       - subset id(139656425239520), adults :  2
-2025-10-27 16:59:08,514 - statsvenues - INFO -       - subset id(139656425239600), elderly :  0
-2025-10-27 16:59:08,514 - statsvenues - INFO -     Venue: 139656449368784 , 17920
-2025-10-27 16:59:08,514 - statsvenues - INFO -       - composition: 0 0 0 1
-2025-10-27 16:59:08,514 - statsvenues - INFO -       - subset id(139656451374080), kids :  0
-2025-10-27 16:59:08,514 - statsvenues - INFO -       - subset id(139656451374160), independent children :  0
-2025-10-27 16:59:08,514 - statsvenues - INFO -       - subset id(139656451374240), adults :  0
-2025-10-27 16:59:08,514 - statsvenues - INFO -       - subset id(139656451374320), elderly :  1
-2025-10-27 16:59:08,514 - statsvenues - INFO - Extreme household types:
-2025-10-27 16:59:08,537 - statsvenues - INFO - Venue with extreme max in specific subsets membership:
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue: 139656499696336 , 3262
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - composition: >=2 >=0 2 0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656547249728), kids :  5
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656547239648), independent children :  2
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656547249648), adults :  2
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656547246368), elderly :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO - Venue with extreme max in specific subsets membership:
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue: 139656401668560 , 31577
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - composition: >=2 >=0 2 0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656401579584), kids :  1
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656401579664), independent children :  5
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656401579744), adults :  2
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656401579824), elderly :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO - Venue with extreme max in specific subsets membership:
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue: 139656436757072 , 21444
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - composition: 0 >=0 >=0 >=0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843136), kids :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843216), independent children :  1
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843296), adults :  10
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843376), elderly :  1
-2025-10-27 16:59:08,537 - statsvenues - INFO - Venue with extreme max in specific subsets membership:
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue: 139656420412624 , 26245
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - composition: 1 >=0 >=0 >=0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656420395840), kids :  1
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656420395920), independent children :  1
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656420396000), adults :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656420396080), elderly :  9
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue with extreme max in total members:
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue: 139656436757072 , 21444
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - composition: 0 >=0 >=0 >=0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843136), kids :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843216), independent children :  1
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843296), adults :  10
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656436843376), elderly :  1
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue with extreme min in total members:
-2025-10-27 16:59:08,537 - statsvenues - INFO -     Venue: 139656510789456 , 217
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - composition: 0 >=0 0 0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656548033680), kids :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656548033920), independent children :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656548033840), adults :  0
-2025-10-27 16:59:08,537 - statsvenues - INFO -       - subset id(139656548034080), elderly :  0
-2025-10-27 16:59:08,549 - create_world - INFO - Number of empty houses = 119 out of 36443
-2025-10-27 16:59:08,549 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO - 5. Query Examples:
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all care_homes
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(care_home) -> 4 care_homes
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all hospitals
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(hospital) -> 3 hospitals
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all companys
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(company) -> 4 companys
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all prisons
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(prison) -> 2 prisons
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all universitys
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(university) -> 2 universitys
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all schools
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(school) -> 4 schools
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all student_dorms
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(student_dorm) -> 6 student_dorms
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get all households
-2025-10-27 16:59:08,550 - create_world - INFO -    venues.get_venues_by_type(household) -> 36443 households
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get venues in a specific area
-2025-10-27 16:59:08,550 - create_world - INFO -    geo.get_unit('E02000173').venues -> 3 venues
-2025-10-27 16:59:08,550 - create_world - INFO -       e.g., St Mary's Hospital (hospital)
-2025-10-27 16:59:08,550 - create_world - INFO - 
-2025-10-27 16:59:08,550 - create_world - INFO -    # Get people by activity
-2025-10-27 16:59:08,556 - create_world - INFO -    population.get_people_by_activity('work') -> 0 people
-2025-10-27 16:59:08,556 - create_world - INFO - 
-2025-10-27 16:59:08,556 - create_world - INFO -    # Get people by housed or not
-2025-10-27 16:59:08,571 - create_world - INFO -    population.get_people_by_activity('home') -> 95218 people out of 95231 with 'home' activity set
-2025-10-27 16:59:08,571 - create_world - INFO - 
-2025-10-27 16:59:08,571 - create_world - INFO - ============================================================
-2025-10-27 16:59:08,571 - create_world - INFO - Script completed in 1.6s
+tests/test_household_allocation_issues.py FFFF                           [  3%]
+tests/test_units/may/distributor/test_distributor_pop_to_venue.py F      [  4%]
+tests/test_units/may/geography/test_venue.py EEEEEEEEEEEEEEEEE           [ 19%]
+tests/test_units/may/population/test_subset.py ..............            [ 32%]
+tests/test_units/may/population/test_subset_bug.py .....                 [ 36%]
+tests/test_units/world_specific_code/test_household_distributor.py ..... [ 41%]
+..........F.................                                             [ 66%]
+tests/test_units/world_specific_code/test_household_subset_distributor.py . [ 66%]
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF                                    [100%]
+
+==================================== ERRORS ====================================
+________ ERROR at setup of test_venue_numbers_correct[care_home-3-True] ________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_______ ERROR at setup of test_venue_numbers_correct[care_home-4-False] ________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_________ ERROR at setup of test_venue_numbers_correct[company-4-True] _________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+________ ERROR at setup of test_venue_numbers_correct[company-2-False] _________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+________ ERROR at setup of test_venue_numbers_correct[company--1-False] ________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+________ ERROR at setup of test_venue_numbers_correct[hospital-3-True] _________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+________ ERROR at setup of test_venue_numbers_correct[hospital-0-False] ________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+________ ERROR at setup of test_venue_numbers_correct[hospital-1-False] ________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+________ ERROR at setup of test_venue_numbers_correct[hospital-7-False] ________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_________ ERROR at setup of test_venue_numbers_correct[prison-2-True] __________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_________ ERROR at setup of test_venue_numbers_correct[school-4-True] __________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_______ ERROR at setup of test_venue_numbers_correct[university-2-True] ________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_____ ERROR at setup of test_venue_numbers_correct[vampire castle-0-True] ______
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_____ ERROR at setup of test_venue_numbers_correct[vampire castle-1-False] _____
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_________ ERROR at setup of test_venue_numbers_correct[narnia-0-True] __________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+_________ ERROR at setup of test_venue_numbers_correct[narnia-2-False] _________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+___________________ ERROR at setup of test_venues_are_venues ___________________
+
+geo = <Geography: 290 units across 3 levels>
+
+    @pytest.fixture
+    def venues(geo):
+        # Load venues
+        logger.info("")
+        logger.info("Loading venues...")
+        venues = VenueManager(geography=geo, data_dir="data/venues")
+>       venues.load_from_csv()
+
+tests/test_units/may/geography/test_venue.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+may/geography/venue_manager.py:196: in load_from_csv
+    self.load_venue_type_from_csv(venue_type, filename)
+may/geography/venue_manager.py:142: in load_venue_type_from_csv
+    self.load_venue_type_from_df(venue_type, venue_df)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <VenueManager: 18 venues, 6 types>, venue_type = 'msoa_boarding_school'
+venue_df = Empty DataFrame
+Columns: [area, super_area, Type, School Name, Gender, StatutoryLowAge, StatutoryHighAge, n_total, n_0...4, n_25_34, n_35_49, n_50_64, n_65_99, prop_0_15, prop_16_24, prop_25_34, prop_35_49, prop_50_64, prop_65_99]
+Index: []
+
+    def load_venue_type_from_df(self, venue_type, venue_df):
+        """ Creates venues from a given dataframe """
+        # Required columns
+        required_cols = ['geo_unit']
+        for col in required_cols:
+            if col not in venue_df.columns:
+>               raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+E               ValueError: Missing required column 'geo_unit' in file for msoa_boarding_school
+
+may/geography/venue_manager.py:53: ValueError
+------------------------------ Captured log setup ------------------------------
+WARNING  config_loader:config_loader.py:25 Config file not found: config.yaml, using defaults
+WARNING  geography:geography.py:178 No coordinate file found for LGU
+=================================== FAILURES ===================================
+_______________ test_no_empty_households_with_unallocated_people _______________
+
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_no_empty_households_with_unallocated_people(mock_geo_unit):
+        """
+        Test that there are no empty households when people remain unallocated.
+    
+        This should fail if there's a bug causing households to be skipped.
+        """
+        # Create diverse household compositions
+        households = [
+            create_household(mock_geo_unit, 'H1', '>=2 >=0 >=0 >=0'),
+            create_household(mock_geo_unit, 'H2', '>=2 >=0 >=0 >=0'),
+            create_household(mock_geo_unit, 'H3', '1 >=0 >=0 >=0'),
+            create_household(mock_geo_unit, 'H4', '0 >=0 >=0 >=0'),
+            create_household(mock_geo_unit, 'H5', '0 0 2 0'),
+            create_household(mock_geo_unit, 'H6', '>=2 >=0 >=0 >=0'),
+            create_household(mock_geo_unit, 'H7', '>=2 >=0 >=0 >=0'),
+            create_household(mock_geo_unit, 'H8', '0 >=0 >=0 >=0'),
+        ]
+    
+        venue_manager = Mock()
+        venue_manager.venues_by_type = {'household': households}
+        venue_manager.get_venues_by_type = Mock(return_value=households)
+    
+        # Create 20 people (fewer than total capacity)
+        Person.reset_counter()
+        people = [
+            Person(age=30, sex='male', geographical_unit=mock_geo_unit, activities=['home'])
+            for _ in range(20)
+        ]
+    
+        # Create distributor and assign
+        distributor = HouseholdDistributor('household', venue_manager, people)
+>       distributor.assign_people_venues_with_expansion('home', 'household')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'HouseholdDistributor' object has no attribute 'assign_people_venues_with_expansion'. Did you mean: 'assign_people_venues_multi_pass'?
+
+tests/test_household_allocation_issues.py:68: AttributeError
+______________________ test_calculate_household_capacity _______________________
+
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_calculate_household_capacity(mock_geo_unit):
+        """
+        Calculate total household capacity based on composition thresholds.
+    
+        This helps understand if there's enough capacity for the population.
+        """
+        # Create households matching typical distribution
+        household_compositions = [
+            ('>=2 >=0 >=0 >=0', 10),  # 10 large flexible households
+            ('1 >=0 >=0 >=0', 5),     # 5 medium flexible households
+            ('0 >=0 >=0 >=0', 5),     # 5 no-kids households
+            ('0 0 2 0', 3),           # 3 strict 2-adult households
+            ('0 0 0 2', 2),           # 2 strict 2-elderly households
+            ('0 0 0 >=3', 3),         # 3 elderly-only flexible
+        ]
+    
+        households = []
+        for composition, count in household_compositions:
+            for i in range(count):
+                h = create_household(mock_geo_unit, f'H_{composition}_{i}', composition)
+                households.append(h)
+    
+        venue_manager = Mock()
+        venue_manager.venues_by_type = {'household': households}
+        venue_manager.get_venues_by_type = Mock(return_value=households)
+    
+        # Create distributor to get thresholds
+        Person.reset_counter()
+        dummy_people = [Person(age=30, sex='male', geographical_unit=mock_geo_unit, activities=['home'])]
+        distributor = HouseholdDistributor('household', venue_manager, dummy_people)
+    
+        # Calculate capacities
+        print(f"\n=== Household Capacity Analysis ===")
+        print(f"Total households: {len(households)}")
+    
+        first_pass_capacity = 0
+        second_pass_capacity = 0
+    
+        composition_counts = {}
+    
+        for h in households:
+            comp = h.properties['composition'].strip()
+    
+            # Count compositions
+            composition_counts[comp] = composition_counts.get(comp, 0) + 1
+    
+            # Get first pass threshold
+            threshold_first = distributor.composition_thresholds.get(
+                comp,
+                distributor.backup_venue_capacity_threshold
+            )
+            first_pass_capacity += threshold_first
+    
+            # Get second pass threshold (if expandable)
+>           threshold_second = distributor.expanded_thresholds.get(comp, threshold_first)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: 'HouseholdDistributor' object has no attribute 'expanded_thresholds'. Did you mean: 'use_expanded_threshold'?
+
+tests/test_household_allocation_issues.py:152: AttributeError
+----------------------------- Captured stdout call -----------------------------
+
+=== Household Capacity Analysis ===
+Total households: 28
+__________________________ test_specific_bug_scenario __________________________
+
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_specific_bug_scenario(mock_geo_unit):
+        """
+        Test a specific scenario that should expose the enumerate bug.
+    
+        If available_venue_indices = [2, 5, 7] but we use enumerate(i),
+        then i = 0, 1, 2 instead of actual indices 2, 5, 7.
+        """
+        # Create 10 households
+        households = [
+            create_household(mock_geo_unit, f'H{i}', '>=2 >=0 >=0 >=0')
+            for i in range(10)
+        ]
+    
+        venue_manager = Mock()
+        venue_manager.venues_by_type = {'household': households}
+        venue_manager.get_venues_by_type = Mock(return_value=households)
+    
+        # Create 30 people
+        Person.reset_counter()
+        people = [
+            Person(age=30, sex='male', geographical_unit=mock_geo_unit, activities=['home'])
+            for _ in range(30)
+        ]
+    
+        # Create distributor
+        distributor = HouseholdDistributor('household', venue_manager, people)
+    
+        # Manually set available_venue_indices to non-contiguous values
+        # This simulates what happens after first pass when some venues are closed
+        custom_indices = [2, 5, 7]  # Only use households at indices 2, 5, 7
+    
+        print(f"\n=== Testing with custom venue indices: {custom_indices} ===")
+    
+        # Before fix: This would use i=0,1,2 instead of venue_idx=2,5,7
+        # causing wrong venues to be removed from available_venue_indices
+        distributor.assign_people_venues('home', 'household',
+                                         available_venue_indices=custom_indices,
+                                         randomize_venue_order=False)
+    
+        print(f"\nResults:")
+        print(f"  Unallocated: {len(distributor.unallocated_people)}")
+    
+        for i in range(10):
+            h = households[i]
+            marker = " ←" if i in custom_indices else ""
+            print(f"  H{i}: {h.num_members} members{marker}")
+    
+        # Verify that ONLY the specified households got people
+        for i in range(10):
+            if i in custom_indices:
+                # These should have people (unless composition full)
+                pass  # May be 0 if closed during assignment
+            else:
+                # These should definitely be empty (never available)
+>               assert households[i].num_members == 0, \
+                    f"BUG: Household {i} has {households[i].num_members} members but was NOT in available_venue_indices!"
+E               AssertionError: BUG: Household 2 has 2 members but was NOT in available_venue_indices!
+E               assert 2 == 0
+E                +  where 2 = <Venue #140374849665488: H2 (household) in TestSGU>.num_members
+
+tests/test_household_allocation_issues.py:241: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+=== Testing with custom venue indices: [2, 5, 7] ===
+
+Results:
+  Unallocated: 24
+  H0: 0 members
+  H1: 0 members
+  H2: 2 members
+  H3: 0 members
+  H4: 0 members
+  H5: 2 members
+  H6: 0 members
+  H7: 2 members
+  H8: 0 members
+  H9: 0 members
+________________________ test_empty_households_analysis ________________________
+
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_empty_households_analysis(mock_geo_unit):
+        """
+        Analyze why households end up empty.
+        """
+        # Create many households
+        households = [
+            create_household(mock_geo_unit, f'H{i}', '>=2 >=0 >=0 >=0')
+            for i in range(50)
+        ]
+    
+        venue_manager = Mock()
+        venue_manager.venues_by_type = {'household': households}
+        venue_manager.get_venues_by_type = Mock(return_value=households)
+    
+        # Create 100 people (should fit in first pass with threshold=4: 50*4=200 capacity)
+        Person.reset_counter()
+        people = [
+            Person(age=30, sex='male', geographical_unit=mock_geo_unit, activities=['home'])
+            for _ in range(100)
+        ]
+    
+        # Create distributor
+        distributor = HouseholdDistributor('household', venue_manager, people)
+>       distributor.assign_people_venues_with_expansion('home', 'household')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'HouseholdDistributor' object has no attribute 'assign_people_venues_with_expansion'. Did you mean: 'assign_people_venues_multi_pass'?
+
+tests/test_household_allocation_issues.py:268: AttributeError
+____________________________ test_Distributor_init _____________________________
+
+    def test_Distributor_init():
+        # given.
+>       venue_type, venue_manager, people =  venues, population.people
+                                                     ^^^^^^^^^^^^^^^^^
+E       AttributeError: 'FixtureFunctionDefinition' object has no attribute 'people'
+
+tests/test_units/may/distributor/test_distributor_pop_to_venue.py:105: AttributeError
+______ TestHouseholdDistributor.test_update_capacity_ge2_ge0_2_0_two_kids ______
+
+self = <test_household_distributor.TestHouseholdDistributor object at 0x7fab9133eb10>
+distributor = <world_specific_code.household_distributors.household_distributor.HouseholdDistributor object at 0x7fab90fb2ad0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_update_capacity_ge2_ge0_2_0_two_kids(self, distributor, mock_geo_unit):
+        """Test capacity update for '>=2 >=0 2 0' with 2 kids (might close randomly)."""
+        venue = self.create_venue_with_composition('>=2 >=0 2 0', mock_geo_unit)
+    
+        # Add 2 kids
+        person1 = Person(age=10, sex='male', geographical_unit=mock_geo_unit)
+        person2 = Person(age=12, sex='female', geographical_unit=mock_geo_unit)
+        venue.subsets['kids'].add_member(person1)
+        venue.subsets['kids'].add_member(person2)
+    
+        subset = venue.subsets['kids']
+        distributor.available_venue_indices = [0]
+    
+        # Test when random returns True (closes kids)
+        with patch('random.getrandbits', return_value=1):  # True
+            distributor._update_venue_membership_capacity(0, venue, subset)
+    
+        capacity = distributor._venue_has_membership_capacity_by_subset[venue.id]
+>       assert capacity[0] == False  # Kids closed by random choice
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       assert True == False
+
+tests/test_units/world_specific_code/test_household_distributor.py:320: AssertionError
+___________ TestHouseholdSubsetDistributor.test_find_subset_for_kid ____________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab911caad0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910ab8c0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_find_subset_for_kid(self, distributor, mock_geo_unit):
+        """Test that children under 18 are assigned to 'kids' subset."""
+        # Test various ages under 18
+        for age in [0, 5, 10, 15, 17]:
+            person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+            venue_has_capacity = [True, True, True, True]
+    
+>           subset_index, subset_name = distributor.find_subset_for_person(
+                venue_has_capacity, person
+            )
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:32: TypeError
+___ TestHouseholdSubsetDistributor.test_find_subset_for_independent_children ___
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9115f230>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab90fe30e0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_find_subset_for_independent_children(self, distributor, mock_geo_unit):
+        """Test that people aged 18-24 are assigned to 'independent children' subset."""
+        for age in [18, 20, 22, 24]:
+            person = Person(age=age, sex='female', geographical_unit=mock_geo_unit)
+            venue_has_capacity = [True, True, True, True]
+    
+>           subset_index, subset_name = distributor.find_subset_for_person(
+                venue_has_capacity, person
+            )
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:45: TypeError
+__________ TestHouseholdSubsetDistributor.test_find_subset_for_adults __________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9115f490>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab90fe3700>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_find_subset_for_adults(self, distributor, mock_geo_unit):
+        """Test that people aged 25-59 are assigned to 'adults' subset."""
+        for age in [25, 30, 40, 50, 59]:
+            person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+            venue_has_capacity = [True, True, True, True]
+    
+>           subset_index, subset_name = distributor.find_subset_for_person(
+                venue_has_capacity, person
+            )
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:58: TypeError
+_________ TestHouseholdSubsetDistributor.test_find_subset_for_elderly __________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9107dc70>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab90fe3a10>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_find_subset_for_elderly(self, distributor, mock_geo_unit):
+        """Test that people aged 60+ are assigned to 'elderly' subset."""
+        for age in [60, 65, 75, 85, 100]:
+            person = Person(age=age, sex='female', geographical_unit=mock_geo_unit)
+            venue_has_capacity = [True, True, True, True]
+    
+>           subset_index, subset_name = distributor.find_subset_for_person(
+                venue_has_capacity, person
+            )
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:71: TypeError
+___________ TestHouseholdSubsetDistributor.test_no_capacity_for_kids ___________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab91212250>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab90fe3c40>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_no_capacity_for_kids(self, distributor, mock_geo_unit):
+        """Test that a kid gets 'No subset available' when kids subset is full."""
+        person = Person(age=10, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [False, True, True, True]  # Kids subset full
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:83: TypeError
+___ TestHouseholdSubsetDistributor.test_no_capacity_for_independent_children ___
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab91212140>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab90fe3930>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_no_capacity_for_independent_children(self, distributor, mock_geo_unit):
+        """Test independent children subset capacity constraint."""
+        person = Person(age=20, sex='female', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, False, True, True]  # Independent children subset full
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:95: TypeError
+__________ TestHouseholdSubsetDistributor.test_no_capacity_for_adults __________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9120e250>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910ab380>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_no_capacity_for_adults(self, distributor, mock_geo_unit):
+        """Test adults subset capacity constraint."""
+        person = Person(age=40, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, False, True]  # Adults subset full
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:107: TypeError
+_________ TestHouseholdSubsetDistributor.test_no_capacity_for_elderly __________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9120e450>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910ab2a0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_no_capacity_for_elderly(self, distributor, mock_geo_unit):
+        """Test elderly subset capacity constraint."""
+        person = Person(age=75, sex='female', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, False]  # Elderly subset full
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:119: TypeError
+_____________ TestHouseholdSubsetDistributor.test_all_subsets_full _____________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab911de4e0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028910>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_all_subsets_full(self, distributor, mock_geo_unit):
+        """Test that 'No subset available' is returned when all subsets are full."""
+        venue_has_capacity = [False, False, False, False]
+    
+        # Test with people from each age group
+        test_cases = [
+            Person(age=10, sex='male', geographical_unit=mock_geo_unit),
+            Person(age=20, sex='female', geographical_unit=mock_geo_unit),
+            Person(age=40, sex='male', geographical_unit=mock_geo_unit),
+            Person(age=75, sex='female', geographical_unit=mock_geo_unit),
+        ]
+    
+        for person in test_cases:
+>           subset_index, subset_name = distributor.find_subset_for_person(
+                venue_has_capacity, person
+            )
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:139: TypeError
+__________ TestHouseholdSubsetDistributor.test_age_priority_ordering ___________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab911de6c0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028bb0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_age_priority_ordering(self, distributor, mock_geo_unit):
+        """Test that age-based assignment follows the priority order (kids -> ind. children -> adults -> elderly)."""
+        # A kid should be assigned to kids, not independent children, even if both are available
+        person_kid = Person(age=10, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       idx, name = distributor.find_subset_for_person(venue_has_capacity, person_kid)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:151: TypeError
+________ TestHouseholdSubsetDistributor.test_fractional_ages[17.5-kids] ________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9109cbb0>
+person_age = 17.5, subset_name = 'kids'
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910a9b00>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    @pytest.mark.parametrize("person_age, subset_name", [
+        (17.5,'kids'),
+        (18.5,'independent children'),
+        (24.9,'independent children'),
+        (25.1,'adults'),
+        (59.99999,'adults'),
+        (60.01,'elderly'),
+    ])
+    def test_fractional_ages(self, person_age, subset_name, distributor, mock_geo_unit):
+        """Test that fractional ages work correctly with boundary conditions."""
+        venue_has_capacity = [True, True, True, True]
+        # Test fractional ages near boundaries
+        for sex in ['male', 'female']:
+            person = Person(age=person_age, sex=sex, geographical_unit=mock_geo_unit)
+>           idx, name = distributor.find_subset_for_person(venue_has_capacity, person)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:169: TypeError
+_ TestHouseholdSubsetDistributor.test_fractional_ages[18.5-independent children] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9109c910>
+person_age = 18.5, subset_name = 'independent children'
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910ab380>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    @pytest.mark.parametrize("person_age, subset_name", [
+        (17.5,'kids'),
+        (18.5,'independent children'),
+        (24.9,'independent children'),
+        (25.1,'adults'),
+        (59.99999,'adults'),
+        (60.01,'elderly'),
+    ])
+    def test_fractional_ages(self, person_age, subset_name, distributor, mock_geo_unit):
+        """Test that fractional ages work correctly with boundary conditions."""
+        venue_has_capacity = [True, True, True, True]
+        # Test fractional ages near boundaries
+        for sex in ['male', 'female']:
+            person = Person(age=person_age, sex=sex, geographical_unit=mock_geo_unit)
+>           idx, name = distributor.find_subset_for_person(venue_has_capacity, person)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:169: TypeError
+_ TestHouseholdSubsetDistributor.test_fractional_ages[24.9-independent children] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910c0bb0>
+person_age = 24.9, subset_name = 'independent children'
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029390>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    @pytest.mark.parametrize("person_age, subset_name", [
+        (17.5,'kids'),
+        (18.5,'independent children'),
+        (24.9,'independent children'),
+        (25.1,'adults'),
+        (59.99999,'adults'),
+        (60.01,'elderly'),
+    ])
+    def test_fractional_ages(self, person_age, subset_name, distributor, mock_geo_unit):
+        """Test that fractional ages work correctly with boundary conditions."""
+        venue_has_capacity = [True, True, True, True]
+        # Test fractional ages near boundaries
+        for sex in ['male', 'female']:
+            person = Person(age=person_age, sex=sex, geographical_unit=mock_geo_unit)
+>           idx, name = distributor.find_subset_for_person(venue_has_capacity, person)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:169: TypeError
+_______ TestHouseholdSubsetDistributor.test_fractional_ages[25.1-adults] _______
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9133f4d0>
+person_age = 25.1, subset_name = 'adults'
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910294e0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    @pytest.mark.parametrize("person_age, subset_name", [
+        (17.5,'kids'),
+        (18.5,'independent children'),
+        (24.9,'independent children'),
+        (25.1,'adults'),
+        (59.99999,'adults'),
+        (60.01,'elderly'),
+    ])
+    def test_fractional_ages(self, person_age, subset_name, distributor, mock_geo_unit):
+        """Test that fractional ages work correctly with boundary conditions."""
+        venue_has_capacity = [True, True, True, True]
+        # Test fractional ages near boundaries
+        for sex in ['male', 'female']:
+            person = Person(age=person_age, sex=sex, geographical_unit=mock_geo_unit)
+>           idx, name = distributor.find_subset_for_person(venue_has_capacity, person)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:169: TypeError
+_____ TestHouseholdSubsetDistributor.test_fractional_ages[59.99999-adults] _____
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9133fdd0>
+person_age = 59.99999, subset_name = 'adults'
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029320>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    @pytest.mark.parametrize("person_age, subset_name", [
+        (17.5,'kids'),
+        (18.5,'independent children'),
+        (24.9,'independent children'),
+        (25.1,'adults'),
+        (59.99999,'adults'),
+        (60.01,'elderly'),
+    ])
+    def test_fractional_ages(self, person_age, subset_name, distributor, mock_geo_unit):
+        """Test that fractional ages work correctly with boundary conditions."""
+        venue_has_capacity = [True, True, True, True]
+        # Test fractional ages near boundaries
+        for sex in ['male', 'female']:
+            person = Person(age=person_age, sex=sex, geographical_unit=mock_geo_unit)
+>           idx, name = distributor.find_subset_for_person(venue_has_capacity, person)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:169: TypeError
+______ TestHouseholdSubsetDistributor.test_fractional_ages[60.01-elderly] ______
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910b83c0>
+person_age = 60.01, subset_name = 'elderly'
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028280>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    @pytest.mark.parametrize("person_age, subset_name", [
+        (17.5,'kids'),
+        (18.5,'independent children'),
+        (24.9,'independent children'),
+        (25.1,'adults'),
+        (59.99999,'adults'),
+        (60.01,'elderly'),
+    ])
+    def test_fractional_ages(self, person_age, subset_name, distributor, mock_geo_unit):
+        """Test that fractional ages work correctly with boundary conditions."""
+        venue_has_capacity = [True, True, True, True]
+        # Test fractional ages near boundaries
+        for sex in ['male', 'female']:
+            person = Person(age=person_age, sex=sex, geographical_unit=mock_geo_unit)
+>           idx, name = distributor.find_subset_for_person(venue_has_capacity, person)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:169: TypeError
+____ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[0-0-kids] ____
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910b9a70>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029780>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 0, expected_idx = 0
+expected_name = 'kids'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+____ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[5-0-kids] ____
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910dc7d0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028b40>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 5, expected_idx = 0
+expected_name = 'kids'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+___ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[17-0-kids] ____
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910dc9b0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029710>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 17, expected_idx = 0
+expected_name = 'kids'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+_ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[18-1-independent children] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab91227e30>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028d00>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 18, expected_idx = 1
+expected_name = 'independent children'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+_ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[21-1-independent children] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910caed0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029a90>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 21, expected_idx = 1
+expected_name = 'independent children'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+_ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[24-1-independent children] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910cafd0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910286e0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 24, expected_idx = 1
+expected_name = 'independent children'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+__ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[25-2-adults] ___
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910d18d0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910a9b00>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 25, expected_idx = 2
+expected_name = 'adults'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+__ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[35-2-adults] ___
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910d1a20>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029080>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 35, expected_idx = 2
+expected_name = 'adults'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+__ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[59-2-adults] ___
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9105bb90>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab910292b0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 59, expected_idx = 2
+expected_name = 'adults'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+__ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[60-3-elderly] __
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9105bc50>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028750>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 60, expected_idx = 3
+expected_name = 'elderly'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+__ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[80-3-elderly] __
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9106fd40>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028910>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 80, expected_idx = 3
+expected_name = 'elderly'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+_ TestHouseholdSubsetDistributor.test_age_mapping_parametrized[100-3-elderly] __
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9106fe30>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029fd0>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>, age = 100, expected_idx = 3
+expected_name = 'elderly'
+
+    @pytest.mark.parametrize("age,expected_idx,expected_name", [
+        (0, 0, 'kids'),
+        (5, 0, 'kids'),
+        (17, 0, 'kids'),
+        (18, 1, 'independent children'),
+        (21, 1, 'independent children'),
+        (24, 1, 'independent children'),
+        (25, 2, 'adults'),
+        (35, 2, 'adults'),
+        (59, 2, 'adults'),
+        (60, 3, 'elderly'),
+        (80, 3, 'elderly'),
+        (100, 3, 'elderly'),
+    ])
+    def test_age_mapping_parametrized(self, distributor, mock_geo_unit, age, expected_idx, expected_name):
+        """Parametrized test for comprehensive age mapping coverage."""
+        person = Person(age=age, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:191: TypeError
+_ TestHouseholdSubsetDistributor.test_capacity_constraints_parametrized[capacity0-10-True] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9106fe80>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028f30>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+capacity = [True, True, True, True], person_age = 10, expected_available = True
+
+    @pytest.mark.parametrize("capacity,person_age,expected_available", [
+        ([True, True, True, True], 10, True),     # All available
+        ([False, True, True, True], 10, False),   # Kids not available
+        ([True, False, True, True], 20, False),   # Independent children not available
+        ([True, True, False, True], 40, False),   # Adults not available
+        ([True, True, True, False], 70, False),   # Elderly not available
+        ([False, False, False, False], 30, False), # None available
+    ])
+    def test_capacity_constraints_parametrized(self, distributor, mock_geo_unit, capacity, person_age, expected_available):
+        """Parametrized test for capacity constraints across age groups."""
+        person = Person(age=person_age, sex='male', geographical_unit=mock_geo_unit)
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(capacity, person)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:210: TypeError
+_ TestHouseholdSubsetDistributor.test_capacity_constraints_parametrized[capacity1-10-False] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9106ff20>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029d30>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+capacity = [False, True, True, True], person_age = 10
+expected_available = False
+
+    @pytest.mark.parametrize("capacity,person_age,expected_available", [
+        ([True, True, True, True], 10, True),     # All available
+        ([False, True, True, True], 10, False),   # Kids not available
+        ([True, False, True, True], 20, False),   # Independent children not available
+        ([True, True, False, True], 40, False),   # Adults not available
+        ([True, True, True, False], 70, False),   # Elderly not available
+        ([False, False, False, False], 30, False), # None available
+    ])
+    def test_capacity_constraints_parametrized(self, distributor, mock_geo_unit, capacity, person_age, expected_available):
+        """Parametrized test for capacity constraints across age groups."""
+        person = Person(age=person_age, sex='male', geographical_unit=mock_geo_unit)
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(capacity, person)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:210: TypeError
+_ TestHouseholdSubsetDistributor.test_capacity_constraints_parametrized[capacity2-20-False] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9106ff70>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab9102a660>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+capacity = [True, False, True, True], person_age = 20
+expected_available = False
+
+    @pytest.mark.parametrize("capacity,person_age,expected_available", [
+        ([True, True, True, True], 10, True),     # All available
+        ([False, True, True, True], 10, False),   # Kids not available
+        ([True, False, True, True], 20, False),   # Independent children not available
+        ([True, True, False, True], 40, False),   # Adults not available
+        ([True, True, True, False], 70, False),   # Elderly not available
+        ([False, False, False, False], 30, False), # None available
+    ])
+    def test_capacity_constraints_parametrized(self, distributor, mock_geo_unit, capacity, person_age, expected_available):
+        """Parametrized test for capacity constraints across age groups."""
+        person = Person(age=person_age, sex='male', geographical_unit=mock_geo_unit)
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(capacity, person)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:210: TypeError
+_ TestHouseholdSubsetDistributor.test_capacity_constraints_parametrized[capacity3-40-False] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab9106ffc0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91029e80>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+capacity = [True, True, False, True], person_age = 40
+expected_available = False
+
+    @pytest.mark.parametrize("capacity,person_age,expected_available", [
+        ([True, True, True, True], 10, True),     # All available
+        ([False, True, True, True], 10, False),   # Kids not available
+        ([True, False, True, True], 20, False),   # Independent children not available
+        ([True, True, False, True], 40, False),   # Adults not available
+        ([True, True, True, False], 70, False),   # Elderly not available
+        ([False, False, False, False], 30, False), # None available
+    ])
+    def test_capacity_constraints_parametrized(self, distributor, mock_geo_unit, capacity, person_age, expected_available):
+        """Parametrized test for capacity constraints across age groups."""
+        person = Person(age=person_age, sex='male', geographical_unit=mock_geo_unit)
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(capacity, person)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:210: TypeError
+_ TestHouseholdSubsetDistributor.test_capacity_constraints_parametrized[capacity4-70-False] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910e8050>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028520>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+capacity = [True, True, True, False], person_age = 70
+expected_available = False
+
+    @pytest.mark.parametrize("capacity,person_age,expected_available", [
+        ([True, True, True, True], 10, True),     # All available
+        ([False, True, True, True], 10, False),   # Kids not available
+        ([True, False, True, True], 20, False),   # Independent children not available
+        ([True, True, False, True], 40, False),   # Adults not available
+        ([True, True, True, False], 70, False),   # Elderly not available
+        ([False, False, False, False], 30, False), # None available
+    ])
+    def test_capacity_constraints_parametrized(self, distributor, mock_geo_unit, capacity, person_age, expected_available):
+        """Parametrized test for capacity constraints across age groups."""
+        person = Person(age=person_age, sex='male', geographical_unit=mock_geo_unit)
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(capacity, person)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:210: TypeError
+_ TestHouseholdSubsetDistributor.test_capacity_constraints_parametrized[capacity5-30-False] _
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910e80f0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028050>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+capacity = [False, False, False, False], person_age = 30
+expected_available = False
+
+    @pytest.mark.parametrize("capacity,person_age,expected_available", [
+        ([True, True, True, True], 10, True),     # All available
+        ([False, True, True, True], 10, False),   # Kids not available
+        ([True, False, True, True], 20, False),   # Independent children not available
+        ([True, True, False, True], 40, False),   # Adults not available
+        ([True, True, True, False], 70, False),   # Elderly not available
+        ([False, False, False, False], 30, False), # None available
+    ])
+    def test_capacity_constraints_parametrized(self, distributor, mock_geo_unit, capacity, person_age, expected_available):
+        """Parametrized test for capacity constraints across age groups."""
+        person = Person(age=person_age, sex='male', geographical_unit=mock_geo_unit)
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(capacity, person)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:210: TypeError
+______ TestHouseholdSubsetDistributor.test_sex_does_not_affect_assignment ______
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910e8190>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab9102a200>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_sex_does_not_affect_assignment(self, distributor, mock_geo_unit):
+        """Test that sex does not affect subset assignment (age is the only factor)."""
+        venue_has_capacity = [True, True, True, True]
+    
+        # Test same age, different sex
+        male_kid = Person(age=10, sex='male', geographical_unit=mock_geo_unit)
+        female_kid = Person(age=10, sex='female', geographical_unit=mock_geo_unit)
+    
+>       idx_male, name_male = distributor.find_subset_for_person(venue_has_capacity, male_kid)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:227: TypeError
+__________ TestHouseholdSubsetDistributor.test_negative_age_handling ___________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910e82d0>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028750>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_negative_age_handling(self, distributor, mock_geo_unit):
+        """Test that negative ages are handled (should go to kids subset)."""
+        person = Person(age=-1, sex='male', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:238: TypeError
+__________ TestHouseholdSubsetDistributor.test_very_old_age_handling ___________
+
+self = <test_household_subset_distributor.TestHouseholdSubsetDistributor object at 0x7fab910e8320>
+distributor = <world_specific_code.household_distributors.household_subset_distributor.HouseholdSubsetDistributor object at 0x7fab91028f30>
+mock_geo_unit = <SGU #0: TestSGU (0 children)>
+
+    def test_very_old_age_handling(self, distributor, mock_geo_unit):
+        """Test that very old ages (>100) are handled correctly."""
+        person = Person(age=150, sex='female', geographical_unit=mock_geo_unit)
+        venue_has_capacity = [True, True, True, True]
+    
+>       subset_index, subset_name = distributor.find_subset_for_person(
+            venue_has_capacity, person
+        )
+E       TypeError: HouseholdSubsetDistributor.find_subset_for_person() missing 1 required positional argument: 'person'
+
+tests/test_units/world_specific_code/test_household_subset_distributor.py:251: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_household_allocation_issues.py::test_no_empty_households_with_unallocated_people
+FAILED tests/test_household_allocation_issues.py::test_calculate_household_capacity
+FAILED tests/test_household_allocation_issues.py::test_specific_bug_scenario
+FAILED tests/test_household_allocation_issues.py::test_empty_households_analysis
+FAILED tests/test_units/may/distributor/test_distributor_pop_to_venue.py::test_Distributor_init
+FAILED tests/test_units/world_specific_code/test_household_distributor.py::TestHouseholdDistributor::test_update_capacity_ge2_ge0_2_0_two_kids
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_find_subset_for_kid
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_find_subset_for_independent_children
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_find_subset_for_adults
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_find_subset_for_elderly
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_no_capacity_for_kids
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_no_capacity_for_independent_children
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_no_capacity_for_adults
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_no_capacity_for_elderly
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_all_subsets_full
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_priority_ordering
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_fractional_ages[17.5-kids]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_fractional_ages[18.5-independent children]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_fractional_ages[24.9-independent children]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_fractional_ages[25.1-adults]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_fractional_ages[59.99999-adults]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_fractional_ages[60.01-elderly]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[0-0-kids]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[5-0-kids]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[17-0-kids]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[18-1-independent children]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[21-1-independent children]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[24-1-independent children]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[25-2-adults]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[35-2-adults]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[59-2-adults]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[60-3-elderly]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[80-3-elderly]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_age_mapping_parametrized[100-3-elderly]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_capacity_constraints_parametrized[capacity0-10-True]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_capacity_constraints_parametrized[capacity1-10-False]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_capacity_constraints_parametrized[capacity2-20-False]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_capacity_constraints_parametrized[capacity3-40-False]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_capacity_constraints_parametrized[capacity4-70-False]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_capacity_constraints_parametrized[capacity5-30-False]
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_sex_does_not_affect_assignment
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_negative_age_handling
+FAILED tests/test_units/world_specific_code/test_household_subset_distributor.py::TestHouseholdSubsetDistributor::test_very_old_age_handling
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[care_home-3-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[care_home-4-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[company-4-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[company-2-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[company--1-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[hospital-3-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[hospital-0-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[hospital-1-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[hospital-7-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[prison-2-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[school-4-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[university-2-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[vampire castle-0-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[vampire castle-1-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[narnia-0-True]
+ERROR tests/test_units/may/geography/test_venue.py::test_venue_numbers_correct[narnia-2-False]
+ERROR tests/test_units/may/geography/test_venue.py::test_venues_are_venues - ...
+=================== 43 failed, 52 passed, 17 errors in 1.02s ===================
