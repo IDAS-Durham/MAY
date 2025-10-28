@@ -20,7 +20,7 @@ if os.environ.get('PYTHONHASHSEED') is None:
 
 logger = logging.getLogger("create_world")
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout)

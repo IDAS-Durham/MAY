@@ -152,7 +152,7 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
             for person in venue_residents:
                 setattr(person, f'{venue_type}_venue', venue)
 
-        if idx >= people_to_allocate:
+        if len(allocated_people) >= people_to_allocate:
             break
 
     # Mark allocated people
