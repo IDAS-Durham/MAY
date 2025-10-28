@@ -369,7 +369,7 @@ def main():
             )
             # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
             # Don't do too many passes, as will go through them again after allocating to prisons. 
-            household_distributor.num_passes = 3
+            household_distributor.num_passes = 5
             household_distributor.assign_people_venues_multi_pass('home',
                                                                   'household')
             still_unallocated_people = household_distributor.unallocated_people
