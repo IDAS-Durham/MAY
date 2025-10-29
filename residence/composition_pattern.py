@@ -186,7 +186,6 @@ class CompositionPattern:
             if operator == "gte" and count > 0:
                 # Reduce >=N to >=(N-1)
                 new_requirements[cat_idx] = ("gte", count - 1)
-                new_pattern = self._requirements_to_string(new_requirements)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
                     requirements=new_requirements
@@ -194,7 +193,6 @@ class CompositionPattern:
             elif operator == "exact" and count > 0:
                 # Reduce exact N to (N-1)
                 new_requirements[cat_idx] = ("exact", count - 1)
-                new_pattern = self._requirements_to_string(new_requirements)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
                     requirements=new_requirements
@@ -270,7 +268,6 @@ class CompositionPattern:
             if operator == "exact":
                 # Convert exact count to >=count
                 new_requirements[cat_idx] = ("gte", count)
-                new_pattern = self._requirements_to_string(new_requirements)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
                     requirements=new_requirements

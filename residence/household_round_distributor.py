@@ -121,12 +121,6 @@ class HouseholdRoundDistributor:
                           If None, no limit.
             max_household_size: Maximum size for any household. If None, no limit.
             allocate_flexible: If True, use BALANCED DISTRIBUTION for flexible (>=) categories.
-                             Strategy:
-                             1. Respects the exact number of households from CSV data
-                             2. Distributes ALL available people across those households
-                             3. Allocates proportionally across flexible categories (e.g., mix of
-                                Young Adults, Adults, Old Adults instead of all one type)
-                             4. Fills households close to max_household_size to minimize leftovers
                              If False, take only minimum required for flexible categories.
             refresh_pools: If True, refresh person pools to exclude already allocated people.
                          Use this when coming back after other allocation operations.
@@ -188,7 +182,7 @@ class HouseholdRoundDistributor:
                 if actual_pattern_str != pattern_str:
                     pattern.census_pattern = pattern_str
 
-                # Validate max_household_size against pattern minimum
+                # Validate max_household_size against pattern minimum (currently only used by flexible households (step 23))
                 if max_household_size is not None:
                     pattern_min_size = pattern.min_household_size()
                     if max_household_size < pattern_min_size:
