@@ -6,9 +6,8 @@ during specific allocation rounds (e.g., initial, demotion, balanced).
 """
 
 import logging
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from residence.composition_pattern import CompositionPattern
-from residence.models import Household
 
 logger = logging.getLogger("household")
 
@@ -25,7 +24,7 @@ class HouseholdRoundDistributor:
         """
         self.distributor = household_distributor
 
-    def _calculate_balanced_distribution(self, area_code: str, pattern: CompositionPattern,
+    def _calculate_balanced_distribution(self, geo_unit_code: str, pattern: CompositionPattern,
                                         num_households: int, max_household_size: Optional[int]) -> List[int]:
         """
         Calculate balanced household sizes for flexible patterns.
@@ -34,7 +33,7 @@ class HouseholdRoundDistributor:
         maximizing allocation while maintaining balance.
 
         Args:
-            area_code: SGU code
+            geo_unit_code: SGU code
             pattern: Composition pattern
             num_households: Number of households to create (from CSV - must be respected!)
             max_household_size: Maximum size per household
@@ -42,10 +41,10 @@ class HouseholdRoundDistributor:
         Returns:
             List of target sizes for each household
         """
-        if area_code not in self.distributor.person_pool_by_area:
+        if geo_unit_code not in self.distributor.person_pool_by_geo_unit:
             return [pattern.min_household_size()] * num_households
 
-        pools = self.distributor.person_pool_by_area[area_code]
+        pools = self.distributor.person_pool_by_geo_unit[geo_unit_code]
 
         # Count total available people in ELIGIBLE categories only
         # (categories where the pattern allows at least 1 person)
@@ -86,7 +85,7 @@ class HouseholdRoundDistributor:
         else:
             sizes = [max(min_size, s) for s in sizes]
 
-        logger.debug(f"Balanced distribution for {num_households} households in {area_code}:")
+        logger.debug(f"Balanced distribution for {num_households} households in {geo_unit_code}:")
         logger.debug(f"  Total available: {total_available}, Target sizes: {sizes[:10]}{'...' if len(sizes) > 10 else ''}")
         return sizes
 
@@ -167,9 +166,9 @@ class HouseholdRoundDistributor:
         if demotion_rules is None:
             demotion_rules = {}
 
-        # Iterate through each area
-        for area_code, compositions in self.distributor.household_counts_by_area.items():
-            # Iterate through each composition type in this area
+        # Iterate through each geo_unit
+        for geo_unit_code, compositions in self.distributor.household_counts_by_geo_unit.items():
+            # Iterate through each composition type in this geo_unit
             for pattern_str, count in compositions.items():
                 # Check if this pattern should be allocated in this round
                 if pattern_set is not None and pattern_str not in pattern_set:
@@ -203,7 +202,7 @@ class HouseholdRoundDistributor:
                 balanced_sizes = None
                 if allocate_flexible:
                     balanced_sizes = self._calculate_balanced_distribution(
-                        area_code, pattern, count, max_household_size
+                        geo_unit_code, pattern, count, max_household_size
                     )
 
                 # Try to create 'count' households of this type
@@ -217,9 +216,9 @@ class HouseholdRoundDistributor:
                     target_size = balanced_sizes[i] if balanced_sizes and i < len(balanced_sizes) else None
 
                     if demotion_enabled:
-                        household = self.distributor._attempt_with_demotion(area_code, pattern, max_attempts, max_household_size, allocate_flexible, target_size, rule_name, demotion_rules)
+                        household = self.distributor._attempt_with_demotion(geo_unit_code, pattern, max_attempts, max_household_size, allocate_flexible, target_size, rule_name, demotion_rules)
                     else:
-                        household, _ = self.distributor._allocate_household_with_rules(area_code, pattern, max_household_size, allocate_flexible, target_size, rule_name)
+                        household, _ = self.distributor._allocate_household_with_rules(geo_unit_code, pattern, max_household_size, allocate_flexible, target_size, rule_name)
 
                     if household:
                         # Get the actual pattern that was used (may have been demoted)
@@ -242,7 +241,7 @@ class HouseholdRoundDistributor:
                         total_created += 1
                         households_created += 1
                     else:
-                        logger.debug(f"  Failed to allocate household {i+1}/{count} of type '{pattern_str}' in {area_code}")
+                        logger.debug(f"  Failed to allocate household {i+1}/{count} of type '{pattern_str}' in {geo_unit_code}")
 
                 # Break outer loop if limit reached
                 if max_households is not None and households_created >= max_households:

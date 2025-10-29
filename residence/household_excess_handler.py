@@ -8,7 +8,7 @@ This module contains logic for:
 
 import logging
 import random
-from typing import List, Optional, Dict, Set
+from typing import List, Optional, Dict
 from population.person import Person
 from residence.models import Household
 
@@ -117,13 +117,13 @@ class HouseholdExcessHandler:
 
         # Iterate through target households and try to add people
         for household in target_households:
-            area_code = household.geographical_unit.name
+            geo_unit_code = household.geographical_unit.name
 
-            # Get person pool for this area
-            if area_code not in self.distributor.person_pool_by_area:
+            # Get person pool for this geo_unit
+            if geo_unit_code not in self.distributor.person_pool_by_geo_unit:
                 continue
 
-            pools = self.distributor.person_pool_by_area[area_code]
+            pools = self.distributor.person_pool_by_geo_unit[geo_unit_code]
             available_people = pools[add_cat_idx]
 
             if not available_people:
@@ -288,50 +288,50 @@ class HouseholdExcessHandler:
                 'error': f"Unknown category '{add_category}'"
             }
 
-        # Group households by area and pattern
+        # Group households by geo_unit and pattern
         filtered_households = self.distributor._filter_households_by_patterns(target_patterns)
-        households_by_area_pattern = {}
+        households_by_geo_unit_pattern = {}
         for household in filtered_households:
-            area_code = household.geographical_unit.name
+            geo_unit_code = household.geographical_unit.name
             original_pattern = household.properties.get('original_pattern', '')
-            key = (area_code, original_pattern)
-            if key not in households_by_area_pattern:
-                households_by_area_pattern[key] = []
-            households_by_area_pattern[key].append(household)
+            key = (geo_unit_code, original_pattern)
+            if key not in households_by_geo_unit_pattern:
+                households_by_geo_unit_pattern[key] = []
+            households_by_geo_unit_pattern[key].append(household)
 
-        logger.info(f"Found {sum(len(hhs) for hhs in households_by_area_pattern.values())} eligible households across {len(households_by_area_pattern)} area-pattern combinations")
+        logger.info(f"Found {sum(len(hhs) for hhs in households_by_geo_unit_pattern.values())} eligible households across {len(households_by_geo_unit_pattern)} geo_unit-pattern combinations")
 
         # Track statistics
         people_added = 0
         households_modified = 0
 
-        # Process each area
-        for area_code in set(k[0] for k in households_by_area_pattern.keys()):
-            if area_code not in self.distributor.person_pool_by_area:
+        # Process each geo_unit
+        for geo_unit_code in set(k[0] for k in households_by_geo_unit_pattern.keys()):
+            if geo_unit_code not in self.distributor.person_pool_by_geo_unit:
                 continue
 
-            pools = self.distributor.person_pool_by_area[area_code]
+            pools = self.distributor.person_pool_by_geo_unit[geo_unit_code]
             available_people = pools[add_cat_idx]
 
             if not available_people:
                 continue
 
-            logger.debug(f"Area {area_code}: {len(available_people)} {add_category} available")
+            logger.debug(f"geo_unit {geo_unit_code}: {len(available_people)} {add_category} available")
 
-            # Get all households in this area across all patterns
-            area_households_by_pattern = {}
-            for (ac, pattern), hhs in households_by_area_pattern.items():
-                if ac == area_code:
-                    area_households_by_pattern[pattern] = hhs
+            # Get all households in this geo_unit across all patterns
+            geo_unit_households_by_pattern = {}
+            for (ac, pattern), hhs in households_by_geo_unit_pattern.items():
+                if ac == geo_unit_code:
+                    geo_unit_households_by_pattern[pattern] = hhs
 
             # Calculate distribution with bias
             total_to_allocate = len(available_people)
 
             # Apply bias weights
             pattern_weights = {}
-            for pattern in area_households_by_pattern.keys():
+            for pattern in geo_unit_households_by_pattern.keys():
                 weight = pattern_bias.get(pattern, 1.0) if pattern_bias else 1.0
-                num_households = len(area_households_by_pattern[pattern])
+                num_households = len(geo_unit_households_by_pattern[pattern])
                 pattern_weights[pattern] = weight * num_households
 
             total_weight = sum(pattern_weights.values())
@@ -343,7 +343,7 @@ class HouseholdExcessHandler:
             pattern_allocations = {}
             allocated_so_far = 0
 
-            for pattern in area_households_by_pattern.keys():
+            for pattern in geo_unit_households_by_pattern.keys():
                 proportion = pattern_weights[pattern] / total_weight
                 allocation = int(total_to_allocate * proportion)
                 pattern_allocations[pattern] = allocation
@@ -365,7 +365,7 @@ class HouseholdExcessHandler:
                 if num_to_add == 0:
                     continue
 
-                pattern_households = area_households_by_pattern[pattern]
+                pattern_households = geo_unit_households_by_pattern[pattern]
                 num_hh = len(pattern_households)
 
                 # Distribute balancedly

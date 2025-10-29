@@ -272,17 +272,17 @@ class PopulationManager:
         """
         return [p for p in self.people if p.has_activity(activity)]
 
-    def get_people_by_area(self, area_code):
+    def get_people_by_geo_unit(self, geo_unit_code):
         """
         Get all people in a specific geographical unit.
 
         Args:
-            area_code (str): Name/code of the geographical unit
+            geo_unit_code (str): Name/code of the geographical unit
 
         Returns:
-            list: List of Person objects in this area
+            list: List of Person objects in this geo_unit
         """
-        unit = self.geography.get_unit(area_code)
+        unit = self.geography.get_unit(geo_unit_code)
         if unit is None:
             return []
         return unit.people if hasattr(unit, 'people') else []

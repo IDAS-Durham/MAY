@@ -74,11 +74,11 @@ class HouseholdDistributor:
 
         # Household data
         self.households: List[Household] = []
-        self.household_counts_by_area: Dict[str, Dict[str, int]] = {}
+        self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
         self.allocated_people: Set[int] = set()  # Person IDs that have been allocated
 
-        # Pool of available people by area and category
-        self.person_pool_by_area: Dict[str, List[List['Person']]] = {}
+        # Pool of available people by geo_unit and category
+        self.person_pool_by_geo_unit: Dict[str, List[List['Person']]] = {}
 
         # Round tracking
         self.current_round: int = 0
@@ -129,18 +129,18 @@ class HouseholdDistributor:
 
         df = pd.read_csv(filepath)
 
-        # First column is the area code, rest are household compositions
-        area_col = df.columns[0]
+        # First column is the geo_unit code, rest are household compositions
+        geo_unit_col = df.columns[0]
         composition_cols = df.columns[1:]
 
-        logger.info(f"Found {len(df)} areas with {len(composition_cols)} household types")
+        logger.info(f"Found {len(df)} geo_units with {len(composition_cols)} household types")
 
-        # Store household counts by area
+        # Store household counts by geo_unit
         for _, row in df.iterrows():
-            area_code = row[area_col]
+            geo_unit_code = row[geo_unit_col]
 
-            # Only include areas that are in our loaded geography
-            if area_code not in self.geography.units:
+            # Only include geo_units that are in our loaded geography
+            if geo_unit_code not in self.geography.units:
                 continue
 
             counts = {}
@@ -150,9 +150,9 @@ class HouseholdDistributor:
                     counts[col] = count
 
             if counts:
-                self.household_counts_by_area[area_code] = counts
+                self.household_counts_by_geo_unit[geo_unit_code] = counts
 
-        logger.info(f"Loaded household data for {len(self.household_counts_by_area)} geographical units")
+        logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
 
     def _categorize_person(self, person: Person) -> int:
         """Get the category index for a person based on their age."""
@@ -164,7 +164,7 @@ class HouseholdDistributor:
 
     def _prepare_person_pools(self, refresh: bool = False):
         """
-        Prepare pools of available people by area and age category.
+        Prepare pools of available people by geo_unit and age category.
 
         Args:
             refresh: If True, refresh pools with currently unallocated people.
@@ -174,18 +174,18 @@ class HouseholdDistributor:
             logger.debug("Person pools already prepared, skipping...")
             return
 
-        logger.info("Preparing person pools by area and age category...")
+        logger.info("Preparing person pools by geo_unit and age category...")
 
         if refresh:
             # Clear existing pools for refresh
-            self.person_pool_by_area = {}
+            self.person_pool_by_geo_unit = {}
 
         # Get all SGU units
         sgu_units = self.geography.get_units_by_level("SGU")
 
-        for area_code, unit in sgu_units.items():
-            # Get all people in this area
-            people = self.population.get_people_by_area(area_code)
+        for geo_unit_code, unit in sgu_units.items():
+            # Get all people in this geo_unit
+            people = self.population.get_people_by_geo_unit(geo_unit_code)
 
             if not people:
                 continue
@@ -203,18 +203,18 @@ class HouseholdDistributor:
             for pool in category_pools:
                 random.shuffle(pool)
 
-            self.person_pool_by_area[area_code] = category_pools
+            self.person_pool_by_geo_unit[geo_unit_code] = category_pools
 
             # Log pool sizes
             pool_sizes = [len(pool) for pool in category_pools]
-            logger.debug(f"  {area_code}: {pool_sizes}")
+            logger.debug(f"  {geo_unit_code}: {pool_sizes}")
 
         total_people = sum(sum(len(pool) for pool in pools)
-                          for pools in self.person_pool_by_area.values())
-        logger.info(f"Prepared person pools for {len(self.person_pool_by_area)} areas ({total_people} total people)")
+                          for pools in self.person_pool_by_geo_unit.values())
+        logger.info(f"Prepared person pools for {len(self.person_pool_by_geo_unit)} geo_units ({total_people} total people)")
         self.pools_prepared = True
 
-    def _allocate_household_with_rules(self, area_code: str, pattern: CompositionPattern,
+    def _allocate_household_with_rules(self, geo_unit_code: str, pattern: CompositionPattern,
                                        max_size: Optional[int] = None,
                                        allocate_flexible: bool = False,
                                        target_size: Optional[int] = None,
@@ -228,7 +228,7 @@ class HouseholdDistributor:
         3. Apply couple matching constraints within roles
 
         Args:
-            area_code: SGU code
+            geo_unit_code: SGU code
             pattern: Composition pattern to match
             max_size: Maximum household size (optional)
             allocate_flexible: If True, allocate people to flexible (>=) categories
@@ -240,7 +240,7 @@ class HouseholdDistributor:
         """
         # If no rule is specified, use simple allocation (no rules)
         if not rule_name:
-            return self._allocate_household(area_code, pattern, max_size, allocate_flexible, target_size)
+            return self._allocate_household(geo_unit_code, pattern, max_size, allocate_flexible, target_size)
 
         # Get pattern to match (for logging)
         pattern_to_match = getattr(pattern, 'census_pattern', pattern.original_pattern)
@@ -249,7 +249,7 @@ class HouseholdDistributor:
         rule = self.relationship_rules.get_rule_by_name(rule_name)
         if not rule:
             logger.warning(f"Rule '{rule_name}' not found, falling back to simple allocation")
-            return self._allocate_household(area_code, pattern, max_size, allocate_flexible, target_size)
+            return self._allocate_household(geo_unit_code, pattern, max_size, allocate_flexible, target_size)
 
         # Log first time we apply rules for this pattern
         if not hasattr(self, '_logged_rules'):
@@ -267,15 +267,15 @@ class HouseholdDistributor:
                 logger.debug(f"✓ Applying relationship rules for pattern: '{pattern.original_pattern}'")
             self._logged_rules.add(log_key)
 
-        if area_code not in self.person_pool_by_area:
+        if geo_unit_code not in self.person_pool_by_geo_unit:
             return (None, None)
 
-        pools = self.person_pool_by_area[area_code]
+        pools = self.person_pool_by_geo_unit[geo_unit_code]
 
         # Detailed logging for ALL households in ALL geo units
-        household_num = self._setup_allocation_logging(area_code)
+        household_num = self._setup_allocation_logging(geo_unit_code)
         logger.debug("=" * 80)
-        logger.debug(f"GEO UNIT: {area_code} - HOUSEHOLD #{household_num}")
+        logger.debug(f"GEO UNIT: {geo_unit_code} - HOUSEHOLD #{household_num}")
         if hasattr(pattern, 'census_pattern'):
             logger.debug(f"Census Pattern: '{pattern.census_pattern}'")
             logger.debug(f"Assumption: '{pattern.original_pattern}'")
@@ -313,7 +313,7 @@ class HouseholdDistributor:
             pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
 
         # Create household
-        unit = self.geography.get_unit(area_code)
+        unit = self.geography.get_unit(geo_unit_code)
         household = Household(
             id=len(self.households),
             geographical_unit=unit,
@@ -332,7 +332,7 @@ class HouseholdDistributor:
         if self._show_detailed_logs:
             logger.debug("FINAL HOUSEHOLD COMPOSITION:")
             logger.debug(f"  Household ID: {household.id}")
-            logger.debug(f"  Geo Unit: {area_code}")
+            logger.debug(f"  Geo Unit: {geo_unit_code}")
             logger.debug(f"  Pattern: {pattern.original_pattern}")
             logger.debug(f"  Total members: {len(all_selected)}")
             logger.debug("")
@@ -862,15 +862,15 @@ class HouseholdDistributor:
 
         return (selections, None)
 
-    def _allocate_household(self, area_code: str, pattern: CompositionPattern,
+    def _allocate_household(self, geo_unit_code: str, pattern: CompositionPattern,
                             max_size: Optional[int] = None,
                             allocate_flexible: bool = False,
                             target_size: Optional[int] = None) -> Tuple[Optional[Household], Optional[int]]:
         """
-        Attempt to allocate a household in an area with the given pattern.
+        Attempt to allocate a household in an geo_unit with the given pattern.
 
         Args:
-            area_code: SGU code
+            geo_unit_code: SGU code
             pattern: Composition pattern to match
             max_size: Maximum household size (optional)
             allocate_flexible: If True, allocate people to flexible (>=) categories randomly
@@ -880,15 +880,15 @@ class HouseholdDistributor:
             - If successful: (household, None)
             - If failed: (None, category_idx that caused failure)
         """
-        if area_code not in self.person_pool_by_area:
+        if geo_unit_code not in self.person_pool_by_geo_unit:
             return (None, None)
 
-        pools = self.person_pool_by_area[area_code]
+        pools = self.person_pool_by_geo_unit[geo_unit_code]
 
         # Detailed logging for ALL households in ALL geo units (NO RULES version)
-        household_num = self._setup_allocation_logging(area_code)
+        household_num = self._setup_allocation_logging(geo_unit_code)
         logger.debug("=" * 80)
-        logger.debug(f"GEO UNIT: {area_code} - HOUSEHOLD #{household_num}")
+        logger.debug(f"GEO UNIT: {geo_unit_code} - HOUSEHOLD #{household_num}")
         logger.debug(f"Pattern: '{pattern.to_string()}'")
         logger.debug("=" * 80)
         logger.debug(f"Allocation mode: Simple (no constraints)")
@@ -935,7 +935,7 @@ class HouseholdDistributor:
         logger.debug(f"  Pattern: {pattern.original_pattern}")
 
         # Create household
-        unit = self.geography.get_unit(area_code)
+        unit = self.geography.get_unit(geo_unit_code)
         household = Household(
             id=len(self.households),
             geographical_unit=unit,
@@ -957,7 +957,7 @@ class HouseholdDistributor:
 
         return (household, None)
 
-    def _attempt_with_demotion(self, area_code: str, pattern: CompositionPattern,
+    def _attempt_with_demotion(self, geo_unit_code: str, pattern: CompositionPattern,
                                max_attempts: int, max_size: Optional[int] = None,
                                allocate_flexible: bool = False,
                                target_size: Optional[int] = None,
@@ -972,7 +972,7 @@ class HouseholdDistributor:
         - Can switch to a different rule when pattern matches a demotion_rules mapping
 
         Args:
-            area_code: SGU code
+            geo_unit_code: SGU code
             pattern: Initial composition pattern
             max_attempts: Maximum demotion attempts
             max_size: Maximum household size (optional)
@@ -1002,7 +1002,7 @@ class HouseholdDistributor:
             # Try to allocate with current pattern
             # First try with relationship rules if available
             household, failed_category_idx = self._allocate_household_with_rules(
-                area_code, current_pattern, max_size, allocate_flexible, target_size, rule_name
+                geo_unit_code, current_pattern, max_size, allocate_flexible, target_size, rule_name
             )
 
             # If rules-based allocation returned None and called the fallback,
@@ -1037,8 +1037,8 @@ class HouseholdDistributor:
                 if failed_category_idx is not None:
                     # Check how many people are available in this category to jump directly
                     available_count = 0
-                    if area_code in self.person_pool_by_area:
-                        pools = self.person_pool_by_area[area_code]
+                    if geo_unit_code in self.person_pool_by_geo_unit:
+                        pools = self.person_pool_by_geo_unit[geo_unit_code]
                         if failed_category_idx < len(pools):
                             available_count = len(pools[failed_category_idx])
 
@@ -1165,7 +1165,7 @@ class HouseholdDistributor:
         # Clear all data
         self.households = []
         self.allocated_people = set()
-        self.person_pool_by_area = {}
+        self.person_pool_by_geo_unit = {}
         self.current_round = 0
         self.pools_prepared = False
 
@@ -1223,35 +1223,35 @@ class HouseholdDistributor:
                 filtered.append(household)
         return filtered
 
-    def _setup_allocation_logging(self, area_code: str) -> int:
+    def _setup_allocation_logging(self, geo_unit_code: str) -> int:
         """
         Initialize and update allocation logging for a geographical unit.
 
-        This tracks how many households have been allocated in each area and logs
-        the start of allocation for new areas.
+        This tracks how many households have been allocated in each geo_unit and logs
+        the start of allocation for new geo_units.
 
         Args:
-            area_code: The geographical unit code
+            geo_unit_code: The geographical unit code
 
         Returns:
-            The household number for this area (1-indexed)
+            The household number for this geo_unit (1-indexed)
         """
         # Initialize logging dict if needed
-        if not hasattr(self, '_household_counts_by_area_log'):
-            self._household_counts_by_area_log = {}
+        if not hasattr(self, '_household_counts_by_geo_unit_log'):
+            self._household_counts_by_geo_unit_log = {}
 
-        # Log start of allocation for new area
-        if area_code not in self._household_counts_by_area_log:
-            self._household_counts_by_area_log[area_code] = 0
+        # Log start of allocation for new geo_unit
+        if geo_unit_code not in self._household_counts_by_geo_unit_log:
+            self._household_counts_by_geo_unit_log[geo_unit_code] = 0
             logger.debug("")
             logger.debug("=" * 80)
-            logger.debug(f"STARTING DETAILED ALLOCATION FOR GEO UNIT: {area_code}")
+            logger.debug(f"STARTING DETAILED ALLOCATION FOR GEO UNIT: {geo_unit_code}")
             logger.debug("=" * 80)
             logger.debug("")
 
         # Increment and return household count
-        self._household_counts_by_area_log[area_code] += 1
-        return self._household_counts_by_area_log[area_code]
+        self._household_counts_by_geo_unit_log[geo_unit_code] += 1
+        return self._household_counts_by_geo_unit_log[geo_unit_code]
 
     def _allocate_balanced_distribution(self, *args, **kwargs):
         """Delegate to round distributor. See HouseholdRoundDistributor._allocate_balanced_distribution for documentation."""

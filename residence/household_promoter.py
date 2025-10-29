@@ -8,9 +8,7 @@ This module contains logic for:
 
 import logging
 import random
-from typing import List, Optional, Dict, Set
-from population.person import Person
-from residence.models import Household
+from typing import List, Optional, Dict
 from residence.composition_pattern import CompositionPattern
 
 logger = logging.getLogger("household")
@@ -36,8 +34,8 @@ class HouseholdPromoter:
         Promote existing households to accommodate remaining people.
 
         This method:
-        1. Identifies areas with remaining people in target categories
-        2. Promotes household patterns in those areas (0 -> >=0, 1 -> >=1, etc.)
+        1. Identifies geo_units with remaining people in target categories
+        2. Promotes household patterns in those geo_units (0 -> >=0, 1 -> >=1, etc.)
         3. Allocates ALL remaining people to the promoted households
 
         Args:
@@ -93,26 +91,26 @@ class HouseholdPromoter:
 
             logger.info(f"Processing category: {category_name}")
 
-            # Find areas with people in this category
-            for area_code, pools in self.distributor.person_pool_by_area.items():
+            # Find geo_units with people in this category
+            for geo_unit_code, pools in self.distributor.person_pool_by_geo_unit.items():
                 available_people = pools[cat_idx]
 
                 if not available_people:
                     continue
 
-                logger.debug(f"  Area {area_code}: {len(available_people)} {category_name} available")
+                logger.debug(f"  geo_unit {geo_unit_code}: {len(available_people)} {category_name} available")
 
-                # Find households in this area
-                area_households = [hh for hh in self.distributor.households if hh.geographical_unit.name == area_code]
+                # Find households in this geo_unit
+                geo_unit_households = [hh for hh in self.distributor.households if hh.geographical_unit.name == geo_unit_code]
 
-                if not area_households:
-                    logger.debug(f"    No households in area {area_code}")
+                if not geo_unit_households:
+                    logger.debug(f"    No households in geo_unit {geo_unit_code}")
                     continue
 
                 # Try to promote and allocate to each household
-                random.shuffle(area_households)  # For fairness
+                random.shuffle(geo_unit_households)  # For fairness
 
-                for household in area_households:
+                for household in geo_unit_households:
                     if not available_people:
                         break
 
@@ -277,12 +275,12 @@ class HouseholdPromoter:
                 if actual_pattern != source_pattern:
                     continue
 
-                area_code = household.geographical_unit.name
+                geo_unit_code = household.geographical_unit.name
 
-                if area_code not in self.distributor.person_pool_by_area:
+                if geo_unit_code not in self.distributor.person_pool_by_geo_unit:
                     continue
 
-                pools = self.distributor.person_pool_by_area[area_code]
+                pools = self.distributor.person_pool_by_geo_unit[geo_unit_code]
 
                 # Try to add people from each accepted category
                 added_to_this_household = 0
