@@ -279,3 +279,135 @@ class HouseholdRoundDistributor:
         logger.info("=" * 60)
 
         return round_stats
+
+    def _allocate_balanced_distribution(self, pattern: CompositionPattern,
+                                       pools, target_size: int):
+        """
+        Calculate balanced allocation using proportional distribution.
+
+        This method distributes people proportionally across flexible categories
+        to reach a target household size while respecting min/max constraints.
+
+        Args:
+            pattern: Composition pattern to match
+            pools: Person pools by category
+            target_size: Target household size
+
+        Returns:
+            Tuple of (selections list, failed_category_idx):
+            - On success: ([(cat_idx, count), ...], None)
+            - On failure: (None, category_idx that caused failure)
+        """
+        logger.debug(f"\n=== BALANCED DISTRIBUTION MODE ===")
+        logger.debug(f"Target size: {target_size}")
+
+        selections = []  # Store planned selections: (cat_idx, count)
+
+        # First pass: allocate exact counts for fixed categories
+        fixed_total = 0
+        flexible_categories = []
+
+        logger.debug(f"\n--- FIRST PASS: Categorizing fixed vs flexible ---")
+        for cat_idx in range(len(self.distributor.age_categories)):
+            min_count = pattern.get_min_count(cat_idx)
+            max_count = pattern.get_max_count(cat_idx)
+            available = len(pools[cat_idx])
+
+            cat_name = self.distributor.age_categories[cat_idx].name
+            logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
+            logger.debug(f"  min_count: {min_count}, max_count: {max_count}, available: {available}")
+
+            # Check minimum availability
+            if available < min_count:
+                logger.debug(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
+                return (None, cat_idx)
+
+            if max_count is not None:
+                # Fixed category - allocate exactly
+                logger.debug(f"  → FIXED category: allocating exactly {max_count}")
+                selections.append((cat_idx, max_count))
+                fixed_total += max_count
+            else:
+                # Flexible category - defer allocation
+                logger.debug(f"  → FLEXIBLE category: deferring (min: {min_count}, available: {available})")
+                flexible_categories.append((cat_idx, min_count, available))
+
+        logger.debug(f"\n--- FIRST PASS COMPLETE ---")
+        logger.debug(f"Fixed total: {fixed_total}")
+        logger.debug(f"Flexible categories: {len(flexible_categories)}")
+
+        # Second pass: distribute remaining capacity proportionally across flexible categories
+        remaining_capacity = target_size - fixed_total
+        logger.debug(f"\n--- SECOND PASS: Proportional allocation ---")
+        logger.debug(f"Remaining capacity: {remaining_capacity} (target: {target_size} - fixed: {fixed_total})")
+
+        if remaining_capacity < 0:
+            # Can't meet target - fixed categories already exceed it
+            logger.debug(f"✗ ERROR: Fixed categories ({fixed_total}) exceed target size ({target_size})")
+            return (None, None)
+
+        # Calculate proportional allocation based on availability
+        total_available = sum(avail for _, _, avail in flexible_categories)
+        logger.debug(f"Total available in flexible categories: {total_available}")
+
+        # Track allocations with their proportions for remainder distribution
+        flexible_allocations = []
+
+        for cat_idx, min_count, available in flexible_categories:
+            cat_name = self.distributor.age_categories[cat_idx].name
+            logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
+            logger.debug(f"  min: {min_count}, available: {available}")
+
+            if total_available > 0:
+                # Proportional share of remaining capacity
+                proportion = available / total_available
+                allocated = int(remaining_capacity * proportion)
+                logger.debug(f"  proportion: {proportion:.3f} ({available}/{total_available})")
+                logger.debug(f"  raw allocation: {allocated} ({remaining_capacity} * {proportion:.3f})")
+
+                # Ensure we meet minimum and don't exceed available
+                allocated = max(min_count, min(allocated, available))
+                logger.debug(f"  initial allocation: {allocated} (after min/max constraints)")
+            else:
+                proportion = 0
+                allocated = min_count
+                logger.debug(f"  total_available=0, using min_count: {allocated}")
+
+            flexible_allocations.append((cat_idx, allocated, available, proportion))
+
+        # Calculate shortfall and distribute remainder
+        current_total = sum(alloc for _, alloc, _, _ in flexible_allocations)
+        shortfall = remaining_capacity - current_total
+        logger.debug(f"\nShortfall check: allocated {current_total}, need {remaining_capacity}, shortfall: {shortfall}")
+
+        if shortfall > 0:
+            logger.debug(f"Distributing {shortfall} remaining slots...")
+            # Sort by proportion (highest first) to prioritize categories with more availability
+            flexible_allocations.sort(key=lambda x: x[3], reverse=True)
+
+            for i, (cat_idx, allocated, available, proportion) in enumerate(flexible_allocations):
+                if shortfall == 0:
+                    break
+
+                # How many more can this category take?
+                can_take = available - allocated
+                if can_take > 0:
+                    give = min(can_take, shortfall)
+                    cat_name = self.distributor.age_categories[cat_idx].name
+                    logger.debug(f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})")
+                    flexible_allocations[i] = (cat_idx, allocated + give, available, proportion)
+                    shortfall -= give
+
+        # Add all flexible allocations to selections
+        for cat_idx, allocated, _, _ in flexible_allocations:
+            selections.append((cat_idx, allocated))
+
+        # Sort selections by category index to maintain order
+        selections.sort(key=lambda x: x[0])
+
+        total_selected = sum(count for _, count in selections)
+        logger.debug(f"\n--- SECOND PASS COMPLETE ---")
+        logger.debug(f"Total selected: {total_selected}")
+        logger.debug(f"Selections: {selections}")
+
+        return (selections, None)
