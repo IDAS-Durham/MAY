@@ -227,7 +227,7 @@ def main():
     logger.info("")
     logger.info("Distributing households...")
     household_config = config.get("households", {})
-    households = HouseholdDistributor(
+    household_distributor = HouseholdDistributor(
         geography=geo,
         population=population,
         data_dir=household_config.get("data_dir", "data/households"),
@@ -236,7 +236,7 @@ def main():
 
     # Load household data
     household_data_file = household_config.get("data_file", "households.csv")
-    households.load_household_data(household_data_file)
+    household_distributor.load_household_data(household_data_file)
 
     # Distribute households and venues based on configuration mode
     strategy_file = household_config.get("strategy_file")
@@ -244,11 +244,11 @@ def main():
     if strategy_file:
         # Mode 1: Unified strategy (households + venues in order)
         logger.info(f"Using unified allocation strategy from {strategy_file}")
-        execute_allocation_strategy(population, venues, households, strategy_file)
+        execute_allocation_strategy(population, venues, household_distributor, strategy_file)
 
     # Export household allocations
     export_file = household_config.get("export_file", "household_allocations.csv")
-    households.export_households_to_csv(export_file)
+    household_distributor.export_households_to_csv(export_file)
 
     # Export venue allocations
     venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
@@ -257,7 +257,7 @@ def main():
     # Create World object
     logger.info("")
     logger.info("Creating World object...")
-    world = World(geography=geo, population=population, venues=venues, households=households)
+    world = World(geography=geo, population=population, venues=venues, households=household_distributor)
     logger.info(world)
 
     logger.info("")

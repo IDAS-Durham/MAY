@@ -13,7 +13,7 @@ from .venue_allocator import _allocate_to_venue_type
 logger = logging.getLogger("allocation_strategy")
 
 
-def execute_allocation_strategy(population, venues, households,
+def execute_allocation_strategy(population, venues, household_distributor,
                                 strategy_file: str = "data/households/allocation_strategy.yaml"):
     """
     Execute a unified allocation strategy from YAML configuration.
@@ -24,7 +24,7 @@ def execute_allocation_strategy(population, venues, households,
     Args:
         population: PopulationManager
         venues: VenueManager
-        households: HouseholdDistributor
+        household_distributor: HouseholdDistributor
         strategy_file: Path to YAML strategy file (relative or absolute)
 
     Returns:
@@ -34,11 +34,9 @@ def execute_allocation_strategy(population, venues, households,
     logger.info("Executing Unified Allocation Strategy")
     logger.info("=" * 60)
 
-    # Handle relative paths
+    # Handle relative paths - assume relative to data/ directory
     if not os.path.isabs(strategy_file):
-        # Try relative to current directory first, then relative to data/
-        if not os.path.exists(strategy_file):
-            strategy_file = f"data/{strategy_file}"
+        strategy_file = f"data/{strategy_file}"
 
     # Load strategy configuration
     logger.info(f"Loading allocation strategy from {strategy_file}")
@@ -82,15 +80,15 @@ def execute_allocation_strategy(population, venues, households,
 
         # Execute based on type
         if step_type == 'household':
-            stats = _execute_household_step(step_config, households)
+            stats = _execute_household_step(step_config, household_distributor)
         elif step_type == 'venue':
-            stats = _execute_venue_step(step_config, population, venues, households)
+            stats = _execute_venue_step(step_config, population, venues, household_distributor)
         elif step_type == 'household_excess':
-            stats = _execute_household_excess_step(step_config, households)
+            stats = _execute_household_excess_step(step_config, household_distributor)
         elif step_type == 'household_overflow':
-            stats = _execute_household_overflow_step(step_config, households)
+            stats = _execute_household_overflow_step(step_config, household_distributor)
         elif step_type == 'household_promotion':
-            stats = _execute_household_promotion_step(step_config, households)
+            stats = _execute_household_promotion_step(step_config, household_distributor)
 
         all_stats[step_name] = {
             'type': step_type,
@@ -153,33 +151,33 @@ def execute_allocation_strategy(population, venues, households,
         logger.info("")
 
     logger.info("Overall Totals:")
-    logger.info(f"  Total households: {len(households.households):,}")
+    logger.info(f"  Total households: {len(household_distributor.households):,}")
     logger.info(f"  People in households (initial): {total_household_alloc:,}")
     logger.info(f"  People added to households (excess): {total_excess_alloc:,}")
     logger.info(f"  People added to households (overflow): {total_overflow_alloc:,}")
     logger.info(f"  People in venues: {total_venue_alloc:,}")
-    logger.info(f"  Total allocated: {len(households.allocated_people):,}")
-    logger.info(f"  Remaining unallocated: {households.get_available_people_count():,}")
+    logger.info(f"  Total allocated: {len(household_distributor.allocated_people):,}")
+    logger.info(f"  Remaining unallocated: {household_distributor.get_available_people_count():,}")
 
     total_pop = len(population.get_all_people())
-    alloc_pct = (len(households.allocated_people) / total_pop * 100) if total_pop > 0 else 0
+    alloc_pct = (len(household_distributor.allocated_people) / total_pop * 100) if total_pop > 0 else 0
     logger.info(f"  Allocation rate: {alloc_pct:.1f}%")
     logger.info("=" * 60)
 
     # Print relationship rules statistics
     logger.info("")
-    households.relationship_rules.print_statistics()
+    household_distributor.relationship_rules.print_statistics()
 
     return all_stats
 
 
-def _execute_household_step(step_config: Dict, households) -> Dict:
+def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
     """
     Execute a household allocation step.
 
     Args:
         step_config: Configuration dict for this step
-        households: HouseholdDistributor
+        household_distributor: HouseholdDistributor
 
     Returns:
         dict: Statistics for this step
@@ -211,7 +209,7 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
         pattern_list = []
         for p in patterns:
             if isinstance(p, dict):
-                # New format with assumption
+                # Format with assumption
                 pattern_str = p.get('pattern')
                 assumption_str = p.get('assumption')
 
@@ -221,17 +219,17 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
                         pattern_assumptions[pattern_str] = assumption_str
                         logger.info(f"  Pattern '{pattern_str}' has assumption: '{assumption_str}'")
             else:
-                # Old format (simple string)
+                # Simple format
                 pattern_list.append(p)
 
     # Temporarily override demotion if specified
     original_demotion = None
     if enable_demotion is not None:
-        original_demotion = households.config['demotion']['enabled']
-        households.config['demotion']['enabled'] = enable_demotion
+        original_demotion = household_distributor.config['demotion']['enabled']
+        household_distributor.config['demotion']['enabled'] = enable_demotion
 
     try:
-        stats = households.distribute_households_round(
+        stats = household_distributor.distribute_households_round(
             pattern_filter=pattern_list,
             pattern_assumptions=pattern_assumptions,
             max_households=max_households,
@@ -246,10 +244,10 @@ def _execute_household_step(step_config: Dict, households) -> Dict:
     finally:
         # Restore original demotion setting
         if original_demotion is not None:
-            households.config['demotion']['enabled'] = original_demotion
+            household_distributor.config['demotion']['enabled'] = original_demotion
 
 
-def _execute_household_excess_step(step_config: Dict, households) -> Dict:
+def _execute_household_excess_step(step_config: Dict, household_distributor) -> Dict:
     """
     Execute a household excess allocation step.
 
@@ -257,7 +255,7 @@ def _execute_household_excess_step(step_config: Dict, households) -> Dict:
 
     Args:
         step_config: Configuration dict for this step
-        households: HouseholdDistributor
+        household_distributor: HouseholdDistributor
 
     Returns:
         dict: Statistics for this step
@@ -282,7 +280,7 @@ def _execute_household_excess_step(step_config: Dict, households) -> Dict:
             'error': "Missing 'add_category' parameter"
         }
 
-    stats = households.allocate_excess_to_households(
+    stats = household_distributor.allocate_excess_to_households(
         target_patterns=target_patterns,
         add_category=add_category,
         constraints=constraints,
@@ -296,7 +294,7 @@ def _execute_household_excess_step(step_config: Dict, households) -> Dict:
     return stats
 
 
-def _execute_household_overflow_step(step_config: Dict, households) -> Dict:
+def _execute_household_overflow_step(step_config: Dict, household_distributor) -> Dict:
     """
     Execute a household overflow allocation step.
 
@@ -306,7 +304,7 @@ def _execute_household_overflow_step(step_config: Dict, households) -> Dict:
 
     Args:
         step_config: Configuration dict for this step
-        households: HouseholdDistributor
+        household_distributor: HouseholdDistributor
 
     Returns:
         dict: Statistics for this step
@@ -325,7 +323,7 @@ def _execute_household_overflow_step(step_config: Dict, households) -> Dict:
             'error': "Missing 'add_category' parameter"
         }
 
-    stats = households.allocate_overflow_to_households(
+    stats = household_distributor.allocate_overflow_to_households(
         target_patterns=target_patterns,
         add_category=add_category,
         pattern_bias=pattern_bias,
@@ -336,7 +334,7 @@ def _execute_household_overflow_step(step_config: Dict, households) -> Dict:
     return stats
 
 
-def _execute_household_promotion_step(step_config: Dict, households) -> Dict:
+def _execute_household_promotion_step(step_config: Dict, household_distributor) -> Dict:
     """
     Execute a household promotion allocation step.
 
@@ -345,7 +343,7 @@ def _execute_household_promotion_step(step_config: Dict, households) -> Dict:
 
     Args:
         step_config: Configuration dict for this step
-        households: HouseholdDistributor
+        household_distributor: HouseholdDistributor
 
     Returns:
         dict: Statistics for this step
@@ -365,14 +363,14 @@ def _execute_household_promotion_step(step_config: Dict, households) -> Dict:
 
     if promotion_rules:
         # Rule-based promotion (controlled)
-        stats = households.promote_with_rules(
+        stats = household_distributor.promote_with_rules(
             promotion_rules=promotion_rules,
             refresh_pools=refresh_pools,
             round_name=round_name
         )
     else:
         # Simple promotion (all categories)
-        stats = households.promote_and_allocate(
+        stats = household_distributor.promote_and_allocate(
             target_categories=target_categories,
             refresh_pools=refresh_pools,
             round_name=round_name
@@ -381,7 +379,7 @@ def _execute_household_promotion_step(step_config: Dict, households) -> Dict:
     return stats
 
 
-def _execute_venue_step(step_config: Dict, population, venues, households) -> Dict:
+def _execute_venue_step(step_config: Dict, population, venues, household_distributor) -> Dict:
     """
     Execute a venue allocation step.
 
@@ -389,7 +387,7 @@ def _execute_venue_step(step_config: Dict, population, venues, households) -> Di
         step_config: Configuration dict for this step
         population: PopulationManager
         venues: VenueManager
-        households: HouseholdDistributor
+        household_distributor: HouseholdDistributor
 
     Returns:
         dict: Statistics for this step
@@ -415,7 +413,7 @@ def _execute_venue_step(step_config: Dict, population, venues, households) -> Di
         allocation_config=allocation_config,
         population=population,
         venues=venues,
-        household_distributor=households
+        household_distributor=household_distributor
     )
 
     return stats
