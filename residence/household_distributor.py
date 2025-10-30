@@ -778,6 +778,7 @@ class HouseholdDistributor:
             - selections: List of (category_idx, count) tuples if successful
             - failed_category_idx: Category index that caused failure, or None if successful
         """
+
         selections = []
         logger.debug(f"\n=== ORIGINAL SEQUENTIAL ALLOCATION MODE ===")
         if max_size:
@@ -993,7 +994,6 @@ class HouseholdDistributor:
         fallback_priority = [idx for _, idx in priority_order]
 
         current_pattern = pattern
-        last_failed_category = None
 
         for attempt in range(max_attempts + 1):
             if attempt > 0:
@@ -1012,9 +1012,6 @@ class HouseholdDistributor:
                     logger.debug(f"  ✓ Succeeded after {attempt} demotion(s) with pattern: {current_pattern.to_string()}")
                     logger.debug("")
                 return household
-
-            # Store which category failed
-            last_failed_category = failed_category_idx
 
             if failed_category_idx is not None:
                 cat = self.age_categories[failed_category_idx]

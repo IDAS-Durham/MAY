@@ -216,12 +216,12 @@ class RelationshipRulesValidator:
 
         return (True, 0.0)
 
-    def validate_couple_numerical_attribute_difference(self,
+    def validate_pair_numerical_attribute_difference(self,
                                       person1: Person,
                                       person2: Person,
                                       constraint: Dict) -> Tuple[bool, float]:
         """
-        Validate numerical attribute difference between couple members.
+        Validate numerical attribute difference between pair members.
 
         Args:
             person1: First person
@@ -248,12 +248,12 @@ class RelationshipRulesValidator:
 
         return (True, 0.0)
 
-    def calculate_couple_numerical_attribute_penalty(self,
+    def calculate_pair_numerical_attribute_penalty(self,
                                     person1: Person,
                                     person2: Person,
                                     constraint: Dict) -> float:
         """
-        Calculate penalty score for couple numerical attribute difference.
+        Calculate penalty score for pair numerical attribute difference.
 
         Lower score = better match based on expected mean/std.
 
@@ -292,7 +292,6 @@ class RelationshipRulesValidator:
                                      existing_people_by_role: Dict[str, List[Person]],
                                      constraints: List[Dict],
                                      current_role: str,
-                                     required_sex: Optional[str] = None,
                                      show_detailed_logs: bool = False) -> Optional[Person]:
         """
         Select a person from candidates that satisfies all constraints.
@@ -307,7 +306,6 @@ class RelationshipRulesValidator:
             existing_people_by_role: Dict of role_name -> list of already selected people
             constraints: List of constraint dicts to validate
             current_role: Name of role being filled
-            required_sex: Required sex (None = any)
             show_detailed_logs: If True, log detailed selection process
 
         Returns:
@@ -315,12 +313,6 @@ class RelationshipRulesValidator:
         """
         if not candidates:
             return None
-
-        # Filter by sex if specified
-        if required_sex:
-            candidates = [p for p in candidates if p.sex == required_sex]
-            if not candidates:
-                return None
 
         max_attempts = self.selection_strategy.get('max_attempts', 50)
         use_best = self.selection_strategy.get('use_best_candidate', True)
@@ -381,7 +373,7 @@ class RelationshipRulesValidator:
         candidates_tested = 0
         candidates_rejected = 0
 
-        for attempt in range(min(max_attempts, len(prioritized_candidates))):
+        for _ in range(min(max_attempts, len(prioritized_candidates))):
             candidate = random.choice(prioritized_candidates)
             candidates_tested += 1
 
@@ -391,7 +383,7 @@ class RelationshipRulesValidator:
                 role_2 = constraint.get('role_2')
                 people_2 = existing_people_by_role.get(role_2, [])
 
-                is_valid, penalty = self.validate_numerical_attribute_difference_constraint(
+                is_valid, _ = self.validate_numerical_attribute_difference_constraint(
                     candidate, people_2, constraint, log_rejection=show_detailed_logs
                 )
 
@@ -585,7 +577,7 @@ class RelationshipRulesValidator:
                 candidates_tested += 1
 
                 # Validate partner against first person (couple numerical attribute difference)
-                is_valid, penalty = self.validate_couple_numerical_attribute_difference(
+                is_valid, _ = self.validate_pair_numerical_attribute_difference(
                     first_person, candidate, constraint
                 )
                 if not is_valid:
@@ -657,10 +649,10 @@ class RelationshipRulesValidator:
             best_penalty = float('inf')
 
             for candidate in remaining:
-                is_valid, val_penalty = self.validate_couple_numerical_attribute_difference(
+                is_valid, val_penalty = self.validate_pair_numerical_attribute_difference(
                     first_person, candidate, constraint
                 )
-                attr_penalty = self.calculate_couple_numerical_attribute_penalty(
+                attr_penalty = self.calculate_pair_numerical_attribute_penalty(
                     first_person, candidate, constraint
                 )
                 total_penalty = val_penalty + attr_penalty
