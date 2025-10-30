@@ -12,6 +12,7 @@ import os
 import logging
 import yaml
 import numpy as np
+from collections import deque
 from typing import List, Optional, Dict
 
 logger = logging.getLogger("venue_allocator")
@@ -119,6 +120,8 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
     # Allocate people to venues
     allocated_people = []
+    # OPTIMIZATION: Use set for O(1) removal instead of list.remove() which is O(n)
+    eligible_people_set = set(eligible_people)
 
     for venue in venue_list:
         capacity = int(venue.properties.get(capacity_property, 0))
@@ -127,7 +130,10 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
         # Filter eligible people to only those from this venue's geographical unit
         venue_geo_unit = venue.geographical_unit
-        venue_eligible = [p for p in eligible_people if p.geographical_unit == venue_geo_unit]
+        venue_eligible_list = [p for p in eligible_people if p.geographical_unit == venue_geo_unit and p in eligible_people_set]
+
+        # OPTIMIZATION: Use deque for O(1) popleft() instead of list.pop(0) which is O(n)
+        venue_eligible = deque(venue_eligible_list)
 
         # Allocate people to this venue
         venue_residents = []
@@ -135,9 +141,9 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
             if not venue_eligible:
                 break
 
-            person = venue_eligible.pop(0)
-            # Remove from global pool as well
-            eligible_people.remove(person)
+            person = venue_eligible.popleft()
+            # Remove from global pool set
+            eligible_people_set.discard(person)
 
             venue_residents.append(person)
             allocated_people.append(person)
@@ -382,7 +388,10 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
             # Filter people to only those from this venue's geographical unit
             venue_geo_unit = venue.geographical_unit
-            geo_filtered_people = [p for p in available_people if p.geographical_unit == venue_geo_unit]
+            geo_filtered_list = [p for p in available_people if p.geographical_unit == venue_geo_unit]
+
+            # OPTIMIZATION: Use deque for O(1) popleft()
+            geo_filtered_people = deque(geo_filtered_list)
 
             # Allocate people to this slot
             venue_residents = []
@@ -392,7 +401,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                 if not geo_filtered_people:
                     break
 
-                person = geo_filtered_people.pop(0)  # Take from front (already sorted by strategy)
+                person = geo_filtered_people.popleft()  # Take from front (already sorted by strategy)
                 # Remove from global pool as well
                 available_people.remove(person)
 

@@ -19,6 +19,7 @@ import logging
 import yaml
 import numpy as np
 from collections import defaultdict
+from itertools import islice
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
@@ -352,15 +353,17 @@ class RelationshipRulesValidator:
                     max_diff = constraint.get('max_difference', 50)
                     target_diff = max(min_diff, min(max_diff, target_diff))
 
-                    # Calculate target attribute value
-                    reference_value = max(getattr(p, attribute) for p in people_2)
+                    # OPTIMIZATION: Calculate target attribute value - extract values once
+                    people_2_values = [getattr(p, attribute) for p in people_2]
+                    reference_value = max(people_2_values)
                     target_value = reference_value + target_diff
 
-                    # Filter to candidates within window of target (±tolerance)
+                    # OPTIMIZATION: Filter to candidates within window - pre-extract attribute values
                     tolerance = pref_dist.get('tolerance', std * 1.5 if dist_type == 'normal' else 10)
+                    candidate_values = {p.id: getattr(p, attribute) for p in prioritized_candidates}
                     prioritized_candidates = [
                         p for p in prioritized_candidates
-                        if abs(getattr(p, attribute) - target_value) <= tolerance
+                        if abs(candidate_values[p.id] - target_value) <= tolerance
                     ]
 
                     # If filtering too aggressive, fall back to all candidates
@@ -371,19 +374,30 @@ class RelationshipRulesValidator:
                     elif show_detailed_logs:
                         logger.debug(f"  ℹ Prioritizing {len(prioritized_candidates)}/{len(candidates)} candidates near target {attribute}={target_value:.1f} (±{tolerance})")
 
+        # OPTIMIZATION: Pre-cache people_2 lookups to avoid repeated dict.get calls
+        constraint_people_cache = {}
+        for constraint in relevant_constraints:
+            role_2 = constraint.get('role_2')
+            if role_2 not in constraint_people_cache:
+                constraint_people_cache[role_2] = existing_people_by_role.get(role_2, [])
+
+        # OPTIMIZATION: Shuffle once instead of repeated np.random.choice
+        shuffled_candidates = prioritized_candidates.copy()
+        np.random.shuffle(shuffled_candidates)
+
         # Try random selection up to max_attempts (from prioritized pool)
         candidates_tested = 0
         candidates_rejected = 0
 
-        for _ in range(min(max_attempts, len(prioritized_candidates))):
-            candidate = np.random.choice(prioritized_candidates)
+        # OPTIMIZATION: Use islice to avoid creating a slice (new list)
+        for candidate in islice(shuffled_candidates, max_attempts):
             candidates_tested += 1
 
             # Validate all relevant constraints
             all_valid = True
             for constraint in relevant_constraints:
                 role_2 = constraint.get('role_2')
-                people_2 = existing_people_by_role.get(role_2, [])
+                people_2 = constraint_people_cache.get(role_2, [])
 
                 is_valid, _ = self.validate_numerical_attribute_difference_constraint(
                     candidate, people_2, constraint, log_rejection=show_detailed_logs
@@ -518,6 +532,13 @@ class RelationshipRulesValidator:
             candidates_by_cat[cat_val].append(p)
             candidate_cat_values[p.id] = cat_val
 
+        # OPTIMIZATION: Pre-cache existing_people_by_role lookups to avoid repeated dict.get
+        constraint_people_cache = {}
+        for rel_constraint in relevant_constraints:
+            role_2 = rel_constraint.get('role_2')
+            if role_2 not in constraint_people_cache:
+                constraint_people_cache[role_2] = existing_people_by_role.get(role_2, [])
+
         # Try to find a valid couple
         attempts_made = 0
         candidates_tested = 0
@@ -525,15 +546,16 @@ class RelationshipRulesValidator:
         first_person = None
         remaining = []
 
+        # OPTIMIZATION: Use islice to avoid creating a slice (new list)
         # Iterate through shuffled candidates instead of random.choice()
-        for first_person in shuffled_candidates[:min(max_attempts, len(shuffled_candidates))]:
+        for first_person in islice(shuffled_candidates, max_attempts):
             candidates_tested += 1
 
             # Validate first person against existing people (e.g., children)
             first_valid = True
             for rel_constraint in relevant_constraints:
                 role_2 = rel_constraint.get('role_2')
-                people_2 = existing_people_by_role.get(role_2, [])
+                people_2 = constraint_people_cache.get(role_2, [])
                 if people_2:
                     # Only log rejections if detailed logging is enabled
                     is_valid, _ = self.validate_numerical_attribute_difference_constraint(
@@ -576,8 +598,9 @@ class RelationshipRulesValidator:
             shuffled_remaining = remaining.copy()
             np.random.shuffle(shuffled_remaining)
 
+            # OPTIMIZATION: Use islice to avoid creating a slice (new list)
             # Try to find valid partner - iterate through shuffled list
-            for candidate in shuffled_remaining[:min(max_attempts, len(shuffled_remaining))]:
+            for candidate in islice(shuffled_remaining, max_attempts):
                 candidates_tested += 1
 
                 # Validate partner against first person (couple numerical attribute difference)
@@ -594,7 +617,7 @@ class RelationshipRulesValidator:
                 partner_valid = True
                 for rel_constraint in relevant_constraints:
                     role_2 = rel_constraint.get('role_2')
-                    people_2 = existing_people_by_role.get(role_2, [])
+                    people_2 = constraint_people_cache.get(role_2, [])
                     if people_2:
                         is_valid, _ = self.validate_numerical_attribute_difference_constraint(
                             candidate, people_2, rel_constraint, log_rejection=show_detailed_logs

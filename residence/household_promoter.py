@@ -8,6 +8,7 @@ This module contains logic for:
 
 import logging
 import numpy as np
+from collections import deque
 from typing import List, Optional, Dict
 from residence.composition_pattern import CompositionPattern
 
@@ -174,13 +175,17 @@ class HouseholdPromoter:
                     else:  # Fixed
                         can_add = max(0, max_count - current_count)
 
+                    # OPTIMIZATION: Convert to deque for O(1) popleft if not already
+                    if not isinstance(available_people, deque):
+                        available_people = deque(available_people)
+
                     # Add people
                     added_to_this = 0
                     for _ in range(can_add):
                         if not available_people:
                             break
 
-                        person = available_people.pop(0)
+                        person = available_people.popleft()
                         household.add_resident(person)
                         self.distributor.allocated_people.add(person.id)
                         added_to_this += 1
@@ -326,6 +331,10 @@ class HouseholdPromoter:
                         promoted_households.add(household.id)
                         logger.debug(f"  Promoted household {household.id}: {source_pattern} → {target_pattern_str}")
 
+                    # OPTIMIZATION: Convert to deque for O(1) popleft if not already
+                    if not isinstance(available_people, deque):
+                        available_people = deque(available_people)
+
                     # Add people
                     for _ in range(category_can_add):
                         if not available_people:
@@ -333,7 +342,7 @@ class HouseholdPromoter:
                         if max_to_add is not None and added_to_this_household >= max_to_add:
                             break
 
-                        person = available_people.pop(0)
+                        person = available_people.popleft()
                         household.add_resident(person)
                         self.distributor.allocated_people.add(person.id)
                         added_to_this_household += 1
