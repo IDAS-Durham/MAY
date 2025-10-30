@@ -8,6 +8,7 @@ import os
 import logging
 import numpy as np
 import pandas as pd
+from collections import defaultdict
 from .person import Person
 
 logger = logging.getLogger("population")
@@ -74,8 +75,8 @@ class PopulationManager:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
-        # Using vectorized pandas operations for performance
-        self.precise_demographics = {}
+        # Using defaultdict to eliminate conditional checks (faster)
+        self.precise_demographics = defaultdict(lambda: defaultdict(dict))
         total_people = 0
 
         logger.info("Processing male demographics (vectorized)...")
@@ -94,21 +95,16 @@ class PopulationManager:
         # Filter out zero counts for efficiency
         female_melted = female_melted[female_melted['count'] > 0]
 
-        logger.info("Building demographic dictionary...")
+        logger.info("Building demographic dictionary (optimized with defaultdict)...")
         # Convert to numpy arrays for much faster iteration
         male_values = male_melted.values  # [[geo_unit, age, count], ...]
         female_values = female_melted.values
 
-        # Build nested dictionary from numpy arrays (much faster than iterrows)
+        # Build nested dictionary using defaultdict (eliminates conditional checks)
         for row in male_values:
             geo_unit = str(row[0])
             age = int(row[1])
             count = int(row[2])
-
-            if geo_unit not in self.precise_demographics:
-                self.precise_demographics[geo_unit] = {}
-            if age not in self.precise_demographics[geo_unit]:
-                self.precise_demographics[geo_unit][age] = {}
 
             self.precise_demographics[geo_unit][age]['male'] = count
             total_people += count
@@ -117,11 +113,6 @@ class PopulationManager:
             geo_unit = str(row[0])
             age = int(row[1])
             count = int(row[2])
-
-            if geo_unit not in self.precise_demographics:
-                self.precise_demographics[geo_unit] = {}
-            if age not in self.precise_demographics[geo_unit]:
-                self.precise_demographics[geo_unit][age] = {}
 
             self.precise_demographics[geo_unit][age]['female'] = count
             total_people += count
