@@ -11,7 +11,7 @@ the unified household + venue allocation strategy.
 import os
 import logging
 import yaml
-import random
+import numpy as np
 from typing import List, Optional, Dict
 
 logger = logging.getLogger("venue_allocator")
@@ -228,14 +228,14 @@ def _apply_strategy(people: List, strategy: str) -> List:
         list: Sorted/shuffled list of people
     """
     if strategy == "random":
-        random.shuffle(people)
+        np.random.shuffle(people)
     elif strategy == "oldest_first":
         people.sort(key=lambda p: p.age, reverse=True)
     elif strategy == "youngest_first":
         people.sort(key=lambda p: p.age)
     else:
         logger.warning(f"Unknown strategy '{strategy}', using random")
-        random.shuffle(people)
+        np.random.shuffle(people)
 
     return people
 

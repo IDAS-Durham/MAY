@@ -17,7 +17,7 @@ No hardcoded assumptions about specific attributes - everything is configurable 
 import os
 import logging
 import yaml
-import random
+import numpy as np
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
@@ -338,12 +338,12 @@ class RelationshipRulesValidator:
                     if dist_type == 'normal':
                         mean = pref_dist.get('mean', 30)
                         std = pref_dist.get('std', 6)
-                        target_diff = random.gauss(mean, std)
+                        target_diff = np.random.normal(mean, std)
                     else:
                         # Fallback to uniform if unknown type
                         min_diff = constraint.get('min_difference', 16)
                         max_diff = constraint.get('max_difference', 50)
-                        target_diff = random.uniform(min_diff, max_diff)
+                        target_diff = np.random.uniform(min_diff, max_diff)
 
                     # Clamp to valid range
                     min_diff = constraint.get('min_difference', 16)
@@ -374,7 +374,7 @@ class RelationshipRulesValidator:
         candidates_rejected = 0
 
         for _ in range(min(max_attempts, len(prioritized_candidates))):
-            candidate = random.choice(prioritized_candidates)
+            candidate = np.random.choice(prioritized_candidates)
             candidates_tested += 1
 
             # Validate all relevant constraints
@@ -479,7 +479,7 @@ class RelationshipRulesValidator:
         cat_attribute = cat_attr_config.get('attribute', 'sex')
         same_category_prob = cat_attr_config.get('same_category_probability', 0.05)
 
-        is_same_category = random.random() < same_category_prob
+        is_same_category = np.random.random() < same_category_prob
 
         if show_detailed_logs:
             pair_type = f"same-{cat_attribute}" if is_same_category else f"different-{cat_attribute}"
@@ -505,7 +505,7 @@ class RelationshipRulesValidator:
 
         # Pre-shuffle candidates once to avoid repeated random.choice() overhead
         shuffled_candidates = candidates.copy()
-        random.shuffle(shuffled_candidates)
+        np.random.shuffle(shuffled_candidates)
 
         # Pre-group candidates by categorical attribute for faster filtering
         candidates_by_cat = {}
@@ -558,7 +558,7 @@ class RelationshipRulesValidator:
                     # Use pre-computed categorical values from candidates_by_cat
                     all_cat_values = list(candidates_by_cat.keys())
                     other_values = [v for v in all_cat_values if v != first_cat_value]
-                    required_cat_value = random.choice(other_values) if other_values else first_cat_value
+                    required_cat_value = np.random.choice(other_values) if other_values else first_cat_value
 
             # Use pre-grouped candidates by categorical attribute
             remaining = candidates_by_cat.get(required_cat_value, [])
@@ -570,7 +570,7 @@ class RelationshipRulesValidator:
 
             # Shuffle remaining candidates once and iterate
             shuffled_remaining = remaining.copy()
-            random.shuffle(shuffled_remaining)
+            np.random.shuffle(shuffled_remaining)
 
             # Try to find valid partner - iterate through shuffled list
             for candidate in shuffled_remaining[:min(max_attempts, len(shuffled_remaining))]:

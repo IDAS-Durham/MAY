@@ -7,7 +7,7 @@ This module contains logic for:
 """
 
 import logging
-import random
+import numpy as np
 from typing import List, Optional, Dict
 from population.person import Person
 from residence.models import Household
@@ -109,7 +109,7 @@ class HouseholdExcessHandler:
             }
 
         # Shuffle households for fairness
-        random.shuffle(target_households)
+        np.random.shuffle(target_households)
 
         # Track statistics
         people_added = 0
@@ -374,7 +374,7 @@ class HouseholdExcessHandler:
 
                 # Shuffle for fairness
                 shuffled_hh = pattern_households.copy()
-                random.shuffle(shuffled_hh)
+                np.random.shuffle(shuffled_hh)
 
                 for hh_idx, household in enumerate(shuffled_hh):
                     # Determine how many to add to this household

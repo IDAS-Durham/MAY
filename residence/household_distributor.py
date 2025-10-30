@@ -11,7 +11,6 @@ This module handles:
 import os
 import logging
 import yaml
-import random
 import math
 import pandas as pd
 import numpy as np
@@ -201,7 +200,7 @@ class HouseholdDistributor:
 
             # Shuffle each pool for randomness
             for pool in category_pools:
-                random.shuffle(pool)
+                np.random.shuffle(pool)
 
             self.person_pool_by_geo_unit[geo_unit_code] = category_pools
 
@@ -829,7 +828,7 @@ class HouseholdDistributor:
 
                     # Random count between min and max_allocatable
                     if max_allocatable > min_count:
-                        count = random.randint(min_count, max_allocatable)
+                        count = np.random.randint(min_count, max_allocatable + 1)  # numpy's randint is exclusive of upper bound
                         logger.debug(f"    random allocation: {count} (range: {min_count}-{max_allocatable})")
                     else:
                         count = min_count
@@ -1381,8 +1380,8 @@ class HouseholdDistributor:
 
             normalized_weights = [w / total_weight for w in weights]
 
-            # Sample using random.choices
-            return random.choices(values, weights=normalized_weights, k=1)[0]
+            # Sample using numpy choice
+            return np.random.choice(values, p=normalized_weights)
 
         elif dist_type == 'poisson':
             # Zero-truncated Poisson distribution, capped at max value
@@ -1417,7 +1416,7 @@ class HouseholdDistributor:
             std = distribution_config.get('std', 0.5)
 
             # Sample from normal distribution
-            value = random.gauss(mean, std)
+            value = np.random.normal(mean, std)
 
             # Ensure non-negative and round
             return max(0, int(round(value)))

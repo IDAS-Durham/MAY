@@ -2,7 +2,6 @@ import cProfile
 import os
 import logging
 import pstats
-import random
 import sys
 import numpy as np
 import numba as nb
@@ -32,17 +31,15 @@ logging.getLogger('numexpr').setLevel(logging.WARNING)
 
 def set_random_seed(seed=999):
     """
-    Sets global seeds for testing in numpy, random, and numbaised numpy.
+    Sets global seeds for testing in numpy and numbaised numpy.
     """
 
     @nb.njit(cache=True)
     def set_seed_numba(seed):
-        random.seed(seed)
         return np.random.seed(seed)
 
     np.random.seed(seed)
     set_seed_numba(seed)
-    random.seed(seed)
     return
 
 set_random_seed(0)

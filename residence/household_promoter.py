@@ -7,7 +7,7 @@ This module contains logic for:
 """
 
 import logging
-import random
+import numpy as np
 from typing import List, Optional, Dict
 from residence.composition_pattern import CompositionPattern
 
@@ -108,7 +108,7 @@ class HouseholdPromoter:
                     continue
 
                 # Try to promote and allocate to each household
-                random.shuffle(geo_unit_households)  # For fairness
+                np.random.shuffle(geo_unit_households)  # For fairness
 
                 for household in geo_unit_households:
                     if not available_people:
