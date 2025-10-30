@@ -74,52 +74,57 @@ class PopulationManager:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
+        # Using vectorized pandas operations for performance
         self.precise_demographics = {}
         total_people = 0
 
-        # Process male data
-        for _, row in male_df.iterrows():
-            geo_unit = str(row['geo_unit'])
+        logger.info("Processing male demographics (vectorized)...")
+        # Convert male dataframe to long format for efficient processing
+        male_melted = male_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
+        male_melted['age'] = male_melted['age'].astype(int)
+        male_melted['count'] = male_melted['count'].fillna(0).astype(int)
+        # Filter out zero counts for efficiency
+        male_melted = male_melted[male_melted['count'] > 0]
+
+        logger.info("Processing female demographics (vectorized)...")
+        # Convert female dataframe to long format
+        female_melted = female_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
+        female_melted['age'] = female_melted['age'].astype(int)
+        female_melted['count'] = female_melted['count'].fillna(0).astype(int)
+        # Filter out zero counts for efficiency
+        female_melted = female_melted[female_melted['count'] > 0]
+
+        logger.info("Building demographic dictionary...")
+        # Convert to numpy arrays for much faster iteration
+        male_values = male_melted.values  # [[geo_unit, age, count], ...]
+        female_values = female_melted.values
+
+        # Build nested dictionary from numpy arrays (much faster than iterrows)
+        for row in male_values:
+            geo_unit = str(row[0])
+            age = int(row[1])
+            count = int(row[2])
 
             if geo_unit not in self.precise_demographics:
                 self.precise_demographics[geo_unit] = {}
+            if age not in self.precise_demographics[geo_unit]:
+                self.precise_demographics[geo_unit][age] = {}
 
-            # Iterate through age columns (skip 'geo_unit' column)
-            for col in male_df.columns:
-                if col == 'geo_unit':
-                    continue
+            self.precise_demographics[geo_unit][age]['male'] = count
+            total_people += count
 
-                age = int(col)
-                count = int(row[col]) if pd.notna(row[col]) else 0
-
-                if count > 0:
-                    if age not in self.precise_demographics[geo_unit]:
-                        self.precise_demographics[geo_unit][age] = {}
-
-                    self.precise_demographics[geo_unit][age]['male'] = count
-                    total_people += count
-
-        # Process female data
-        for _, row in female_df.iterrows():
-            geo_unit = str(row['geo_unit'])
+        for row in female_values:
+            geo_unit = str(row[0])
+            age = int(row[1])
+            count = int(row[2])
 
             if geo_unit not in self.precise_demographics:
                 self.precise_demographics[geo_unit] = {}
+            if age not in self.precise_demographics[geo_unit]:
+                self.precise_demographics[geo_unit][age] = {}
 
-            # Iterate through age columns
-            for col in female_df.columns:
-                if col == 'geo_unit':
-                    continue
-
-                age = int(col)
-                count = int(row[col]) if pd.notna(row[col]) else 0
-
-                if count > 0:
-                    if age not in self.precise_demographics[geo_unit]:
-                        self.precise_demographics[geo_unit][age] = {}
-
-                    self.precise_demographics[geo_unit][age]['female'] = count
-                    total_people += count
+            self.precise_demographics[geo_unit][age]['female'] = count
+            total_people += count
 
         logger.info(f"Loaded precise demographics for {len(self.precise_demographics)} geographical units")
         logger.info(f"Total people in demographics: {total_people:,}")
