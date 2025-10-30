@@ -18,6 +18,7 @@ import os
 import logging
 import yaml
 import numpy as np
+from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
@@ -192,9 +193,12 @@ class RelationshipRulesValidator:
         # Get attribute values
         person1_value = getattr(person1, attribute)
 
-        # Check against person with MAX attribute value in people2 for min constraint
-        max_person = max(people2, key=lambda p: getattr(p, attribute))
-        max_value = getattr(max_person, attribute)
+        # OPTIMIZATION: Extract all attribute values once to avoid repeated getattr in min/max
+        people2_values = [getattr(p, attribute) for p in people2]
+        max_value = max(people2_values)
+        min_value = min(people2_values)
+
+        # Check against MAX attribute value in people2 for min constraint
         diff_max = person1_value - max_value
 
         if diff_max < min_diff:
@@ -203,9 +207,7 @@ class RelationshipRulesValidator:
                 logger.debug(f"      ✗ Rejected: {person1} - too young (diff={diff_max} < min={min_diff})")
             return (False, penalty)
 
-        # Check against person with MIN attribute value in people2 for max constraint
-        min_person = min(people2, key=lambda p: getattr(p, attribute))
-        min_value = getattr(min_person, attribute)
+        # Check against MIN attribute value in people2 for max constraint
         diff_min = person1_value - min_value
 
         if diff_min > max_diff:
@@ -507,13 +509,14 @@ class RelationshipRulesValidator:
         shuffled_candidates = candidates.copy()
         np.random.shuffle(shuffled_candidates)
 
-        # Pre-group candidates by categorical attribute for faster filtering
-        candidates_by_cat = {}
+        # OPTIMIZATION: Pre-group candidates by categorical attribute AND cache attribute values
+        # This avoids repeated getattr calls in the selection loops
+        candidates_by_cat = defaultdict(list)
+        candidate_cat_values = {}  # Cache categorical attribute values
         for p in candidates:
             cat_val = getattr(p, cat_attribute)
-            if cat_val not in candidates_by_cat:
-                candidates_by_cat[cat_val] = []
             candidates_by_cat[cat_val].append(p)
+            candidate_cat_values[p.id] = cat_val
 
         # Try to find a valid couple
         attempts_made = 0
@@ -544,8 +547,8 @@ class RelationshipRulesValidator:
             if not first_valid:
                 continue
 
-            # Determine required categorical attribute value for second person
-            first_cat_value = getattr(first_person, cat_attribute)
+            # OPTIMIZATION: Use cached categorical attribute value
+            first_cat_value = candidate_cat_values[first_person.id]
             if is_same_category:
                 required_cat_value = first_cat_value
             else:
@@ -562,8 +565,9 @@ class RelationshipRulesValidator:
 
             # Use pre-grouped candidates by categorical attribute
             remaining = candidates_by_cat.get(required_cat_value, [])
-            # Remove first person from remaining
-            remaining = [p for p in remaining if p.id != first_person.id]
+            # OPTIMIZATION: Cache first_person.id to avoid repeated attribute access
+            first_person_id = first_person.id
+            remaining = [p for p in remaining if p.id != first_person_id]
 
             if not remaining:
                 continue
