@@ -2,7 +2,7 @@
 
 geography:
   # Path to geography data files
-  data_dir: "data/geography"
+  data_dir: "world_specific_code/Modern_Day_UK/data/geography"
 
   # Load all geographical units (ignores all filters below if true)
   load_all: true
@@ -29,11 +29,28 @@ geography:
 
 population:
   # Path to population data files
-  data_dir: "data/population"
+  data_dir: "world_specific_code/Modern_Day_UK/data/population"
 
   # Demographics files (matrix format: rows=geo_units, columns=ages)
   demographics_male_file: "demographics_male.csv"
   demographics_female_file: "demographics_female.csv"
+
+
+# ========================================
+# VENUES
+# ========================================
+
+venues:
+  # Path to venue files
+  data_dir: "world_specific_code/Modern_Day_UK/data/venues"
+
+
+# ========================================
+# HOUSEHOLDS (a specific venue)
+# ========================================
+households:
+  data_dir: "world_specific_code/Modern_Day_UK/data/households"
+
 
 # ========================================
 # EXAMPLES

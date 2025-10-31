@@ -9,10 +9,10 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World
-from world_specific_code.household_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
-from world_specific_code.care_home_distributor import CareHomeDistributor, CareHomeSubsetDistributor
-from world_specific_code.student_dorms import StudentDormDistributor, StudentDormSubsetDistributor
-from world_specific_code.prisons import PrisonDistributor, PrisonSubsetDistributor
+from world_specific_code.Modern_Day_UK.household_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
+from world_specific_code.Modern_Day_UK.care_home_distributor import CareHomeDistributor, CareHomeSubsetDistributor
+from world_specific_code.Modern_Day_UK.student_dorms import StudentDormDistributor, StudentDormSubsetDistributor
+from world_specific_code.Modern_Day_UK.prisons import PrisonDistributor, PrisonSubsetDistributor
 
 from may.stats import StatMakerVenues, StatMaker, StatMakerPop
 
@@ -227,11 +227,11 @@ def main():
     logger.info("=" * 60)
 
     # Load config file
-    with open("may/config.yaml", "r") as f:
+    with open("world_specific_code/Modern_Day_UK/config.yaml", "r") as f:
         config = yaml.safe_load(f)
 
     # Setup geography from config and command-line arguments
-    geo, filters = setup_geography()
+    geo, filters = setup_geography(config=config)
 
     # Load the geography data
     geo.load_from_csv()
@@ -242,7 +242,7 @@ def main():
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir="data/venues")
+    venues = VenueManager(geography=geo, data_dir=config.get("venues",{}).get('data_dir','data/venues'))
     for venue_type, phile in [('care_home', 'msoa_care_homes.csv'),
                               ('hospital', 'hospitals.csv'),
                               ('company', 'companies.csv'),
@@ -282,7 +282,7 @@ def main():
     
     # Create Households
     logger.info("Loading households...")
-    household_manager = HouseholdManager(geography=geo, data_dir='data/households', filter_by_geography=True)
+    household_manager = HouseholdManager(geography=geo, data_dir=config.get("households",{}).get("data_dir",'data/households'), filter_by_geography=True)
     household_manager.load_venue_type_from_csv('household', 'households.csv')
 
     logger.info("Loading and creating household data took {:.2g}s".format(time.perf_counter()-laptime))
