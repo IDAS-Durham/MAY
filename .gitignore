@@ -39,6 +39,7 @@ env/
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -64,7 +65,7 @@ cw.txt
 # Debug scripts
 debug_scripts/
 
-data
+/data
 # Generated allocation files
 data/households/household_allocations.csv
 data/venues/venue_allocations.csv
@@ -76,3 +77,6 @@ stuff_for_carehomes
 profile_analyzer.py
 profile_bottlenecks.txt
 simulation_profile.stats
+
+# pytest_cache
+.pytest_cache

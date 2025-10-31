@@ -38,6 +38,9 @@ class PopulationManager:
         # Precise demographics: geo_unit -> age -> sex -> count
         self.precise_demographics = {}
 
+    def __len__(self):
+        return len(self.people)
+
     def load_demographics_from_csv(self, male_file="demographics_male.csv",
                                      female_file="demographics_female.csv"):
         """
@@ -119,7 +122,7 @@ class PopulationManager:
         logger.info(f"Loaded precise demographics for {len(self.precise_demographics)} geographical units")
         logger.info(f"Total people in demographics: {total_people:,}")
 
-    def generate_population(self):
+    def generate_population(self, **kwargs):
         """
         Generate population from precise demographics data.
 
@@ -129,6 +132,17 @@ class PopulationManager:
 
         Assumes demographics are provided for the smallest geographical level
         (first level in the hierarchy, e.g., SGU, village, census block, etc.).
+
+        Args:
+          **kwargs:
+            Arbitrary keyword arguments to be passed to the creation of Person.
+            Supported keys include:
+              * activities (list[str], optional): list of activity names for each Person.
+              * properties (dict, optional): a dict of properties of the Person, e.g. 'ethnicity', 'compliance', 'taste'.
+              * activity_map (DefaultDict[str,list[Subset]], optional):
+                a dict mapping an activity (same string as in activities) to a list of potential Subsets the Person would
+                join to fulfil that activity. 
+                    
         """
         if not self.precise_demographics:
             logger.error("No demographics data loaded. Cannot generate population.")
@@ -168,7 +182,7 @@ class PopulationManager:
 
         for age, sex, unit, count in all_age_sex_geo:
             for _ in range(count):
-                person = Person(age=age, sex=sex, geographical_unit=unit)
+                person = Person(age=age, sex=sex, geographical_unit=unit, **kwargs)
                 self.people.append(person)
                 self.people_by_id[person.id] = person
                 # Add person to their geographical unit's people list

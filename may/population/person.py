@@ -4,6 +4,9 @@ Person class for June Zero.
 Represents an individual agent with age, sex, geographical unit, and activities.
 """
 
+from collections import defaultdict
+from typing import DefaultDict, Optional
+
 class Person:
     """
     Represents an individual person in the simulation.
@@ -15,11 +18,22 @@ class Person:
         geographical_unit (GeographicalUnit): SGU where person lives
         activities (list): List of activity names this person can do
         properties (dict): Extensible dictionary for additional attributes
+        activity_map (defaultdict):
     """
-
+    
     _id_counter = 0
 
-    def __init__(self, age, sex, geographical_unit=None, activities=None, properties=None):
+    __slots__ = [
+        'id',
+        'age',
+        'sex',
+        'geographical_unit',
+        'activities',
+        'properties',
+        'activity_map',
+    ]
+
+    def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"]=None, activities: Optional[list[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
         """
         Initialize a Person.
 
@@ -27,8 +41,13 @@ class Person:
             age (int): Age in years
             sex (str): Sex category
             geographical_unit (GeographicalUnit, optional): SGU where person lives
-            activities (list, optional): List of activity names
+            activities (list[str], optional): List of activity names
             properties (dict, optional): Additional attributes
+            activity_map (dict[str,tuple[int,int,str]], optional):
+              Dictionary mapping an activity name (key being the activity name as a str matching that in self.activities),
+              to a tuple (id of the venue, index of the subgroup for that activity and venue, name of the subgroup).
+              Default = {}.
+        
         """
         self.id = Person._id_counter
         Person._id_counter += 1
@@ -38,6 +57,8 @@ class Person:
         self.geographical_unit = geographical_unit
         self.activities = activities if activities is not None else []
         self.properties = properties if properties is not None else {}
+        if activity_map is None:
+            self.activity_map = defaultdict(list)
 
     @classmethod
     def reset_counter(cls):
@@ -82,6 +103,3 @@ class Person:
         return (f"Person(id={self.id}, age={self.age}, sex={self.sex}, "
                 f"geographical_unit={geo_unit_name}, activities={self.activities})")
 
-    def __str__(self):
-        """User-friendly string representation."""
-        return f"Person {self.id} (age {self.age}, {self.sex})"

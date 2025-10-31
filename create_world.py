@@ -6,12 +6,12 @@ import sys
 import numpy as np
 import numba as nb
 import yaml
-from config_loader import setup_geography
+from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.residence.allocation_strategy import execute_allocation_strategy
 from may.residence.household_distributor import HouseholdDistributor
-from world import World
+from may.world import World
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -89,7 +89,7 @@ def print_world_examples(world):
     logger.info("")
     logger.info("2. Venue Examples:")
     venue_types = venues.get_venue_types()
-    for vtype in sorted(venue_types)[:10]:  # Show first 3 types
+    for vtype in sorted(venue_types)[:10]:  # Show first 10 types
         venues_of_type = venues.get_venues_by_type(vtype)
         if venues_of_type:
             example_venue = venues_of_type[0]
@@ -99,7 +99,7 @@ def print_world_examples(world):
                 logger.info(f"   - Coordinates: {example_venue.coordinates}")
             if example_venue.properties:
                 # Show first 2 properties
-                props = list(example_venue.properties.items())[:2]
+                props = list(example_venue.properties.items())
                 for key, value in props:
                     logger.info(f"   - {key}: {value}")
 
@@ -122,7 +122,7 @@ def print_world_examples(world):
         # Show example people
         logger.info("")
         logger.info("   Example people:")
-        for person in population.get_all_people()[:3]:
+        for person in random.choices(population.get_all_people(), k=5):
             logger.info(f"   {person}")
             logger.info(f"     - Activities: {', '.join(person.activities)}")
 
@@ -135,7 +135,7 @@ def print_world_examples(world):
         logger.info(f"   People allocated: {len(world.households.allocated_people):,} / {total_pop:,} ({allocation_rate:.1f}%)")
         logger.info("")
         logger.info("   Example households:")
-        for household in world.households.households[:5]:
+        for household in random.choices(world.households.households, k=5):
             composition = household.get_composition()
             logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
             logger.info(f"     - Size: {household.size()} people")
@@ -186,7 +186,7 @@ def main():
     logger.info("=" * 60)
 
     # Load config file
-    with open("config.yaml", "r") as f:
+    with open("may/config.yaml", "r") as f:
         config = yaml.safe_load(f)
 
     # Setup geography from config and command-line arguments
@@ -266,7 +266,7 @@ def main():
     logger.info("=" * 60)
 
     # Show examples of what was created
-    #print_world_examples(world)
+    print_world_examples(world)
 
     return world
 
@@ -274,7 +274,7 @@ def main():
 if __name__ == "__main__":
     profiler = cProfile.Profile()
     profiler.enable()
-    
+
     world = main()
 
     try:
