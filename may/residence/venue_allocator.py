@@ -498,8 +498,8 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                 venue.properties[slot_key].extend(venue_residents)
 
                 # Set venue reference on each person
-                for person in venue_residents:
-                    setattr(person, f'{venue_type}_venue', venue)
+                # for person in venue_residents:
+                #     setattr(person, f'{venue_type}_venue', venue)
 
     # Mark allocated people
     if allocated_people:

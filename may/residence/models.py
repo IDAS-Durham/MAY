@@ -42,7 +42,7 @@ class Household:
     def add_resident(self, person: Person):
         """Add a person to this household."""
         self.residents.append(person)
-        person.residence = self
+        #person.residence = self
 
     def size(self) -> int:
         """Get household size."""
