@@ -29,7 +29,7 @@ geography:
 
 population:
   # Path to population data files
-  data_dir: "world_specific_code/Modern_Day_UK/data/population"
+  data_dir: "data/population"
 
   # Demographics files (matrix format: rows=geo_units, columns=ages)
   demographics_male_file: "demographics_male.csv"
@@ -42,23 +42,10 @@ population:
 
 venues:
   # Path to venue files
-  data_dir: "world_specific_code/Modern_Day_UK/data/venues"
+  data_dir: "data/venues"
 
-
-# ========================================
-# HOUSEHOLDS (a specific venue)
-# ========================================
-households:
-  data_dir: "world_specific_code/Modern_Day_UK/data/households"
-
-
-# ========================================
-# VENUES
-# ========================================
-
-venues:
   # Path to YAML configuration file (relative to data/venues or absolute path)
-  config_file: "venues_config.yaml"
+  config_file: "yaml/venues/venues_config.yaml"
 
   # Export file for venue allocations (automatically created after allocation)
   export_file: "venue_allocations.csv"
@@ -75,7 +62,7 @@ households:
   data_file: "households.csv"
 
   # Configuration file for age categories and demotion rules
-  config_file: "households_config.yaml"
+  config_file: "yaml/households/households_config.yaml"
 
   # =============================================
   # ALLOCATION MODE (choose one)
@@ -84,7 +71,7 @@ households:
   # Option 1: Unified strategy (RECOMMENDED - controls everything in one place)
   #   - Defines both household AND venue allocations in order
   #   - File: data/households/allocation_strategy.yaml
-  strategy_file: "households/allocation_strategy.yaml"
+  strategy_file: "yaml/households/allocation_strategy.yaml"
 
   # Option 2: Multi-round households only (household rounds, no venue integration)
   #   - Only household allocation rounds
