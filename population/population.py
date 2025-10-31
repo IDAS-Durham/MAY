@@ -75,11 +75,10 @@ class PopulationManager:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
-        # Using defaultdict to eliminate conditional checks (faster)
         self.precise_demographics = defaultdict(lambda: defaultdict(dict))
         total_people = 0
 
-        logger.info("Processing male demographics (vectorized)...")
+        logger.info("Processing male demographics...")
         # Convert male dataframe to long format for efficient processing
         male_melted = male_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
         male_melted['age'] = male_melted['age'].astype(int)
@@ -87,7 +86,7 @@ class PopulationManager:
         # Filter out zero counts for efficiency
         male_melted = male_melted[male_melted['count'] > 0]
 
-        logger.info("Processing female demographics (vectorized)...")
+        logger.info("Processing female demographics...")
         # Convert female dataframe to long format
         female_melted = female_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
         female_melted['age'] = female_melted['age'].astype(int)
@@ -95,12 +94,12 @@ class PopulationManager:
         # Filter out zero counts for efficiency
         female_melted = female_melted[female_melted['count'] > 0]
 
-        logger.info("Building demographic dictionary (optimized with defaultdict)...")
+        logger.info("Building demographic dictionary...")
         # Convert to numpy arrays for much faster iteration
         male_values = male_melted.values  # [[geo_unit, age, count], ...]
         female_values = female_melted.values
 
-        # Build nested dictionary using defaultdict (eliminates conditional checks)
+        # Build nested dictionary
         for row in male_values:
             geo_unit = str(row[0])
             age = int(row[1])

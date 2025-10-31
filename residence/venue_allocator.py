@@ -193,7 +193,10 @@ def _get_eligible_people(population, household_distributor, eligibility: Dict) -
     Returns:
         list: List of eligible Person objects
     """
-    min_age = eligibility.get('min_age', 0)
+    min_age = eligibility.get('min_age')
+    if min_age is None:
+        min_age = 0
+
     max_age = eligibility.get('max_age')
     required_sex = eligibility.get('sex')
 
@@ -205,7 +208,7 @@ def _get_eligible_people(population, household_distributor, eligibility: Dict) -
             continue
 
         # Check age
-        if person.age < min_age:
+        if min_age is not None and person.age < min_age:
             continue
         if max_age is not None and person.age > max_age:
             continue
@@ -244,6 +247,58 @@ def _apply_strategy(people: List, strategy: str) -> List:
         np.random.shuffle(people)
 
     return people
+
+
+def _check_attribute_constraints(person, venue, attribute_constraints: Dict) -> bool:
+    """
+    Check if a person meets venue-specific attribute constraints.
+
+    Args:
+        person: Person object to check
+        venue: Venue object with constraint values in properties
+        attribute_constraints: Dict mapping attribute names to constraint config
+                              Format: {attribute_name: {min_column: "col", max_column: "col"}}
+
+    Returns:
+        bool: True if person meets all constraints, False otherwise
+    """
+    if not attribute_constraints:
+        return True
+
+    for attr_name, constraint_config in attribute_constraints.items():
+        # Get the attribute value from the person
+        person_value = getattr(person, attr_name, None)
+        if person_value is None:
+            logger.debug(f"Person {person.id} has no attribute '{attr_name}', skipping constraint check")
+            continue
+
+        # Get min constraint from venue
+        min_column = constraint_config.get('min_column')
+        if min_column:
+            min_value = venue.properties.get(min_column)
+            if min_value is not None:
+                # Handle NaN values
+                if isinstance(min_value, float) and np.isnan(min_value):
+                    min_value = None
+                elif min_value is not None:
+                    min_value = float(min_value)
+                    if person_value < min_value:
+                        return False
+
+        # Get max constraint from venue
+        max_column = constraint_config.get('max_column')
+        if max_column:
+            max_value = venue.properties.get(max_column)
+            if max_value is not None:
+                # Handle NaN values
+                if isinstance(max_value, float) and np.isnan(max_value):
+                    max_value = None
+                elif max_value is not None:
+                    max_value = float(max_value)
+                    if person_value > max_value:
+                        return False
+
+    return True
 
 
 def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
@@ -298,6 +353,15 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
         allocation_config['allocation_mode'] = 'simple'
         allocation_config['use_attribute_capacities'] = False
         return _allocate_to_venue_type(venue_type, allocation_config, population, venues, household_distributor)
+
+    # Get attribute constraints (if any)
+    attribute_constraints = capacity_config.get('attribute_constraints', {})
+    if attribute_constraints:
+        logger.info(f"  Attribute constraints configured:")
+        for attr_name, constraint_config in attribute_constraints.items():
+            min_col = constraint_config.get('min_column', 'N/A')
+            max_col = constraint_config.get('max_column', 'N/A')
+            logger.info(f"    {attr_name}: min_column={min_col}, max_column={max_col}")
 
     # Calculate total capacity across all attribute slots
     total_capacity = 0
@@ -402,7 +466,14 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                     break
 
                 person = geo_filtered_people.popleft()  # Take from front (already sorted by strategy)
-                # Remove from global pool as well
+
+                # Check if person meets venue-specific attribute constraints
+                if not _check_attribute_constraints(person, venue, attribute_constraints):
+                    # Person doesn't meet constraints, skip them
+                    # Put them back in available_people for potential allocation to other venues
+                    continue
+
+                # Remove from global pool
                 available_people.remove(person)
 
                 venue_residents.append(person)
