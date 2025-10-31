@@ -186,7 +186,7 @@ def main():
     logger.info("=" * 60)
 
     # Load config file
-    with open("may/config.yaml", "r") as f:
+    with open("world_specific_code/Modern_Day_UK/config.yaml", "r") as f:
         config = yaml.safe_load(f)
 
     # Setup geography from config and command-line arguments
