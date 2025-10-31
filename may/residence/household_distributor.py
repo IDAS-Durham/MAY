@@ -16,15 +16,15 @@ import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Set
 
-from geography.geography import Geography
-from population.person import Person
-from population.population import PopulationManager
-from residence.relationship_rules import RelationshipRulesValidator
-from residence.models import AgeCategory, Household
-from residence.composition_pattern import CompositionPattern
-from residence.household_excess_handler import HouseholdExcessHandler
-from residence.household_promoter import HouseholdPromoter
-from residence.household_round_distributor import HouseholdRoundDistributor
+from may.geography.geography import Geography
+from may.population.person import Person
+from may.population.population import PopulationManager
+from may.residence.relationship_rules import RelationshipRulesValidator
+from may.residence.models import AgeCategory, Household
+from may.residence.composition_pattern import CompositionPattern
+from may.residence.household_excess_handler import HouseholdExcessHandler
+from may.residence.household_promoter import HouseholdPromoter
+from may.residence.household_round_distributor import HouseholdRoundDistributor
 
 logger = logging.getLogger("household")
 

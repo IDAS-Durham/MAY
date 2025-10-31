@@ -6,7 +6,7 @@ import os
 import logging
 import argparse
 import yaml
-from geography import Geography
+from may.geography import Geography
 
 logger = logging.getLogger("config_loader")
 

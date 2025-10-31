@@ -230,7 +230,7 @@ class VenueManager:
             venues_created += 1
 
         if venues_skipped > 0:
-            logger.info(f"Created {venues_created} {venue_type} venues ({venues_skipped} skipped due to geography filter)")
+            logger.info(f"Created {venues_created} {venue_type} venues")
         else:
             logger.info(f"Created {venues_created} {venue_type} venues")
 

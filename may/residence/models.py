@@ -8,8 +8,8 @@ allocation system.
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-from geography.geography import GeographicalUnit
-from population.person import Person
+from may.geography.geography import GeographicalUnit
+from may.population.person import Person
 
 
 @dataclass

@@ -10,7 +10,7 @@ import logging
 import numpy as np
 from collections import deque
 from typing import List, Optional, Dict
-from residence.composition_pattern import CompositionPattern
+from may.residence.composition_pattern import CompositionPattern
 
 logger = logging.getLogger("household")
 

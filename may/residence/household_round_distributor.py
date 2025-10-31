@@ -7,7 +7,7 @@ during specific allocation rounds (e.g., initial, demotion, balanced).
 
 import logging
 from typing import List, Dict, Optional
-from residence.composition_pattern import CompositionPattern
+from may.residence.composition_pattern import CompositionPattern
 
 logger = logging.getLogger("household")
 

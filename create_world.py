@@ -7,10 +7,10 @@ import numpy as np
 import numba as nb
 import yaml
 from config_loader import setup_geography
-from geography import VenueManager
-from population import PopulationManager
-from residence.allocation_strategy import execute_allocation_strategy
-from residence.household_distributor import HouseholdDistributor
+from may.geography import VenueManager
+from may.population import PopulationManager
+from may.residence.allocation_strategy import execute_allocation_strategy
+from may.residence.household_distributor import HouseholdDistributor
 from world import World
 
 if os.environ.get('PYTHONHASHSEED') is None:

@@ -9,8 +9,8 @@ This module contains logic for:
 import logging
 import numpy as np
 from typing import List, Optional, Dict
-from population.person import Person
-from residence.models import Household
+from may.population.person import Person
+from may.residence.models import Household
 
 logger = logging.getLogger("household")
 

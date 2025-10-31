@@ -23,7 +23,7 @@ from itertools import islice
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
-from population.person import Person
+from may.population.person import Person
 
 logger = logging.getLogger("relationship_rules")
 
