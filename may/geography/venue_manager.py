@@ -229,8 +229,12 @@ class VenueManager:
         # Try to find config file
         config_path = config_file
         if not os.path.isabs(config_path):
-            # Try relative to data_dir
-            config_path = os.path.join(self.data_dir, config_file)
+            # Try relative to current working directory first
+            if os.path.exists(config_path):
+                config_path = config_path
+            else:
+                # Try relative to data_dir
+                config_path = os.path.join(self.data_dir, config_file)
 
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Venue config file not found: {config_path}")

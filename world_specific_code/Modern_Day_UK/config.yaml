@@ -2,7 +2,7 @@
 
 geography:
   # Path to geography data files
-  data_dir: "world_specific_code/Modern_Day_UK/data/geography"
+  data_dir: "data/geography"
 
   # Load all geographical units (ignores all filters below if true)
   load_all: false
@@ -21,7 +21,7 @@ geography:
 
     # Or specify a file path with codes (for large lists)
     # File should have one code per line
-    file: filters/example_mgu.txt
+    file: may/filters/example_mgu.txt
 
 # ========================================
 # POPULATION
@@ -44,7 +44,7 @@ venues:
   # Path to venue files
   data_dir: "data/venues"
 
-  # Path to YAML configuration file (relative to data/venues or absolute path)
+  # Path to YAML configuration file (relative to project root or absolute path)
   config_file: "yaml/venues/venues_config.yaml"
 
   # Export file for venue allocations (automatically created after allocation)
