@@ -89,7 +89,12 @@ class HouseholdDistributor:
         self.pools_prepared: bool = False
 
         # Initialize relationship rules validator
-        rules_config_path = os.path.join(data_dir, "relationship_rules.yaml")
+        # Try yaml/households/ first, then data_dir
+        if os.path.exists("yaml/households/relationship_rules.yaml"):
+            rules_config_path = "yaml/households/relationship_rules.yaml"
+        else:
+            rules_config_path = os.path.join(data_dir, "relationship_rules.yaml")
+
         self.relationship_rules = RelationshipRulesValidator(
             age_categories=self.age_categories,
             config_file=rules_config_path
