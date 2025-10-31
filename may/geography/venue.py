@@ -6,6 +6,7 @@ Venues are places where people live, work, learn, or receive services.
 import logging
 import pandas as pd
 import os
+from may.population import Subset
 
 logger = logging.getLogger("venue")
 
@@ -46,7 +47,7 @@ class Venue:
                  geographical_unit,
                  coordinates=None,
                  properties: dict=None,
-                 subsets: dict[str,"Subset"] = None,
+                 subsets: dict[str, Subset] = None,
                  ):
         self.id = id(self)              # Unique numeric ID (generated)
         self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
