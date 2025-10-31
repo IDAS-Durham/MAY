@@ -34,9 +34,10 @@ def execute_allocation_strategy(population, venues, household_distributor,
     logger.info("Executing Unified Allocation Strategy")
     logger.info("=" * 60)
 
-    # Handle relative paths - assume relative to data/ directory
+    # Handle relative paths - try as-is first, then relative to data/ directory
     if not os.path.isabs(strategy_file):
-        strategy_file = f"data/{strategy_file}"
+        if not os.path.exists(strategy_file):
+            strategy_file = f"data/{strategy_file}"
 
     # Load strategy configuration
     logger.info(f"Loading allocation strategy from {strategy_file}")

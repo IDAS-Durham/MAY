@@ -61,7 +61,12 @@ class HouseholdDistributor:
         self.data_dir = data_dir
 
         # Load configuration
-        config_path = os.path.join(data_dir, config_file)
+        # Try relative to current working directory first, then relative to data_dir
+        if os.path.isabs(config_file) or os.path.exists(config_file):
+            config_path = config_file
+        else:
+            config_path = os.path.join(data_dir, config_file)
+
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
