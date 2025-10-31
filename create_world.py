@@ -122,7 +122,7 @@ def print_world_examples(world):
         # Show example people
         logger.info("")
         logger.info("   Example people:")
-        for person in random.choices(population.get_all_people(), k=5):
+        for person in np.random.choice(population.get_all_people(), size=min(5, len(population.get_all_people())), replace=False):
             logger.info(f"   {person}")
             logger.info(f"     - Activities: {', '.join(person.activities)}")
 
@@ -135,7 +135,7 @@ def print_world_examples(world):
         logger.info(f"   People allocated: {len(world.households.allocated_people):,} / {total_pop:,} ({allocation_rate:.1f}%)")
         logger.info("")
         logger.info("   Example households:")
-        for household in random.choices(world.households.households, k=5):
+        for household in np.random.choice(world.households.households, size=min(5, len(world.households.households)), replace=False):
             composition = household.get_composition()
             logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
             logger.info(f"     - Size: {household.size()} people")
