@@ -190,7 +190,7 @@ def main():
         config = yaml.safe_load(f)
 
     # Setup geography from config and command-line arguments
-    geo, filters = setup_geography()
+    geo, filters = setup_geography(config=config)
 
     # Load the geography data
     geo.load_from_csv()
