@@ -194,7 +194,6 @@ class RelationshipRulesValidator:
         # Get attribute values
         person1_value = getattr(person1, attribute)
 
-        # OPTIMIZATION: Extract all attribute values once to avoid repeated getattr in min/max
         people2_values = [getattr(p, attribute) for p in people2]
         max_value = max(people2_values)
         min_value = min(people2_values)
@@ -326,7 +325,6 @@ class RelationshipRulesValidator:
             if c.get('type') == 'numerical_attribute_difference' and c.get('role_1') == current_role
         ]
 
-        # OPTIMIZATION: If preferred_distribution exists, prioritize candidates near target
         prioritized_candidates = candidates
         for constraint in relevant_constraints:
             pref_dist = constraint.get('preferred_distribution')
@@ -353,12 +351,10 @@ class RelationshipRulesValidator:
                     max_diff = constraint.get('max_difference', 50)
                     target_diff = max(min_diff, min(max_diff, target_diff))
 
-                    # OPTIMIZATION: Calculate target attribute value - extract values once
                     people_2_values = [getattr(p, attribute) for p in people_2]
                     reference_value = max(people_2_values)
                     target_value = reference_value + target_diff
 
-                    # OPTIMIZATION: Filter to candidates within window - pre-extract attribute values
                     tolerance = pref_dist.get('tolerance', std * 1.5 if dist_type == 'normal' else 10)
                     candidate_values = {p.id: getattr(p, attribute) for p in prioritized_candidates}
                     prioritized_candidates = [
@@ -374,14 +370,12 @@ class RelationshipRulesValidator:
                     elif show_detailed_logs:
                         logger.debug(f"  ℹ Prioritizing {len(prioritized_candidates)}/{len(candidates)} candidates near target {attribute}={target_value:.1f} (±{tolerance})")
 
-        # OPTIMIZATION: Pre-cache people_2 lookups to avoid repeated dict.get calls
         constraint_people_cache = {}
         for constraint in relevant_constraints:
             role_2 = constraint.get('role_2')
             if role_2 not in constraint_people_cache:
                 constraint_people_cache[role_2] = existing_people_by_role.get(role_2, [])
 
-        # OPTIMIZATION: Shuffle once instead of repeated np.random.choice
         shuffled_candidates = prioritized_candidates.copy()
         np.random.shuffle(shuffled_candidates)
 
@@ -389,7 +383,6 @@ class RelationshipRulesValidator:
         candidates_tested = 0
         candidates_rejected = 0
 
-        # OPTIMIZATION: Use islice to avoid creating a slice (new list)
         for candidate in islice(shuffled_candidates, max_attempts):
             candidates_tested += 1
 
@@ -523,8 +516,7 @@ class RelationshipRulesValidator:
         shuffled_candidates = candidates.copy()
         np.random.shuffle(shuffled_candidates)
 
-        # OPTIMIZATION: Pre-group candidates by categorical attribute AND cache attribute values
-        # This avoids repeated getattr calls in the selection loops
+        # Pre-group candidates by categorical attribute AND cache attribute values
         candidates_by_cat = defaultdict(list)
         candidate_cat_values = {}  # Cache categorical attribute values
         for p in candidates:
@@ -532,7 +524,6 @@ class RelationshipRulesValidator:
             candidates_by_cat[cat_val].append(p)
             candidate_cat_values[p.id] = cat_val
 
-        # OPTIMIZATION: Pre-cache existing_people_by_role lookups to avoid repeated dict.get
         constraint_people_cache = {}
         for rel_constraint in relevant_constraints:
             role_2 = rel_constraint.get('role_2')
@@ -546,7 +537,6 @@ class RelationshipRulesValidator:
         first_person = None
         remaining = []
 
-        # OPTIMIZATION: Use islice to avoid creating a slice (new list)
         # Iterate through shuffled candidates instead of random.choice()
         for first_person in islice(shuffled_candidates, max_attempts):
             candidates_tested += 1
@@ -569,7 +559,7 @@ class RelationshipRulesValidator:
             if not first_valid:
                 continue
 
-            # OPTIMIZATION: Use cached categorical attribute value
+            # Use cached categorical attribute value
             first_cat_value = candidate_cat_values[first_person.id]
             if is_same_category:
                 required_cat_value = first_cat_value
@@ -587,7 +577,6 @@ class RelationshipRulesValidator:
 
             # Use pre-grouped candidates by categorical attribute
             remaining = candidates_by_cat.get(required_cat_value, [])
-            # OPTIMIZATION: Cache first_person.id to avoid repeated attribute access
             first_person_id = first_person.id
             remaining = [p for p in remaining if p.id != first_person_id]
 
@@ -598,7 +587,6 @@ class RelationshipRulesValidator:
             shuffled_remaining = remaining.copy()
             np.random.shuffle(shuffled_remaining)
 
-            # OPTIMIZATION: Use islice to avoid creating a slice (new list)
             # Try to find valid partner - iterate through shuffled list
             for candidate in islice(shuffled_remaining, max_attempts):
                 candidates_tested += 1
