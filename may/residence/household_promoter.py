@@ -175,7 +175,6 @@ class HouseholdPromoter:
                     else:  # Fixed
                         can_add = max(0, max_count - current_count)
 
-                    # OPTIMIZATION: Convert to deque for O(1) popleft if not already
                     if not isinstance(available_people, deque):
                         available_people = deque(available_people)
 
@@ -331,7 +330,6 @@ class HouseholdPromoter:
                         promoted_households.add(household.id)
                         logger.debug(f"  Promoted household {household.id}: {source_pattern} → {target_pattern_str}")
 
-                    # OPTIMIZATION: Convert to deque for O(1) popleft if not already
                     if not isinstance(available_people, deque):
                         available_people = deque(available_people)
 

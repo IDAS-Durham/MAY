@@ -197,10 +197,7 @@ steps:
 
     # General eligibility (pre-filter before attribute matching)
     # People will be sorted into age-band slots based on capacity_config
-    eligibility:
-      min_age: null
-      max_age: null
-      sex: null
+    eligibility: {}
 
     strategy: "random"
     max_allocations: null
@@ -222,9 +219,8 @@ steps:
     # This gets people who are eligible, then they get sorted into
     # specific age/sex slots based on capacity_config
     eligibility:
-      min_age: 50  # Minimum age to consider for care homes
-      max_age: null
-      sex: null
+      - attribute: "age"
+        min: 50  # Minimum age to consider for care homes
 
     strategy: "oldest_first"  # Prioritize oldest within each age/sex group
     max_allocations: null
@@ -245,9 +241,8 @@ steps:
     # General eligibility (pre-filter before attribute matching)
     # People will be sorted into age-band slots based on capacity_config
     eligibility:
-      min_age: 16
-      max_age: null
-      sex: null
+      - attribute: "age"
+        min: 16
 
     strategy: "random"
     max_allocations: null
@@ -692,10 +687,11 @@ steps:
 # For venue steps:
 #   - venue_type: Type of venue (must match venue data)
 #   - capacity_property: Property name for capacity in venue data
-#   - eligibility: Criteria for who can be allocated
-#     - min_age: Minimum age
-#     - max_age: Maximum age (null = no limit)
-#     - sex: Filter by sex (null = any, "male"/"female")
+#   - eligibility: List of criteria for who can be allocated
+#     Each criterion specifies an attribute and constraints:
+#       - {attribute: "age", min: 18, max: 65}  # Range check
+#       - {attribute: "sex", value: "F"}        # Exact match
+#     Empty list [] or {} means no filtering
 #   - strategy: Allocation strategy ("random", "oldest_first", "youngest_first")
 #   - max_allocations: Limit number of people (null = fill capacity)
 
@@ -757,7 +753,9 @@ steps:
 #     type: "venue"
 #     venue_type: "care_home"
 #     capacity_property: "capacity"
-#     eligibility: {min_age: 75}
+#     eligibility:
+#       - attribute: "age"
+#         min: 75
 #     strategy: "oldest_first"
 #
 #   - name: "Remaining Households"

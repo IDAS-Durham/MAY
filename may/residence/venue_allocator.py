@@ -8,12 +8,10 @@ Venue allocations are configured in allocation_strategy.yaml as part of
 the unified household + venue allocation strategy.
 """
 
-import os
 import logging
-import yaml
 import numpy as np
 from collections import deque
-from typing import List, Optional, Dict
+from typing import List, Dict
 
 logger = logging.getLogger("venue_allocator")
 
@@ -120,7 +118,6 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
     # Allocate people to venues
     allocated_people = []
-    # OPTIMIZATION: Use set for O(1) removal instead of list.remove() which is O(n)
     eligible_people_set = set(eligible_people)
 
     for venue in venue_list:
@@ -132,7 +129,6 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
         venue_geo_unit = venue.geographical_unit
         venue_eligible_list = [p for p in eligible_people if p.geographical_unit == venue_geo_unit and p in eligible_people_set]
 
-        # OPTIMIZATION: Use deque for O(1) popleft() instead of list.pop(0) which is O(n)
         venue_eligible = deque(venue_eligible_list)
 
         # Allocate people to this venue
@@ -181,46 +177,104 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
     }
 
 
-def _get_eligible_people(population, household_distributor, eligibility: Dict) -> List:
+def _get_eligible_people(population, household_distributor, eligibility) -> List:
     """
     Get list of people who meet eligibility criteria.
+
+    Supports flexible attribute-based filtering with explicit attribute names:
+    - Range checks: {attribute: "age", min: value, max: value}
+    - Exact matches: {attribute: "sex", value: "F"}
+    - Categorical variations: {attribute: "income", value_by_attribute: {...}}
+
+    Examples:
+        eligibility = [
+            {'attribute': 'age', 'min': 18, 'max': 65},
+            {'attribute': 'sex', 'value': 'F'},
+            {'attribute': 'employed', 'value': True}
+        ]
+
+        # Or empty dict/list for no filtering:
+        eligibility = {}
+        eligibility = []
 
     Args:
         population: PopulationManager
         household_distributor: HouseholdDistributor
-        eligibility: Dict with criteria (min_age, max_age, sex, etc.)
+        eligibility: List of criteria dicts or empty dict/list
 
     Returns:
         list: List of eligible Person objects
     """
-    min_age = eligibility.get('min_age')
-    if min_age is None:
-        min_age = 0
-
-    max_age = eligibility.get('max_age')
-    required_sex = eligibility.get('sex')
-
     eligible = []
+
+    # Handle empty eligibility (no filtering)
+    if not eligibility:
+        # Return all unallocated people
+        return [p for p in population.get_all_people()
+                if p.id not in household_distributor.allocated_people]
+
+    # Support both list format (new) and dict format (legacy)
+    criteria_list = eligibility if isinstance(eligibility, list) else []
 
     for person in population.get_all_people():
         # Skip if already allocated
         if person.id in household_distributor.allocated_people:
             continue
 
-        # Check age
-        if min_age is not None and person.age < min_age:
-            continue
-        if max_age is not None and person.age > max_age:
-            continue
+        # Check all eligibility criteria
+        meets_criteria = True
+        for criterion in criteria_list:
+            # Get attribute name
+            attr_name = criterion.get('attribute')
+            if not attr_name:
+                logger.warning(f"Eligibility criterion missing 'attribute' key: {criterion}")
+                continue
 
-        # Check sex
-        if required_sex is not None and person.sex != required_sex:
-            continue
+            # Get the attribute value from person
+            person_value = getattr(person, attr_name, None)
 
-        # Add other criteria here as needed
-        # (activities, location, etc.)
+            # If person doesn't have this attribute, they don't qualify
+            if person_value is None:
+                meets_criteria = False
+                break
 
-        eligible.append(person)
+            # Check if this is a range check or exact match
+            if 'min' in criterion or 'max' in criterion:
+                # Range check
+                min_value = criterion.get('min')
+                max_value = criterion.get('max')
+
+                if min_value is not None and person_value < min_value:
+                    meets_criteria = False
+                    break
+                if max_value is not None and person_value > max_value:
+                    meets_criteria = False
+                    break
+
+            elif 'value' in criterion:
+                # Exact match
+                expected_value = criterion['value']
+                if person_value != expected_value:
+                    meets_criteria = False
+                    break
+
+            elif 'value_by_attribute' in criterion:
+                # Categorical variation (e.g., different max by sex)
+                variation_attr = criterion['value_by_attribute'].get('attribute')
+                variation_values = criterion['value_by_attribute'].get('values', {})
+
+                if variation_attr:
+                    variation_value = getattr(person, variation_attr, None)
+                    expected_value = variation_values.get(variation_value)
+
+                    if expected_value is not None and person_value != expected_value:
+                        meets_criteria = False
+                        break
+            else:
+                logger.warning(f"Eligibility criterion has no recognized constraint: {criterion}")
+
+        if meets_criteria:
+            eligible.append(person)
 
     return eligible
 
@@ -373,11 +427,8 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
     logger.info(f"  Total attribute-based capacity: {total_capacity}")
 
-    # Get general eligibility criteria (pre-filter)
+    # Get general eligibility criteria
     eligibility = allocation_config.get('eligibility', {})
-    min_age_filter = eligibility.get('min_age', 0)
-    max_age_filter = eligibility.get('max_age')
-    sex_filter = eligibility.get('sex')
 
     # Get eligible people (broad filter)
     eligible_people = _get_eligible_people(
@@ -454,7 +505,6 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
             venue_geo_unit = venue.geographical_unit
             geo_filtered_list = [p for p in available_people if p.geographical_unit == venue_geo_unit]
 
-            # OPTIMIZATION: Use deque for O(1) popleft()
             geo_filtered_people = deque(geo_filtered_list)
 
             # Allocate people to this slot
