@@ -49,17 +49,17 @@ class HouseholdRoundDistributor:
         # Count total available people in ELIGIBLE categories only
         # (categories where the pattern allows at least 1 person)
         total_available = 0
-        for cat_idx in range(len(self.distributor.age_categories)):
+        for cat_idx in range(len(self.distributor.categories)):
             max_count = pattern.get_max_count(cat_idx)
             pool_size = len(pools[cat_idx])
             # Only count if category allows people (max_count is None or > 0)
             if max_count is None or max_count > 0:
                 total_available += pool_size
                 if pool_size > 0:
-                    logger.debug(f"  Category {self.distributor.age_categories[cat_idx].name}: {pool_size} available (max_count={max_count})")
+                    logger.debug(f"  Category {self.distributor.categories[cat_idx].name}: {pool_size} available (max_count={max_count})")
             else:
                 if pool_size > 0:
-                    logger.debug(f"  Category {self.distributor.age_categories[cat_idx].name}: {pool_size} available but EXCLUDED by pattern (max_count={max_count})")
+                    logger.debug(f"  Category {self.distributor.categories[cat_idx].name}: {pool_size} available but EXCLUDED by pattern (max_count={max_count})")
 
         # Strategy: Fill households to capacity to allocate as many people as possible
         if max_household_size:
@@ -304,12 +304,12 @@ class HouseholdRoundDistributor:
         flexible_categories = []
 
         logger.debug(f"\n--- FIRST PASS: Categorizing fixed vs flexible ---")
-        for cat_idx in range(len(self.distributor.age_categories)):
+        for cat_idx in range(len(self.distributor.categories)):
             min_count = pattern.get_min_count(cat_idx)
             max_count = pattern.get_max_count(cat_idx)
             available = len(pools[cat_idx])
 
-            cat_name = self.distributor.age_categories[cat_idx].name
+            cat_name = self.distributor.categories[cat_idx].name
             logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
             logger.debug(f"  min_count: {min_count}, max_count: {max_count}, available: {available}")
 
@@ -350,7 +350,7 @@ class HouseholdRoundDistributor:
         flexible_allocations = []
 
         for cat_idx, min_count, available in flexible_categories:
-            cat_name = self.distributor.age_categories[cat_idx].name
+            cat_name = self.distributor.categories[cat_idx].name
             logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
             logger.debug(f"  min: {min_count}, available: {available}")
 
@@ -389,7 +389,7 @@ class HouseholdRoundDistributor:
                 can_take = available - allocated
                 if can_take > 0:
                     give = min(can_take, shortfall)
-                    cat_name = self.distributor.age_categories[cat_idx].name
+                    cat_name = self.distributor.categories[cat_idx].name
                     logger.debug(f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})")
                     flexible_allocations[i] = (cat_idx, allocated + give, available, proportion)
                     shortfall -= give

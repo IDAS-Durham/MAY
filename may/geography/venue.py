@@ -218,27 +218,27 @@ class Venue:
         """
         return sum(len(subset.members) for subset in self.subsets.values())
 
-    def get_composition(self, age_categories=None):
+    def get_composition(self, categories=None):
         """
-        Get composition by age category (useful for household-type venues).
+        Get composition by category (useful for household-type venues).
 
         Args:
-            age_categories: List of AgeCategory objects
+            categories: List of Category objects
 
         Returns:
             dict: Composition counts by category name
         """
-        # Get age_categories from properties if not provided
-        if age_categories is None:
-            age_categories = self.properties.get('_age_categories', [])
+        # Get categories from properties if not provided
+        if categories is None:
+            categories = self.properties.get('_age_categories', [])
 
-        if not age_categories:
+        if not categories:
             return {}
 
-        composition = {cat.name: 0 for cat in age_categories}
+        composition = {cat.name: 0 for cat in categories}
         for person in self.get_all_members():
-            for cat in age_categories:
-                if cat.matches(person.age):
+            for cat in categories:
+                if cat.matches(person):
                     composition[cat.name] += 1
                     break
         return composition

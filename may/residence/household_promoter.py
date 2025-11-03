@@ -68,7 +68,7 @@ class HouseholdPromoter:
         # Get priority order
         priority_config = promotion_config.get('priority', {})
         promotion_priority = []
-        for cat_idx, cat in enumerate(self.distributor.age_categories):
+        for cat_idx, cat in enumerate(self.distributor.categories):
             priority = priority_config.get(cat.name, 999)
             promotion_priority.append((priority, cat_idx))
         promotion_priority.sort()  # Sort by priority
@@ -128,7 +128,7 @@ class HouseholdPromoter:
                     for attempt in range(max_attempts + 1):
                         # Can we add someone from this category?
                         min_count = current_pattern.get_min_count(cat_idx)
-                        age_categories = household.properties.get('_age_categories', self.distributor.age_categories)
+                        age_categories = household.properties.get('_age_categories', self.distributor.categories)
                         current_count = household.get_composition(age_categories).get(category_name, 0)
 
                         if current_count >= min_count:
@@ -169,7 +169,7 @@ class HouseholdPromoter:
 
                     # Now try to add people
                     max_count = current_pattern.get_max_count(cat_idx)
-                    age_categories = household.properties.get('_age_categories', self.distributor.age_categories)
+                    age_categories = household.properties.get('_age_categories', self.distributor.categories)
                     current_count = household.get_composition(age_categories).get(category_name, 0)
 
                     # Determine how many we can add
@@ -219,7 +219,7 @@ class HouseholdPromoter:
         logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
         logger.info("")
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)
@@ -305,7 +305,7 @@ class HouseholdPromoter:
                         continue
 
                     # Get current count in this category
-                    age_categories = household.properties.get('_age_categories', self.distributor.age_categories)
+                    age_categories = household.properties.get('_age_categories', self.distributor.categories)
                     current_composition = household.get_composition(age_categories)
                     current_count = current_composition.get(category_name, 0)
 
@@ -378,7 +378,7 @@ class HouseholdPromoter:
         logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
         logger.info("")
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)

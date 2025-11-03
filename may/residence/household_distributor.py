@@ -22,18 +22,13 @@ from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
 from may.residence.relationship_rules import RelationshipRulesValidator
-from may.residence.models import AgeCategory
+from may.residence.models import Category
 from may.residence.composition_pattern import CompositionPattern
 from may.residence.household_excess_handler import HouseholdExcessHandler
 from may.residence.household_promoter import HouseholdPromoter
 from may.residence.household_round_distributor import HouseholdRoundDistributor
 
 logger = logging.getLogger("household")
-
-
-# Removed: AgeCategory class - now in residence.models
-# Removed: CompositionPattern class - now in residence.composition_pattern
-# Removed: Household class - now in residence.models
 
 
 class HouseholdDistributor:
@@ -74,11 +69,11 @@ class HouseholdDistributor:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
-        # Parse age categories from config
-        self.age_categories = self._parse_age_categories()
+        # Parse categories from config
+        self.categories = self._parse_categories()
 
         # Create mapping from category name to index for validation rules
-        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.age_categories)}
+        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.categories)}
 
         # Household data - now stored in VenueManager
         self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
@@ -99,7 +94,7 @@ class HouseholdDistributor:
             rules_config_path = os.path.join(data_dir, "relationship_rules.yaml")
 
         self.relationship_rules = RelationshipRulesValidator(
-            age_categories=self.age_categories,
+            categories=self.categories,
             config_file=rules_config_path
         )
 
@@ -112,19 +107,38 @@ class HouseholdDistributor:
         # Initialize round distributor
         self.round_distributor = HouseholdRoundDistributor(self)
 
-        logger.info(f"Initialized HouseholdDistributor with {len(self.age_categories)} age categories")
-        for cat in self.age_categories:
+        logger.info(f"Initialized HouseholdDistributor with {len(self.categories)} categories")
+        for cat in self.categories:
             logger.info(f"  - {cat}")
 
-    def _parse_age_categories(self) -> List[AgeCategory]:
-        """Parse age categories from config."""
+    def _parse_categories(self) -> List[Category]:
+        """Parse categories from config."""
         categories = []
-        for cat_config in self.config['age_categories']:
-            cat = AgeCategory(
+        for cat_config in self.config['categories']:
+            cat_type = cat_config['type']
+
+            # Extract type-specific parameters from nested structure
+            if cat_type == 'numerical':
+                numerical_config = cat_config.get('numerical', {})
+                min_value = numerical_config.get('min')
+                max_value = numerical_config.get('max')
+                allowed_values = None
+            elif cat_type == 'categorical':
+                categorical_config = cat_config.get('categorical', {})
+                min_value = None
+                max_value = None
+                allowed_values = categorical_config.get('allowed_values')
+            else:
+                raise ValueError(f"Unknown category type: {cat_type}")
+
+            cat = Category(
                 name=cat_config['name'],
                 symbol=cat_config['symbol'],
-                min_age=cat_config['min_age'],
-                max_age=cat_config['max_age']
+                attribute=cat_config['attribute'],
+                type=cat_type,
+                min_value=min_value,
+                max_value=max_value,
+                allowed_values=allowed_values
             )
             categories.append(cat)
         return categories
@@ -167,12 +181,12 @@ class HouseholdDistributor:
         logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
 
     def _categorize_person(self, person: Person) -> int:
-        """Get the category index for a person based on their age."""
-        for idx, cat in enumerate(self.age_categories):
-            if cat.matches(person.age):
+        """Get the category index for a person based on their attributes."""
+        for idx, cat in enumerate(self.categories):
+            if cat.matches(person):
                 return idx
         # Shouldn't happen, but default to last category
-        return len(self.age_categories) - 1
+        return len(self.categories) - 1
 
     def _prepare_person_pools(self, refresh: bool = False):
         """
@@ -203,7 +217,7 @@ class HouseholdDistributor:
                 continue
 
             # Initialize category pools
-            category_pools = [[] for _ in self.age_categories]
+            category_pools = [[] for _ in self.categories]
 
             # Categorize each person (only if not already allocated)
             for person in people:
@@ -321,7 +335,7 @@ class HouseholdDistributor:
 
         # Remove selected people from pools
         selected_ids = {p.id for p in all_selected}
-        for cat_idx in range(len(self.age_categories)):
+        for cat_idx in range(len(self.categories)):
             pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
 
         # Create household as Venue (ID auto-generated)
@@ -332,7 +346,7 @@ class HouseholdDistributor:
             properties={
                 'original_pattern': pattern.original_pattern,
                 'actual_pattern': pattern.to_string(),
-                '_age_categories': self.age_categories
+                '_age_categories': self.categories
             }
         )
 
@@ -802,12 +816,12 @@ class HouseholdDistributor:
         total_selected = 0
         logger.debug(f"\n--- SEQUENTIAL ALLOCATION PHASE ---")
 
-        for cat_idx in range(len(self.age_categories)):
+        for cat_idx in range(len(self.categories)):
             min_count = pattern.get_min_count(cat_idx)
             max_count = pattern.get_max_count(cat_idx)
             available = len(pools[cat_idx])
 
-            cat_name = self.age_categories[cat_idx].name
+            cat_name = self.categories[cat_idx].name
             logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
             logger.debug(f"  min: {min_count}, max: {max_count}, available: {available}")
             logger.debug(f"  total_selected so far: {total_selected}")
@@ -928,8 +942,8 @@ class HouseholdDistributor:
         selected_people = []
         logger.debug("ALLOCATION DECISIONS:")
         for cat_idx, count in selections:
-            cat = self.age_categories[cat_idx]
-            logger.debug(f"  {cat.name} (age {cat.min_age}-{cat.max_age if cat.max_age else '∞'}): {count} people")
+            cat = self.categories[cat_idx]
+            logger.debug(f"  {cat.name} ({cat.attribute} {cat.min_value}-{cat.max_value if cat.max_value else '∞'}): {count} people")
             if count > 0:
                 selected = pools[cat_idx][:count]
                 selected_people.extend(selected)
@@ -955,7 +969,7 @@ class HouseholdDistributor:
             properties={
                 'original_pattern': pattern.original_pattern,  # The original requested pattern
                 'actual_pattern': pattern.to_string(),  # The actual pattern used (may be demoted)
-                '_age_categories': self.age_categories
+                '_age_categories': self.categories
             }
         )
 
@@ -999,7 +1013,7 @@ class HouseholdDistributor:
         # Get demotion priority from config (used as fallback)
         priority_config = self.config['demotion']['priority']
         priority_order = []
-        for cat_idx, cat in enumerate(self.age_categories):
+        for cat_idx, cat in enumerate(self.categories):
             priority = priority_config.get(cat.name, 999)
             priority_order.append((priority, cat_idx))
         priority_order.sort()  # Sort by priority (lower = demote first)
@@ -1026,7 +1040,7 @@ class HouseholdDistributor:
                 return household
 
             if failed_category_idx is not None:
-                cat = self.age_categories[failed_category_idx]
+                cat = self.categories[failed_category_idx]
                 logger.debug(f"  ✗ ALLOCATION FAILED: Category '{cat.name}' (idx {failed_category_idx}) has insufficient people")
             else:
                 logger.debug(f"  ✗ ALLOCATION FAILED: No specific category identified")
@@ -1052,7 +1066,7 @@ class HouseholdDistributor:
                             available_count = len(pools[failed_category_idx])
 
                     # Try demoting the failed category directly to available count
-                    cat_name = self.age_categories[failed_category_idx].name
+                    cat_name = self.categories[failed_category_idx].name
                     logger.debug(f"  → Attempting intelligent demotion: Reducing '{cat_name}' (category {failed_category_idx})")
                     logger.debug(f"  → Available {cat_name}: {available_count} people")
 
@@ -1121,13 +1135,13 @@ class HouseholdDistributor:
         return len(self.population.get_all_people()) - len(self.allocated_people)
 
     def get_available_people_by_category(self) -> Dict[str, int]:
-        """Get counts of available people by age category."""
-        counts = {cat.name: 0 for cat in self.age_categories}
+        """Get counts of available people by category."""
+        counts = {cat.name: 0 for cat in self.categories}
 
         for person in self.population.get_all_people():
             if person.id not in self.allocated_people:
-                for cat in self.age_categories:
-                    if cat.matches(person.age):
+                for cat in self.categories:
+                    if cat.matches(person):
                         counts[cat.name] += 1
                         break
 
@@ -1189,12 +1203,9 @@ class HouseholdDistributor:
         return self.excess_handler._select_person_for_excess_with_rule(*args, **kwargs)
 
     def _get_person_category_name(self, person: 'Person') -> str:
-        """Get the category name for a person based on their age."""
-        for cat in self.age_categories:
-            if cat.max_age is None:
-                if person.age >= cat.min_age:
-                    return cat.name
-            elif cat.min_age <= person.age < cat.max_age:
+        """Get the category name for a person based on their attributes."""
+        for cat in self.categories:
+            if cat.matches(person):
                 return cat.name
         return "Unknown"
 
@@ -1328,7 +1339,7 @@ class HouseholdDistributor:
             remaining_by_category = self.get_available_people_by_category()
             logger.info("")
             logger.info("  Remaining by category:")
-            for cat_name in [cat.name for cat in self.age_categories]:
+            for cat_name in [cat.name for cat in self.categories]:
                 count = remaining_by_category.get(cat_name, 0)
                 logger.info(f"    {cat_name}: {count:,}")
 
@@ -1524,7 +1535,7 @@ class HouseholdDistributor:
         rows = []
         for household in all_households:
             # Get age categories
-            age_categories = household.properties.get('_age_categories', self.age_categories)
+            age_categories = household.properties.get('_age_categories', self.categories)
 
             # Get composition
             composition = household.get_composition(age_categories)

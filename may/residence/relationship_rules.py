@@ -50,17 +50,17 @@ class RelationshipRulesValidator:
     """
 
     def __init__(self,
-                 age_categories: List,
+                 categories: List,
                  config_file: str = "data/households/relationship_rules.yaml"):
         """
         Initialize relationship rules validator.
 
         Args:
-            age_categories: List of AgeCategory objects from household config
+            categories: List of Category objects from household config
             config_file: Path to relationship rules YAML configuration
         """
-        self.age_categories = age_categories
-        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(age_categories)}
+        self.categories = categories
+        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(categories)}
 
         # Load configuration
         self.enabled = False

@@ -233,7 +233,7 @@ class HouseholdExcessHandler:
         # Show remaining by category
         remaining_by_category = self.distributor.get_available_people_by_category()
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)
@@ -425,7 +425,7 @@ class HouseholdExcessHandler:
         logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
         logger.info("")
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)

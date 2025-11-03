@@ -144,8 +144,6 @@ venue_types:
       # - "strict": Only allocate to exact matches
       # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
 
-    
-
   student_dorms:
     enabled: true
     filename: student_dorms.csv
