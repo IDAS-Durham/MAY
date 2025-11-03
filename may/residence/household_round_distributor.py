@@ -231,7 +231,7 @@ class HouseholdRoundDistributor:
                         if actual_pattern_str != pattern_str:
                             household.properties['original_pattern'] = pattern_str
 
-                        self.distributor.households.append(household)
+                        # Household is already added to VenueManager via create_venue()
                         total_created += 1
                         households_created += 1
                     else:
@@ -246,6 +246,9 @@ class HouseholdRoundDistributor:
                 break
 
         # Calculate round statistics
+        # Get household count from VenueManager
+        all_households = self.distributor.venue_manager.get_venues_by_type("household")
+
         round_stats = {
             'round_name': round_label,
             'round_number': self.distributor.current_round,
@@ -253,7 +256,7 @@ class HouseholdRoundDistributor:
             'households_requested': total_requested,
             'households_with_demotion': total_demoted,
             'people_allocated_this_round': len(self.distributor.allocated_people) - round_start_allocated,
-            'total_households': len(self.distributor.households),
+            'total_households': len(all_households),
             'total_people_allocated': len(self.distributor.allocated_people),
             'total_people_remaining': len(self.distributor.population.get_all_people()) - len(self.distributor.allocated_people)
         }
@@ -266,7 +269,7 @@ class HouseholdRoundDistributor:
         if total_demoted > 0:
             logger.info(f"  Households using demotion: {total_demoted:,}")
         logger.info(f"  People allocated this round: {round_stats['people_allocated_this_round']:,}")
-        logger.info(f"  Total households so far: {len(self.distributor.households):,}")
+        logger.info(f"  Total households so far: {round_stats['total_households']:,}")
         logger.info(f"  Total people allocated: {len(self.distributor.allocated_people):,}")
         logger.info(f"  People remaining: {round_stats['total_people_remaining']:,}")
         logger.info("=" * 60)

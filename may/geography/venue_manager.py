@@ -15,13 +15,13 @@ class VenueManager:
         self.geography = geography      # Reference to Geography object
         self.data_dir = data_dir
         self.venues = {}                # All venues by name: {name: Venue}
-        self.venues_by_id = {}          # All venues by ID: {id: Venue}
+        self.venues_by_type_and_id = defaultdict(dict)  # Venues by type and ID: {type: {id: Venue}}
         self.venues_by_type = defaultdict(list)        # Venues grouped by type: {type: [Venue, ...]}
 
         self.filter_by_geography = filter_by_geography  # Only load venues in loaded geo units
 
-        # ID counter for generating unique IDs
-        self._next_id = 0
+        # ID counter per venue type for generating type-scoped unique IDs
+        self._next_id_by_type = defaultdict(int)  # {venue_type: next_id}
 
         # Get set of loaded geographical unit names for filtering
         self._loaded_geo_units = set(self.geography.get_all_units().keys())
@@ -29,31 +29,36 @@ class VenueManager:
         # Store capacity configurations by venue type
         self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
-    def _generate_id(self):
+    def _generate_id(self, venue_type: str) -> int:
         """
-        Generate a unique sequential ID for a venue.
+        Generate a unique sequential ID for a venue type.
+
+        Args:
+            venue_type: Type of venue (e.g., "household", "hospital")
 
         Returns:
-            Unique integer ID
+            Unique integer ID within that venue type
         """
-        self._next_id += 1
-        return self._next_id
+        next_id = self._next_id_by_type[venue_type]
+        self._next_id_by_type[venue_type] += 1
+        return next_id
 
     def add_venue(self, venue, geo_unit):
         """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
         self.venues[venue.name] = venue
-        self.venues_by_id[venue.id] = venue
+        # Store by type and ID
+        self.venues_by_type_and_id[venue.type][venue.id] = venue
         # Group by type
         self.venues_by_type[venue.type].append(venue)
         # Add venue to its geographical unit
         geo_unit.add_venue(venue)
 
-    def create_venue(self, venue_id, venue_type, geo_unit, properties=None):
+    def create_venue(self, venue_type, geo_unit, properties=None):
         """
         Create a venue and add it to the manager.
+        ID is auto-generated per venue type.
 
         Args:
-            venue_id: Unique venue ID
             venue_type: Type of venue (e.g., "household", "hospital", "school")
             geo_unit: GeographicalUnit where venue is located
             properties: Venue-specific properties dict
@@ -61,12 +66,18 @@ class VenueManager:
         Returns:
             Venue object
         """
+        # Generate type-scoped ID
+        venue_id = self._generate_id(venue_type)
+
         venue = Venue(
             name=f"{venue_type}_{venue_id}",
             venue_type=venue_type,
             geographical_unit=geo_unit,
             properties=properties or {}
         )
+
+        # Set the ID on the venue
+        venue.id = venue_id
 
         # Add to manager
         self.add_venue(venue, geo_unit)
@@ -118,17 +129,21 @@ class VenueManager:
             for prop_col in property_cols:
                 if pd.notna(row[prop_col]):
                     properties[prop_col] = row[prop_col]
-                
-            # Generate ID and create venue
-            venue = Venue(name=name,
-                          venue_type=venue_type,
-                          geographical_unit=geo_unit,
-                          coordinates=coordinates,
-                          properties=properties,
-                          )
-            
-            # Store venue
-            self.add_venue(venue, geo_unit)
+
+            # Create venue (ID auto-generated per type)
+            venue = self.create_venue(
+                venue_type=venue_type,
+                geo_unit=geo_unit,
+                properties=properties
+            )
+
+            # Override name if provided
+            if pd.notna(row.get('name')):
+                venue.name = name
+
+            # Set coordinates if available
+            if coordinates:
+                venue.coordinates = coordinates
 
             venues_created += 1
 
@@ -323,12 +338,17 @@ class VenueManager:
         it is easy to combine them into one single object at the end.
 
         Args:
-          other (VenueManager): another instance of the VenueManager class. 
-        
+          other (VenueManager): another instance of the VenueManager class.
+
         """
         # Should add something to check that self.geography and other.geography are equal.
         self.venues.update(other.venues)
-        self.venues_by_id.update(other.venues)
+
+        # Merge venues_by_type_and_id
+        for venue_type, id_dict in other.venues_by_type_and_id.items():
+            self.venues_by_type_and_id[venue_type].update(id_dict)
+
+        # Merge venues_by_type
         for venue_type, venue_list in other.venues_by_type.items():
             self.venues_by_type[venue_type] = self.venues_by_type.get(venue_type, []) + venue_list
 
@@ -336,9 +356,18 @@ class VenueManager:
         """Get a venue by its name"""
         return self.venues.get(name)
 
-    def get_venue_by_id(self, id):
-        """Get a venue by its numeric ID"""
-        return self.venues_by_id.get(id)
+    def get_venue_by_type_and_id(self, venue_type, venue_id):
+        """
+        Get a venue by its type and ID.
+
+        Args:
+            venue_type: Type of venue (e.g., "household", "hospital")
+            venue_id: ID within that venue type
+
+        Returns:
+            Venue object or None if not found
+        """
+        return self.venues_by_type_and_id.get(venue_type, {}).get(venue_id)
 
     def get_venues_by_type(self, venue_type):
         """Get all venues of a specific type"""

@@ -102,7 +102,9 @@ class HouseholdPromoter:
                 logger.debug(f"  geo_unit {geo_unit_code}: {len(available_people)} {category_name} available")
 
                 # Find households in this geo_unit
-                geo_unit_households = [hh for hh in self.distributor.households if hh.geographical_unit.name == geo_unit_code]
+                # Get all households from VenueManager
+                all_households = self.distributor.venue_manager.get_venues_by_type("household")
+                geo_unit_households = [hh for hh in all_households if hh.geographical_unit.name == geo_unit_code]
 
                 if not geo_unit_households:
                     logger.debug(f"    No households in geo_unit {geo_unit_code}")
@@ -275,7 +277,9 @@ class HouseholdPromoter:
             logger.info(f"Rule {rule_idx + 1}: {source_pattern} → {target_pattern_str} (categories: {accept_categories})")
 
             # Find households matching source pattern
-            for household in self.distributor.households:
+            # Get all households from VenueManager
+            all_households = self.distributor.venue_manager.get_venues_by_type("household")
+            for household in all_households:
                 actual_pattern = household.properties.get('actual_pattern', '')
 
                 if actual_pattern != source_pattern:

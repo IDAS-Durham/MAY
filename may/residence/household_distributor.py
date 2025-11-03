@@ -80,8 +80,7 @@ class HouseholdDistributor:
         # Create mapping from category name to index for validation rules
         self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.age_categories)}
 
-        # Household data (stored as Venue objects)
-        self.households: List[Venue] = []
+        # Household data - now stored in VenueManager
         self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
         self.allocated_people: Set[int] = set()  # Person IDs that have been allocated
 
@@ -325,10 +324,9 @@ class HouseholdDistributor:
         for cat_idx in range(len(self.age_categories)):
             pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
 
-        # Create household as Venue
+        # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)
         household = self.venue_manager.create_venue(
-            venue_id=len(self.households),
             venue_type="household",
             geo_unit=unit,
             properties={
@@ -949,10 +947,9 @@ class HouseholdDistributor:
         logger.debug(f"  Total members: {len(selected_people)}")
         logger.debug(f"  Pattern: {pattern.original_pattern}")
 
-        # Create household as Venue
+        # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)
         household = self.venue_manager.create_venue(
-            venue_id=len(self.households),
             venue_type="household",
             geo_unit=unit,
             properties={
@@ -1179,7 +1176,7 @@ class HouseholdDistributor:
                     del person.activity_map["household"]
 
         # Clear all data
-        self.households = []
+        # Note: Households are stored in VenueManager, cleared separately if needed
         self.allocated_people = set()
         self.person_pool_by_geo_unit = {}
         self.current_round = 0
@@ -1232,8 +1229,11 @@ class HouseholdDistributor:
         Returns:
             List of households matching the target patterns
         """
+        # Get all household venues from VenueManager
+        all_households = self.venue_manager.get_venues_by_type("household")
+
         filtered = []
-        for household in self.households:
+        for household in all_households:
             pattern = household.properties.get(pattern_property, '')
             if pattern in target_patterns:
                 filtered.append(household)
@@ -1518,8 +1518,11 @@ class HouseholdDistributor:
         """
         logger.info(f"Exporting household data to {output_file}...")
 
+        # Get all household venues from VenueManager
+        all_households = self.venue_manager.get_venues_by_type("household")
+
         rows = []
-        for household in self.households:
+        for household in all_households:
             # Get age categories
             age_categories = household.properties.get('_age_categories', self.age_categories)
 

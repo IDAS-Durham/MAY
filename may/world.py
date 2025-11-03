@@ -22,31 +22,45 @@ class World:
     Attributes:
         geography (Geography): The geographical hierarchy
         population (PopulationManager): The population manager
-        venues (VenueManager): The venue manager (optional)
-        households (HouseholdDistributor): The household distributor (optional)
+        venues (VenueManager): The venue manager (includes all venues including households)
+        household_distributor (HouseholdDistributor): The household distributor for allocation logic
     """
 
-    def __init__(self, geography=None, population=None, venues=None, households=None):
+    def __init__(self, geography=None, population=None, venues=None, household_distributor=None):
         """
         Initialize a World object.
 
         Args:
             geography (Geography): Geography object containing geographical units
             population (PopulationManager): PopulationManager object containing people
-            venues (VenueManager): VenueManager object containing venues (optional)
-            households (HouseholdDistributor): HouseholdDistributor with allocated households (optional)
+            venues (VenueManager): VenueManager object containing all venues (including households)
+            household_distributor (HouseholdDistributor): HouseholdDistributor for allocation logic (optional)
         """
         self.geography = geography
         self.population = population
         self.venues = venues
-        self.households = households
+        self.household_distributor = household_distributor
+
+    def get_households(self):
+        """Get all household venues from VenueManager."""
+        if self.venues:
+            return self.venues.get_venues_by_type("household")
+        return []
 
     def __repr__(self):
         geo_str = f"{len(self.geography.get_all_units())} units" if self.geography else "no geography"
         pop_str = f"{len(self.population.get_all_people()):,} people" if self.population else "no population"
-        venue_str = f"{len(self.venues.get_all_venues())} venues" if self.venues else "no venues"
-        household_str = f"{len(self.households.households)} households" if self.households else "no households"
-        return f"<World: {geo_str}, {pop_str}, {venue_str}, {household_str}>"
+
+        if self.venues:
+            total_venues = len(self.venues.get_all_venues())
+            households = self.get_households()
+            household_str = f"{len(households)} households"
+            other_venues = total_venues - len(households)
+            venue_str = f"{total_venues} venues ({household_str}, {other_venues} other)"
+        else:
+            venue_str = "no venues"
+
+        return f"<World: {geo_str}, {pop_str}, {venue_str}>"
 
     def get_statistics(self):
         """
@@ -75,15 +89,16 @@ class World:
                 'venue_types': len(self.venues.get_venue_types())
             }
 
-        if self.households:
-            total_allocated = len(self.households.allocated_people)
-            total_people = sum(len(pool) for pool in self.households.person_pool_by_area.values())
+        if self.household_distributor:
+            households = self.get_households()
+            total_allocated = len(self.household_distributor.allocated_people)
+            total_people = sum(len(pool) for pool in self.household_distributor.person_pool_by_geo_unit.values())
             stats['households'] = {
-                'total_households': len(self.households.households),
+                'total_households': len(households),
                 'people_allocated': total_allocated,
                 'people_unallocated': total_people - total_allocated,
                 'allocation_rate': total_allocated / max(total_people, 1),
-                'average_household_size': sum(h.size() for h in self.households.households) / max(len(self.households.households), 1)
+                'average_household_size': sum(h.size() for h in households) / max(len(households), 1)
             }
 
         return stats

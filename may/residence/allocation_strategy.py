@@ -152,7 +152,9 @@ def execute_allocation_strategy(population, venues, household_distributor,
         logger.info("")
 
     logger.info("Overall Totals:")
-    logger.info(f"  Total households: {len(household_distributor.households):,}")
+    # Get household count from VenueManager
+    all_households = household_distributor.venue_manager.get_venues_by_type("household")
+    logger.info(f"  Total households: {len(all_households):,}")
     logger.info(f"  People in households (initial): {total_household_alloc:,}")
     logger.info(f"  People added to households (excess): {total_excess_alloc:,}")
     logger.info(f"  People added to households (overflow): {total_overflow_alloc:,}")

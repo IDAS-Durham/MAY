@@ -126,14 +126,15 @@ def print_world_examples(world):
 
     logger.info("")
     logger.info("4. Household Examples:")
-    if world.households and world.households.households:
+    households = world.get_households()
+    if households and world.household_distributor:
         total_pop = len(population.get_all_people())
-        allocation_rate = (len(world.households.allocated_people) / total_pop * 100) if total_pop > 0 else 0
-        logger.info(f"   Total households: {len(world.households.households)}")
-        logger.info(f"   People allocated: {len(world.households.allocated_people):,} / {total_pop:,} ({allocation_rate:.1f}%)")
+        allocation_rate = (len(world.household_distributor.allocated_people) / total_pop * 100) if total_pop > 0 else 0
+        logger.info(f"   Total households: {len(households)}")
+        logger.info(f"   People allocated: {len(world.household_distributor.allocated_people):,} / {total_pop:,} ({allocation_rate:.1f}%)")
         logger.info("")
         logger.info("   Example households:")
-        for household in np.random.choice(world.households.households, size=min(5, len(world.households.households)), replace=False):
+        for household in np.random.choice(households, size=min(5, len(households)), replace=False):
             age_categories = household.properties.get('_age_categories', [])
             composition = household.get_composition(age_categories)
             logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
@@ -164,8 +165,8 @@ def print_world_examples(world):
 
     logger.info("")
     logger.info("   # Get person's household")
-    if world.households and world.households.allocated_people:
-        example_person_id = next(iter(world.households.allocated_people))
+    if world.household_distributor and world.household_distributor.allocated_people:
+        example_person_id = next(iter(world.household_distributor.allocated_people))
         example_person = next((p for p in population.get_all_people() if p.id == example_person_id), None)
         if example_person and "household" in example_person.activity_map:
             household_subsets = example_person.activity_map["household"]
@@ -229,7 +230,7 @@ def main():
     # Create World object
     logger.info("")
     logger.info("Creating World object...")
-    world = World(geography=geo, population=population, venues=venues, households=household_distributor)
+    world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
     logger.info(world)
 
     logger.info("")
