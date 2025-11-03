@@ -10,7 +10,7 @@ import logging
 import numpy as np
 from typing import List, Optional, Dict
 from may.population.person import Person
-from may.residence.models import Household
+from may.geography.venue import Venue
 
 logger = logging.getLogger("household")
 
@@ -390,7 +390,7 @@ class HouseholdExcessHandler:
                             break
 
                         person = available_people[global_people_index]
-                        household.add_resident(person)
+                        household.add_to_subset(person)
                         self.distributor.allocated_people.add(person.id)
                         global_people_index += 1
                         added_to_hh += 1
@@ -398,7 +398,7 @@ class HouseholdExcessHandler:
 
                     if added_to_hh > 0:
                         households_modified += 1
-                        logger.debug(f"Added {added_to_hh} {add_category} to household {household.id} (pattern: {pattern}, now size: {len(household.residents)})")
+                        logger.debug(f"Added {added_to_hh} {add_category} to household {household.id} (pattern: {pattern}, now size: {household.size()})")
 
             # Remove allocated people from pool
             pools[add_cat_idx] = pools[add_cat_idx][global_people_index:]
@@ -432,7 +432,7 @@ class HouseholdExcessHandler:
 
         return stats
 
-    def _select_person_for_excess_with_rule(self, household: 'Household',
+    def _select_person_for_excess_with_rule(self, household: Venue,
                                            candidates: List['Person'],
                                            add_category: str,
                                            rule) -> Optional['Person']:
@@ -460,7 +460,7 @@ class HouseholdExcessHandler:
             existing_people_by_role[role_name] = []
 
             # Find all household members that belong to this role's categories
-            for resident in household.residents:
+            for resident in household.get_all_members():
                 resident_cat_name = self.distributor._get_person_category_name(resident)
                 if resident_cat_name in category_names:
                     existing_people_by_role[role_name].append(resident)

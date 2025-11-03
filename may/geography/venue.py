@@ -151,3 +151,94 @@ class Venue:
         for subset in self.subsets.values():
             total += subset.num_members
         return total
+
+    def add_to_subset(self, person, subset_key=None, activity_name=None):
+        """
+        Add a person to a subset of this venue and register the activity.
+
+        Args:
+            person: Person object to add
+            subset_key: Key for the subset (if None, uses first subset or creates default)
+            activity_name: Activity name to register (if None, uses venue type)
+        """
+        from may.population import Subset
+
+        # Use venue type as default activity if not specified
+        if activity_name is None:
+            activity_name = self.type
+
+        # If no subset_key specified, use the first existing subset or create one
+        if subset_key is None:
+            if self.subsets:
+                subset_key = next(iter(self.subsets.keys()))
+            else:
+                subset_key = 0  # Use numeric index as default
+
+        # Create subset if it doesn't exist
+        if subset_key not in self.subsets:
+            subset_index = len(self.subsets)
+            self.subsets[subset_key] = Subset(
+                venue=self,
+                subset_index=subset_index,
+                subset_name=str(subset_key)
+            )
+
+        subset = self.subsets[subset_key]
+
+        # Add person to subset members
+        subset.add_member(person)
+
+        # Register activity in person's activity_map
+        if activity_name not in person.activities:
+            person.add_activity(activity_name)
+
+        # Add subset to person's activity_map (check by venue ID to avoid equality check issues)
+        subset_already_added = any(s.venue.id == self.id for s in person.activity_map[activity_name])
+        if not subset_already_added:
+            person.activity_map[activity_name].append(subset)
+
+    def get_all_members(self):
+        """
+        Get all members from all subsets.
+
+        Returns:
+            List of Person objects
+        """
+        members = []
+        for subset in self.subsets.values():
+            members.extend(list(subset.members))
+        return members
+
+    def size(self) -> int:
+        """
+        Get total number of members across all subsets.
+
+        Returns:
+            int: Number of members
+        """
+        return sum(len(subset.members) for subset in self.subsets.values())
+
+    def get_composition(self, age_categories=None):
+        """
+        Get composition by age category (useful for household-type venues).
+
+        Args:
+            age_categories: List of AgeCategory objects
+
+        Returns:
+            dict: Composition counts by category name
+        """
+        # Get age_categories from properties if not provided
+        if age_categories is None:
+            age_categories = self.properties.get('_age_categories', [])
+
+        if not age_categories:
+            return {}
+
+        composition = {cat.name: 0 for cat in age_categories}
+        for person in self.get_all_members():
+            for cat in age_categories:
+                if cat.matches(person.age):
+                    composition[cat.name] += 1
+                    break
+        return composition

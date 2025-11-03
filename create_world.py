@@ -134,7 +134,8 @@ def print_world_examples(world):
         logger.info("")
         logger.info("   Example households:")
         for household in np.random.choice(world.households.households, size=min(5, len(world.households.households)), replace=False):
-            composition = household.get_composition()
+            age_categories = household.properties.get('_age_categories', [])
+            composition = household.get_composition(age_categories)
             logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
             logger.info(f"     - Size: {household.size()} people")
             logger.info(f"     - Composition: {composition}")
@@ -166,9 +167,13 @@ def print_world_examples(world):
     if world.households and world.households.allocated_people:
         example_person_id = next(iter(world.households.allocated_people))
         example_person = next((p for p in population.get_all_people() if p.id == example_person_id), None)
-        if example_person and hasattr(example_person, 'residence') and example_person.residence:
-            logger.info(f"   person.residence -> Household {example_person.residence.id}")
-            logger.info(f"      Size: {example_person.residence.size()}, Composition: {example_person.residence.get_composition()}")
+        if example_person and "household" in example_person.activity_map:
+            household_subsets = example_person.activity_map["household"]
+            if household_subsets:
+                household_venue = household_subsets[0].venue
+                age_categories = household_venue.properties.get('_age_categories', [])
+                logger.info(f"   person.activity_map['household'] -> Household {household_venue.id}")
+                logger.info(f"      Size: {household_venue.size()}, Composition: {household_venue.get_composition(age_categories)}")
 
     logger.info("")
     logger.info("=" * 60)

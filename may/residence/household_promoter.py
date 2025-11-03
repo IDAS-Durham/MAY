@@ -126,7 +126,8 @@ class HouseholdPromoter:
                     for attempt in range(max_attempts + 1):
                         # Can we add someone from this category?
                         min_count = current_pattern.get_min_count(cat_idx)
-                        current_count = household.get_composition().get(category_name, 0)
+                        age_categories = household.properties.get('_age_categories', self.distributor.age_categories)
+                        current_count = household.get_composition(age_categories).get(category_name, 0)
 
                         if current_count >= min_count:
                             # Already meets minimum, check if flexible
@@ -166,7 +167,8 @@ class HouseholdPromoter:
 
                     # Now try to add people
                     max_count = current_pattern.get_max_count(cat_idx)
-                    current_count = household.get_composition().get(category_name, 0)
+                    age_categories = household.properties.get('_age_categories', self.distributor.age_categories)
+                    current_count = household.get_composition(age_categories).get(category_name, 0)
 
                     # Determine how many we can add
                     if max_count is None:  # Flexible
@@ -185,7 +187,7 @@ class HouseholdPromoter:
                             break
 
                         person = available_people.popleft()
-                        household.add_resident(person)
+                        household.add_to_subset(person)
                         self.distributor.allocated_people.add(person.id)
                         added_to_this += 1
                         people_added += 1
@@ -299,7 +301,8 @@ class HouseholdPromoter:
                         continue
 
                     # Get current count in this category
-                    current_composition = household.get_composition()
+                    age_categories = household.properties.get('_age_categories', self.distributor.age_categories)
+                    current_composition = household.get_composition(age_categories)
                     current_count = current_composition.get(category_name, 0)
 
                     # Get max allowed from target pattern
@@ -341,7 +344,7 @@ class HouseholdPromoter:
                             break
 
                         person = available_people.popleft()
-                        household.add_resident(person)
+                        household.add_to_subset(person)
                         self.distributor.allocated_people.add(person.id)
                         added_to_this_household += 1
                         people_added += 1

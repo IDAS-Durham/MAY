@@ -17,10 +17,12 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Set
 
 from may.geography.geography import Geography
+from may.geography.venue import Venue
+from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
 from may.residence.relationship_rules import RelationshipRulesValidator
-from may.residence.models import AgeCategory, Household
+from may.residence.models import AgeCategory
 from may.residence.composition_pattern import CompositionPattern
 from may.residence.household_excess_handler import HouseholdExcessHandler
 from may.residence.household_promoter import HouseholdPromoter
@@ -46,6 +48,7 @@ class HouseholdDistributor:
     """
 
     def __init__(self, geography: Geography, population: PopulationManager,
+                 venue_manager: VenueManager,
                  data_dir: str = "data/households", config_file: str = "households_config.yaml"):
         """
         Initialize the household distributor.
@@ -58,6 +61,7 @@ class HouseholdDistributor:
         """
         self.geography = geography
         self.population = population
+        self.venue_manager = venue_manager
         self.data_dir = data_dir
 
         # Load configuration
@@ -76,8 +80,8 @@ class HouseholdDistributor:
         # Create mapping from category name to index for validation rules
         self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.age_categories)}
 
-        # Household data
-        self.households: List[Household] = []
+        # Household data (stored as Venue objects)
+        self.households: List[Venue] = []
         self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
         self.allocated_people: Set[int] = set()  # Person IDs that have been allocated
 
@@ -227,7 +231,7 @@ class HouseholdDistributor:
                                        max_size: Optional[int] = None,
                                        allocate_flexible: bool = False,
                                        target_size: Optional[int] = None,
-                                       rule_name: Optional[str] = None) -> Tuple[Optional[Household], Optional[int]]:
+                                       rule_name: Optional[str] = None) -> Tuple[Optional[Venue], Optional[int]]:
         """
         Allocate a household using relationship rules.
 
@@ -245,7 +249,7 @@ class HouseholdDistributor:
             rule_name: Optional rule name to use (overrides auto-matching)
 
         Returns:
-            Tuple of (Household object if successful or None, failed_category_idx or None)
+            Tuple of (Venue object if successful or None, failed_category_idx or None)
         """
         # If no rule is specified, use simple allocation (no rules)
         if not rule_name:
@@ -321,21 +325,22 @@ class HouseholdDistributor:
         for cat_idx in range(len(self.age_categories)):
             pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
 
-        # Create household
+        # Create household as Venue
         unit = self.geography.get_unit(geo_unit_code)
-        household = Household(
-            id=len(self.households),
-            geographical_unit=unit,
+        household = self.venue_manager.create_venue(
+            venue_id=len(self.households),
+            venue_type="household",
+            geo_unit=unit,
             properties={
                 'original_pattern': pattern.original_pattern,
-                'actual_pattern': pattern.to_string()
+                'actual_pattern': pattern.to_string(),
+                '_age_categories': self.age_categories
             }
         )
-        household._age_categories = self.age_categories
 
-        # Add residents
+        # Add residents to venue subset
         for person in all_selected:
-            household.add_resident(person)
+            household.add_to_subset(person)
             self.allocated_people.add(person.id)
 
         if self._show_detailed_logs:
@@ -875,7 +880,7 @@ class HouseholdDistributor:
     def _allocate_household(self, geo_unit_code: str, pattern: CompositionPattern,
                             max_size: Optional[int] = None,
                             allocate_flexible: bool = False,
-                            target_size: Optional[int] = None) -> Tuple[Optional[Household], Optional[int]]:
+                            target_size: Optional[int] = None) -> Tuple[Optional[Venue], Optional[int]]:
         """
         Attempt to allocate a household in an geo_unit with the given pattern.
 
@@ -886,7 +891,7 @@ class HouseholdDistributor:
             allocate_flexible: If True, allocate people to flexible (>=) categories randomly
 
         Returns:
-            Tuple of (Household object if successful or None, failed_category_idx or None)
+            Tuple of (Venue object if successful or None, failed_category_idx or None)
             - If successful: (household, None)
             - If failed: (None, category_idx that caused failure)
         """
@@ -944,21 +949,22 @@ class HouseholdDistributor:
         logger.debug(f"  Total members: {len(selected_people)}")
         logger.debug(f"  Pattern: {pattern.original_pattern}")
 
-        # Create household
+        # Create household as Venue
         unit = self.geography.get_unit(geo_unit_code)
-        household = Household(
-            id=len(self.households),
-            geographical_unit=unit,
+        household = self.venue_manager.create_venue(
+            venue_id=len(self.households),
+            venue_type="household",
+            geo_unit=unit,
             properties={
                 'original_pattern': pattern.original_pattern,  # The original requested pattern
-                'actual_pattern': pattern.to_string()  # The actual pattern used (may be demoted)
+                'actual_pattern': pattern.to_string(),  # The actual pattern used (may be demoted)
+                '_age_categories': self.age_categories
             }
         )
-        household._age_categories = self.age_categories
 
-        # Add residents
+        # Add residents to venue subset
         for person in selected_people:
-            household.add_resident(person)
+            household.add_to_subset(person)
             self.allocated_people.add(person.id)
 
         logger.debug(f"  ✓ Household {household.id} created successfully")
@@ -972,7 +978,7 @@ class HouseholdDistributor:
                                allocate_flexible: bool = False,
                                target_size: Optional[int] = None,
                                rule_name: Optional[str] = None,
-                               demotion_rules: Optional[Dict[str, str]] = None) -> Optional[Household]:
+                               demotion_rules: Optional[Dict[str, str]] = None) -> Optional[Venue]:
         """
         Attempt to allocate a household, using intelligent demotion if necessary.
 
@@ -991,7 +997,7 @@ class HouseholdDistributor:
             demotion_rules: Optional dict mapping pattern strings to rule names for demoted patterns
 
         Returns:
-            Household object if successful, None otherwise
+            Venue object if successful, None otherwise
         """
         # Get demotion priority from config (used as fallback)
         priority_config = self.config['demotion']['priority']
@@ -1162,11 +1168,15 @@ class HouseholdDistributor:
         """
         logger.warning("Resetting all household allocations...")
 
-        # Clear residence from all allocated people
+        # Clear household activity from all allocated people
         for person_id in self.allocated_people:
             person = self.population.get_person(person_id)
-            if person and hasattr(person, 'residence'):
-                person.residence = None
+            if person:
+                # Remove household activity and activity_map entries
+                if "household" in person.activities:
+                    person.remove_activity("household")
+                if "household" in person.activity_map:
+                    del person.activity_map["household"]
 
         # Clear all data
         self.households = []
@@ -1211,7 +1221,7 @@ class HouseholdDistributor:
         return cat_idx
 
     def _filter_households_by_patterns(self, target_patterns: List[str],
-                                       pattern_property: str = 'original_pattern') -> List[Household]:
+                                       pattern_property: str = 'original_pattern') -> List[Venue]:
         """
         Filter households by matching patterns.
 
@@ -1324,17 +1334,17 @@ class HouseholdDistributor:
 
         logger.info("=" * 60)
 
-    def _allocate_person_to_household(self, household: Household, person: Person,
+    def _allocate_person_to_household(self, household: Venue, person: Person,
                                       pool: Optional[List[Person]] = None):
         """
         Add person to household, mark as allocated, and optionally remove from pool.
 
         Args:
-            household: Household to add person to
+            household: Household venue to add person to
             person: Person to add
             pool: Optional pool to remove person from (modifies list in-place)
         """
-        household.add_resident(person)
+        household.add_to_subset(person)
         self.allocated_people.add(person.id)
 
         # Remove from pool if provided
@@ -1435,13 +1445,13 @@ class HouseholdDistributor:
             logger.warning(f"Unknown distribution type '{dist_type}', defaulting to 0")
             return 0
 
-    def _check_constraints_if_added(self, household: Household, add_category: str,
+    def _check_constraints_if_added(self, household: Venue, add_category: str,
                                      constraints: List[Dict]) -> bool:
         """
         Check if adding one more person of add_category would violate constraints.
 
         Args:
-            household: Household to check
+            household: Household venue to check
             add_category: Category of person being added
             constraints: List of constraint dicts
 
@@ -1510,8 +1520,11 @@ class HouseholdDistributor:
 
         rows = []
         for household in self.households:
+            # Get age categories
+            age_categories = household.properties.get('_age_categories', self.age_categories)
+
             # Get composition
-            composition = household.get_composition()
+            composition = household.get_composition(age_categories)
             composition_str = ", ".join([f"{cat}: {count}" for cat, count in composition.items()])
 
             # Get original pattern
@@ -1519,7 +1532,7 @@ class HouseholdDistributor:
 
             # Get resident details
             resident_details = []
-            for person in household.residents:
+            for person in household.get_all_members():
                 resident_details.append(f"Person_{person.id}(age={person.age},sex={person.sex})")
             residents_str = "; ".join(resident_details)
 

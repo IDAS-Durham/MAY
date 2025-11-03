@@ -46,7 +46,32 @@ class VenueManager:
         # Group by type
         self.venues_by_type[venue.type].append(venue)
         # Add venue to its geographical unit
-        geo_unit.add_venue(venue)       
+        geo_unit.add_venue(venue)
+
+    def create_venue(self, venue_id, venue_type, geo_unit, properties=None):
+        """
+        Create a venue and add it to the manager.
+
+        Args:
+            venue_id: Unique venue ID
+            venue_type: Type of venue (e.g., "household", "hospital", "school")
+            geo_unit: GeographicalUnit where venue is located
+            properties: Venue-specific properties dict
+
+        Returns:
+            Venue object
+        """
+        venue = Venue(
+            name=f"{venue_type}_{venue_id}",
+            venue_type=venue_type,
+            geographical_unit=geo_unit,
+            properties=properties or {}
+        )
+
+        # Add to manager
+        self.add_venue(venue, geo_unit)
+
+        return venue       
 
     def load_venue_type_from_df(self, venue_type, venue_df):
         """ Creates venues from a given dataframe """
