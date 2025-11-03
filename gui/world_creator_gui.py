@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+WORK IN PROGRESS/ 
+
 GUI for creating June Zero worlds.
 
 This application provides a graphical form-based interface for configuring
@@ -359,6 +361,414 @@ class ConfigForm(ttk.Frame):
             messagebox.showerror("Save Error", f"Error saving config:\n{str(e)}")
 
 
+class StepWidget(ttk.Frame):
+    """Widget for a single allocation step."""
+
+    def __init__(self, parent, step_data=None, on_delete=None, step_number=1, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.step_data = step_data or {}
+        self.on_delete = on_delete
+        self.step_number = step_number
+        self.pattern_widgets = []
+        self.demotion_rule_widgets = []
+
+        # Create the step UI
+        self.build_ui()
+
+        # Load data if provided
+        if step_data:
+            self.load_data(step_data)
+
+    def build_ui(self):
+        """Build the step widget UI."""
+        # Main container with border
+        container = ttk.LabelFrame(self, text=f"Step {self.step_number}", padding=10)
+        container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # Create inner frame for grid layout
+        inner_frame = ttk.Frame(container)
+        inner_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Basic fields
+        row = 0
+
+        # Delete button
+        delete_btn = ttk.Button(inner_frame, text="✕ Delete Step", command=self._on_delete)
+        delete_btn.grid(row=row, column=0, columnspan=2, sticky=tk.E, pady=(0, 10))
+        row += 1
+
+        # Name
+        ttk.Label(inner_frame, text="Name:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        self.name_entry = ttk.Entry(inner_frame, width=50)
+        self.name_entry.grid(row=row, column=1, sticky=tk.W+tk.E, padx=5, pady=5)
+        row += 1
+
+        # Type
+        ttk.Label(inner_frame, text="Type:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        self.type_combo = ttk.Combobox(inner_frame, values=["household", "venue"], width=47, state="readonly")
+        self.type_combo.grid(row=row, column=1, sticky=tk.W+tk.E, padx=5, pady=5)
+        self.type_combo.bind("<<ComboboxSelected>>", self._on_type_changed)
+        row += 1
+
+        # Description
+        ttk.Label(inner_frame, text="Description:").grid(row=row, column=0, sticky=tk.W, padx=5, pady=5)
+        self.description_entry = ttk.Entry(inner_frame, width=50)
+        self.description_entry.grid(row=row, column=1, sticky=tk.W+tk.E, padx=5, pady=5)
+        row += 1
+
+        # Household-specific fields frame
+        self.household_frame = ttk.LabelFrame(inner_frame, text="Household Settings", padding=10)
+        self.household_frame.grid(row=row, column=0, columnspan=2, sticky=tk.W+tk.E, padx=5, pady=10)
+        self.household_frame.grid_remove()  # Hidden by default
+        row += 1
+
+        self._build_household_fields()
+
+        inner_frame.columnconfigure(1, weight=1)
+
+    def _build_household_fields(self):
+        """Build household-specific fields."""
+        h_row = 0
+
+        # Rule
+        ttk.Label(self.household_frame, text="Rule:").grid(row=h_row, column=0, sticky=tk.W, padx=5, pady=5)
+        self.rule_entry = ttk.Entry(self.household_frame, width=40)
+        self.rule_entry.grid(row=h_row, column=1, sticky=tk.W+tk.E, padx=5, pady=5)
+        ttk.Label(self.household_frame, text="(from relationship_rules.yaml)", font=('Arial', 9, 'italic')).grid(row=h_row, column=2, sticky=tk.W, padx=5)
+        h_row += 1
+
+        # Patterns section
+        patterns_label = ttk.Label(self.household_frame, text="Patterns:", font=('Arial', 10, 'bold'))
+        patterns_label.grid(row=h_row, column=0, sticky=tk.W, padx=5, pady=(10, 5))
+        h_row += 1
+
+        # Patterns list frame
+        self.patterns_frame = ttk.Frame(self.household_frame)
+        self.patterns_frame.grid(row=h_row, column=0, columnspan=3, sticky=tk.W+tk.E, padx=20, pady=5)
+        h_row += 1
+
+        # Add pattern button
+        add_pattern_btn = ttk.Button(self.household_frame, text="+ Add Pattern", command=self.add_pattern)
+        add_pattern_btn.grid(row=h_row, column=0, columnspan=3, sticky=tk.W, padx=20, pady=5)
+        h_row += 1
+
+        # Max households
+        ttk.Label(self.household_frame, text="Max Households:").grid(row=h_row, column=0, sticky=tk.W, padx=5, pady=5)
+        self.max_households_entry = ttk.Entry(self.household_frame, width=20)
+        self.max_households_entry.grid(row=h_row, column=1, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(self.household_frame, text="(leave empty for no limit)", font=('Arial', 9, 'italic')).grid(row=h_row, column=2, sticky=tk.W, padx=5)
+        h_row += 1
+
+        # Refresh pools
+        ttk.Label(self.household_frame, text="Refresh Pools:").grid(row=h_row, column=0, sticky=tk.W, padx=5, pady=5)
+        self.refresh_pools_var = tk.BooleanVar()
+        ttk.Checkbutton(self.household_frame, variable=self.refresh_pools_var).grid(row=h_row, column=1, sticky=tk.W, padx=5, pady=5)
+        h_row += 1
+
+        # Enable demotion
+        ttk.Label(self.household_frame, text="Enable Demotion:").grid(row=h_row, column=0, sticky=tk.W, padx=5, pady=5)
+        self.enable_demotion_var = tk.BooleanVar()
+        ttk.Checkbutton(self.household_frame, variable=self.enable_demotion_var).grid(row=h_row, column=1, sticky=tk.W, padx=5, pady=5)
+        h_row += 1
+
+        # Demotion rules section
+        demotion_label = ttk.Label(self.household_frame, text="Demotion Rules:", font=('Arial', 10, 'bold'))
+        demotion_label.grid(row=h_row, column=0, sticky=tk.W, padx=5, pady=(10, 5))
+        h_row += 1
+
+        # Demotion rules list frame
+        self.demotion_rules_frame = ttk.Frame(self.household_frame)
+        self.demotion_rules_frame.grid(row=h_row, column=0, columnspan=3, sticky=tk.W+tk.E, padx=20, pady=5)
+        h_row += 1
+
+        # Add demotion rule button
+        add_demotion_btn = ttk.Button(self.household_frame, text="+ Add Demotion Rule", command=self.add_demotion_rule)
+        add_demotion_btn.grid(row=h_row, column=0, columnspan=3, sticky=tk.W, padx=20, pady=5)
+
+        self.household_frame.columnconfigure(1, weight=1)
+
+    def add_pattern(self, pattern_value="", assumption=""):
+        """Add a pattern input field."""
+        pattern_frame = ttk.Frame(self.patterns_frame)
+        pattern_frame.pack(fill=tk.X, pady=2)
+
+        ttk.Label(pattern_frame, text="Pattern:").pack(side=tk.LEFT, padx=5)
+        pattern_entry = ttk.Entry(pattern_frame, width=30)
+        pattern_entry.pack(side=tk.LEFT, padx=5)
+        pattern_entry.insert(0, pattern_value)
+
+        ttk.Label(pattern_frame, text="Assumption:").pack(side=tk.LEFT, padx=5)
+        assumption_entry = ttk.Entry(pattern_frame, width=30)
+        assumption_entry.pack(side=tk.LEFT, padx=5)
+        assumption_entry.insert(0, assumption)
+
+        remove_btn = ttk.Button(pattern_frame, text="✕", width=3,
+                               command=lambda: self.remove_pattern(pattern_frame))
+        remove_btn.pack(side=tk.LEFT, padx=5)
+
+        self.pattern_widgets.append((pattern_frame, pattern_entry, assumption_entry))
+
+    def remove_pattern(self, frame):
+        """Remove a pattern."""
+        for i, (f, _, _) in enumerate(self.pattern_widgets):
+            if f == frame:
+                self.pattern_widgets.pop(i)
+                frame.destroy()
+                break
+
+    def add_demotion_rule(self, from_pattern="", to_rule=""):
+        """Add a demotion rule mapping."""
+        rule_frame = ttk.Frame(self.demotion_rules_frame)
+        rule_frame.pack(fill=tk.X, pady=2)
+
+        ttk.Label(rule_frame, text="From Pattern:").pack(side=tk.LEFT, padx=5)
+        from_entry = ttk.Entry(rule_frame, width=25)
+        from_entry.pack(side=tk.LEFT, padx=5)
+        from_entry.insert(0, from_pattern)
+
+        ttk.Label(rule_frame, text="→ To Rule:").pack(side=tk.LEFT, padx=5)
+        to_entry = ttk.Entry(rule_frame, width=25)
+        to_entry.pack(side=tk.LEFT, padx=5)
+        to_entry.insert(0, to_rule)
+
+        remove_btn = ttk.Button(rule_frame, text="✕", width=3,
+                               command=lambda: self.remove_demotion_rule(rule_frame))
+        remove_btn.pack(side=tk.LEFT, padx=5)
+
+        self.demotion_rule_widgets.append((rule_frame, from_entry, to_entry))
+
+    def remove_demotion_rule(self, frame):
+        """Remove a demotion rule."""
+        for i, (f, _, _) in enumerate(self.demotion_rule_widgets):
+            if f == frame:
+                self.demotion_rule_widgets.pop(i)
+                frame.destroy()
+                break
+
+    def _on_type_changed(self, event=None):
+        """Handle type change."""
+        if self.type_combo.get() == "household":
+            self.household_frame.grid()
+        else:
+            self.household_frame.grid_remove()
+
+    def _on_delete(self):
+        """Handle delete button."""
+        if self.on_delete:
+            self.on_delete(self)
+
+    def get_data(self):
+        """Get step data as dictionary."""
+        data = {
+            "name": self.name_entry.get(),
+            "type": self.type_combo.get(),
+            "description": self.description_entry.get(),
+        }
+
+        if self.type_combo.get() == "household":
+            data["rule"] = self.rule_entry.get()
+
+            # Get patterns
+            patterns = []
+            for _, pattern_entry, assumption_entry in self.pattern_widgets:
+                pattern = pattern_entry.get().strip()
+                assumption = assumption_entry.get().strip()
+                if pattern:
+                    if assumption:
+                        # Pattern with assumption
+                        patterns.append({
+                            "pattern": pattern,
+                            "assumption": assumption
+                        })
+                    else:
+                        # Simple pattern string
+                        patterns.append(pattern)
+            if patterns:
+                data["patterns"] = patterns
+
+            # Max households
+            max_hh = self.max_households_entry.get().strip()
+            data["max_households"] = int(max_hh) if max_hh and max_hh.isdigit() else None
+
+            data["refresh_pools"] = self.refresh_pools_var.get()
+            data["enable_demotion"] = self.enable_demotion_var.get() or None
+
+            # Get demotion rules
+            demotion_rules = {}
+            for _, from_entry, to_entry in self.demotion_rule_widgets:
+                from_pattern = from_entry.get().strip()
+                to_rule = to_entry.get().strip()
+                if from_pattern and to_rule:
+                    demotion_rules[from_pattern] = to_rule
+            if demotion_rules:
+                data["demotion_rules"] = demotion_rules
+
+        return data
+
+    def load_data(self, data):
+        """Load data into the widget."""
+        self.name_entry.insert(0, data.get("name", ""))
+        self.type_combo.set(data.get("type", "household"))
+        self.description_entry.insert(0, data.get("description", ""))
+
+        if data.get("type") == "household":
+            self.household_frame.grid()
+            self.rule_entry.insert(0, data.get("rule", ""))
+
+            # Load patterns
+            for pattern in data.get("patterns", []):
+                if isinstance(pattern, dict):
+                    # Pattern with assumption
+                    pattern_value = pattern.get("pattern", "")
+                    assumption = pattern.get("assumption", "")
+                    self.add_pattern(pattern_value, assumption)
+                else:
+                    # Simple pattern string
+                    self.add_pattern(pattern)
+
+            # Load max households
+            max_hh = data.get("max_households")
+            if max_hh is not None:
+                self.max_households_entry.insert(0, str(max_hh))
+
+            # Handle boolean values (convert None to False)
+            refresh_pools = data.get("refresh_pools")
+            self.refresh_pools_var.set(refresh_pools if refresh_pools is not None else False)
+
+            enable_demotion = data.get("enable_demotion")
+            self.enable_demotion_var.set(enable_demotion if enable_demotion is not None else False)
+
+            # Load demotion rules
+            demotion_rules = data.get("demotion_rules", {})
+            if demotion_rules:
+                for from_pattern, to_rule in demotion_rules.items():
+                    self.add_demotion_rule(from_pattern, to_rule)
+
+    def update_number(self, number):
+        """Update step number."""
+        self.step_number = number
+        for child in self.winfo_children():
+            if isinstance(child, ttk.LabelFrame):
+                child.config(text=f"Step {number}")
+                break
+
+
+class AllocationStrategyTab(ttk.Frame):
+    """Tab for managing allocation strategy."""
+
+    def __init__(self, parent, strategy_path, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.strategy_path = strategy_path
+        self.step_widgets = []
+
+        # Create UI
+        self.build_ui()
+
+        # Load existing strategy
+        self.load_strategy()
+
+    def build_ui(self):
+        """Build the allocation strategy UI."""
+        # Top toolbar
+        toolbar = ttk.Frame(self)
+        toolbar.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+
+        ttk.Label(toolbar, text="Allocation Strategy", font=('Arial', 14, 'bold')).pack(side=tk.LEFT)
+
+        save_btn = ttk.Button(toolbar, text="💾 Save Strategy", command=self.save_strategy)
+        save_btn.pack(side=tk.RIGHT, padx=5)
+
+        add_btn = ttk.Button(toolbar, text="+ Add Step", command=self.add_step)
+        add_btn.pack(side=tk.RIGHT, padx=5)
+
+        # Scrollable steps area
+        canvas = tk.Canvas(self, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self, orient="vertical", command=canvas.yview)
+        self.steps_frame = ttk.Frame(canvas)
+
+        self.steps_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas_frame = canvas.create_window((0, 0), window=self.steps_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True, padx=10)
+        scrollbar.pack(side="right", fill="y")
+
+        # Update canvas width on resize
+        def on_canvas_configure(event):
+            canvas.itemconfig(canvas_frame, width=event.width)
+
+        canvas.bind('<Configure>', on_canvas_configure)
+
+        # Enable mousewheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta)), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Empty state label
+        self.empty_label = ttk.Label(self.steps_frame, text="No steps added yet.\nClick '+ Add Step' to begin.",
+                                     font=('Arial', 12), foreground='gray')
+        self.empty_label.pack(pady=50)
+
+    def add_step(self, step_data=None):
+        """Add a new step."""
+        # Hide empty label
+        if self.step_widgets == []:
+            self.empty_label.pack_forget()
+
+        step_number = len(self.step_widgets) + 1
+        step_widget = StepWidget(self.steps_frame, step_data=step_data,
+                                on_delete=self.remove_step, step_number=step_number)
+        step_widget.pack(fill=tk.X, padx=10, pady=5)
+        self.step_widgets.append(step_widget)
+
+    def remove_step(self, step_widget):
+        """Remove a step."""
+        if messagebox.askyesno("Delete Step", "Are you sure you want to delete this step?"):
+            self.step_widgets.remove(step_widget)
+            step_widget.destroy()
+
+            # Renumber remaining steps
+            for i, widget in enumerate(self.step_widgets, 1):
+                widget.update_number(i)
+
+            # Show empty label if no steps
+            if not self.step_widgets:
+                self.empty_label.pack(pady=50)
+
+    def load_strategy(self):
+        """Load strategy from YAML file."""
+        try:
+            if os.path.exists(self.strategy_path):
+                with open(self.strategy_path, 'r') as f:
+                    strategy = yaml.safe_load(f)
+
+                if strategy and "steps" in strategy:
+                    for step_data in strategy["steps"]:
+                        self.add_step(step_data)
+        except Exception as e:
+            messagebox.showerror("Load Error", f"Error loading strategy:\n{str(e)}")
+
+    def save_strategy(self):
+        """Save strategy to YAML file."""
+        try:
+            strategy = {
+                "enabled": True,
+                "steps": [widget.get_data() for widget in self.step_widgets]
+            }
+
+            with open(self.strategy_path, 'w') as f:
+                yaml.dump(strategy, f, default_flow_style=False, sort_keys=False)
+
+            messagebox.showinfo("Saved", f"Allocation strategy saved successfully! at {str(self.strategy_path)}")
+        except Exception as e:
+            messagebox.showerror("Save Error", f"Error saving strategy:\n{str(e)}")
+
+
 class WorldCreatorGUI:
     """Main GUI application for world creation."""
 
@@ -374,10 +784,14 @@ class WorldCreatorGUI:
         self.gui_dir = os.path.dirname(os.path.abspath(__file__))
         self.project_root = os.path.dirname(self.gui_dir)
 
-        # Main config path
+        # Config paths
         self.main_config_path = os.path.join(
             self.project_root,
-            "world_specific_code/Modern_Day_UK/config.yaml"
+            "world_specific_code/Modern_Day_UK/config_gui.yaml"
+        )
+        self.strategy_path = os.path.join(
+            self.project_root,
+            "yaml/households/allocation_strategy_gui.yaml"
         )
 
         # Create main container
@@ -388,13 +802,21 @@ class WorldCreatorGUI:
         paned = ttk.PanedWindow(main_container, orient=tk.VERTICAL)
         paned.pack(fill=tk.BOTH, expand=True)
 
-        # Top section: Configuration form
-        form_frame = ttk.LabelFrame(paned, text="World Configuration", padding=10)
-        paned.add(form_frame, weight=3)
+        # Top section: Configuration tabs
+        config_notebook = ttk.Notebook(paned)
+        paned.add(config_notebook, weight=3)
 
-        # Create config form
-        self.config_form = ConfigForm(form_frame, self.main_config_path)
+        # Tab 1: Main Configuration
+        main_config_frame = ttk.Frame(config_notebook)
+        config_notebook.add(main_config_frame, text="Main Configuration")
+        self.config_form = ConfigForm(main_config_frame, self.main_config_path)
         self.config_form.pack(fill=tk.BOTH, expand=True)
+
+        # Tab 2: Allocation Strategy
+        strategy_frame = ttk.Frame(config_notebook)
+        config_notebook.add(strategy_frame, text="Allocation Strategy")
+        self.strategy_tab = AllocationStrategyTab(strategy_frame, self.strategy_path)
+        self.strategy_tab.pack(fill=tk.BOTH, expand=True)
 
         # Bottom section: Control panel and output
         bottom_frame = ttk.Frame(paned)
@@ -468,8 +890,9 @@ class WorldCreatorGUI:
 
     def run_world_creation(self):
         """Run the create_world.py script."""
-        # Save config first
+        # Save configs first
         self.config_form.save_config()
+        self.strategy_tab.save_strategy()
 
         # Disable run button, enable stop button
         self.run_btn.config(state=tk.DISABLED)
