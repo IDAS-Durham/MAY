@@ -9,9 +9,7 @@ import yaml
 from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
-from may.residence.allocation_strategy import execute_allocation_strategy
-from may.residence.household_distributor import HouseholdDistributor
-from may.world import World
+from may.world import World, setup_households
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -190,7 +188,7 @@ def main():
         config = yaml.safe_load(f)
 
     # Setup geography from config and command-line arguments
-    geo, filters = setup_geography(config=config)
+    geo, _ = setup_geography(config=config)
 
     # Load the geography data
     geo.load_from_csv()
@@ -220,36 +218,8 @@ def main():
     # Generate population
     population.generate_population()
 
-    # Distribute households
-    logger.info("")
-    logger.info("Distributing households...")
-    household_config = config.get("households", {})
-    household_distributor = HouseholdDistributor(
-        geography=geo,
-        population=population,
-        data_dir=household_config.get("data_dir", "data/households"),
-        config_file=household_config.get("config_file", "households_config.yaml")
-    )
-
-    # Load household data
-    household_data_file = household_config.get("data_file", "households.csv")
-    household_distributor.load_household_data(household_data_file)
-
-    # Distribute households and venues based on configuration mode
-    strategy_file = household_config.get("strategy_file")
-
-    if strategy_file:
-        # Mode 1: Unified strategy (households + venues in order)
-        logger.info(f"Using unified allocation strategy from {strategy_file}")
-        execute_allocation_strategy(population, venues, household_distributor, strategy_file)
-
-    # Export household allocations
-    #export_file = household_config.get("export_file", "household_allocations.csv")
-    #household_distributor.export_households_to_csv(export_file)
-
-    # Export venue allocations
-    venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
-    venues.export_venues_to_csv(venue_export_file)
+    # Setup and distribute households
+    household_distributor = setup_households(geo, population, venues, config)
 
     # Create World object
     logger.info("")
@@ -266,7 +236,7 @@ def main():
     logger.info("=" * 60)
 
     # Show examples of what was created
-    print_world_examples(world)
+    #print_world_examples(world)
 
     return world
 

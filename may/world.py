@@ -2,9 +2,12 @@
 World module for June Zero.
 
 The World class is the main container for geography and population.
+This module also contains setup functions for orchestrating world creation.
 """
 
 import logging
+from may.residence.household_distributor import HouseholdDistributor
+from may.residence.allocation_strategy import execute_allocation_strategy
 
 logger = logging.getLogger("world")
 
@@ -84,3 +87,56 @@ class World:
             }
 
         return stats
+
+
+def setup_households(geo, population, venues, config):
+    """
+    Setup and distribute households based on configuration.
+
+    This orchestration function:
+    - Creates a HouseholdDistributor
+    - Loads household data
+    - Executes allocation strategy
+    - Exports venue allocations
+
+    Args:
+        geo: Geography object
+        population: PopulationManager object
+        venues: VenueManager object
+        config: Configuration dictionary
+
+    Returns:
+        HouseholdDistributor object with allocated households
+    """
+    logger.info("")
+    logger.info("Distributing households...")
+    household_config = config.get("households", {})
+
+    household_distributor = HouseholdDistributor(
+        geography=geo,
+        population=population,
+        data_dir=household_config.get("data_dir", "data/households"),
+        config_file=household_config.get("config_file", "households_config.yaml")
+    )
+
+    # Load household data
+    household_data_file = household_config.get("data_file", "households.csv")
+    household_distributor.load_household_data(household_data_file)
+
+    # Distribute households and venues based on configuration mode
+    strategy_file = household_config.get("strategy_file")
+
+    if strategy_file:
+        # Mode 1: Unified strategy (households + venues in order)
+        logger.info(f"Using unified allocation strategy from {strategy_file}")
+        execute_allocation_strategy(population, venues, household_distributor, strategy_file)
+
+    # Export household allocations
+    #export_file = household_config.get("export_file", "household_allocations.csv")
+    #household_distributor.export_households_to_csv(export_file)
+
+    # Export venue allocations
+    venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
+    venues.export_venues_to_csv(venue_export_file)
+
+    return household_distributor
