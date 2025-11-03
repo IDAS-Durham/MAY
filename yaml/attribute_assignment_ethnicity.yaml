@@ -1,0 +1,637 @@
+# ============================================================================
+# Post-Allocation Attribute Assignment Configuration
+# ============================================================================
+# This configuration defines how to assign attributes (like ethnicity) to people
+# AFTER they have been allocated to households and venues.
+#
+# Key Concepts:
+# - Works with categories defined in households_config.yaml (Kids, Young Adults, etc.)
+# - Uses ORIGINAL PATTERN to understand intended household structure
+# - Uses ACTUAL PATTERN to know final composition after demotion
+# - Applies different logic based on household type (family vs flexible)
+#
+# Example: Both have actual pattern "0 0 2 0" (2 adults)
+#   - Original ">=2 0 2 0" → Family (use couple/partnership rules)
+#   - Original "0 >=0 >=0 >=0" → Flexible household (assign independently)
+# ============================================================================
+
+attribute:
+  name: "ethnicity"
+  description: "Assigns ethnicity to people based on geography and household composition"
+  data_type: "categorical"
+
+# ============================================================================
+# Household Structure Classification
+# ============================================================================
+# Define household types based on ORIGINAL and ACTUAL patterns
+# This captures the INTENDED structure, not just the final composition
+
+household_structures:
+  family_with_kids:
+    description: "Family household intended to have children"
+    patterns:
+      original:
+        - ">=2 >=0 2 0"
+        - ">=2 >=0 1 0"
+        - "1 >=0 2 0"
+        - "1 >=0 1 0"
+        - ">=2 >=0 >=0 >=0"  # Multi-gen with kids
+        - "1 >=0 >=0 >=0"
+    note: "Even if demoted to 0 kids, still has family structure with relationship assumptions"
+
+  family_with_young_adults:
+    description: "Family household with young adults (no young kids)"
+    patterns:
+      original:
+        - "0 >=1 2 0"
+        - "0 >=1 1 0"
+    note: "Adults with young adult children"
+
+  couple_household:
+    description: "Two adults living together as a couple"
+    patterns:
+      original:
+        - "0 0 2 0"
+      actual:
+        - "0 0 2 0"
+      conditions:
+        - "not household.original_pattern.startswith('0 >=0')"  # Not flexible
+        - "not household.original_pattern.startswith('>=2')"    # Not family
+        - "not household.original_pattern.startswith('1 >=0')"  # Not family
+    note: "Explicit couple household, use partnership/diversity rules"
+
+  elderly_couple:
+    description: "Elderly couple living together"
+    patterns:
+      original:
+        - "0 0 0 2"
+    note: "Two elderly adults, treated as couple with partnership rules"
+
+  young_adult_group:
+    description: "Young adults living together (roommates/housemates)"
+    patterns:
+      original:
+        - "0 >=0 0 0"
+      actual:
+        - "0 >=1 0 0"
+    note: "Young adults living together, some relationship awareness"
+
+  flexible_household:
+    description: "Flexible multi-person household (not relationship-based)"
+    patterns:
+      original:
+        - "0 >=0 >=0 >=0"
+    note: "People assigned independently, NO relationship assumptions"
+
+  multi_elderly:
+    description: "Multiple elderly living together"
+    patterns:
+      original:
+        - "0 0 0 >=3"
+    note: "3+ elderly adults, some may be couples"
+
+  single_person:
+    description: "Single person household"
+    patterns:
+      actual:
+        - "0 0 1 0"
+        - "0 1 0 0"
+        - "0 0 0 1"
+      conditions:
+        - "household.size == 1"
+    note: "One person living alone"
+
+# ============================================================================
+# Person Role Classification
+# ============================================================================
+# Define roles based on person's category and household structure
+# These roles determine which assignment rule applies
+
+person_roles:
+  primary_adult:
+    description: "First adult to assign in household"
+    conditions:
+      - "person.category in ['Adults', 'Young Adults']"
+      - "not household.has_assigned_adult"
+
+  secondary_adult_partner:
+    description: "Second adult in couple/family structure"
+    conditions:
+      - "person.category in ['Adults', 'Young Adults']"
+      - "household.structure in ['family_with_kids', 'family_with_young_adults', 'couple_household', 'elderly_couple']"
+      - "household.count_assigned_adults == 1"
+
+  additional_adult_independent:
+    description: "Additional adult in flexible household (not a partner)"
+    conditions:
+      - "person.category in ['Adults', 'Young Adults']"
+      - "household.structure in ['flexible_household', 'young_adult_group']"
+      - "household.has_assigned_adult"
+
+  dependent_child:
+    description: "Child/young adult dependent on adults"
+    conditions:
+      - "person.category in ['Kids', 'Young Adults']"
+      - "household.structure in ['family_with_kids', 'family_with_young_adults']"
+
+  elderly_in_family:
+    description: "Elderly in multi-generational household"
+    conditions:
+      - "person.category == 'Old Adults'"
+      - "household.has_category('Adults')"
+      - "household.structure == 'family_with_kids'"
+
+  elderly_couple_member:
+    description: "Member of elderly couple"
+    conditions:
+      - "person.category == 'Old Adults'"
+      - "household.structure == 'elderly_couple'"
+
+  elderly_in_group:
+    description: "Elderly in multi-elderly household"
+    conditions:
+      - "person.category == 'Old Adults'"
+      - "household.structure == 'multi_elderly'"
+
+  independent_person:
+    description: "Person in single-person or flexible household"
+    conditions:
+      - "household.structure in ['single_person', 'flexible_household']"
+      - "not person.role_assigned"
+
+# ============================================================================
+# Data Sources
+# ============================================================================
+# Define where to load attribute distribution data from
+
+data_sources:
+  # Geographic distribution of ethnicity by area
+  area_distribution:
+    type: "csv_lookup"
+    description: "Area-specific ethnicity distributions"
+
+    # Multiple files with conditional routing based on area code
+    files:
+      - path: "data/population/ethnicity/ethnicity_by_area_ew.csv"
+        condition: "not area_code.startswith(('S', 'N'))"
+        key_column: "area"
+        value_columns:
+          W: "white"
+          A: "asian"
+          B: "black"
+          M: "mixed"
+          O: "other"
+        total_column: "total"
+
+      - path: "data/population/ethnicity/ethnicity_by_area_scotland.csv"
+        condition: "area_code.startswith('S')"
+        key_column: "area"
+        value_columns:
+          W: "white"
+          A: "asian"
+          B: "black"
+          M: "mixed"
+          O: "other"
+        total_column: "total"
+
+      - path: "data/population/ethnicity/ethnicity_by_area_ni.csv"
+        condition: "area_code.startswith('N')"
+        key_column: "area"
+        value_columns:
+          W: "white"
+          A: "asian"
+          B: "black"
+          M: "mixed"
+          O: "other"
+        total_column: "total"
+
+    # Fallback probabilities when area not found in data
+    fallbacks:
+      - condition: "area_code.startswith('S')"
+        values:
+          W: 0.90
+          A: 0.05
+          B: 0.02
+          M: 0.02
+          O: 0.01
+
+      - condition: "area_code.startswith('N')"
+        values:
+          W: 0.92
+          A: 0.04
+          B: 0.01
+          M: 0.02
+          O: 0.01
+
+      - condition: "default"
+        values:
+          W: 0.81
+          A: 0.09
+          B: 0.04
+          M: 0.03
+          O: 0.03
+
+  # Household diversity data (single vs mixed ethnicity households)
+  household_diversity:
+    type: "csv_lookup"
+    description: "Probability of single vs mixed ethnicity households by area"
+
+    files:
+      - path: "data/population/ethnicity/household_diversity_ew.csv"
+        condition: "not area_code.startswith(('S', 'N'))"
+        key_column: "area"
+        value_columns:
+          single: "single_ethnicity"
+          mixed_two: "two_ethnicities"
+          mixed_three_plus: "three_plus_ethnicities"
+
+      - path: "data/population/ethnicity/household_diversity_scotland.csv"
+        condition: "area_code.startswith('S')"
+        key_column: "area"
+        value_columns:
+          single: "single_ethnicity"
+          mixed_two: "two_ethnicities"
+          mixed_three_plus: "three_plus_ethnicities"
+
+      - path: "data/population/ethnicity/household_diversity_ni.csv"
+        condition: "area_code.startswith('N')"
+        key_column: "area"
+        value_columns:
+          single: "single_ethnicity"
+          mixed_two: "two_ethnicities"
+          mixed_three_plus: "three_plus_ethnicities"
+
+    fallbacks:
+      - condition: "default"
+        values:
+          single: 0.85
+          mixed_two: 0.12
+          mixed_three_plus: 0.03
+
+  # Partnership probabilities (conditional on first person's ethnicity)
+  partnership_probabilities:
+    type: "csv_lookup"
+    description: "Conditional probabilities for partner ethnicity given first person"
+
+    files:
+      - path: "data/population/ethnicity/partnership_probabilities.csv"
+        key_columns: ["area", "first_ethnicity"]
+        value_columns:
+          prob_W: "W"
+          prob_A: "A"
+          prob_B: "B"
+          prob_M: "M"
+          prob_O: "O"
+
+    fallback: "uniform"  # Equal probability for all ethnicities if no data
+
+# ============================================================================
+# Assignment Rules (Evaluated in Order by Priority)
+# ============================================================================
+
+assignment_rules:
+  # ---------------------------------------------------------------------------
+  # Rule 1: Primary Adult (All Household Types)
+  # ---------------------------------------------------------------------------
+  - name: "assign_primary_adult"
+    priority: 1
+    description: "Assign first adult based on area demographics"
+
+    applies_to:
+      person_role: "primary_adult"
+
+    assignment:
+      type: "probabilistic"
+      data_source: "area_distribution"
+      context: "household.area_code"
+
+  # ---------------------------------------------------------------------------
+  # Rule 2a: Secondary Adult in Couple/Family Structures
+  # ---------------------------------------------------------------------------
+  - name: "assign_partner_in_couple_or_family"
+    priority: 2
+    description: "Assign partner in couple/family with diversity awareness"
+
+    applies_to:
+      person_role: "secondary_adult_partner"
+      household_structure:
+        - "family_with_kids"
+        - "family_with_young_adults"
+        - "couple_household"
+
+    assignment:
+      type: "conditional_probabilistic"
+
+      # First check if household should be diverse
+      diversity_check:
+        data_source: "household_diversity"
+        context: "household.area_code"
+        sample_from: ["single", "mixed_two", "mixed_three_plus"]
+
+      # Then assign based on diversity decision
+      rules:
+        - when: "diversity_check == 'single'"
+          then:
+            type: "copy"
+            source: "primary_adult.ethnicity"
+
+        - when: "diversity_check in ['mixed_two', 'mixed_three_plus']"
+          then:
+            type: "conditional_probabilistic"
+            data_source: "partnership_probabilities"
+            context: ["household.area_code", "primary_adult.ethnicity"]
+            fallback:
+              type: "probabilistic"
+              data_source: "area_distribution"
+              context: "household.area_code"
+
+  # ---------------------------------------------------------------------------
+  # Rule 2b: Elderly Couple Member
+  # ---------------------------------------------------------------------------
+  - name: "assign_elderly_couple"
+    priority: 2
+    description: "Assign elderly couple with diversity awareness"
+
+    applies_to:
+      person_role: "elderly_couple_member"
+
+    assignment:
+      type: "conditional_probabilistic"
+
+      diversity_check:
+        data_source: "household_diversity"
+        context: "household.area_code"
+        sample_from: ["single", "mixed_two", "mixed_three_plus"]
+
+      rules:
+        - when: "diversity_check == 'single'"
+          then:
+            type: "copy"
+            source: "first_elderly.ethnicity"
+
+        - when: "diversity_check in ['mixed_two', 'mixed_three_plus']"
+          then:
+            type: "conditional_probabilistic"
+            data_source: "partnership_probabilities"
+            context: ["household.area_code", "first_elderly.ethnicity"]
+            fallback:
+              type: "probabilistic"
+              data_source: "area_distribution"
+              context: "household.area_code"
+
+  # ---------------------------------------------------------------------------
+  # Rule 2c: Additional Adult in Flexible Household (Independent)
+  # ---------------------------------------------------------------------------
+  - name: "assign_independent_adult_in_flexible"
+    priority: 2
+    description: "Assign adults independently in flexible households"
+
+    applies_to:
+      person_role: "additional_adult_independent"
+      household_structure:
+        - "flexible_household"
+        - "young_adult_group"
+
+    assignment:
+      type: "probabilistic"
+      data_source: "area_distribution"
+      context: "household.area_code"
+      note: "No relationship assumptions - assign independently"
+
+  # ---------------------------------------------------------------------------
+  # Rule 2d: Elderly in Multi-Elderly Household
+  # ---------------------------------------------------------------------------
+  - name: "assign_elderly_in_group"
+    priority: 2
+    description: "Assign elderly in multi-elderly households with some pairing"
+
+    applies_to:
+      person_role: "elderly_in_group"
+
+    assignment:
+      type: "mixed_strategy"
+
+      logic:
+        # First two elderly - treat as potential couple
+        - when: "household.count_assigned_elderly < 2"
+          then:
+            # Use same logic as elderly couple
+            type: "conditional_probabilistic"
+            diversity_check:
+              data_source: "household_diversity"
+              context: "household.area_code"
+              sample_from: ["single", "mixed_two", "mixed_three_plus"]
+            rules:
+              - when: "diversity_check == 'single' and household.count_assigned_elderly == 1"
+                then:
+                  type: "copy"
+                  source: "first_elderly.ethnicity"
+              - when: "otherwise"
+                then:
+                  type: "probabilistic"
+                  data_source: "area_distribution"
+                  context: "household.area_code"
+
+        # Additional elderly - assign independently
+        - when: "household.count_assigned_elderly >= 2"
+          then:
+            type: "probabilistic"
+            data_source: "area_distribution"
+            context: "household.area_code"
+
+  # ---------------------------------------------------------------------------
+  # Rule 3: Dependent Children/Young Adults
+  # ---------------------------------------------------------------------------
+  - name: "assign_dependents"
+    priority: 3
+    description: "Dependents inherit from adults with mixing logic"
+
+    applies_to:
+      person_role: "dependent_child"
+
+    assignment:
+      type: "inheritance"
+
+      # Collect ethnicities from adults in household
+      inherit_from:
+        person_roles: ["primary_adult", "secondary_adult_partner"]
+
+      # Apply mixing logic
+      logic:
+        - when: "count(unique_adult_values) == 1"
+          then: "adult_values[0]"
+
+        - when: "count(unique_adult_values) > 1"
+          then: "M"  # Mixed ethnicity code
+
+        - when: "count(adult_values) == 0"
+          # Fallback (shouldn't happen for dependents)
+          then:
+            type: "probabilistic"
+            data_source: "area_distribution"
+            context: "household.area_code"
+
+  # ---------------------------------------------------------------------------
+  # Rule 4: Elderly in Multi-Generational Family
+  # ---------------------------------------------------------------------------
+  - name: "assign_elderly_in_family"
+    priority: 4
+    description: "Elderly assigned as parents/grandparents of adults"
+
+    applies_to:
+      person_role: "elderly_in_family"
+
+    assignment:
+      type: "reverse_inheritance"
+      description: "Work backwards - elderly are parents of the adult generation"
+
+      # Adults are the 'children' generation
+      child_generation:
+        person_roles: ["primary_adult", "secondary_adult_partner"]
+
+      logic:
+        # Single elderly person (parent of one adult)
+        - when: "count(unassigned_elderly) == 1"
+          then: "random_choice(adult_values)"
+
+        # Elderly couple (parents of adults)
+        - when: "count(unassigned_elderly) == 2"
+          then:
+            # If adults are Mixed, parents must have different ethnicities
+            - when: "'M' in adult_values"
+              then:
+                assign_pair:
+                  first: "random_choice(['W', 'A', 'B', 'O'])"
+                  second: "random_choice(['W', 'A', 'B', 'O']) != first"
+
+            # If all adults same ethnicity, parents are same
+            - when: "count(unique_adult_values) == 1"
+              then:
+                assign_pair:
+                  first: "adult_values[0]"
+                  second: "adult_values[0]"
+
+            # Multiple adult ethnicities (siblings with different partners)
+            - when: "otherwise"
+              then:
+                assign_pair:
+                  first: "unique_adult_values[0]"
+                  second: "unique_adult_values[1]"
+
+        # 3+ elderly (extended family - grandparents, great-aunts, etc.)
+        - when: "count(unassigned_elderly) > 2"
+          then: "distribute_from(adult_values)"
+
+  # ---------------------------------------------------------------------------
+  # Rule 5: Independent Person (Single or Flexible Household)
+  # ---------------------------------------------------------------------------
+  - name: "assign_independent_person"
+    priority: 5
+    description: "Independent assignment for single/flexible households"
+
+    applies_to:
+      person_role: "independent_person"
+
+    assignment:
+      type: "probabilistic"
+      data_source: "area_distribution"
+      context: "household.area_code"
+
+# ============================================================================
+# Venue Assignment Rules
+# ============================================================================
+# Simpler rules for people allocated to venues (not households)
+
+venue_assignment_rules:
+  - venue_types: ["care_home"]
+    description: "Care home residents - simple area-based assignment"
+    assignment:
+      type: "probabilistic"
+      data_source: "area_distribution"
+      context: "venue.area_code"
+
+  - venue_types: ["boarding_school"]
+    description: "Boarding school students - simple area-based assignment"
+    assignment:
+      type: "probabilistic"
+      data_source: "area_distribution"
+      context: "venue.area_code"
+
+  - venue_types: ["student_dorms"]
+    description: "University students - simple area-based assignment"
+    assignment:
+      type: "probabilistic"
+      data_source: "area_distribution"
+      context: "venue.area_code"
+
+# ============================================================================
+# Category Adjustments (Optional)
+# ============================================================================
+# Optionally adjust probabilities based on person's category
+# This allows modeling demographic differences
+
+category_adjustments:
+  enabled: false
+  description: "Adjust ethnicity probabilities based on age category"
+
+  adjustments:
+    "Old Adults":
+      description: "Elderly tend to be more homogeneous (less diverse)"
+      multipliers:
+        W: 1.05
+        A: 0.90
+        B: 0.80
+        M: 0.70
+        O: 0.80
+
+    "Young Adults":
+      description: "Young adults tend to be more diverse"
+      multipliers:
+        W: 0.92
+        A: 1.10
+        B: 1.05
+        M: 1.15
+        O: 1.05
+
+# ============================================================================
+# Global Settings
+# ============================================================================
+
+settings:
+  # Random seed (null = use global simulation seed)
+  random_seed: null
+
+  # Normalize probabilities to ensure they sum to 1.0
+  normalize_probabilities: true
+
+  # Cache data source lookups for performance
+  cache_lookups: true
+
+  # Pattern matching strictness
+  strict_pattern_matching: false
+
+  # Error handling strategies
+  error_handling:
+    missing_area_code: "use_fallback"  # Options: "use_fallback", "error", "skip"
+    missing_lookup_data: "use_fallback"
+    missing_household_structure: "default_to_independent"
+
+  # Logging configuration
+  logging:
+    level: "INFO"
+    show_samples: true
+    sample_size: 10
+    log_household_statistics: true
+    log_ethnicity_distribution: true
+
+# ============================================================================
+# Ethnicity Codes Reference
+# ============================================================================
+# For documentation purposes - the actual codes used in this configuration
+
+ethnicity_codes:
+  W: "White"
+  A: "Asian/Asian British"
+  B: "Black/African/Caribbean/Black British"
+  M: "Mixed/Multiple ethnic groups"
+  O: "Other ethnic group"
