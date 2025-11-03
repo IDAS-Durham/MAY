@@ -155,4 +155,67 @@ def setup_households(geo, population, venues, config):
     venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
     venues.export_venues_to_csv(venue_export_file)
 
+    # Show where households are located and examples
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("HOUSEHOLD STORAGE LOCATIONS")
+    logger.info("=" * 60)
+
+    # Get all households from VenueManager
+    all_households = venues.get_venues_by_type("household")
+    logger.info(f"Total households created: {len(all_households):,}")
+    logger.info("")
+
+    logger.info("Households are stored in VenueManager:")
+    logger.info("  1. venues.get_venues_by_type('household')  -> List of all household Venues")
+    logger.info("  2. venues.get_venue_by_type_and_id('household', id)  -> Specific household by ID")
+    logger.info("  3. venues.venues['household_0']  -> Specific household by name")
+    logger.info("")
+
+    # Show a few example households
+    if all_households:
+        logger.info("Example Households (first 3):")
+        for household in all_households[:3]:
+            age_categories = household.properties.get('_age_categories', [])
+            composition = household.get_composition(age_categories)
+            members = household.get_all_members()
+
+            logger.info(f"")
+            logger.info(f"  Household ID: {household.id} (type-scoped ID)")
+            logger.info(f"  Venue ID: {id(household)} (Python object ID)")
+            logger.info(f"  Name: {household.name}")
+            logger.info(f"  Type: {household.type}")
+            logger.info(f"  Location: {household.geographical_unit.name}")
+            logger.info(f"  Size: {household.size()} people")
+            logger.info(f"  Composition: {composition}")
+            if members:
+                logger.info(f"  Members: {', '.join([f'Person_{p.id}({p.age}{'m' if p.sex=='male' else 'f'})' for p in members])}")
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("PEOPLE IN HOUSEHOLDS - How to find where someone lives")
+    logger.info("=" * 60)
+
+    # Show how to access people's households
+    if household_distributor.allocated_people:
+        example_person_ids = list(household_distributor.allocated_people)[:3]
+
+        for person_id in example_person_ids:
+            person = population.get_person(person_id)
+            if person and "household" in person.activity_map:
+                household_subsets = person.activity_map["household"]
+                if household_subsets:
+                    household_venue = household_subsets[0].venue
+                    age_categories = household_venue.properties.get('_age_categories', [])
+
+                    logger.info(f"")
+                    logger.info(f"  Person {person.id} (age={person.age}, sex={person.sex})")
+                    logger.info(f"  Activity map: {person.activity_map}")
+                    logger.info(f"  Lives in: {household_venue.name} (ID={household_venue.id})")
+                    logger.info(f"  Location: {household_venue.geographical_unit.name}")
+                    logger.info(f"  Household size: {household_venue.size()}")
+                    logger.info(f"  Household composition: {household_venue.get_composition(age_categories)}")
+
+    logger.info("")
+    logger.info("=" * 60)
+
     return household_distributor
