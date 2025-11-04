@@ -54,6 +54,24 @@ class ProbabilisticStrategy(AssignmentStrategy):
     (e.g., ethnicity distribution for a geographical unit).
     """
 
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize and cache configuration values."""
+        super().__init__(config, data_manager)
+        # Cache frequently accessed config values
+        self.data_source_name = config.get('data_source')
+        self.context_key = config.get('context', 'venue.area_code')
+
+        # Pre-parse context key for faster resolution
+        self._context_in_simple = None
+        self._context_parts = None
+        if self.context_key and '.' in self.context_key:
+            self._context_parts = self.context_key.split('.')
+        else:
+            self._context_in_simple = self.context_key
+
+        # Check if we should log debug messages (check once)
+        self._debug_enabled = logger.isEnabledFor(logging.DEBUG)
+
     def assign(self, person, venue, context: Dict[str, Any]) -> Any:
         """
         Sample attribute value from probability distribution.
@@ -66,39 +84,79 @@ class ProbabilisticStrategy(AssignmentStrategy):
         Returns:
             Sampled attribute value
         """
-        # Get data source name
-        data_source_name = self.config.get('data_source')
-        if not data_source_name:
+        # Use cached data source name
+        if not self.data_source_name:
             logger.error("ProbabilisticStrategy requires 'data_source' in config")
             return None
 
-        # Get context for lookup (e.g., "household.area_code")
-        context_key = self.config.get('context', 'venue.area_code')
-
-        # Resolve context value
-        lookup_value = self._resolve_context(context_key, person, venue, context)
+        # Resolve context value using pre-parsed context key
+        lookup_value = self._resolve_context_fast(person, venue, context)
         if not lookup_value:
-            logger.warning(f"Could not resolve context '{context_key}'")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Could not resolve context '{self.context_key}'")
             return None
 
         # Get probability distribution from data source
-        probs = self.data_manager.lookup(data_source_name, lookup_value)
+        probs = self.data_manager.lookup(self.data_source_name, lookup_value)
         if not probs:
-            logger.warning(f"No probabilities found for {data_source_name}({lookup_value})")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"No probabilities found for {self.data_source_name}({lookup_value})")
             return None
 
-        # Sample from distribution
-        values = list(probs.keys())
-        probabilities = list(probs.values())
+        # Sample from distribution - use arrays directly without creating lists
+        # np.random.choice can work with dict directly if we convert once
+        if isinstance(probs, dict):
+            # Convert dict to arrays once (numpy is faster with arrays)
+            values = list(probs.keys())
+            probabilities = list(probs.values())
+            sampled = np.random.choice(values, p=probabilities)
+        else:
+            # Assume it's already in array format
+            sampled = np.random.choice(probs)
 
-        sampled = np.random.choice(values, p=probabilities)
-
-        logger.debug(f"Probabilistic assignment: {sampled} for {person} (from {data_source_name})")
+        if self._debug_enabled:
+            logger.debug(f"Probabilistic assignment: {sampled} for {person} (from {self.data_source_name})")
         return sampled
+
+    def _resolve_context_fast(self, person, venue, context: Dict) -> Optional[str]:
+        """
+        Fast context resolution using pre-parsed context key.
+
+        Args:
+            person: Person object
+            venue: Venue object
+            context: Assignment context dict
+
+        Returns:
+            Resolved value or None
+        """
+        # Try simple lookup first (fastest path)
+        if self._context_in_simple:
+            return context.get(self._context_in_simple)
+
+        # Try context dict lookup
+        if self.context_key in context:
+            return context[self.context_key]
+
+        # Use pre-parsed parts (avoid repeated string splitting)
+        if self._context_parts:
+            parts = self._context_parts
+
+            if parts[0] in ('household', 'venue'):
+                # Get geo unit code
+                if venue and venue.geographical_unit:
+                    return venue.geographical_unit.name
+
+            elif parts[0] == 'person' and len(parts) > 1:
+                # Get person attribute
+                return getattr(person, parts[1], None)
+
+        return None
 
     def _resolve_context(self, context_key: str, person, venue, context: Dict) -> Optional[str]:
         """
         Resolve a context key to an actual value.
+        DEPRECATED: Use _resolve_context_fast for better performance.
 
         Examples:
             "household.area_code" -> venue.geographical_unit.code
@@ -366,6 +424,25 @@ class PairProbabilityStrategy(AssignmentStrategy):
     (e.g., partner ethnicity given first person's ethnicity).
     """
 
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize and cache configuration values."""
+        super().__init__(config, data_manager)
+        # Cache frequently accessed config values
+        self.data_source_name = config.get('data_source')
+        self.context_spec = config.get('context', [])
+        self.fallback_config = config.get('fallback')
+
+        # Pre-extract geo and first value contexts
+        if isinstance(self.context_spec, list) and len(self.context_spec) >= 2:
+            self.geo_context = self.context_spec[0]
+            self.first_value_context = self.context_spec[1]
+        else:
+            self.geo_context = None
+            self.first_value_context = None
+
+        # Check if we should log debug messages
+        self._debug_enabled = logger.isEnabledFor(logging.DEBUG)
+
     def assign(self, person, venue, context: Dict[str, Any]) -> Any:
         """
         Assign based on pair probabilities.
@@ -378,40 +455,37 @@ class PairProbabilityStrategy(AssignmentStrategy):
         Returns:
             Assigned attribute value
         """
-        # Get data source and context
-        data_source_name = self.config.get('data_source')
-        context_spec = self.config.get('context', [])
-
-        if not isinstance(context_spec, list) or len(context_spec) < 2:
+        # Validate configuration
+        if not self.geo_context or not self.first_value_context:
             logger.error("PairProbabilityStrategy requires context list with 2 elements")
             return None
 
         # Resolve geo unit and first person's value
-        geo_context = context_spec[0]
-        first_value_context = context_spec[1]
-
-        geo_unit = self._resolve_context(geo_context, person, venue, context)
-        first_value = self._resolve_context(first_value_context, person, venue, context)
+        geo_unit = self._resolve_context(self.geo_context, person, venue, context)
+        first_value = self._resolve_context(self.first_value_context, person, venue, context)
 
         if not geo_unit or not first_value:
-            logger.warning(f"Could not resolve pair context: geo={geo_unit}, first={first_value}")
+            if logger.isEnabledFor(logging.WARNING):
+                logger.warning(f"Could not resolve pair context: geo={geo_unit}, first={first_value}")
             # Try fallback
-            fallback_config = self.config.get('fallback')
-            if fallback_config:
-                fallback_strategy = StrategyFactory.create_strategy(fallback_config, self.data_manager)
+            if self.fallback_config:
+                fallback_strategy = StrategyFactory.create_strategy(self.fallback_config, self.data_manager)
                 return fallback_strategy.assign(person, venue, context)
             return None
 
         # Get pair probabilities
-        probs = self.data_manager.lookup(data_source_name, geo_unit, first_value)
+        probs = self.data_manager.lookup(self.data_source_name, geo_unit, first_value)
 
-        # Sample from distribution
-        values = list(probs.keys())
-        probabilities = list(probs.values())
+        # Sample from distribution - avoid creating lists unnecessarily
+        if isinstance(probs, dict):
+            values = list(probs.keys())
+            probabilities = list(probs.values())
+            sampled = np.random.choice(values, p=probabilities)
+        else:
+            sampled = np.random.choice(probs)
 
-        sampled = np.random.choice(values, p=probabilities)
-
-        logger.debug(f"Pair probability assignment: {sampled} (given first={first_value})")
+        if self._debug_enabled:
+            logger.debug(f"Pair probability assignment: {sampled} (given first={first_value})")
         return sampled
 
     def _resolve_context(self, context_key: str, person, venue, context: Dict) -> Optional[str]:
@@ -444,39 +518,101 @@ class PairProbabilityStrategy(AssignmentStrategy):
 class StrategyFactory:
     """
     Factory for creating assignment strategies from configuration.
+    Uses caching to avoid recreating the same strategy objects repeatedly.
     """
 
-    @staticmethod
-    def create_strategy(config: Dict[str, Any], data_manager) -> AssignmentStrategy:
+    # Cache for strategy objects keyed by (config_hash, data_manager_id)
+    _strategy_cache: Dict[tuple, AssignmentStrategy] = {}
+
+    @classmethod
+    def create_strategy(cls, config: Dict[str, Any], data_manager) -> AssignmentStrategy:
         """
-        Create strategy from configuration.
+        Create strategy from configuration with caching.
 
         Args:
             config: Strategy configuration dict
             data_manager: DataSourceManager instance
 
         Returns:
-            AssignmentStrategy instance
+            AssignmentStrategy instance (cached if possible)
         """
+        # Create a cache key from config and data_manager
+        # Use a simple hash of the config dict converted to a frozen representation
+        try:
+            # Convert config to a hashable key
+            config_key = cls._make_config_key(config)
+            cache_key = (config_key, id(data_manager))
+
+            # Check cache
+            if cache_key in cls._strategy_cache:
+                return cls._strategy_cache[cache_key]
+
+        except (TypeError, ValueError):
+            # If we can't hash the config, skip caching for this strategy
+            cache_key = None
+
+        # Create new strategy
         strategy_type = config.get('type')
 
         if strategy_type == 'probabilistic':
-            return ProbabilisticStrategy(config, data_manager)
+            strategy = ProbabilisticStrategy(config, data_manager)
 
         elif strategy_type == 'copy':
-            return CopyStrategy(config, data_manager)
+            strategy = CopyStrategy(config, data_manager)
 
         elif strategy_type == 'inheritance':
-            return InheritanceStrategy(config, data_manager)
+            strategy = InheritanceStrategy(config, data_manager)
 
         elif strategy_type == 'conditional_probabilistic':
-            return ConditionalStrategy(config, data_manager)
+            strategy = ConditionalStrategy(config, data_manager)
 
         elif strategy_type == 'conditional_probabilistic' or 'diversity_check' in config:
             # Handle conditional with embedded config
-            return ConditionalStrategy(config, data_manager)
+            strategy = ConditionalStrategy(config, data_manager)
 
         else:
             logger.error(f"Unknown strategy type: {strategy_type}")
             # Return a default probabilistic strategy
-            return ProbabilisticStrategy(config, data_manager)
+            strategy = ProbabilisticStrategy(config, data_manager)
+
+        # Cache the strategy if we have a valid cache key
+        if cache_key is not None:
+            cls._strategy_cache[cache_key] = strategy
+
+        return strategy
+
+    @staticmethod
+    def _make_config_key(config: Dict[str, Any]) -> tuple:
+        """
+        Convert a config dict to a hashable tuple key.
+
+        Args:
+            config: Configuration dictionary
+
+        Returns:
+            Hashable tuple representation of config
+        """
+        # Extract the key fields that identify a unique strategy
+        strategy_type = config.get('type', '')
+        data_source = config.get('data_source', '')
+        context = config.get('context', '')
+
+        # For list contexts (like in PairProbabilityStrategy), convert to tuple
+        if isinstance(context, list):
+            context = tuple(context)
+
+        # For copy strategy, include source
+        source = config.get('source', '')
+
+        # For inheritance, include inherit_from
+        inherit_from = config.get('inherit_from', {})
+        if isinstance(inherit_from, dict):
+            person_roles = inherit_from.get('person_roles', [])
+            if isinstance(person_roles, list):
+                person_roles = tuple(person_roles)
+            inherit_from = ('inherit_from', person_roles)
+        else:
+            inherit_from = ()
+
+        # Create a tuple of the key identifying fields
+        return (strategy_type, data_source, context, source, inherit_from)

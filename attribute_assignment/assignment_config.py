@@ -34,6 +34,18 @@ class HouseholdStructure:
     patterns: Dict[str, List[str]] = field(default_factory=dict)
     conditions: List[str] = field(default_factory=list)
 
+    def __post_init__(self):
+        """Pre-compile condition expressions for performance."""
+        # Compile each condition string once for faster evaluation
+        self._compiled_conditions = []
+        for condition_str in self.conditions:
+            try:
+                compiled_code = compile(condition_str, '<string>', 'eval')
+                self._compiled_conditions.append((condition_str, compiled_code))
+            except SyntaxError as e:
+                logger.warning(f"Failed to compile condition '{condition_str}': {e}")
+                self._compiled_conditions.append((condition_str, None))
+
     def matches(self, household) -> bool:
         """
         Check if a household matches this structure.
@@ -74,18 +86,25 @@ class HouseholdStructure:
         Returns:
             True if all conditions are satisfied
         """
-        if not self.conditions:
+        if not self._compiled_conditions:
             return True
 
-        for condition_str in self.conditions:
-            if not self._evaluate_single_condition(household, condition_str):
+        # Create safe evaluation context once for all conditions
+        context = {
+            'household': household,
+            'not': lambda x: not x,
+            'len': len,
+        }
+
+        for condition_str, compiled_code in self._compiled_conditions:
+            if not self._evaluate_single_condition(household, condition_str, compiled_code, context):
                 return False
 
         return True
 
-    def _evaluate_single_condition(self, household, condition_str: str) -> bool:
+    def _evaluate_single_condition(self, household, condition_str: str, compiled_code, context: Dict) -> bool:
         """
-        Evaluate a single condition string.
+        Evaluate a single condition string using pre-compiled code.
 
         Examples of condition strings:
             - "household.size == 1"
@@ -94,22 +113,20 @@ class HouseholdStructure:
 
         Args:
             household: Venue object
-            condition_str: Condition expression as string
+            condition_str: Condition expression as string (for error messages)
+            compiled_code: Pre-compiled code object or None if compilation failed
+            context: Evaluation context dict
 
         Returns:
             True if condition is satisfied
         """
         try:
-            # Create safe evaluation context
-            # Only allow access to household attributes
-            context = {
-                'household': household,
-                'not': lambda x: not x,
-                'len': len,
-            }
+            # Skip if compilation failed
+            if compiled_code is None:
+                return False
 
-            # Evaluate the condition
-            result = eval(condition_str, {"__builtins__": {}}, context)
+            # Evaluate the pre-compiled condition
+            result = eval(compiled_code, {"__builtins__": {}}, context)
             return bool(result)
         except Exception as e:
             logger.warning(f"Error evaluating condition '{condition_str}': {e}")
@@ -136,6 +153,18 @@ class PersonRole:
     description: str
     conditions: List[str] = field(default_factory=list)
 
+    def __post_init__(self):
+        """Pre-compile condition expressions for performance."""
+        # Compile each condition string once for faster evaluation
+        self._compiled_conditions = []
+        for condition_str in self.conditions:
+            try:
+                compiled_code = compile(condition_str, '<string>', 'eval')
+                self._compiled_conditions.append((condition_str, compiled_code))
+            except SyntaxError as e:
+                logger.warning(f"Failed to compile condition '{condition_str}': {e}")
+                self._compiled_conditions.append((condition_str, None))
+
     def matches(self, person, household, assignment_context: Optional[Dict] = None) -> bool:
         """
         Check if a person matches this role.
@@ -148,22 +177,31 @@ class PersonRole:
         Returns:
             True if person matches this role's criteria
         """
-        if not self.conditions:
+        if not self._compiled_conditions:
             return True
 
         # Prepare context for evaluation
         if assignment_context is None:
             assignment_context = {}
 
-        for condition_str in self.conditions:
-            if not self._evaluate_condition(person, household, assignment_context, condition_str):
+        # Create evaluation context once for all conditions
+        eval_context = {
+            'person': person,
+            'household': household,
+            'not': lambda x: not x,
+            'len': len,
+            **assignment_context  # Include assignment context (has_assigned_adult, etc.)
+        }
+
+        for condition_str, compiled_code in self._compiled_conditions:
+            if not self._evaluate_condition(person, household, eval_context, condition_str, compiled_code):
                 return False
 
         return True
 
-    def _evaluate_condition(self, person, household, context: Dict, condition_str: str) -> bool:
+    def _evaluate_condition(self, person, household, eval_context: Dict, condition_str: str, compiled_code) -> bool:
         """
-        Evaluate a condition string for person role matching.
+        Evaluate a condition string for person role matching using pre-compiled code.
 
         Examples:
             - "person.category in ['Adults', 'Young Adults']"
@@ -173,24 +211,20 @@ class PersonRole:
         Args:
             person: Person object
             household: Venue object
-            context: Assignment context dict
-            condition_str: Condition expression
+            eval_context: Pre-built evaluation context dict
+            condition_str: Condition expression as string (for error messages)
+            compiled_code: Pre-compiled code object or None if compilation failed
 
         Returns:
             True if condition is satisfied
         """
         try:
-            # Create evaluation context
-            eval_context = {
-                'person': person,
-                'household': household,
-                'not': lambda x: not x,
-                'len': len,
-                **context  # Include assignment context (has_assigned_adult, etc.)
-            }
+            # Skip if compilation failed
+            if compiled_code is None:
+                return False
 
-            # Evaluate the condition
-            result = eval(condition_str, {"__builtins__": {}}, eval_context)
+            # Evaluate the pre-compiled condition
+            result = eval(compiled_code, {"__builtins__": {}}, eval_context)
             return bool(result)
         except Exception as e:
             logger.debug(f"Error evaluating role condition '{condition_str}': {e}")
