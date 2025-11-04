@@ -22,7 +22,7 @@ class DataSource:
     Base class for data sources.
 
     Data sources load demographic data from CSV files and provide
-    probability distributions based on context (e.g., area code).
+    probability distributions based on context (e.g., geographical unit code).
     """
 
     def __init__(self, name: str, config: Dict[str, Any]):
@@ -38,12 +38,12 @@ class DataSource:
         self.cache: Dict[str, Any] = {}
         self._data_loaded = False
 
-    def load_data(self, area_codes: Optional[set] = None):
+    def load_data(self, geo_units: Optional[set] = None):
         """
         Load data from CSV files.
 
         Args:
-            area_codes: Optional set of area codes to filter by (for efficiency)
+            geo_units: Optional set of geographical unit codes to filter by (for efficiency)
         """
         raise NotImplementedError("Subclasses must implement load_data()")
 
@@ -102,12 +102,12 @@ class GeoDistributionSource(DataSource):
         self._file_configs = config.get('files', [])
         self._fallback = config.get('fallback', {})
 
-    def load_data(self, area_codes: Optional[set] = None):
+    def load_data(self, geo_units: Optional[set] = None):
         """
-        Load area distribution data from CSV file.
+        Load geographical unit distribution data from CSV file.
 
         Args:
-            area_codes: Set of area codes to load (for efficiency)
+            geo_units: Set of geographical unit codes to load (for efficiency)
         """
         logger.info(f"Loading data for source '{self.name}'...")
 
@@ -122,8 +122,8 @@ class GeoDistributionSource(DataSource):
 
                     # Filter to needed areas
                     key_column = file_config.get('key_column', 'geo_unit')
-                    if area_codes and key_column in df.columns:
-                        df = df[df[key_column].isin(area_codes)]
+                    if geo_units and key_column in df.columns:
+                        df = df[df[key_column].isin(geo_units)]
 
                     # Parse value columns
                     value_columns = file_config.get('value_columns', {})
@@ -151,17 +151,17 @@ class GeoDistributionSource(DataSource):
 
         Args:
             df: DataFrame to parse
-            key_column: Column with area codes
+            key_column: Column with geographical unit codes
             value_columns: Mapping of output keys to DataFrame columns
             total_column: Optional column with totals (for normalization)
 
         Returns:
-            Dictionary mapping area codes to probability distributions
+            Dictionary mapping geographical unit codes to probability distributions
         """
         lookup = {}
 
         for _, row in df.iterrows():
-            area_code = row[key_column]
+            geo_unit = row[key_column]
 
             # Get total if available
             if total_column and total_column in df.columns:
@@ -183,7 +183,7 @@ class GeoDistributionSource(DataSource):
 
             # Normalize probabilities
             probs = self._normalize_probabilities(probs)
-            lookup[area_code] = probs
+            lookup[geo_unit] = probs
 
         return lookup
 
@@ -226,7 +226,7 @@ class DiversitySource(DataSource):
         self._file_configs = config.get('files', [])
         self._fallback = config.get('fallback', {})
 
-    def load_data(self, area_codes: Optional[set] = None):
+    def load_data(self, geo_units: Optional[set] = None):
         """Load diversity data from CSV file."""
         logger.info(f"Loading data for source '{self.name}'...")
 
@@ -236,10 +236,10 @@ class DiversitySource(DataSource):
             if file_path.exists():
                 try:
                     df = pd.read_csv(file_path)
-                    key_column = file_config.get('key_column', 'area')
+                    key_column = file_config.get('key_column', 'geo_unit')
 
-                    if area_codes and key_column in df.columns:
-                        df = df[df[key_column].isin(area_codes)]
+                    if geo_units and key_column in df.columns:
+                        df = df[df[key_column].isin(geo_units)]
 
                     value_columns = file_config.get('value_columns', {})
                     self._lookup = self._parse_diversity_dataframe(df, key_column, value_columns)
@@ -259,7 +259,7 @@ class DiversitySource(DataSource):
         lookup = {}
 
         for _, row in df.iterrows():
-            area_code = row[key_column]
+            geo_unit = row[key_column]
 
             # Get diversity counts
             counts = {}
@@ -276,7 +276,7 @@ class DiversitySource(DataSource):
                 n = len(counts)
                 probs = {k: 1.0 / n for k in counts.keys()}
 
-            lookup[area_code] = self._normalize_probabilities(probs)
+            lookup[geo_unit] = self._normalize_probabilities(probs)
 
         return lookup
 
@@ -304,19 +304,19 @@ class PairProbabilitySource(DataSource):
     def __init__(self, name: str, config: Dict[str, Any]):
         """Initialize pair probability source."""
         super().__init__(name, config)
-        # Nested lookup: area -> first_ethnicity -> partner_ethnicity -> probability
+        # Nested lookup: geo_unit -> first_ethnicity -> partner_ethnicity -> probability
         self._lookups: Dict[str, Dict[str, Dict[str, float]]] = {}
         self._file_configs = config.get('files', [])
         self._fallback_type = config.get('fallback', 'uniform')
 
-    def load_data(self, area_codes: Optional[set] = None):
+    def load_data(self, geo_units: Optional[set] = None):
         """Load pair probability data."""
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
             file_path = Path(file_config['path'])
 
-            if area_codes:
+            if geo_units:
                 # Partnership data covers all areas, just filter
                 pass
 
@@ -325,9 +325,9 @@ class PairProbabilitySource(DataSource):
                     df = pd.read_csv(file_path)
 
                     # Filter to needed areas if specified
-                    key_columns = file_config.get('key_columns', ['area', 'first_ethnicity'])
-                    if area_codes and key_columns[0] in df.columns:
-                        df = df[df[key_columns[0]].isin(area_codes)]
+                    key_columns = file_config.get('key_columns', ['geo_unit', 'first_ethnicity'])
+                    if geo_units and key_columns[0] in df.columns:
+                        df = df[df[key_columns[0]].isin(geo_units)]
 
                     value_columns = file_config.get('value_columns', {})
                     self._lookups = self._parse_pair_dataframe(df, key_columns, value_columns)
@@ -443,16 +443,16 @@ class DataSourceManager:
             else:
                 logger.warning(f"Unknown data source type: {source_type}")
 
-    def load_all(self, area_codes: Optional[set] = None):
+    def load_all(self, geo_units: Optional[set] = None):
         """
         Load all data sources.
 
         Args:
-            area_codes: Optional set of area codes to preload
+            geo_units: Optional set of geographical unit codes to preload
         """
         logger.info("Loading all data sources...")
         for source_name, source in self.sources.items():
-            source.load_data(area_codes)
+            source.load_data(geo_units)
         logger.info("✓ All data sources loaded")
 
     def get_source(self, source_name: str) -> Optional[DataSource]:

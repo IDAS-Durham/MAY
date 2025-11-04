@@ -310,7 +310,7 @@ class DataSourceConfig:
     Configuration for a data source.
 
     Data sources provide probability distributions for attribute values
-    based on context (e.g., area code, first person's ethnicity, etc.).
+    based on context (e.g., geographical unit code, first person's ethnicity, etc.).
 
     Attributes:
         name: Identifier for this data source
@@ -336,7 +336,7 @@ class VenueAssignmentRule:
     """
     Assignment rule for people in venues (not households).
 
-    Simpler than household rules - typically just area-based probabilistic assignment.
+    Simpler than household rules - typically just geo_unit-based probabilistic assignment.
 
     Attributes:
         venue_types: List of venue types this applies to

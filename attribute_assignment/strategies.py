@@ -59,7 +59,7 @@ class ProbabilisticStrategy(AssignmentStrategy):
         super().__init__(config, data_manager)
         # Cache frequently accessed config values
         self.data_source_name = config.get('data_source')
-        self.context_key = config.get('context', 'venue.area_code')
+        self.context_key = config.get('context', 'venue.geo_unit')
 
         # Pre-parse context key for faster resolution
         self._context_in_simple = None
@@ -159,8 +159,8 @@ class ProbabilisticStrategy(AssignmentStrategy):
         DEPRECATED: Use _resolve_context_fast for better performance.
 
         Examples:
-            "household.area_code" -> venue.geographical_unit.code
-            "venue.area_code" -> venue.geographical_unit.code
+            "household.geo_unit" -> venue.geographical_unit.code
+            "venue.geo_unit" -> venue.geographical_unit.code
 
         Args:
             context_key: Context key string
@@ -175,7 +175,7 @@ class ProbabilisticStrategy(AssignmentStrategy):
         if context_key in context:
             return context[context_key]
 
-        # Handle dot notation (e.g., "household.area_code")
+        # Handle dot notation (e.g., "household.geo_unit")
         if '.' in context_key:
             parts = context_key.split('.')
 
@@ -340,7 +340,7 @@ class ConditionalStrategy(AssignmentStrategy):
 
         # Perform diversity check
         diversity_data_source = diversity_config.get('data_source')
-        diversity_context = diversity_config.get('context', 'household.area_code')
+        diversity_context = diversity_config.get('context', 'household.geo_unit')
 
         # Get geo unit
         geo_unit = self._resolve_context(diversity_context, person, venue, context)

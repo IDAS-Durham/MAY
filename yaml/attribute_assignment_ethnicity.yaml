@@ -196,7 +196,7 @@ data_sources:
 
     files:
       - path: "data/population/ethnicity/combination_ethnicities_in_households_standardized.csv"
-        key_column: "area"
+        key_column: "geo_unit"
         value_columns:
           single: "single_ethnicity"
           mixed_two: "two_ethnicities"
@@ -234,7 +234,7 @@ assignment_rules:
   # ---------------------------------------------------------------------------
   - name: "assign_primary_adult"
     priority: 1
-    description: "Assign first adult based on area demographics"
+    description: "Assign first adult based on geographical unit demographics"
 
     applies_to:
       person_role: "primary_adult"
@@ -242,7 +242,7 @@ assignment_rules:
     assignment:
       type: "probabilistic"
       data_source: "geo_distribution"
-      context: "household.area_code"
+      context: "household.geo_unit"
 
   # ---------------------------------------------------------------------------
   # Rule 2a: Secondary Adult in Couple/Family Structures
@@ -264,7 +264,7 @@ assignment_rules:
       # First check if household should be diverse
       diversity_check:
         data_source: "diversity"
-        context: "household.area_code"
+        context: "household.geo_unit"
         sample_from: ["single", "mixed_two", "mixed_three_plus"]
 
       # Then assign based on diversity decision
@@ -278,11 +278,11 @@ assignment_rules:
           then:
             type: "conditional_probabilistic"
             data_source: "pair_probabilities"
-            context: ["household.area_code", "primary_adult.ethnicity"]
+            context: ["household.geo_unit", "primary_adult.ethnicity"]
             fallback:
               type: "probabilistic"
               data_source: "geo_distribution"
-              context: "household.area_code"
+              context: "household.geo_unit"
 
   # ---------------------------------------------------------------------------
   # Rule 2b: Elderly Couple Member
@@ -299,7 +299,7 @@ assignment_rules:
 
       diversity_check:
         data_source: "diversity"
-        context: "household.area_code"
+        context: "household.geo_unit"
         sample_from: ["single", "mixed_two", "mixed_three_plus"]
 
       rules:
@@ -312,11 +312,11 @@ assignment_rules:
           then:
             type: "conditional_probabilistic"
             data_source: "pair_probabilities"
-            context: ["household.area_code", "first_elderly.ethnicity"]
+            context: ["household.geo_unit", "first_elderly.ethnicity"]
             fallback:
               type: "probabilistic"
               data_source: "geo_distribution"
-              context: "household.area_code"
+              context: "household.geo_unit"
 
   # ---------------------------------------------------------------------------
   # Rule 2c: Additional Adult in Flexible Household (Independent)
@@ -334,7 +334,7 @@ assignment_rules:
     assignment:
       type: "probabilistic"
       data_source: "geo_distribution"
-      context: "household.area_code"
+      context: "household.geo_unit"
       note: "No relationship assumptions - assign independently"
 
   # ---------------------------------------------------------------------------
@@ -358,7 +358,7 @@ assignment_rules:
             type: "conditional_probabilistic"
             diversity_check:
               data_source: "diversity"
-              context: "household.area_code"
+              context: "household.geo_unit"
               sample_from: ["single", "mixed_two", "mixed_three_plus"]
             rules:
               - when: "diversity_check == 'single' and household.count_assigned_elderly == 1"
@@ -369,14 +369,14 @@ assignment_rules:
                 then:
                   type: "probabilistic"
                   data_source: "geo_distribution"
-                  context: "household.area_code"
+                  context: "household.geo_unit"
 
         # Additional elderly - assign independently
         - when: "household.count_assigned_elderly >= 2"
           then:
             type: "probabilistic"
             data_source: "geo_distribution"
-            context: "household.area_code"
+            context: "household.geo_unit"
 
   # ---------------------------------------------------------------------------
   # Rule 3: Dependent Children/Young Adults
@@ -408,7 +408,7 @@ assignment_rules:
           then:
             type: "probabilistic"
             data_source: "geo_distribution"
-            context: "household.area_code"
+            context: "household.geo_unit"
 
   # ---------------------------------------------------------------------------
   # Rule 4: Elderly in Multi-Generational Family
@@ -474,7 +474,7 @@ assignment_rules:
     assignment:
       type: "probabilistic"
       data_source: "geo_distribution"
-      context: "household.area_code"
+      context: "household.geo_unit"
 
 # ============================================================================
 # Venue Assignment Rules
@@ -487,21 +487,21 @@ venue_assignment_rules:
     assignment:
       type: "probabilistic"
       data_source: "geo_distribution"
-      context: "venue.area_code"
+      context: "venue.geo_unit"
 
   - venue_types: ["boarding_school"]
     description: "Boarding school students - simple geo-based assignment"
     assignment:
       type: "probabilistic"
       data_source: "geo_distribution"
-      context: "venue.area_code"
+      context: "venue.geo_unit"
 
   - venue_types: ["student_dorms"]
     description: "University students - simple geo-based assignment"
     assignment:
       type: "probabilistic"
       data_source: "geo_distribution"
-      context: "venue.area_code"
+      context: "venue.geo_unit"
 
 # ============================================================================
 # Category Adjustments (Optional)
@@ -551,7 +551,7 @@ settings:
 
   # Error handling strategies
   error_handling:
-    missing_area_code: "use_fallback"  # Options: "use_fallback", "error", "skip"
+    missing_geo_unit: "use_fallback"  # Options: "use_fallback", "error", "skip"
     missing_lookup_data: "use_fallback"
     missing_household_structure: "default_to_independent"
 
