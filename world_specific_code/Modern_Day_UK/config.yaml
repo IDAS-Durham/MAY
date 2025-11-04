@@ -86,6 +86,17 @@ households:
   export_file: "household_allocations.csv"
 
 # ========================================
+# ATTRIBUTES
+# ========================================
+
+attributes:
+  # Enable attribute assignment (set to false to skip)
+  enabled: true
+
+  # Ethnicity assignment configuration
+  ethnicity_config: "yaml/attribute_assignment_ethnicity.yaml"
+
+# ========================================
 # EXAMPLES
 # ========================================
 

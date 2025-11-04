@@ -165,123 +165,62 @@ person_roles:
 # Define where to load attribute distribution data from
 
 data_sources:
-  # Geographic distribution of ethnicity by area
-  area_distribution:
+  # Geographic distribution of ethnicity by geographical unit
+  geo_distribution:
     type: "csv_lookup"
-    description: "Area-specific ethnicity distributions"
-
-    # Multiple files with conditional routing based on area code
-    files:
-      - path: "data/population/ethnicity/ethnicity_by_area_ew.csv"
-        condition: "not area_code.startswith(('S', 'N'))"
-        key_column: "area"
-        value_columns:
-          W: "white"
-          A: "asian"
-          B: "black"
-          M: "mixed"
-          O: "other"
-        total_column: "total"
-
-      - path: "data/population/ethnicity/ethnicity_by_area_scotland.csv"
-        condition: "area_code.startswith('S')"
-        key_column: "area"
-        value_columns:
-          W: "white"
-          A: "asian"
-          B: "black"
-          M: "mixed"
-          O: "other"
-        total_column: "total"
-
-      - path: "data/population/ethnicity/ethnicity_by_area_ni.csv"
-        condition: "area_code.startswith('N')"
-        key_column: "area"
-        value_columns:
-          W: "white"
-          A: "asian"
-          B: "black"
-          M: "mixed"
-          O: "other"
-        total_column: "total"
-
-    # Fallback probabilities when area not found in data
-    fallbacks:
-      - condition: "area_code.startswith('S')"
-        values:
-          W: 0.90
-          A: 0.05
-          B: 0.02
-          M: 0.02
-          O: 0.01
-
-      - condition: "area_code.startswith('N')"
-        values:
-          W: 0.92
-          A: 0.04
-          B: 0.01
-          M: 0.02
-          O: 0.01
-
-      - condition: "default"
-        values:
-          W: 0.81
-          A: 0.09
-          B: 0.04
-          M: 0.03
-          O: 0.03
-
-  # Household diversity data (single vs mixed ethnicity households)
-  household_diversity:
-    type: "csv_lookup"
-    description: "Probability of single vs mixed ethnicity households by area"
+    description: "Geographical unit-specific ethnicity distributions"
 
     files:
-      - path: "data/population/ethnicity/household_diversity_ew.csv"
-        condition: "not area_code.startswith(('S', 'N'))"
+      - path: "data/population/ethnicity/ethnicity_5groups_by_OA.csv"
+        key_column: "geo_unit"
+        value_columns:
+          W: "W"
+          A: "A"
+          B: "B"
+          M: "M"
+          O: "CO"
+        total_column: "total"
+
+    # Fallback probabilities when geographical unit not found in data
+    fallback:
+      W: 0.81
+      A: 0.09
+      B: 0.04
+      M: 0.03
+      O: 0.03
+
+  # Diversity data (single vs mixed ethnicity venues)
+  diversity:
+    type: "csv_lookup"
+    description: "Probability of single vs mixed ethnicity venues by geographical unit"
+
+    files:
+      - path: "data/population/ethnicity/combination_ethnicities_in_households_standardized.csv"
         key_column: "area"
         value_columns:
           single: "single_ethnicity"
           mixed_two: "two_ethnicities"
           mixed_three_plus: "three_plus_ethnicities"
 
-      - path: "data/population/ethnicity/household_diversity_scotland.csv"
-        condition: "area_code.startswith('S')"
-        key_column: "area"
-        value_columns:
-          single: "single_ethnicity"
-          mixed_two: "two_ethnicities"
-          mixed_three_plus: "three_plus_ethnicities"
+    fallback:
+      single: 0.85
+      mixed_two: 0.12
+      mixed_three_plus: 0.03
 
-      - path: "data/population/ethnicity/household_diversity_ni.csv"
-        condition: "area_code.startswith('N')"
-        key_column: "area"
-        value_columns:
-          single: "single_ethnicity"
-          mixed_two: "two_ethnicities"
-          mixed_three_plus: "three_plus_ethnicities"
-
-    fallbacks:
-      - condition: "default"
-        values:
-          single: 0.85
-          mixed_two: 0.12
-          mixed_three_plus: 0.03
-
-  # Partnership probabilities (conditional on first person's ethnicity)
-  partnership_probabilities:
+  # Pair probabilities (conditional on first person's ethnicity)
+  pair_probabilities:
     type: "csv_lookup"
-    description: "Conditional probabilities for partner ethnicity given first person"
+    description: "Conditional probabilities for second person's ethnicity given first person"
 
     files:
-      - path: "data/population/ethnicity/partnership_probabilities.csv"
-        key_columns: ["area", "first_ethnicity"]
+      - path: "data/population/ethnicity/precomputed_area_partnerships.csv"
+        key_columns: ["geo_unit", "first_ethnicity"]
         value_columns:
-          prob_W: "W"
-          prob_A: "A"
-          prob_B: "B"
-          prob_M: "M"
-          prob_O: "O"
+          W: "prob_W"
+          A: "prob_A"
+          B: "prob_B"
+          M: "prob_M"
+          O: "prob_O"
 
     fallback: "uniform"  # Equal probability for all ethnicities if no data
 
@@ -302,7 +241,7 @@ assignment_rules:
 
     assignment:
       type: "probabilistic"
-      data_source: "area_distribution"
+      data_source: "geo_distribution"
       context: "household.area_code"
 
   # ---------------------------------------------------------------------------
@@ -324,7 +263,7 @@ assignment_rules:
 
       # First check if household should be diverse
       diversity_check:
-        data_source: "household_diversity"
+        data_source: "diversity"
         context: "household.area_code"
         sample_from: ["single", "mixed_two", "mixed_three_plus"]
 
@@ -338,11 +277,11 @@ assignment_rules:
         - when: "diversity_check in ['mixed_two', 'mixed_three_plus']"
           then:
             type: "conditional_probabilistic"
-            data_source: "partnership_probabilities"
+            data_source: "pair_probabilities"
             context: ["household.area_code", "primary_adult.ethnicity"]
             fallback:
               type: "probabilistic"
-              data_source: "area_distribution"
+              data_source: "geo_distribution"
               context: "household.area_code"
 
   # ---------------------------------------------------------------------------
@@ -359,7 +298,7 @@ assignment_rules:
       type: "conditional_probabilistic"
 
       diversity_check:
-        data_source: "household_diversity"
+        data_source: "diversity"
         context: "household.area_code"
         sample_from: ["single", "mixed_two", "mixed_three_plus"]
 
@@ -372,11 +311,11 @@ assignment_rules:
         - when: "diversity_check in ['mixed_two', 'mixed_three_plus']"
           then:
             type: "conditional_probabilistic"
-            data_source: "partnership_probabilities"
+            data_source: "pair_probabilities"
             context: ["household.area_code", "first_elderly.ethnicity"]
             fallback:
               type: "probabilistic"
-              data_source: "area_distribution"
+              data_source: "geo_distribution"
               context: "household.area_code"
 
   # ---------------------------------------------------------------------------
@@ -394,7 +333,7 @@ assignment_rules:
 
     assignment:
       type: "probabilistic"
-      data_source: "area_distribution"
+      data_source: "geo_distribution"
       context: "household.area_code"
       note: "No relationship assumptions - assign independently"
 
@@ -418,7 +357,7 @@ assignment_rules:
             # Use same logic as elderly couple
             type: "conditional_probabilistic"
             diversity_check:
-              data_source: "household_diversity"
+              data_source: "diversity"
               context: "household.area_code"
               sample_from: ["single", "mixed_two", "mixed_three_plus"]
             rules:
@@ -429,14 +368,14 @@ assignment_rules:
               - when: "otherwise"
                 then:
                   type: "probabilistic"
-                  data_source: "area_distribution"
+                  data_source: "geo_distribution"
                   context: "household.area_code"
 
         # Additional elderly - assign independently
         - when: "household.count_assigned_elderly >= 2"
           then:
             type: "probabilistic"
-            data_source: "area_distribution"
+            data_source: "geo_distribution"
             context: "household.area_code"
 
   # ---------------------------------------------------------------------------
@@ -468,7 +407,7 @@ assignment_rules:
           # Fallback (shouldn't happen for dependents)
           then:
             type: "probabilistic"
-            data_source: "area_distribution"
+            data_source: "geo_distribution"
             context: "household.area_code"
 
   # ---------------------------------------------------------------------------
@@ -534,7 +473,7 @@ assignment_rules:
 
     assignment:
       type: "probabilistic"
-      data_source: "area_distribution"
+      data_source: "geo_distribution"
       context: "household.area_code"
 
 # ============================================================================
@@ -544,24 +483,24 @@ assignment_rules:
 
 venue_assignment_rules:
   - venue_types: ["care_home"]
-    description: "Care home residents - simple area-based assignment"
+    description: "Care home residents - simple geo-based assignment"
     assignment:
       type: "probabilistic"
-      data_source: "area_distribution"
+      data_source: "geo_distribution"
       context: "venue.area_code"
 
   - venue_types: ["boarding_school"]
-    description: "Boarding school students - simple area-based assignment"
+    description: "Boarding school students - simple geo-based assignment"
     assignment:
       type: "probabilistic"
-      data_source: "area_distribution"
+      data_source: "geo_distribution"
       context: "venue.area_code"
 
   - venue_types: ["student_dorms"]
-    description: "University students - simple area-based assignment"
+    description: "University students - simple geo-based assignment"
     assignment:
       type: "probabilistic"
-      data_source: "area_distribution"
+      data_source: "geo_distribution"
       context: "venue.area_code"
 
 # ============================================================================

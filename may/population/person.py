@@ -5,7 +5,11 @@ Represents an individual agent with age, sex, geographical unit, and activities.
 """
 
 from collections import defaultdict
-from typing import DefaultDict, Optional
+from typing import TYPE_CHECKING, Any, DefaultDict, Optional
+
+if TYPE_CHECKING:
+    from may.geography.geography import GeographicalUnit
+    from may.world import Subset
 
 class Person:
     """
@@ -33,7 +37,15 @@ class Person:
         'activity_map',
     ]
 
-    def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"]=None, activities: Optional[list[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
+    def __init__(
+        self,
+        age: float,
+        sex: str,
+        geographical_unit: Optional["GeographicalUnit"] = None,
+        activities: Optional[list[str]] = None,
+        properties: Optional[dict[str, Any]] = None,
+        activity_map: Optional[DefaultDict[str, list["Subset"]]] = None
+    ) -> None:
         """
         Initialize a Person.
 
@@ -61,11 +73,11 @@ class Person:
             self.activity_map = defaultdict(list)
 
     @classmethod
-    def reset_counter(cls):
+    def reset_counter(cls) -> None:
         """Reset the ID counter (useful for testing)."""
         cls._id_counter = 0
 
-    def add_activity(self, activity):
+    def add_activity(self, activity: str) -> None:
         """
         Add an activity to this person's activity list.
 
@@ -75,7 +87,7 @@ class Person:
         if activity not in self.activities:
             self.activities.append(activity)
 
-    def remove_activity(self, activity):
+    def remove_activity(self, activity: str) -> None:
         """
         Remove an activity from this person's activity list.
 
@@ -85,7 +97,7 @@ class Person:
         if activity in self.activities:
             self.activities.remove(activity)
 
-    def has_activity(self, activity):
+    def has_activity(self, activity: str) -> bool:
         """
         Check if person has a specific activity.
 
@@ -97,7 +109,7 @@ class Person:
         """
         return activity in self.activities
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """String representation of the Person."""
         geo_unit_name = self.geographical_unit.name if self.geographical_unit else "None"
         return (f"Person(id={self.id}, age={self.age}, sex={self.sex}, "

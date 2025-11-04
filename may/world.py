@@ -6,6 +6,7 @@ This module also contains setup functions for orchestrating world creation.
 """
 
 import logging
+from typing import Optional, Set
 from may.residence.household_distributor import HouseholdDistributor
 from may.residence.allocation_strategy import execute_allocation_strategy
 
@@ -100,6 +101,40 @@ class World:
                 'allocation_rate': total_allocated / max(total_people, 1),
                 'average_household_size': sum(h.size() for h in households) / max(len(households), 1)
             }
+
+        return stats
+
+    def assign_attributes(self, config_path: str, geo_units: Optional[Set[str]] = None):
+        """
+        Assign attributes to all people in the world.
+
+        This method uses the attribute assignment system to assign attributes
+        (e.g., ethnicity) to all people based on YAML configuration.
+
+        Args:
+            config_path: Path to attribute assignment YAML config file
+            geo_units: Optional set of geo unit codes to preload data for
+
+        Returns:
+            Dictionary with assignment statistics
+        """
+        from attribute_assignment import assign_attributes
+
+        logger.info("")
+        logger.info("="*60)
+        logger.info("Assigning attributes...")
+        logger.info("="*60)
+
+        # Get geo units from geography if not provided
+        if geo_units is None and self.geography:
+            geo_units = {unit.name for unit in self.geography.get_all_units_list()}
+
+        # Run attribute assignment
+        stats = assign_attributes(
+            venue_manager=self.venues,
+            config_path=config_path,
+            geo_units=geo_units
+        )
 
         return stats
 
