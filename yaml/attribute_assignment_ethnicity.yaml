@@ -1,6 +1,14 @@
 # ============================================================================
 # Post-Allocation Attribute Assignment Configuration
 # ============================================================================
+# SCHEMA REFERENCE: See ATTRIBUTE_ASSIGNMENT_SCHEMA.md for complete documentation
+# of what is EXPECTED vs USER-DEFINED in this configuration file.
+#
+# KEY TERMS:
+#   [EXPECTED] = Field name/keyword that must match exactly (hardcoded in code)
+#   [USER-DEFINED] = Identifier you create and can name however you want
+#   [REFERENCE] = Must match a user-defined identifier defined elsewhere in this file
+#
 # This configuration defines how to assign attributes (like ethnicity) to people
 # AFTER they have been allocated to households and venues.
 #
@@ -15,8 +23,8 @@
 #   - Original "0 >=0 >=0 >=0" → Flexible household (assign independently)
 # ============================================================================
 
-attribute:
-  name: "ethnicity"
+attribute:                      # [EXPECTED] Section name
+  name: "ethnicity"             # [EXPECTED] Field name (value is your choice)
   description: "Assigns ethnicity to people based on geography and household composition"
   data_type: "categorical"
 
@@ -25,12 +33,15 @@ attribute:
 # ============================================================================
 # Define household types based on ORIGINAL and ACTUAL patterns
 # This captures the INTENDED structure, not just the final composition
+#
+# IMPORTANT: Structure names (like 'family_with_kids') are [USER-DEFINED]
+# You can name them anything. They will be referenced in assignment_rules.
 
-household_structures:
-  family_with_kids:
-    description: "Family household intended to have children"
-    patterns:
-      original:
+household_structures:           # [EXPECTED] Section name
+  family_with_kids:             # [USER-DEFINED] Structure identifier (you choose the name)
+    description: "Family household intended to have children"  # [EXPECTED] Field name
+    patterns:                   # [EXPECTED] Field name
+      original:                 # [EXPECTED] Sub-field (checks household's original_pattern)
         - ">=2 >=0 2 0"
         - ">=2 >=0 1 0"
         - "1 >=0 2 0"
@@ -54,11 +65,7 @@ household_structures:
         - "0 0 2 0"
       actual:
         - "0 0 2 0"
-      conditions:
-        - "not household.original_pattern.startswith('0 >=0')"  # Not flexible
-        - "not household.original_pattern.startswith('>=2')"    # Not family
-        - "not household.original_pattern.startswith('1 >=0')"  # Not family
-    note: "Explicit couple household, use partnership/diversity rules"
+    note: "Explicit couple household (not demoted from family), use partnership/diversity rules"
 
   elderly_couple:
     description: "Elderly couple living together"
@@ -97,8 +104,6 @@ household_structures:
         - "0 0 1 0"
         - "0 1 0 0"
         - "0 0 0 1"
-      conditions:
-        - "household.size == 1"
     note: "One person living alone"
 
 # ============================================================================
@@ -106,11 +111,14 @@ household_structures:
 # ============================================================================
 # Define roles based on person's category and household structure
 # These roles determine which assignment rule applies
+#
+# IMPORTANT: Role names (like 'primary_adult') are [USER-DEFINED]
+# You can name them anything. They will be referenced in assignment_rules.
 
-person_roles:
-  primary_adult:
-    description: "First adult to assign in household"
-    conditions:
+person_roles:                   # [EXPECTED] Section name
+  primary_adult:                # [USER-DEFINED] Role identifier (you choose the name)
+    description: "First adult to assign in household"  # [EXPECTED] Field name
+    conditions:                 # [EXPECTED] Field name (list of Python expressions)
       - "person.category in ['Adults', 'Young Adults']"
       - "not household.has_assigned_adult"
 
@@ -163,26 +171,29 @@ person_roles:
 # Data Sources
 # ============================================================================
 # Define where to load attribute distribution data from
+#
+# IMPORTANT: Source names (like 'geo_distribution') are [USER-DEFINED]
+# You can name them anything. They will be referenced in assignment_rules.
 
-data_sources:
+data_sources:                   # [EXPECTED] Section name
   # Geographic distribution of ethnicity by geographical unit
-  geo_distribution:
-    type: "csv_lookup"
-    description: "Geographical unit-specific ethnicity distributions"
+  geo_distribution:             # [USER-DEFINED] Source identifier (you choose the name)
+    type: "csv_lookup"          # [EXPECTED] Field name and value
+    description: "Geographical unit-specific ethnicity distributions"  # [EXPECTED] Field name
 
-    files:
-      - path: "data/population/ethnicity/ethnicity_5groups_by_OA.csv"
-        key_column: "geo_unit"
-        value_columns:
+    files:                      # [EXPECTED] Field name
+      - path: "data/population/ethnicity/ethnicity_5groups_by_OA.csv"  # [EXPECTED] Field name
+        key_column: "geo_unit"  # [EXPECTED] Field name (column with geo unit codes)
+        value_columns:          # [EXPECTED] Field name (your attribute values → CSV columns)
           W: "W"
           A: "A"
           B: "B"
           M: "M"
           O: "CO"
-        total_column: "total"
+        total_column: "total"   # [EXPECTED] Field name (optional)
 
     # Fallback probabilities when geographical unit not found in data
-    fallback:
+    fallback:                   # [EXPECTED] Field name
       W: 0.81
       A: 0.09
       B: 0.04
@@ -227,59 +238,61 @@ data_sources:
 # ============================================================================
 # Assignment Rules (Evaluated in Order by Priority)
 # ============================================================================
+# IMPORTANT: Each rule has a [USER-DEFINED] name but references [USER-DEFINED]
+# identifiers from sections above (person_roles, household_structures, data_sources)
 
-assignment_rules:
+assignment_rules:               # [EXPECTED] Section name (list of rules)
   # ---------------------------------------------------------------------------
   # Rule 1: Primary Adult (All Household Types)
   # ---------------------------------------------------------------------------
-  - name: "assign_primary_adult"
-    priority: 1
-    description: "Assign first adult based on geographical unit demographics"
+  - name: "assign_primary_adult"  # [EXPECTED] Field name, [USER-DEFINED] value
+    priority: 1                 # [EXPECTED] Field name (lower = earlier)
+    description: "Assign first adult based on geographical unit demographics"  # [EXPECTED] Field name
 
-    applies_to:
-      person_role: "primary_adult"
+    applies_to:                 # [EXPECTED] Field name (specifies when this rule applies)
+      person_role: "primary_adult"  # [EXPECTED] Field name, [REFERENCE] to user-defined role
 
-    assignment:
-      type: "probabilistic"
-      data_source: "geo_distribution"
-      context: "household.geo_unit"
+    assignment:                 # [EXPECTED] Field name (defines HOW to assign)
+      type: "probabilistic"     # [EXPECTED] Field name and value (must be supported type)
+      data_source: "geo_distribution"  # [EXPECTED] Field name, [REFERENCE] to user-defined source
+      context: "household.geo_unit"    # [EXPECTED] Field name (context expression)
 
   # ---------------------------------------------------------------------------
   # Rule 2a: Secondary Adult in Couple/Family Structures
   # ---------------------------------------------------------------------------
-  - name: "assign_partner_in_couple_or_family"
+  - name: "assign_partner_in_couple_or_family"  # [USER-DEFINED] rule name
     priority: 2
     description: "Assign partner in couple/family with diversity awareness"
 
     applies_to:
-      person_role: "secondary_adult_partner"
-      household_structure:
-        - "family_with_kids"
+      person_role: "secondary_adult_partner"  # [REFERENCE] to user-defined role
+      household_structure:      # [EXPECTED] Field name (optional - restricts to certain structures)
+        - "family_with_kids"    # [REFERENCE] to user-defined structure
         - "family_with_young_adults"
         - "couple_household"
 
     assignment:
-      type: "conditional_probabilistic"
+      type: "conditional_probabilistic"  # [EXPECTED] value (conditional assignment)
 
       # First check if household should be diverse
-      diversity_check:
-        data_source: "diversity"
-        context: "household.geo_unit"
-        sample_from: ["single", "mixed_two", "mixed_three_plus"]
+      diversity_check:          # [EXPECTED] Field name (for conditional type)
+        data_source: "diversity"  # [REFERENCE] to user-defined source
+        context: "household.geo_unit"  # [EXPECTED] context expression
+        sample_from: ["single", "mixed_two", "mixed_three_plus"]  # [EXPECTED] field
 
       # Then assign based on diversity decision
-      rules:
-        - when: "diversity_check == 'single'"
-          then:
-            type: "copy"
-            source: "primary_adult.ethnicity"
+      rules:                    # [EXPECTED] Field name (for conditional type)
+        - when: "diversity_check == 'single'"  # [EXPECTED] Field name (Python condition)
+          then:                 # [EXPECTED] Field name (nested assignment strategy)
+            type: "copy"        # [EXPECTED] value (copy from another person)
+            source: "primary_adult.ethnicity"  # [EXPECTED] field (who to copy from)
 
         - when: "diversity_check in ['mixed_two', 'mixed_three_plus']"
           then:
-            type: "conditional_probabilistic"
-            data_source: "pair_probabilities"
-            context: ["household.geo_unit", "primary_adult.ethnicity"]
-            fallback:
+            type: "conditional_probabilistic"  # Nested strategy
+            data_source: "pair_probabilities"  # [REFERENCE] to user-defined source
+            context: ["household.geo_unit", "primary_adult.ethnicity"]  # Multiple contexts for pair lookup
+            fallback:           # [EXPECTED] Field name (if pair data not found)
               type: "probabilistic"
               data_source: "geo_distribution"
               context: "household.geo_unit"
@@ -481,13 +494,13 @@ assignment_rules:
 # ============================================================================
 # Simpler rules for people allocated to venues (not households)
 
-venue_assignment_rules:
-  - venue_types: ["care_home"]
-    description: "Care home residents - simple geo-based assignment"
-    assignment:
+venue_assignment_rules:         # [EXPECTED] Section name (list of rules)
+  - venue_types: ["care_home"]  # [EXPECTED] Field name (list of venue types)
+    description: "Care home residents - simple geo-based assignment"  # [EXPECTED] Field name
+    assignment:                 # [EXPECTED] Field name (same as household assignment)
       type: "probabilistic"
-      data_source: "geo_distribution"
-      context: "venue.geo_unit"
+      data_source: "geo_distribution"  # [REFERENCE] to user-defined source
+      context: "venue.geo_unit"  # [EXPECTED] context expression (note: venue not household)
 
   - venue_types: ["boarding_school"]
     description: "Boarding school students - simple geo-based assignment"
@@ -509,12 +522,12 @@ venue_assignment_rules:
 # Optionally adjust probabilities based on person's category
 # This allows modeling demographic differences
 
-category_adjustments:
-  enabled: false
+category_adjustments:           # [EXPECTED] Section name
+  enabled: false                # [EXPECTED] Field name (set to true to enable)
   description: "Adjust ethnicity probabilities based on age category"
 
-  adjustments:
-    "Old Adults":
+  adjustments:                  # [EXPECTED] Field name
+    "Old Adults":               # Your category name (from households_config.yaml)
       description: "Elderly tend to be more homogeneous (less diverse)"
       multipliers:
         W: 1.05
@@ -535,40 +548,42 @@ category_adjustments:
 # ============================================================================
 # Global Settings
 # ============================================================================
+# All field names in this section are [EXPECTED]
 
-settings:
+settings:                       # [EXPECTED] Section name
   # Random seed (null = use global simulation seed)
-  random_seed: null
+  random_seed: null             # [EXPECTED] Field name
 
   # Normalize probabilities to ensure they sum to 1.0
-  normalize_probabilities: true
+  normalize_probabilities: true  # [EXPECTED] Field name
 
   # Cache data source lookups for performance
-  cache_lookups: true
+  cache_lookups: true           # [EXPECTED] Field name
 
   # Pattern matching strictness
-  strict_pattern_matching: false
+  strict_pattern_matching: false  # [EXPECTED] Field name
 
   # Error handling strategies
-  error_handling:
-    missing_geo_unit: "use_fallback"  # Options: "use_fallback", "error", "skip"
-    missing_lookup_data: "use_fallback"
-    missing_household_structure: "default_to_independent"
+  error_handling:               # [EXPECTED] Field name
+    missing_geo_unit: "use_fallback"  # [EXPECTED] Field name and values
+    missing_lookup_data: "use_fallback"  # [EXPECTED] Field name
+    missing_household_structure: "default_to_independent"  # [EXPECTED] Field name
 
   # Logging configuration
-  logging:
-    level: "INFO"
-    show_samples: true
-    sample_size: 10
-    log_household_statistics: true
-    log_ethnicity_distribution: true
+  logging:                      # [EXPECTED] Field name
+    level: "INFO"               # [EXPECTED] Field name
+    show_samples: true          # [EXPECTED] Field name
+    sample_size: 10             # [EXPECTED] Field name
+    log_household_statistics: true  # [EXPECTED] Field name
+    log_ethnicity_distribution: true  # [EXPECTED] Field name
 
 # ============================================================================
 # Ethnicity Codes Reference
 # ============================================================================
 # For documentation purposes - the actual codes used in this configuration
+# This section is optional and not required by the code
 
-ethnicity_codes:
+ethnicity_codes:                # [EXPECTED] Section name (optional, for documentation)
   W: "White"
   A: "Asian/Asian British"
   B: "Black/African/Caribbean/Black British"
