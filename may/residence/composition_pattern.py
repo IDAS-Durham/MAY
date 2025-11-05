@@ -17,15 +17,15 @@ class CompositionPattern:
     """
     Represents a household composition pattern.
 
-    Example: ">=2 >=0 2 0" means:
+    Example: ">=2 >=0 2 <=2" means:
     - 2 or more people in category 0 (Kids)
     - 0 or more people in category 1 (Young Adults)
     - exactly 2 people in category 2 (Adults)
-    - exactly 0 people in category 3 (Old Adults)
+    - 2 or fewer people in category 3 (Old Adults)
     """
     original_pattern: str
     requirements: List[Tuple[str, int]]  # List of (operator, count) for each category
-    # operator can be "exact" or "gte" (greater than or equal)
+    # operator can be "exact", "gte" (>=), or "lte" (<=)
 
     @classmethod
     def from_string(cls, pattern: str) -> 'CompositionPattern':
@@ -33,7 +33,7 @@ class CompositionPattern:
         Parse a composition pattern string.
 
         Args:
-            pattern: Pattern string like ">=2 >=0 2 0"
+            pattern: Pattern string like ">=2 >=0 2 <=2"
 
         Returns:
             CompositionPattern object
@@ -46,6 +46,10 @@ class CompositionPattern:
                 # Greater-than-or-equal requirement
                 count = int(part[2:])
                 requirements.append(("gte", count))
+            elif part.startswith("<="):
+                # Less-than-or-equal requirement
+                count = int(part[2:])
+                requirements.append(("lte", count))
             else:
                 # Exact requirement
                 count = int(part)
@@ -58,7 +62,9 @@ class CompositionPattern:
         if category_idx >= len(self.requirements):
             return 0
         operator, count = self.requirements[category_idx]
-        return count
+        if operator == "lte":
+            return 0  # <=N means minimum is 0
+        return count  # For "exact" and "gte", minimum is the count
 
     def get_max_count(self, category_idx: int) -> Optional[int]:
         """Get maximum allowed count for a category (None if unlimited)."""
@@ -66,16 +72,18 @@ class CompositionPattern:
             return None
         operator, count = self.requirements[category_idx]
         if operator == "exact":
-            return count
+            return count  # Exact N means max is N
+        elif operator == "lte":
+            return count  # <=N means max is N
         else:  # gte
-            return None  # No upper limit
+            return None  # >=N means no upper limit
 
     def is_flexible(self, category_idx: int) -> bool:
-        """Check if a category has flexible (>=) requirement."""
+        """Check if a category has flexible (>= or <=) requirement."""
         if category_idx >= len(self.requirements):
             return True
         operator, _ = self.requirements[category_idx]
-        return operator == "gte"
+        return operator in ("gte", "lte")
 
     def min_household_size(self) -> int:
         """Calculate minimum household size required."""
@@ -282,7 +290,9 @@ class CompositionPattern:
         for operator, count in requirements:
             if operator == "gte":
                 parts.append(f">={count}")
-            else:
+            elif operator == "lte":
+                parts.append(f"<={count}")
+            else:  # exact
                 parts.append(str(count))
         return " ".join(parts)
 
