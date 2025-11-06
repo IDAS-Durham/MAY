@@ -104,7 +104,7 @@ class ProbabilisticStrategy(AssignmentStrategy):
     """
     Probabilistic assignment based on geographical distribution.
 
-    Samples from ethnicity distribution for the household's geographical unit.
+    Samples from attribute distribution for the household's geographical unit.
     This is the simplest strategy - no dependencies on other people.
     """
 
@@ -123,7 +123,7 @@ class ProbabilisticStrategy(AssignmentStrategy):
             context: Assignment context
 
         Returns:
-            Sampled ethnicity value
+            Sampled attribute value
         """
         # Get geo unit from household
         if not household or not household.geographical_unit:
@@ -151,7 +151,7 @@ class PartnershipStrategy(AssignmentStrategy):
     """
     Partnership-based assignment using pair probabilities.
 
-    Given the first person's ethnicity, samples the second person's ethnicity
+    Given the first person's attribute value, samples the second person's value
     from conditional probability distribution. Used for couples and family secondary adults.
 
     Replaces complex conditional strategies with role-based subset selection.
@@ -165,7 +165,7 @@ class PartnershipStrategy(AssignmentStrategy):
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """
-        Sample partner ethnicity based on first person's ethnicity.
+        Sample partner attribute value based on first person's attribute value.
 
         Args:
             person: Person object (the partner being assigned)
@@ -173,7 +173,7 @@ class PartnershipStrategy(AssignmentStrategy):
             context: Assignment context (must contain partner_role person)
 
         Returns:
-            Sampled ethnicity value
+            Sampled attribute value
         """
         # Get the first person (primary_adult or primary_elder)
         first_person = self._get_person_by_role(context, self.partner_role)
@@ -182,11 +182,11 @@ class PartnershipStrategy(AssignmentStrategy):
             # Fall back to probabilistic
             return self._fallback_probabilistic(person, household, context)
 
-        # Get first person's ethnicity
+        # Get first person's attribute value
         attribute_name = context.get('attribute_name', 'ethnicity')
-        first_ethnicity = self._get_attribute_value(first_person, attribute_name)
-        if not first_ethnicity:
-            logger.warning(f"No ethnicity found for {self.partner_role}")
+        first_value = self._get_attribute_value(first_person, attribute_name)
+        if not first_value:
+            logger.warning(f"No {attribute_name} found for {self.partner_role}")
             return self._fallback_probabilistic(person, household, context)
 
         # Get geo unit
@@ -197,9 +197,9 @@ class PartnershipStrategy(AssignmentStrategy):
         geo_unit = household.geographical_unit.name
 
         # Look up pair probabilities
-        probs = self.data_manager.lookup(self.data_source_name, geo_unit, first_ethnicity)
+        probs = self.data_manager.lookup(self.data_source_name, geo_unit, first_value)
         if not probs:
-            logger.warning(f"No pair probabilities for {geo_unit}, {first_ethnicity}")
+            logger.warning(f"No pair probabilities for {geo_unit}, {first_value}")
             return self._fallback_probabilistic(person, household, context)
 
         # Sample from distribution
@@ -207,7 +207,7 @@ class PartnershipStrategy(AssignmentStrategy):
         probabilities = list(probs.values())
         sampled = np.random.choice(values, p=probabilities)
 
-        logger.debug(f"Partnership: {sampled} (partner of {first_ethnicity}) for {person.id}")
+        logger.debug(f"Partnership: {sampled} (partner of {first_value}) for {person.id}")
         return sampled
 
     def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
@@ -234,7 +234,10 @@ class InheritanceStrategy(AssignmentStrategy):
     """
     Forward inheritance: Parent → Child.
 
-    Children inherit ethnicity from parents based on combination rules:
+    Children inherit attribute values from parents based on combination rules.
+    Logic is completely configurable via YAML logic blocks.
+
+    Example for ethnicity:
     - Same + Same = Same (W+W=W, A+A=A, etc.)
     - Different = Mixed (W+A=M, W+B=M, etc.)
     - Mixed + Any = Mixed (M+X=M)
@@ -349,9 +352,12 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
     """
     Reverse inheritance: Child → Parent.
 
-    When children are assigned first (or already have ethnicity), infer parent ethnicity:
+    When children are assigned first, infer parent attribute values.
+    Logic is completely configurable via YAML logic blocks.
+
+    Example for ethnicity:
     - Child is W/A/B/O → Both parents must be same (both W, both A, etc.)
-    - Child is M → Parents must differ (sample two different ethnicities from geo distribution)
+    - Child is M → Parents must differ (sample two different values from geo distribution)
 
     Enables "kids first" assignment in certain household patterns.
     """
@@ -443,62 +449,6 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
             return eval(condition, safe_context, {})
         except:
             return False
-
-    def _sample_different_ethnicity(self, person, household, context: Dict[str, Any],
-                                     exclude: str) -> Any:
-        """
-        Sample ethnicity different from excluded value.
-
-        Args:
-            person: Person object
-            household: Household object
-            context: Assignment context
-            exclude: Ethnicity to exclude
-
-        Returns:
-            Sampled ethnicity (guaranteed different from exclude)
-        """
-        if not household or not household.geographical_unit:
-            logger.warning("No geographical unit for different ethnicity sampling")
-            # Just pick a different single ethnicity randomly
-            available = [e for e in self.single_ethnicities if e != exclude]
-            if available:
-                return np.random.choice(available)
-            return exclude  # Edge case
-
-        geo_unit = household.geographical_unit.name
-
-        # Get geo distribution
-        probs = self.data_manager.lookup('geo_distribution', geo_unit)
-        if not probs:
-            # Fallback: uniform over single ethnicities except excluded
-            available = [e for e in self.single_ethnicities if e != exclude]
-            if available:
-                return np.random.choice(available)
-            return exclude
-
-        # Filter out the excluded ethnicity and renormalize
-        filtered_probs = {k: v for k, v in probs.items()
-                          if k != exclude and k in self.single_ethnicities}
-
-        if not filtered_probs:
-            # Edge case: all probability on excluded value
-            available = [e for e in self.single_ethnicities if e != exclude]
-            if available:
-                return np.random.choice(available)
-            return exclude
-
-        # Renormalize
-        total = sum(filtered_probs.values())
-        if total > 0:
-            filtered_probs = {k: v / total for k, v in filtered_probs.items()}
-
-        values = list(filtered_probs.keys())
-        probabilities = list(filtered_probs.values())
-        sampled = np.random.choice(values, p=probabilities)
-
-        logger.debug(f"Different ethnicity: {sampled} (excluding {exclude}) for {person.id}")
-        return sampled
 
     def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
         """Fallback to geographical distribution."""

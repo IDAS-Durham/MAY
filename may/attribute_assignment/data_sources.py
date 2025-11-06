@@ -407,6 +407,7 @@ class MultiKeyLookupSource(DataSource):
     Data source for multi-key CSV lookups.
 
     Supports lookups based on multiple keys (e.g., sex + age + ethnicity + region).
+    Uses a pure Python dictionary for maximum performance.
     """
 
     def __init__(self, name: str, config: Dict[str, Any], assignment_config):
@@ -422,10 +423,13 @@ class MultiKeyLookupSource(DataSource):
         self.assignment_config = assignment_config
         self._file_configs = config.get('files', [])
         self._fallback = config.get('fallback', {})
-        self._df = None
+        self._lookup_dict = {}  # Dict mapping tuple keys to value dicts
+        self._key_columns = []
+        self._value_columns = {}
+        self._key_columns_config = None  # Cache key columns config for fast lookup
 
     def load_data(self, geo_units: Optional[set] = None):
-        """Load CSV data for multi-key lookups."""
+        """Load CSV data and convert to dictionary for fast lookups."""
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
@@ -433,15 +437,26 @@ class MultiKeyLookupSource(DataSource):
 
             if file_path.exists():
                 try:
-                    self._df = pd.read_csv(file_path)
+                    df = pd.read_csv(file_path)
 
-                    # Create multi-index for fast lookups
-                    key_columns = list(file_config.get('key_columns', {}).keys())
-                    if key_columns:
-                        self._df.set_index(key_columns, inplace=True)
-                        logger.info(f"  ✓ Loaded {len(self._df)} rows from {file_path.name} (indexed by {key_columns})")
-                    else:
-                        logger.info(f"  ✓ Loaded {len(self._df)} rows from {file_path.name}")
+                    # Get key and value columns
+                    self._key_columns = list(file_config.get('key_columns', {}).keys())
+                    self._key_columns_config = file_config.get('key_columns', {})
+                    self._value_columns = file_config.get('value_columns', {})
+
+                    # Build dictionary: {(key1, key2, ...): {col1: val1, col2: val2, ...}}
+                    logger.info(f"  Building lookup dictionary from {len(df)} rows...")
+
+                    for _, row in df.iterrows():
+                        # Build key tuple
+                        key = tuple(row[col] for col in self._key_columns)
+
+                        # Build value dict
+                        values = {name: float(row[csv_col]) for name, csv_col in self._value_columns.items()}
+
+                        self._lookup_dict[key] = values
+
+                    logger.info(f"  ✓ Loaded {len(self._lookup_dict)} rows from {file_path.name} into dictionary")
                 except Exception as e:
                     logger.warning(f"  ✗ Error loading {file_path}: {e}")
             else:
@@ -451,7 +466,7 @@ class MultiKeyLookupSource(DataSource):
 
     def lookup(self, person, household=None, context=None) -> Dict[str, float]:
         """
-        Look up probabilities based on person demographics.
+        Look up probabilities based on person demographics using dictionary lookup.
 
         Args:
             person: Person object
@@ -461,40 +476,29 @@ class MultiKeyLookupSource(DataSource):
         Returns:
             Dict of value columns (e.g., {'cvd': 0.05, 'crd': 0.03, ...})
         """
-        if self._df is None:
+        if not self._lookup_dict:
             return self._fallback
 
-        # Build lookup key from person
-        file_config = self._file_configs[0]
-        key_columns = file_config.get('key_columns', {})
-
-        lookup_values = {}
-        for csv_col_name, col_config in key_columns.items():
+        # Build key tuple directly (faster than building intermediate dict)
+        key_values = []
+        for csv_col_name, col_config in self._key_columns_config.items():
             value = self._resolve_key_value(col_config, person, household, context)
             if value is None:
                 # Can't build complete key, use fallback
                 return self._fallback
-            lookup_values[csv_col_name] = value
+            key_values.append(value)
 
-        # Use indexed lookup for speed
-        try:
-            # Build lookup key tuple in the order of the index
-            lookup_key = tuple(lookup_values[col] for col in self._df.index.names)
+        # Direct dictionary lookup with tuple key
+        lookup_key = tuple(key_values)
 
-            # Fast index lookup
-            row = self._df.loc[lookup_key]
+        # O(1) dictionary lookup
+        result = self._lookup_dict.get(lookup_key)
 
-            # Extract value columns
-            value_columns = file_config.get('value_columns', {})
-            result = {}
-            for key, csv_col in value_columns.items():
-                result[key] = float(row[csv_col])
-
-            return result
-
-        except KeyError:
+        if result is None:
             # No match found, use fallback
             return self._fallback
+
+        return result
 
     def _resolve_key_value(self, col_config, person, household, context):
         """
