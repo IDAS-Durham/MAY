@@ -3,6 +3,8 @@
 // Global state
 const state = {
     map: null,
+    baseLayer: null,  // Track base layer separately
+    imageBounds: null,  // Bounds for image overlay
     layers: {
         geography: null,
         venues: {}
@@ -10,30 +12,96 @@ const state = {
     selectedLevel: null,
     selectedVenueType: null,
     showPopulation: true,
-    showVenues: false
+    showVenues: false,
+    mapConfig: null  // Store map configuration
 };
 
 // Initialize the application
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('Initializing World Map Visualization...');
+
+    // Load map configuration first
+    await loadMapConfiguration();
+
+    // Initialize map with configuration
     initializeMap();
+
     loadWorldStatistics();
     loadGeographyLevels();
     loadVenueTypes();
     setupEventListeners();
 });
 
+// Load map configuration from backend
+async function loadMapConfiguration() {
+    try {
+        const response = await fetch('/api/map/config');
+        state.mapConfig = await response.json();
+        console.log('Map configuration loaded:', state.mapConfig);
+    } catch (error) {
+        console.error('Error loading map configuration:', error);
+        // Fall back to default OSM configuration
+        state.mapConfig = {
+            background_type: 'osm',
+            image_url: null,
+            bounds: null,
+            attribution: null
+        };
+    }
+}
+
 // Initialize Leaflet map
 function initializeMap() {
-    state.map = L.map('map').setView([51.5074, -0.1278], 6); // Default to London
+    const config = state.mapConfig;
 
-    // Add OpenStreetMap tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(state.map);
+    if (config.background_type === 'image' && config.image_url && config.bounds) {
+        // IMAGE-BASED MAP WITH GEOGRAPHIC PROJECTION
 
-    console.log('Map initialized');
+        const [[south, west], [north, east]] = config.bounds;
+        const centerLat = (south + north) / 2;
+        const centerLon = (west + east) / 2;
+
+        // Create map with standard geographic CRS
+        state.map = L.map('map', {
+            crs: L.CRS.EPSG3857,  // Standard web mercator
+            minZoom: 1,
+            maxZoom: 18,
+            attributionControl: true
+        }).setView([centerLat, centerLon], 6);
+
+        // Add image overlay with geographic bounds
+        const bounds = L.latLngBounds(
+            L.latLng(south, west),  // southwest
+            L.latLng(north, east)   // northeast
+        );
+
+        state.baseLayer = L.imageOverlay(config.image_url, bounds, {
+            attribution: config.attribution || 'Custom Map Image',
+            opacity: 0.9,
+            interactive: false
+        }).addTo(state.map);
+
+        state.imageBounds = bounds;
+        state.map.fitBounds(bounds);
+
+        console.log('Map initialized with georeferenced image');
+        console.log('Image URL:', config.image_url);
+        console.log('Bounds:', bounds);
+
+    } else {
+        // OPENSTREETMAP TILES (DEFAULT)
+
+        // Create map with default view
+        state.map = L.map('map').setView([51.5074, -0.1278], 6);
+
+        // Add OpenStreetMap tile layer
+        state.baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(state.map);
+
+        console.log('Map initialized with OpenStreetMap tiles');
+    }
 }
 
 // Setup event listeners

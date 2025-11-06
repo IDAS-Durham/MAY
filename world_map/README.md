@@ -7,6 +7,7 @@ An interactive web-based visualization tool for exploring `World` class instance
 ## Features
 
 - 🗺️ **Interactive Map**: Explore geographical units with Leaflet.js
+- 🖼️ **Custom Backgrounds**: Use arbitrary images as map backgrounds (historical maps, fantasy worlds, etc.)
 - 👥 **Population Visualization**: View population distribution across geographic levels
 - 🏢 **Venue Mapping**: Visualize schools, hospitals, universities, and other venues
 - 📊 **Rich Statistics**: Age distribution, sex distribution, and demographic breakdowns
@@ -81,7 +82,169 @@ Options:
   --host HOST            Host to run the server on (default: 127.0.0.1)
   --port PORT            Port to run the server on (default: 5000)
   --debug                Run in debug mode
+  --map-background       Background map type: osm or image (default: osm)
+  --map-image PATH       Path or URL to custom map background image
+  --map-bounds BOUNDS    Geographic bounds: "south,west,north,east"
+  --map-attribution TEXT Attribution text for custom map
 ```
+
+## Custom Background Maps
+
+The world map visualization supports **arbitrary background images** in addition to the default OpenStreetMap tiles. This is essential for historical worlds, fantasy settings, or any scenario where modern maps don't apply.
+
+### Why Custom Backgrounds?
+
+- **Historical Worlds**: Use period-accurate maps (e.g., Medieval England, Ancient Rome)
+- **Fantasy Worlds**: Display fictional world maps
+- **Alternate Geographies**: Show custom or imagined territories
+- **Artistic Maps**: Use hand-drawn or stylized cartography
+
+### Using a Custom Background Image
+
+#### Basic Usage
+
+```bash
+python launch_world_map.py \
+    --world-file world_state.joblib \
+    --map-background image \
+    --map-image /path/to/your_map.png \
+    --map-bounds "50.0,-5.0,55.0,2.0" \
+    --map-attribution "Custom Map - Your Attribution"
+```
+
+#### Parameters Explained
+
+- `--map-background image`: Switch from OSM to custom image mode
+- `--map-image`: Path to local file or URL to remote image
+- `--map-bounds`: Geographic coordinates defining the image corners
+  - Format: `"south,west,north,east"`
+  - Example: `"50.0,-5.0,55.0,2.0"` (southern England)
+- `--map-attribution`: Optional credit/attribution text
+
+### Determining Geographic Bounds
+
+The bounds define how your image maps to latitude/longitude coordinates. You need four values:
+
+- **South**: Southern latitude (bottom edge)
+- **West**: Western longitude (left edge)
+- **North**: Northern latitude (top edge)
+- **East**: Eastern longitude (right edge)
+
+#### Method 1: Known Landmarks
+
+If your map shows recognizable locations:
+1. Identify 2-4 known points (cities, rivers, coastlines)
+2. Look up their lat/long coordinates
+3. Use corner or edge points to establish bounds
+
+#### Method 2: Map Scale/Legend
+
+If your map has a scale bar:
+1. Measure the map dimensions
+2. Use the scale to calculate geographic extent
+3. Estimate corner coordinates
+
+#### Method 3: GIS Software
+
+For precise georeferencing:
+1. Load image in QGIS (free GIS software)
+2. Use the Georeferencer tool
+3. Export corner coordinates
+
+### Examples
+
+#### Example 1: Medieval England Map
+
+```bash
+python launch_world_map.py \
+    --world-file medieval_england.joblib \
+    --map-background image \
+    --map-image /data/maps/england_1200ad.jpg \
+    --map-bounds "50.0,-6.0,56.0,2.0" \
+    --map-attribution "Medieval England 1200 AD - Historical Atlas"
+```
+
+#### Example 2: Fantasy World
+
+```bash
+python launch_world_map.py \
+    --world-file fantasy_realm.joblib \
+    --map-background image \
+    --map-image https://mycdn.com/fantasy_world_map.png \
+    --map-bounds "-45.0,-180.0,45.0,180.0" \
+    --map-attribution "Fantasy Realm © 2025"
+```
+
+#### Example 3: City Map (High Detail)
+
+```bash
+python launch_world_map.py \
+    --world-file london_1800.joblib \
+    --map-background image \
+    --map-image /maps/london_1800_detailed.png \
+    --map-bounds "51.45,-0.25,51.58,0.05" \
+    --map-attribution "London 1800 - City Archives"
+```
+
+### Image Requirements
+
+**Supported Formats:**
+- PNG (recommended - supports transparency)
+- JPG/JPEG
+- GIF
+
+**Recommended Specifications:**
+- Resolution: 4000x4000 pixels or higher
+- File size: Keep under 50MB for web performance
+- Transparency: PNG with alpha channel supported
+- Color depth: 24-bit or higher
+
+**Coordinate System:**
+- Use WGS84 lat/long (EPSG:4326)
+- Latitude range: -90 (South Pole) to +90 (North Pole)
+- Longitude range: -180 (West) to +180 (East)
+
+### How It Works
+
+The visualization uses Leaflet's `imageOverlay` feature to:
+1. Display your image as a georeferenced layer
+2. Align it with the specified geographic bounds
+3. Allow markers and features to be placed using lat/long coordinates
+4. Support standard map interactions (pan, zoom)
+
+Your World instance's coordinates (from geographical units and venues) are plotted on top of the image using their latitude/longitude values.
+
+### Switching Back to OpenStreetMap
+
+To return to the default OpenStreetMap background:
+
+```bash
+python launch_world_map.py --world-file world.joblib
+# --map-background defaults to 'osm'
+```
+
+Or explicitly:
+
+```bash
+python launch_world_map.py --world-file world.joblib --map-background osm
+```
+
+### Troubleshooting Custom Backgrounds
+
+**Image doesn't display:**
+- Check that the image file exists and path is correct
+- Verify the image format is supported (PNG, JPG, GIF)
+- For URLs, ensure the image is publicly accessible
+
+**Markers appear in wrong locations:**
+- Verify your bounds are correct (south < north, west < east)
+- Check that coordinates match the geographic projection
+- Ensure your World coordinates align with the map image
+
+**Image is stretched or distorted:**
+- Use an image with the correct aspect ratio for your bounds
+- Lat/long spacing is not uniform (due to Earth's curvature)
+- Consider using a map projection that matches your region
 
 ## API Endpoints
 

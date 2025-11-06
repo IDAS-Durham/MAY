@@ -19,21 +19,38 @@ logger = logging.getLogger(__name__)
 # Global world instance - set via initialize_app()
 _world_instance = None
 
+# Global map configuration
+_map_config = {
+    'background_type': 'osm',  # 'osm' or 'image'
+    'image_url': None,
+    'bounds': None,  # [[south, west], [north, east]]
+    'attribution': None
+}
 
-def initialize_app(world):
+
+def initialize_app(world, map_config=None):
     """
-    Initialize the Flask app with a World instance.
+    Initialize the Flask app with a World instance and optional map configuration.
 
     Args:
         world: World instance to visualize
+        map_config: Dict with optional keys:
+            - background_type: 'osm' (default) or 'image'
+            - image_url: URL or path to background image (required if background_type='image')
+            - bounds: [[south, west], [north, east]] geographic bounds (required if background_type='image')
+            - attribution: Attribution text for the image
 
     Returns:
         Flask app instance
     """
-    global _world_instance
+    global _world_instance, _map_config
     _world_instance = world
 
+    if map_config:
+        _map_config.update(map_config)
+
     logger.info(f"Initialized world map with: {world}")
+    logger.info(f"Map configuration: {_map_config}")
     return app
 
 
@@ -57,6 +74,12 @@ CORS(app)
 def index():
     """Serve the main interactive map page."""
     return render_template('index.html')
+
+
+@app.route('/api/map/config')
+def get_map_config():
+    """Get map configuration including background type and bounds."""
+    return jsonify(_map_config)
 
 
 # ============================================================================

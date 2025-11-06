@@ -80,3 +80,6 @@ simulation_profile.stats
 
 # pytest_cache
 .pytest_cache
+
+# World files
+*.joblib
