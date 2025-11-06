@@ -1,0 +1,50 @@
+# June Zero Configuration File
+
+geography:
+  # Path to geography data files
+  data_dir: "data/geography"
+
+  # Load all geographical units (ignores all filters below if true)
+  load_all: true
+
+
+# ========================================
+# POPULATION
+# ========================================
+
+population:
+  # Path to population data files
+  data_dir: "data/population"
+
+  # Demographics files (matrix format: rows=geo_units, columns=ages)
+  demographics_male_file: "demography_male.csv"
+  demographics_female_file: "demography_female.csv"
+
+
+# ========================================
+# VENUES
+# ========================================
+
+venues:
+  # Path to venue files
+  data_dir: "data/venues"
+
+  # Path to YAML configuration file (relative to project root or absolute path)
+  config_file: "yaml/venues/venues_config.yaml"
+
+  # Export file for venue allocations (automatically created after allocation)
+  export_file: "venue_allocations.csv"
+
+# ========================================
+# HOUSEHOLDS
+# ========================================
+
+households:
+  # Path to household data files
+  data_dir: "data/venues"
+
+  # Household composition data file (CSV with patterns like ">=2 >=0 2 0")
+  data_file: "household_composition_1348.csv"
+
+  # Configuration file for age categories and demotion rules
+  config_file: "yaml/households/households_config.yaml"
