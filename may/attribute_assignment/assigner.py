@@ -56,17 +56,31 @@ class AttributeAssigner:
 
     def assign_all(self, venue_manager) -> Dict[str, Any]:
         """
-        Assign attribute to all people in households.
+        Assign attribute based on assignment level (household or person).
 
         Args:
-            venue_manager: VenueManager with households
+            venue_manager: VenueManager with households and people
 
         Returns:
             Dictionary with assignment statistics
         """
         logger.info(f"Starting attribute assignment for '{self.attribute_name}'...")
+        logger.info(f"Assignment level: {self.config.assignment_level}")
         logger.info("=" * 80)
 
+        # Branch based on assignment level
+        if self.config.assignment_level == "person":
+            self._assign_all_people(venue_manager)
+        else:  # household (default)
+            self._assign_all_households(venue_manager)
+
+        # Report statistics
+        self._report_statistics()
+
+        return self.stats
+
+    def _assign_all_households(self, venue_manager):
+        """Assign attributes at household level (existing logic)."""
         # Get all venues
         all_venues = venue_manager.get_all_venues_list()
         logger.info(f"Found {len(all_venues)} total venues")
@@ -84,10 +98,37 @@ class AttributeAssigner:
         logger.info(f"✓ Processed {self.stats['households_processed']} households")
         logger.info("")
 
-        # Report statistics
-        self._report_statistics()
+    def _assign_all_people(self, venue_manager):
+        """Assign attributes at person level (new logic)."""
+        # Get all people from venue manager
+        all_people = []
+        for venue in venue_manager.get_all_venues_list():
+            all_people.extend(venue.get_all_members())
 
-        return self.stats
+        logger.info(f"Found {len(all_people)} total people")
+        logger.info("")
+
+        # Check required attributes
+        self._check_required_attributes(all_people)
+
+        # Assign each person
+        logger.info("Processing people...")
+        total = len(all_people)
+
+        # Progress tracking
+        progress_interval = max(1, total // 20)  # Report every 5%
+
+        for i, person in enumerate(all_people):
+            self._assign_person(person)
+
+            # Log progress
+            if (i + 1) % progress_interval == 0 or (i + 1) == total:
+                progress = ((i + 1) / total) * 100
+                logger.info(f"  Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
+
+        logger.info(f"✓ Processed {len(all_people)} people")
+        logger.info(f"✓ Assigned {self.stats['total_people'] - self.stats['unassigned_people']} people")
+        logger.info("")
 
     def _assign_household(self, household):
         """
@@ -270,34 +311,124 @@ class AttributeAssigner:
             return person.activity_map["household"][0].subset_name
         return "unknown"
 
+    def _assign_person(self, person):
+        """
+        Assign attribute to a single person (person-level assignment).
+
+        Args:
+            person: Person object
+        """
+        # Check dependencies
+        for attr_name, attr_config in self.config.required_attributes.items():
+            if attr_config.get('required', False):
+                if attr_name not in person.properties:
+                    if attr_config.get('error_if_missing', False):
+                        if self.verbose:
+                            logger.debug(f"Person {person.id} missing required attribute '{attr_name}', skipping")
+                        self.stats['unassigned_people'] += 1
+                        self.stats['total_people'] += 1
+                        return
+
+        # Get household (if person is in one)
+        household = self._get_person_household(person)
+
+        # Get assignment rule for person-level
+        rule = self.config.get_person_assignment_rule()
+        if not rule:
+            logger.warning(f"No assignment rule for person-level attribute '{self.attribute_name}'")
+            self.stats['unassigned_people'] += 1
+            self.stats['total_people'] += 1
+            return
+
+        # Create context
+        context = {
+            'attribute_name': self.attribute_name,
+        }
+
+        # Create and execute strategy
+        try:
+            strategy = StrategyFactory.create_strategy(rule.assignment, self.data_manager)
+            value = strategy.assign(person, household, context)
+
+            if value is not None:
+                person.properties[self.attribute_name] = value
+                self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
+                self.stats['attribute_distribution'][str(value)] += 1
+                self.stats['total_people'] += 1
+
+                if self.verbose:
+                    logger.debug(f"  {person}: {self.attribute_name}={value}")
+            else:
+                if self.verbose:
+                    logger.debug(f"  Strategy returned None for {person}")
+                self.stats['unassigned_people'] += 1
+                self.stats['total_people'] += 1
+
+        except Exception as e:
+            logger.error(f"Error assigning to {person}: {e}")
+            self.stats['unassigned_people'] += 1
+            self.stats['total_people'] += 1
+
+    def _get_person_household(self, person):
+        """Get household venue for a person, if any."""
+        if "household" in person.activity_map and person.activity_map["household"]:
+            return person.activity_map["household"][0].venue
+        return None
+
+    def _check_required_attributes(self, people):
+        """Check and log required attribute availability."""
+        if not self.config.required_attributes:
+            return
+
+        logger.info("Checking required attributes...")
+        for attr_name, attr_config in self.config.required_attributes.items():
+            if not attr_config.get('required', False):
+                continue
+
+            missing_count = sum(1 for p in people if attr_name not in p.properties)
+            total_count = len(people)
+            present_count = total_count - missing_count
+
+            logger.info(f"  '{attr_name}': {present_count}/{total_count} people have this attribute")
+
+            if missing_count > 0:
+                logger.warning(f"    {missing_count} people missing required attribute '{attr_name}'")
+
+        logger.info("")
+
     def _report_statistics(self):
         """Report assignment statistics."""
         logger.info("=" * 80)
         logger.info("ASSIGNMENT STATISTICS")
         logger.info("=" * 80)
         logger.info(f"Total people: {self.stats['total_people']}")
-        logger.info(f"  In households: {self.stats['people_in_households']}")
-        logger.info(f"Households processed: {self.stats['households_processed']}")
+        if self.stats['people_in_households'] > 0:
+            logger.info(f"  In households: {self.stats['people_in_households']}")
+        if self.stats['households_processed'] > 0:
+            logger.info(f"Households processed: {self.stats['households_processed']}")
         logger.info(f"Unassigned people: {self.stats['unassigned_people']}")
         logger.info("")
 
-        # Household structure distribution
-        logger.info("Household structures:")
-        for structure, count in sorted(self.stats['household_structure_counts'].items()):
-            logger.info(f"  {structure}: {count}")
-        logger.info("")
+        # Household structure distribution (only if household-level)
+        if self.stats['household_structure_counts']:
+            logger.info("Household structures:")
+            for structure, count in sorted(self.stats['household_structure_counts'].items()):
+                logger.info(f"  {structure}: {count}")
+            logger.info("")
 
-        # Role distribution
-        logger.info("Assignments by role:")
-        for role, count in sorted(self.stats['assignments_by_role'].items()):
-            logger.info(f"  {role}: {count}")
-        logger.info("")
+        # Role distribution (only if household-level)
+        if self.stats['assignments_by_role']:
+            logger.info("Assignments by role:")
+            for role, count in sorted(self.stats['assignments_by_role'].items()):
+                logger.info(f"  {role}: {count}")
+            logger.info("")
 
         # Strategy distribution
-        logger.info("Assignments by strategy:")
-        for strategy, count in sorted(self.stats['assignments_by_strategy'].items()):
-            logger.info(f"  {strategy}: {count}")
-        logger.info("")
+        if self.stats['assignments_by_strategy']:
+            logger.info("Assignments by strategy:")
+            for strategy, count in sorted(self.stats['assignments_by_strategy'].items()):
+                logger.info(f"  {strategy}: {count}")
+            logger.info("")
 
         # Attribute distribution
         logger.info(f"{self.attribute_name.capitalize()} distribution:")

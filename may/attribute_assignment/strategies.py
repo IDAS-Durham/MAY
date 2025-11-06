@@ -509,6 +509,87 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         return fallback_strategy.assign(person, household, context)
 
 
+class ProbabilisticConditionsStrategy(AssignmentStrategy):
+    """
+    Assigns multiple conditions independently based on probabilities.
+
+    Each condition is checked with a Bernoulli trial (independent sampling).
+    Person can end up with 0, 1, or multiple conditions.
+    """
+
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize probabilistic conditions strategy."""
+        super().__init__(config, data_manager)
+        self.strategy_type = "probabilistic_conditions"
+        self.conditions = config.get('conditions', [])
+        self.selection_method = config.get('selection_method', 'independent_bernoulli')
+
+    def assign(self, person, household, context: Dict[str, Any]) -> List[str]:
+        """
+        Assign comorbidities to person.
+
+        Args:
+            person: Person object
+            household: Household venue (optional)
+            context: Assignment context
+
+        Returns:
+            List of condition names (e.g., ["cvd", "crd"])
+        """
+        # Get data source name
+        data_source_name = self.config.get('data_source')
+        if not data_source_name:
+            logger.warning("No data_source specified for probabilistic_conditions strategy")
+            return []
+
+        # Look up probabilities using data source
+        source = self.data_manager.get_source(data_source_name)
+        if not source:
+            logger.warning(f"Data source '{data_source_name}' not found")
+            return []
+
+        # Perform lookup
+        probabilities = source.lookup(person, household, context)
+        if not probabilities:
+            logger.warning(f"No probabilities found for person {person.id}")
+            return []
+
+        # Sample conditions based on selection method
+        if self.selection_method == 'independent_bernoulli':
+            return self._sample_independent_bernoulli(probabilities)
+        else:
+            logger.warning(f"Unknown selection method: {self.selection_method}")
+            return []
+
+    def _sample_independent_bernoulli(self, probabilities: Dict[str, float]) -> List[str]:
+        """
+        Sample conditions independently using Bernoulli trials.
+
+        Each condition is checked independently with its probability.
+
+        Args:
+            probabilities: Dict mapping condition names to probabilities
+
+        Returns:
+            List of condition names that were sampled
+        """
+        selected_conditions = []
+
+        for condition in self.conditions:
+            condition_name = condition.get('name')
+            if not condition_name:
+                continue
+
+            # Get probability for this condition
+            probability = probabilities.get(condition_name, 0.0)
+
+            # Bernoulli trial
+            if np.random.random() < probability:
+                selected_conditions.append(condition_name)
+
+        return selected_conditions
+
+
 class StrategyFactory:
     """
     Factory for creating strategy instances.
@@ -521,6 +602,7 @@ class StrategyFactory:
         'partnership': PartnershipStrategy,
         'inheritance': InheritanceStrategy,
         'reverse_inheritance': ReverseInheritanceStrategy,
+        'probabilistic_conditions': ProbabilisticConditionsStrategy,
     }
 
     @classmethod

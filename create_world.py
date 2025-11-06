@@ -236,8 +236,16 @@ def main():
     # Assign attributes
     attribute_config = config.get("attributes", {})
     if attribute_config.get("enabled", True):
-        config_path = attribute_config.get("config", "yaml/attribute_assignment.yaml")
-        world.assign_attributes(config_path)
+        # Support both single config and list of configs
+        configs = attribute_config.get("configs")
+        if configs is None:
+            # Legacy: single config
+            configs = [attribute_config.get("config", "yaml/attribute_assignment.yaml")]
+
+        # Assign each attribute in sequence
+        for config_path in configs:
+            logger.info(f"Assigning attributes from: {config_path}")
+            world.assign_attributes(config_path)
 
     logger.info("")
     logger.info("=" * 60)

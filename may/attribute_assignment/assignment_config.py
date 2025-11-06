@@ -312,6 +312,10 @@ class AttributeAssignmentConfig:
 
         # Parse sections
         self.attribute_name = self._parse_attribute()
+        self.assignment_level = self._parse_assignment_level()
+        self.required_attributes = self._parse_required_attributes()
+        self.region_mapping = self.raw_config.get('region_mapping', {})
+        self.categories = self._parse_categories()
         self.roles = self._parse_roles()
         self.household_structures = self._parse_household_structures()
         self.data_sources = self._parse_data_sources()
@@ -320,13 +324,30 @@ class AttributeAssignmentConfig:
         self.settings = self._parse_settings()
 
         logger.info(f"Loaded config for '{self.attribute_name}' from {self.config_path}")
+        logger.info(f"  Assignment level: {self.assignment_level}")
+        if self.required_attributes:
+            logger.info(f"  Required attributes: {list(self.required_attributes.keys())}")
+        if self.categories:
+            logger.info(f"  Categories: {len(self.categories)}")
         logger.info(f"  Roles: {len(self.roles)}")
         logger.info(f"  Household structures: {len(self.household_structures)}")
-        logger.info(f"  Structure-based assignment rules: {len(self.assignment_rules)}")
+        logger.info(f"  Assignment rules: {len(self.assignment_rules)}")
 
     def _parse_attribute(self) -> str:
         """Parse attribute name."""
         return self.raw_config.get('attribute', {}).get('name', 'unknown')
+
+    def _parse_assignment_level(self) -> str:
+        """Parse assignment level (household or person)."""
+        return self.raw_config.get('attribute', {}).get('assignment_level', 'household')
+
+    def _parse_required_attributes(self) -> Dict[str, Any]:
+        """Parse required attributes (dependencies)."""
+        return self.raw_config.get('required_attributes', {})
+
+    def _parse_categories(self) -> List[Dict[str, Any]]:
+        """Parse categories (e.g., age bands)."""
+        return self.raw_config.get('categories', [])
 
     def _parse_roles(self) -> Dict[str, Role]:
         """Parse role definitions."""
@@ -559,6 +580,69 @@ class AttributeAssignmentConfig:
         if verbose:
             logger.debug(f"    ✗ No rule for role '{role}'")
         return None
+
+    def get_category_for_value(self, value: Any, attribute_name: str = "age") -> Optional[Dict[str, Any]]:
+        """
+        Find which category a value falls into.
+
+        Args:
+            value: The value to categorize (e.g., age=25)
+            attribute_name: The attribute name to match against (default: "age")
+
+        Returns:
+            Category dict with 'csv_value' or None if no match
+        """
+        for category in self.categories:
+            if category.get('attribute') != attribute_name:
+                continue
+
+            if category.get('type') == 'numerical':
+                min_val = category['numerical']['min']
+                max_val = category['numerical'].get('max')
+
+                if max_val is None:
+                    # No upper limit
+                    if value >= min_val:
+                        return category
+                elif min_val <= value <= max_val:
+                    return category
+
+            elif category.get('type') == 'categorical':
+                allowed = category.get('categorical', {}).get('allowed_values', [])
+                if value in allowed:
+                    return category
+
+        return None
+
+    def get_person_assignment_rule(self) -> Optional[AssignmentRule]:
+        """
+        Get assignment rule for person-level assignment.
+
+        Returns:
+            First assignment rule from 'person' structure or None
+        """
+        if 'person' not in self.assignment_rules:
+            return None
+
+        person_rules = self.assignment_rules['person']
+        if not person_rules.rules:
+            return None
+
+        return person_rules.rules[0]
+
+    def get_required_attribute_mapping(self, attr_name: str) -> Dict[str, str]:
+        """
+        Get mapping for a required attribute.
+
+        Args:
+            attr_name: Name of required attribute
+
+        Returns:
+            Mapping dict or empty dict
+        """
+        if attr_name in self.required_attributes:
+            return self.required_attributes[attr_name].get('mapping', {})
+        return {}
 
     @classmethod
     def from_yaml(cls, config_path: Path) -> 'AttributeAssignmentConfig':

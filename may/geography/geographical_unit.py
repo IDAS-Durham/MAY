@@ -57,6 +57,29 @@ class GeographicalUnit:
             current = current.parent
         return ancestors
 
+    def get_ancestor_by_level(self, level):
+        """
+        Get ancestor unit at a specific level.
+
+        Args:
+            level: Level name (e.g., "LGU", "MGU", "SGU")
+
+        Returns:
+            GeographicalUnit at that level or None if not found
+        """
+        # Check if we're already at the requested level
+        if self.level == level:
+            return self
+
+        # Traverse up the hierarchy
+        current = self.parent
+        while current is not None:
+            if current.level == level:
+                return current
+            current = current.parent
+
+        return None
+
     def get_descendants(self, level=None):
         """
         Get all descendant units. If level specified, only return that level.

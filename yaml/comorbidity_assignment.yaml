@@ -1,0 +1,225 @@
+# ============================================================================
+# Comorbidities Attribute Assignment Configuration
+# ============================================================================
+# This configuration assigns health comorbidities to individuals based on
+# demographic characteristics: sex, age, ethnicity, and region.
+#
+# Assignment Level: person
+# - Operates directly on people (not household structures)
+# - Each person assigned independently based on their demographics
+#
+# Dependencies: ethnicity
+# - Requires ethnicity to be assigned first
+# ============================================================================
+
+attribute:
+  name: "comorbidities"
+  description: "Assigns health comorbidities based on person demographics"
+  data_type: "list"
+  assignment_level: "person"
+
+# ============================================================================
+# Required Attributes (Dependencies)
+# ============================================================================
+# Attributes that must be assigned before this one
+required_attributes:
+  ethnicity:
+    description: "Ethnicity attribute must be assigned first"
+    required: true
+    error_if_missing: true
+
+    # Map internal ethnicity codes to CSV ethnicity codes
+    mapping:
+      W: "W"
+      A: "A"
+      B: "B"
+      M: "M"
+      O: "CO"  # Internal "O" maps to CSV "CO" (Other)
+
+# ============================================================================
+# Region Mapping
+# ============================================================================
+# Map LGU names to CSV region names
+region_mapping:
+  "East of England": "East"
+  "East Midlands": "East Midlands"
+  "London": "London"
+  "North East": "North East"
+  "North West": "North West"
+  "South East": "South East"
+  "South West": "South West"
+  "West Midlands": "West Midlands"
+  "Yorkshire and The Humber": "Yorkshire and The Humber"
+
+# ============================================================================
+# Age Band Categories
+# ============================================================================
+# Define age bands that match the comorbidities CSV structure
+# Similar to household_config.yaml categories
+categories:
+  - name: "Children (0-9)"
+    symbol: "C09"
+    csv_value: "0-9"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 0
+      max: 9
+
+  - name: "Adolescents (10-17)"
+    symbol: "A1017"
+    csv_value: "10-17"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 10
+      max: 17
+
+  - name: "Young Adults (18-29)"
+    symbol: "YA1829"
+    csv_value: "18-29"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 18
+      max: 29
+
+  - name: "Adults (30-49)"
+    symbol: "A3049"
+    csv_value: "30-49"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 30
+      max: 49
+
+  - name: "Middle-aged (50-74)"
+    symbol: "MA5074"
+    csv_value: "50-74"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 50
+      max: 74
+
+  - name: "Elderly (75-99)"
+    symbol: "E7599"
+    csv_value: "75-99"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 75
+      max: null
+
+# ============================================================================
+# Data Sources
+# ============================================================================
+data_sources:
+  comorbidity_probabilities:
+    type: "csv_lookup"
+    description: "Comorbidity probabilities stratified by demographics"
+
+    files:
+      - path: "data/population/comorbidities/comorbidities_by_region.csv"
+
+        # Multi-key lookup (all keys must match for a row)
+        key_columns:
+          sex:
+            attribute: "sex"
+
+          age_band_min:
+            attribute: "age"
+            type: "category_lookup"
+
+          combined_ethnicity_less:
+            attribute: "ethnicity"
+
+          region:
+            attribute: "geographical_unit"
+            type: "ancestor_lookup"
+            level: "LGU"
+            property: "name"
+            mapping: "region_mapping"  # Apply region name mapping
+
+        # Value columns: condition probabilities
+        value_columns:
+          no_condition: "no_condition_midpoint_rounded"
+          has_comorbidity: "has_comorbidity_midpoint_rounded"
+          multiple_morbidities: "multiple_morbidities_count_midpoint_rounded"
+          cvd: "has_had_cvd_diagnosis_count_midpoint_rounded"
+          crd: "has_had_crd_diagnosis_count_midpoint_rounded"
+          ckd: "has_had_ckd_diagnosis_count_midpoint_rounded"
+          cld: "has_had_cld_diagnosis_count_midpoint_rounded"
+          severe_obesity: "severe_obesity_count_midpoint_rounded"
+          cancer: "has_had_cancer_diagnosis_count_midpoint_rounded"
+          immunosuppression: "has_had_immunosuppression_diagnosis_count_midpoint_rounded"
+          neuro: "has_had_neuro_diagnosis_count_midpoint_rounded"
+
+    fallback:
+      no_condition: 0.95
+      has_comorbidity: 0.05
+      multiple_morbidities: 0.01
+      cvd: 0.01
+      crd: 0.01
+      ckd: 0.005
+      cld: 0.005
+      severe_obesity: 0.01
+      cancer: 0.005
+      immunosuppression: 0.002
+      neuro: 0.005
+
+# ============================================================================
+# Assignment Rules (Person-Level)
+# ============================================================================
+assignment_rules:
+  person:
+    description: "Assign comorbidities to all people based on demographics"
+
+    rules:
+      - description: "Probabilistic assignment of comorbidities"
+        priority: 1
+
+        assignment:
+          strategy: "probabilistic_conditions"
+          data_source: "comorbidity_probabilities"
+          selection_method: "independent_bernoulli"
+
+          # Conditions to consider (sampled independently)
+          conditions:
+            - name: "cvd"
+              label: "Cardiovascular Disease"
+            - name: "crd"
+              label: "Chronic Respiratory Disease"
+            - name: "ckd"
+              label: "Chronic Kidney Disease"
+            - name: "cld"
+              label: "Chronic Liver Disease"
+            - name: "severe_obesity"
+              label: "Severe Obesity"
+            - name: "cancer"
+              label: "Cancer"
+            - name: "immunosuppression"
+              label: "Immunosuppression"
+            - name: "neuro"
+              label: "Neurological Condition"
+
+# ============================================================================
+# Settings
+# ============================================================================
+settings:
+  random_seed: null
+  normalize_probabilities: false
+  cache_lookups: true
+
+  error_handling:
+    missing_required_attribute: "skip_person"
+    missing_geo_unit: "use_fallback"
+    missing_lookup_data: "use_fallback"
+    invalid_age: "skip_person"
+    invalid_sex: "skip_person"
+
+  logging:
+    level: "INFO"
+    detailed_assignment_logging: false
+    show_samples: true
+    sample_size: 10

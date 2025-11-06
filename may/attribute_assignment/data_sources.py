@@ -402,6 +402,169 @@ class PairProbabilitySource(DataSource):
             return {'W': 0.2, 'A': 0.2, 'B': 0.2, 'M': 0.2, 'O': 0.2}
 
 
+class MultiKeyLookupSource(DataSource):
+    """
+    Data source for multi-key CSV lookups.
+
+    Supports lookups based on multiple keys (e.g., sex + age + ethnicity + region).
+    """
+
+    def __init__(self, name: str, config: Dict[str, Any], assignment_config):
+        """
+        Initialize multi-key lookup source.
+
+        Args:
+            name: Source name
+            config: Configuration with files and fallback
+            assignment_config: Parent AttributeAssignmentConfig for category lookups
+        """
+        super().__init__(name, config)
+        self.assignment_config = assignment_config
+        self._file_configs = config.get('files', [])
+        self._fallback = config.get('fallback', {})
+        self._df = None
+
+    def load_data(self, geo_units: Optional[set] = None):
+        """Load CSV data for multi-key lookups."""
+        logger.info(f"Loading data for source '{self.name}'...")
+
+        for file_config in self._file_configs:
+            file_path = Path(file_config['path'])
+
+            if file_path.exists():
+                try:
+                    self._df = pd.read_csv(file_path)
+
+                    # Create multi-index for fast lookups
+                    key_columns = list(file_config.get('key_columns', {}).keys())
+                    if key_columns:
+                        self._df.set_index(key_columns, inplace=True)
+                        logger.info(f"  ✓ Loaded {len(self._df)} rows from {file_path.name} (indexed by {key_columns})")
+                    else:
+                        logger.info(f"  ✓ Loaded {len(self._df)} rows from {file_path.name}")
+                except Exception as e:
+                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+            else:
+                logger.warning(f"  ✗ File not found: {file_path}")
+
+        self._data_loaded = True
+
+    def lookup(self, person, household=None, context=None) -> Dict[str, float]:
+        """
+        Look up probabilities based on person demographics.
+
+        Args:
+            person: Person object
+            household: Optional household object
+            context: Optional additional context
+
+        Returns:
+            Dict of value columns (e.g., {'cvd': 0.05, 'crd': 0.03, ...})
+        """
+        if self._df is None:
+            return self._fallback
+
+        # Build lookup key from person
+        file_config = self._file_configs[0]
+        key_columns = file_config.get('key_columns', {})
+
+        lookup_values = {}
+        for csv_col_name, col_config in key_columns.items():
+            value = self._resolve_key_value(col_config, person, household, context)
+            if value is None:
+                # Can't build complete key, use fallback
+                return self._fallback
+            lookup_values[csv_col_name] = value
+
+        # Use indexed lookup for speed
+        try:
+            # Build lookup key tuple in the order of the index
+            lookup_key = tuple(lookup_values[col] for col in self._df.index.names)
+
+            # Fast index lookup
+            row = self._df.loc[lookup_key]
+
+            # Extract value columns
+            value_columns = file_config.get('value_columns', {})
+            result = {}
+            for key, csv_col in value_columns.items():
+                result[key] = float(row[csv_col])
+
+            return result
+
+        except KeyError:
+            # No match found, use fallback
+            return self._fallback
+
+    def _resolve_key_value(self, col_config, person, household, context):
+        """
+        Resolve a key value based on column configuration.
+
+        Args:
+            col_config: Column configuration dict
+            person: Person object
+            household: Optional household object
+            context: Optional context dict
+
+        Returns:
+            Resolved value or None if can't resolve
+        """
+        attr_name = col_config.get('attribute')
+        col_type = col_config.get('type', 'direct')
+
+        if col_type == 'direct':
+            # Direct attribute lookup
+            value = person.properties.get(attr_name)
+            if value is None:
+                value = getattr(person, attr_name, None)
+
+            # Check if this is a required attribute with mapping
+            if attr_name in self.assignment_config.required_attributes:
+                mapping = self.assignment_config.required_attributes[attr_name].get('mapping', {})
+                value = mapping.get(value, value)
+
+            return value
+
+        elif col_type == 'category_lookup':
+            # Get attribute value, find matching category
+            value = getattr(person, attr_name, None)
+            if value is None:
+                value = person.properties.get(attr_name)
+
+            category = self.assignment_config.get_category_for_value(value, attr_name)
+            return category.get('csv_value') if category else None
+
+        elif col_type == 'ancestor_lookup':
+            # Traverse hierarchy
+            geo_unit = getattr(person, attr_name, None)
+            if geo_unit is None:
+                # Try household's geo unit
+                if household:
+                    geo_unit = getattr(household, attr_name, None)
+
+            if geo_unit is None:
+                return None
+
+            level = col_config.get('level')
+            ancestor = geo_unit.get_ancestor_by_level(level)
+
+            if ancestor is None:
+                return None
+
+            property_name = col_config.get('property', 'name')
+            value = getattr(ancestor, property_name)
+
+            # Apply mapping if specified
+            mapping_name = col_config.get('mapping')
+            if mapping_name:
+                mapping = getattr(self.assignment_config, mapping_name, {})
+                value = mapping.get(value, value)
+
+            return value
+
+        return None
+
+
 class DataSourceManager:
     """
     Manager for all data sources.
@@ -426,8 +589,18 @@ class DataSourceManager:
             source_type = source_config.type
 
             if source_type == 'csv_lookup':
-                # Determine specific source class based on name/structure
-                if 'diversity' in source_name.lower():
+                # Check if this is a multi-key lookup (has key_columns in file config)
+                file_config = source_config.config.get('files', [{}])[0]
+                key_columns = file_config.get('key_columns')
+
+                if isinstance(key_columns, dict) and any(
+                    isinstance(v, dict) for v in key_columns.values()
+                ):
+                    # Multi-key lookup (values are dicts with 'attribute', 'type', etc.)
+                    self.sources[source_name] = MultiKeyLookupSource(
+                        source_name, source_config.config, self.config
+                    )
+                elif 'diversity' in source_name.lower():
                     self.sources[source_name] = DiversitySource(
                         source_name, source_config.config
                     )

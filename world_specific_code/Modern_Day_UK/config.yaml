@@ -93,8 +93,11 @@ attributes:
   # Enable attribute assignment (set to false to skip)
   enabled: true
 
-  # Path to attribute assignment configuration
-  config: "yaml/attribute_assignment.yaml"
+  # Sequential attribute assignment configurations
+  # Each config is applied in order (dependencies must be satisfied)
+  configs:
+    - "yaml/attribute_assignment.yaml"           # Ethnicity (household-level)
+    - "yaml/comorbidity_assignment.yaml"         # Comorbidities (person-level, depends on ethnicity)
 
 # ========================================
 # EXAMPLES
