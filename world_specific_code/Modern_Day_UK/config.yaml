@@ -93,8 +93,8 @@ attributes:
   # Enable attribute assignment (set to false to skip)
   enabled: true
 
-  # Ethnicity assignment configuration (simplified structure-based system)
-  ethnicity_config: "yaml/attribute_assignment.yaml"
+  # Path to attribute assignment configuration
+  config: "yaml/attribute_assignment.yaml"
 
 # ========================================
 # EXAMPLES
