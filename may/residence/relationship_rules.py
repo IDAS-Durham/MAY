@@ -150,7 +150,8 @@ class RelationshipRulesValidator:
                                           person1: Person,
                                           people2: List[Person],
                                           constraint: Dict,
-                                          log_rejection: bool = False) -> Tuple[bool, float]:
+                                          log_rejection: bool = False,
+                                          cached_values: Optional[Dict] = None) -> Tuple[bool, float]:
         """
         Validate numerical attribute difference constraint between person1 and people in people2.
 
@@ -171,6 +172,7 @@ class RelationshipRulesValidator:
             people2: List of people from role_2
             constraint: Constraint dict
             log_rejection: If True, log when validation fails (for debugging)
+            cached_values: Optional dict with pre-computed min/max values (for performance)
 
         Returns:
             Tuple of (is_valid, penalty_score)
@@ -194,9 +196,15 @@ class RelationshipRulesValidator:
         # Get attribute values
         person1_value = getattr(person1, attribute)
 
-        people2_values = [getattr(p, attribute) for p in people2]
-        max_value = max(people2_values)
-        min_value = min(people2_values)
+        # Use cached min/max values if provided (performance optimization)
+        if cached_values and attribute in cached_values:
+            max_value = cached_values[attribute]['max']
+            min_value = cached_values[attribute]['min']
+        else:
+            # Vectorized computation using numpy for better performance
+            people2_values = np.array([getattr(p, attribute) for p in people2])
+            max_value = people2_values.max()
+            min_value = people2_values.min()
 
         # Check against MAX attribute value in people2 for min constraint
         diff_max = person1_value - max_value
@@ -524,11 +532,26 @@ class RelationshipRulesValidator:
             candidates_by_cat[cat_val].append(p)
             candidate_cat_values[p.id] = cat_val
 
+        # Pre-compute min/max values for each constraint (performance optimization)
         constraint_people_cache = {}
+        constraint_value_cache = {}
         for rel_constraint in relevant_constraints:
             role_2 = rel_constraint.get('role_2')
             if role_2 not in constraint_people_cache:
-                constraint_people_cache[role_2] = existing_people_by_role.get(role_2, [])
+                people_2 = existing_people_by_role.get(role_2, [])
+                constraint_people_cache[role_2] = people_2
+
+                # Pre-compute min/max for numerical attributes
+                if people_2:
+                    attribute = rel_constraint.get('attribute', 'age')
+                    if role_2 not in constraint_value_cache:
+                        constraint_value_cache[role_2] = {}
+                    if attribute not in constraint_value_cache[role_2]:
+                        values = np.array([getattr(p, attribute) for p in people_2])
+                        constraint_value_cache[role_2][attribute] = {
+                            'min': values.min(),
+                            'max': values.max()
+                        }
 
         # Try to find a valid couple
         attempts_made = 0
@@ -548,8 +571,12 @@ class RelationshipRulesValidator:
                 people_2 = constraint_people_cache.get(role_2, [])
                 if people_2:
                     # Only log rejections if detailed logging is enabled
+                    # Pass cached min/max values for performance
+                    cached_vals = constraint_value_cache.get(role_2)
                     is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                        first_person, people_2, rel_constraint, log_rejection=show_detailed_logs
+                        first_person, people_2, rel_constraint,
+                        log_rejection=show_detailed_logs,
+                        cached_values=cached_vals
                     )
                     if not is_valid:
                         first_valid = False
@@ -607,8 +634,12 @@ class RelationshipRulesValidator:
                     role_2 = rel_constraint.get('role_2')
                     people_2 = constraint_people_cache.get(role_2, [])
                     if people_2:
+                        # Pass cached min/max values for performance
+                        cached_vals = constraint_value_cache.get(role_2)
                         is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                            candidate, people_2, rel_constraint, log_rejection=show_detailed_logs
+                            candidate, people_2, rel_constraint,
+                            log_rejection=show_detailed_logs,
+                            cached_values=cached_vals
                         )
                         if not is_valid:
                             partner_valid = False

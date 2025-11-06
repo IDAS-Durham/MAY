@@ -8,8 +8,33 @@ the required number of people in each age category.
 import logging
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
+from functools import lru_cache
 
 logger = logging.getLogger("composition_pattern")
+
+
+@lru_cache(maxsize=1024)
+def _parse_pattern_cached(pattern: str) -> Tuple[Tuple[str, int], ...]:
+    """
+    Cached pattern parsing function.
+
+    Returns a tuple of (operator, count) tuples that can be cached.
+    """
+    parts = pattern.strip().split()
+    requirements = []
+
+    for part in parts:
+        if part.startswith(">="):
+            count = int(part[2:])
+            requirements.append(("gte", count))
+        elif part.startswith("<="):
+            count = int(part[2:])
+            requirements.append(("lte", count))
+        else:
+            count = int(part)
+            requirements.append(("exact", count))
+
+    return tuple(requirements)
 
 
 @dataclass
@@ -38,24 +63,9 @@ class CompositionPattern:
         Returns:
             CompositionPattern object
         """
-        parts = pattern.strip().split()
-        requirements = []
-
-        for part in parts:
-            if part.startswith(">="):
-                # Greater-than-or-equal requirement
-                count = int(part[2:])
-                requirements.append(("gte", count))
-            elif part.startswith("<="):
-                # Less-than-or-equal requirement
-                count = int(part[2:])
-                requirements.append(("lte", count))
-            else:
-                # Exact requirement
-                count = int(part)
-                requirements.append(("exact", count))
-
-        return cls(original_pattern=pattern, requirements=requirements)
+        # Use cached parsing function
+        requirements_tuple = _parse_pattern_cached(pattern)
+        return cls(original_pattern=pattern, requirements=list(requirements_tuple))
 
     def get_min_count(self, category_idx: int) -> int:
         """Get minimum required count for a category."""

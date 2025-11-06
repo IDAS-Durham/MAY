@@ -13,9 +13,54 @@ import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
+from functools import lru_cache
 from may.residence.composition_pattern import CompositionPattern
 
 logger = logging.getLogger("may.attribute_assignment.config")
+
+
+@lru_cache(maxsize=4096)
+def _pattern_matches_cached(actual: str, template: str) -> bool:
+    """
+    Cached pattern matching function.
+
+    Check if an actual pattern matches a template pattern.
+
+    Examples:
+        actual="2 0 2 0", template=">=1 >=0 2 0" -> True
+        actual="0 1 2 0", template=">=1 >=0 2 0" -> False
+    """
+    # Handle empty patterns
+    if not actual or not template:
+        return False
+
+    # Parse actual pattern into counts
+    try:
+        actual_counts = [int(x) for x in actual.split()]
+    except ValueError:
+        return False
+
+    # Parse template pattern using CompositionPattern (which is now cached)
+    template_pattern = CompositionPattern.from_string(template)
+
+    # Check each category
+    if len(actual_counts) != len(template_pattern.requirements):
+        return False
+
+    for i, actual_count in enumerate(actual_counts):
+        operator, required_count = template_pattern.requirements[i]
+
+        if operator == "exact":
+            if actual_count != required_count:
+                return False
+        elif operator == "gte":
+            if actual_count < required_count:
+                return False
+        elif operator == "lte":
+            if actual_count > required_count:
+                return False
+
+    return True
 
 
 @dataclass
@@ -117,6 +162,11 @@ class MatchingRule:
         Returns:
             Pattern string like "2 0 2 0" (counts per category)
         """
+        # Check if pattern is already cached on the household
+        cached_pattern = household.properties.get('_cached_actual_pattern')
+        if cached_pattern is not None:
+            return cached_pattern
+
         # Get age categories from household properties
         age_categories = household.properties.get('_age_categories', [])
         if not age_categories:
@@ -140,7 +190,12 @@ class MatchingRule:
                         break
 
         # Return as space-separated string
-        return ' '.join(str(c) for c in counts)
+        pattern = ' '.join(str(c) for c in counts)
+
+        # Cache the pattern on the household for future lookups
+        household.properties['_cached_actual_pattern'] = pattern
+
+        return pattern
 
     def _pattern_matches(self, actual: str, template: str) -> bool:
         """
@@ -152,38 +207,8 @@ class MatchingRule:
             actual="2 1 2 0", template="0 >=1 1 <=2" -> False (has kids)
             actual="0 1 1 1", template="0 >=1 1 <=2" -> True
         """
-        # Handle empty patterns
-        if not actual or not template:
-            return False
-
-        # Parse actual pattern into counts
-        try:
-            actual_counts = [int(x) for x in actual.split()]
-        except ValueError:
-            # If actual contains non-numeric values, it's invalid
-            return False
-
-        # Parse template pattern using CompositionPattern
-        template_pattern = CompositionPattern.from_string(template)
-
-        # Check each category
-        if len(actual_counts) != len(template_pattern.requirements):
-            return False
-
-        for i, actual_count in enumerate(actual_counts):
-            operator, required_count = template_pattern.requirements[i]
-
-            if operator == "exact":
-                if actual_count != required_count:
-                    return False
-            elif operator == "gte":
-                if actual_count < required_count:
-                    return False
-            elif operator == "lte":
-                if actual_count > required_count:
-                    return False
-
-        return True
+        # Use cached function for pattern matching
+        return _pattern_matches_cached(actual, template)
 
 
 @dataclass
@@ -406,15 +431,29 @@ class AttributeAssignmentConfig:
         Classify household structure.
         Returns first matching structure.
         """
+        # Check if structure is already cached (only when not verbose)
+        if not verbose:
+            cached_structure = household.properties.get('_cached_household_structure')
+            if cached_structure is not None:
+                return cached_structure
+
         if verbose:
             logger.debug(f"  Classifying household {household.id}:")
 
         for struct_name, structure in self.household_structures.items():
             if structure.matches(household, verbose=verbose):
+                # Cache the result (only when not verbose to avoid caching debug runs)
+                if not verbose:
+                    household.properties['_cached_household_structure'] = struct_name
                 return struct_name
 
         if verbose:
             logger.debug(f"  ✗ No structure matched")
+
+        # Cache None result as well
+        if not verbose:
+            household.properties['_cached_household_structure'] = None
+
         return None
 
     def get_person_role(self, person, household_structure: str,

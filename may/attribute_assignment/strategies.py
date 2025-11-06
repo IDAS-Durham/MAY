@@ -10,8 +10,24 @@ This module implements the simplified strategies that work with:
 import logging
 import numpy as np
 from typing import Dict, List, Any, Optional
+from functools import lru_cache
 
 logger = logging.getLogger("may.attribute_assignment.strategies")
+
+
+@lru_cache(maxsize=2048)
+def _compile_expression(expr: str, mode: str = 'eval'):
+    """
+    Cached compilation of Python expressions.
+
+    Args:
+        expr: The expression string to compile
+        mode: 'eval' for expressions, 'exec' for statements
+
+    Returns:
+        Compiled code object
+    """
+    return compile(expr, '<string>', mode)
 
 
 class AssignmentStrategy:
@@ -303,16 +319,18 @@ class InheritanceStrategy(AssignmentStrategy):
     def _evaluate_condition(self, condition: str, context: dict) -> bool:
         """Evaluate a when condition."""
         try:
-            # Safe evaluation with limited context
-            return eval(condition, {"__builtins__": {}}, context)
+            # Use cached compiled expression for better performance
+            code = _compile_expression(condition, 'eval')
+            return eval(code, {"__builtins__": {}}, context)
         except:
             return False
 
     def _resolve_value(self, value_expr: str, context: dict) -> Any:
         """Resolve a value expression like 'values[0]' or 'M'."""
         try:
-            # Try to evaluate as expression first
-            return eval(value_expr, {"__builtins__": {}}, context)
+            # Use cached compiled expression for better performance
+            code = _compile_expression(value_expr, 'eval')
+            return eval(code, {"__builtins__": {}}, context)
         except:
             # If it fails, return as literal string
             return value_expr
