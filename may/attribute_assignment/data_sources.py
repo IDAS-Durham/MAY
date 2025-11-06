@@ -476,7 +476,11 @@ class MultiKeyLookupSource(DataSource):
         Returns:
             Dict of value columns (e.g., {'cvd': 0.05, 'crd': 0.03, ...})
         """
+        debug = context and context.get('debug', False)
+
         if not self._lookup_dict:
+            if debug:
+                logger.debug(f"    [LOOKUP] No lookup dict available, using fallback")
             return self._fallback
 
         # Build key tuple directly (faster than building intermediate dict)
@@ -485,18 +489,28 @@ class MultiKeyLookupSource(DataSource):
             value = self._resolve_key_value(col_config, person, household, context)
             if value is None:
                 # Can't build complete key, use fallback
+                if debug:
+                    logger.debug(f"    [LOOKUP] Failed to resolve '{csv_col_name}', using fallback")
                 return self._fallback
             key_values.append(value)
 
         # Direct dictionary lookup with tuple key
         lookup_key = tuple(key_values)
 
+        if debug:
+            logger.debug(f"    [LOOKUP] Key: {lookup_key}")
+
         # O(1) dictionary lookup
         result = self._lookup_dict.get(lookup_key)
 
         if result is None:
             # No match found, use fallback
+            if debug:
+                logger.debug(f"    [LOOKUP] Key not found in data, using fallback")
             return self._fallback
+
+        if debug:
+            logger.debug(f"    [LOOKUP] ✓ Found data: {list(result.keys())[:3]}...")
 
         return result
 

@@ -9,6 +9,7 @@ Simplified attribute assignment system:
 """
 
 import logging
+import numpy as np
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 
@@ -90,12 +91,20 @@ class AttributeAssigner:
         logger.info(f"  Households: {len(households)}")
         logger.info("")
 
-        # Assign households
+        # Assign households with progress tracking
         logger.info("Processing households...")
-        for household in households:
+        total = len(households)
+        progress_interval = max(1, total // 20)  # Report every 5%
+
+        for i, household in enumerate(households):
             self._assign_household(household)
 
-        logger.info(f"✓ Processed {self.stats['households_processed']} households")
+            # Log progress
+            if (i + 1) % progress_interval == 0 or (i + 1) == total:
+                progress = ((i + 1) / total) * 100
+                logger.info(f"  Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
+
+        logger.info(f"\n✓ Processed {self.stats['households_processed']} households")
         logger.info("")
 
     def _assign_all_people(self, venue_manager):
@@ -118,16 +127,36 @@ class AttributeAssigner:
         # Progress tracking
         progress_interval = max(1, total // 20)  # Report every 5%
 
+        # Sample tracking for debugging
+        sample_size = min(10, total)
+        sample_indices = set(np.random.choice(total, sample_size, replace=False))
+        samples_logged = []
+
         for i, person in enumerate(all_people):
-            self._assign_person(person)
+            # Track if this is a sample person
+            is_sample = i in sample_indices
+
+            if is_sample:
+                logger.debug(f"\n  [SAMPLE {len(samples_logged)+1}] Person {person.id}:")
+                logger.debug(f"    Age: {person.age}, Sex: {person.sex}")
+                logger.debug(f"    Geo Unit: {person.geographical_unit.name if person.geographical_unit else 'None'}")
+                logger.debug(f"    Existing attributes: {list(person.properties.keys())}")
+
+            self._assign_person(person, debug=is_sample)
+
+            if is_sample:
+                result = person.properties.get(self.attribute_name, "NOT_ASSIGNED")
+                logger.debug(f"    Result: {self.attribute_name} = {result}")
+                samples_logged.append((person.id, result))
 
             # Log progress
             if (i + 1) % progress_interval == 0 or (i + 1) == total:
                 progress = ((i + 1) / total) * 100
                 logger.info(f"  Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
 
-        logger.info(f"✓ Processed {len(all_people)} people")
+        logger.info(f"\n✓ Processed {len(all_people)} people")
         logger.info(f"✓ Assigned {self.stats['total_people'] - self.stats['unassigned_people']} people")
+        logger.info(f"✓ Fallback used: {self.stats.get('fallback_count', 0)} times")
         logger.info("")
 
     def _assign_household(self, household):
@@ -311,26 +340,29 @@ class AttributeAssigner:
             return person.activity_map["household"][0].subset_name
         return "unknown"
 
-    def _assign_person(self, person):
+    def _assign_person(self, person, debug=False):
         """
         Assign attribute to a single person (person-level assignment).
 
         Args:
             person: Person object
+            debug: If True, log detailed debug information
         """
         # Check dependencies
         for attr_name, attr_config in self.config.required_attributes.items():
             if attr_config.get('required', False):
                 if attr_name not in person.properties:
                     if attr_config.get('error_if_missing', False):
-                        if self.verbose:
-                            logger.debug(f"Person {person.id} missing required attribute '{attr_name}', skipping")
+                        if debug:
+                            logger.debug(f"    ⚠️  Missing required attribute '{attr_name}', skipping")
                         self.stats['unassigned_people'] += 1
                         self.stats['total_people'] += 1
                         return
 
         # Get household (if person is in one)
         household = self._get_person_household(person)
+        if debug:
+            logger.debug(f"    Household: {household.id if household else 'None'}")
 
         # Get assignment rule for person-level
         rule = self.config.get_person_assignment_rule()
@@ -343,11 +375,16 @@ class AttributeAssigner:
         # Create context
         context = {
             'attribute_name': self.attribute_name,
+            'debug': debug,  # Pass debug flag through
         }
 
         # Create and execute strategy
         try:
             strategy = StrategyFactory.create_strategy(rule.assignment, self.data_manager)
+            if debug:
+                logger.debug(f"    Strategy: {strategy.strategy_type}")
+                logger.debug(f"    Data source: {rule.assignment.get('data_source', 'N/A')}")
+
             value = strategy.assign(person, household, context)
 
             if value is not None:
@@ -356,16 +393,19 @@ class AttributeAssigner:
                 self.stats['attribute_distribution'][str(value)] += 1
                 self.stats['total_people'] += 1
 
-                if self.verbose:
-                    logger.debug(f"  {person}: {self.attribute_name}={value}")
+                if debug:
+                    logger.debug(f"    ✓ Assigned: {value}")
             else:
-                if self.verbose:
-                    logger.debug(f"  Strategy returned None for {person}")
+                if debug:
+                    logger.debug(f"    ⚠️  Strategy returned None")
                 self.stats['unassigned_people'] += 1
                 self.stats['total_people'] += 1
 
         except Exception as e:
-            logger.error(f"Error assigning to {person}: {e}")
+            if debug:
+                logger.error(f"    ❌ Error: {e}")
+            else:
+                logger.error(f"Error assigning to {person}: {e}")
             self.stats['unassigned_people'] += 1
             self.stats['total_people'] += 1
 
