@@ -11,7 +11,7 @@ import logging
 import numpy as np
 from typing import Dict, List, Any, Optional
 
-logger = logging.getLogger("attribute_assignment.strategies")
+logger = logging.getLogger("may.attribute_assignment.strategies")
 
 
 class AssignmentStrategy:

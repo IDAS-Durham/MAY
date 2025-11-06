@@ -14,7 +14,7 @@ import numpy as np
 from typing import Dict, List, Any, Optional, Union, Tuple
 from pathlib import Path
 
-logger = logging.getLogger("attribute_assignment.data_sources")
+logger = logging.getLogger("may.attribute_assignment.data_sources")
 
 
 class DataSource:

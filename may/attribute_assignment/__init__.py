@@ -12,7 +12,7 @@ Key components:
 - assigner: Main orchestrator for attribute assignment
 
 Usage:
-    from attribute_assignment import assign_attributes
+    from may.attribute_assignment import assign_attributes
 
     stats = assign_attributes(
         venue_manager=venue_manager,
@@ -21,9 +21,9 @@ Usage:
     )
 """
 
-from attribute_assignment.assignment_config import AttributeAssignmentConfig
-from attribute_assignment.strategies import StrategyFactory
-from attribute_assignment.assigner import AttributeAssigner, assign_attributes
+from .assignment_config import AttributeAssignmentConfig
+from .strategies import StrategyFactory
+from .assigner import AttributeAssigner, assign_attributes
 
 __all__ = [
     'AttributeAssignmentConfig',

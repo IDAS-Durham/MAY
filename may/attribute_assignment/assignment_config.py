@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from may.residence.composition_pattern import CompositionPattern
 
-logger = logging.getLogger("attribute_assignment.config")
+logger = logging.getLogger("may.attribute_assignment.config")
 
 
 @dataclass

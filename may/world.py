@@ -118,7 +118,7 @@ class World:
         Returns:
             Dictionary with assignment statistics
         """
-        from attribute_assignment import assign_attributes
+        from may.attribute_assignment import assign_attributes
 
         logger.info("")
         logger.info("="*60)

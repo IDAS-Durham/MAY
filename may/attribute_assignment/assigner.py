@@ -12,11 +12,11 @@ import logging
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 
-from attribute_assignment.assignment_config import AttributeAssignmentConfig
-from attribute_assignment.data_sources import DataSourceManager
-from attribute_assignment.strategies import StrategyFactory
+from .assignment_config import AttributeAssignmentConfig
+from .data_sources import DataSourceManager
+from .strategies import StrategyFactory
 
-logger = logging.getLogger("attribute_assignment.assigner")
+logger = logging.getLogger("may.attribute_assignment.assigner")
 
 
 class AttributeAssigner:
