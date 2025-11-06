@@ -67,6 +67,19 @@ class PopulationManager:
             logger.info("Cannot generate population without demographics data")
             return
 
+        # Get the smallest geographical level from the loaded geography
+        # to filter demographics to only relevant geo units
+        smallest_level = self.geography.levels[0]
+        smallest_units_dict = self.geography.get_units_by_level(smallest_level)
+
+        if not smallest_units_dict:
+            logger.warning(f"No {smallest_level} units found in geography. Cannot load demographics.")
+            return
+
+        # Create a set of geo unit names that exist in our geography for fast lookup
+        valid_geo_units = set(smallest_units_dict.keys())
+        logger.info(f"Filtering demographics to {len(valid_geo_units)} {smallest_level}s in loaded geography")
+
         logger.info(f"Loading male demographics from {male_path}")
         male_df = pd.read_csv(male_path)
 
@@ -76,6 +89,12 @@ class PopulationManager:
         # Validate structure
         if 'geo_unit' not in male_df.columns or 'geo_unit' not in female_df.columns:
             raise ValueError("Demographics files must have 'geo_unit' column")
+
+        # Filter to only geo units in our geography BEFORE processing
+        male_df = male_df[male_df['geo_unit'].isin(valid_geo_units)]
+        female_df = female_df[female_df['geo_unit'].isin(valid_geo_units)]
+
+        logger.info(f"Filtered to {len(male_df)} male geo units and {len(female_df)} female geo units")
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
         self.precise_demographics = defaultdict(lambda: defaultdict(dict))

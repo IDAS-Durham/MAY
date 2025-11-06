@@ -153,21 +153,33 @@ class HouseholdDistributor:
         filepath = os.path.join(self.data_dir, filename)
         logger.info(f"Loading household data from {filepath}")
 
+        # Get the smallest geographical level from the loaded geography
+        # to filter household data to only relevant geo units
+        smallest_level = self.geography.levels[0]
+        smallest_units_dict = self.geography.get_units_by_level(smallest_level)
+
+        if not smallest_units_dict:
+            logger.warning(f"No {smallest_level} units found in geography. Cannot load household data.")
+            return
+
+        # Create a set of geo unit names that exist in our geography for fast lookup
+        valid_geo_units = set(smallest_units_dict.keys())
+        logger.info(f"Filtering household data to {len(valid_geo_units)} {smallest_level}s in loaded geography")
+
         df = pd.read_csv(filepath)
 
         # First column is the geo_unit code, rest are household compositions
         geo_unit_col = df.columns[0]
         composition_cols = df.columns[1:]
 
-        logger.info(f"Found {len(df)} geo_units with {len(composition_cols)} household types")
+        # Filter to only geo units in our geography BEFORE processing
+        df = df[df[geo_unit_col].isin(valid_geo_units)]
+
+        logger.info(f"Filtered to {len(df)} geo_units with {len(composition_cols)} household types")
 
         # Store household counts by geo_unit
         for _, row in df.iterrows():
             geo_unit_code = row[geo_unit_col]
-
-            # Only include geo_units that are in our loaded geography
-            if geo_unit_code not in self.geography.units:
-                continue
 
             counts = {}
             for col in composition_cols:
@@ -350,9 +362,10 @@ class HouseholdDistributor:
             }
         )
 
-        # Add residents to venue subset
+        # Add residents to venue subset (with category name as subset_key)
         for person in all_selected:
-            household.add_to_subset(person)
+            category_name = self._get_person_category_name(person)
+            household.add_to_subset(person, subset_key=category_name)
             self.allocated_people.add(person.id)
 
         if self._show_detailed_logs:
@@ -973,9 +986,10 @@ class HouseholdDistributor:
             }
         )
 
-        # Add residents to venue subset
+        # Add residents to venue subset (with category name as subset_key)
         for person in selected_people:
-            household.add_to_subset(person)
+            category_name = self._get_person_category_name(person)
+            household.add_to_subset(person, subset_key=category_name)
             self.allocated_people.add(person.id)
 
         logger.debug(f"  ✓ Household {household.id} created successfully")
@@ -1355,7 +1369,8 @@ class HouseholdDistributor:
             person: Person to add
             pool: Optional pool to remove person from (modifies list in-place)
         """
-        household.add_to_subset(person)
+        category_name = self._get_person_category_name(person)
+        household.add_to_subset(person, subset_key=category_name)
         self.allocated_people.add(person.id)
 
         # Remove from pool if provided

@@ -45,6 +45,11 @@ attribute:
   description: "Assigns ethnicity based on household structure and roles"
   data_type: "categorical"
 
+  # Attribute-specific inheritance configuration
+  inheritance_config:
+    mixed_code: "M"  # Code for mixed/combined values
+    single_values: ["W", "A", "B", "O"]  # Pure (non-mixed) values
+
 # ============================================================================
 # Role Definitions
 # ============================================================================
@@ -252,7 +257,7 @@ assignment_rules:
       - role: "primary_adult"
         priority: 1
         assignment:
-          type: "probabilistic"
+          strategy: "probabilistic"
           data_source: "geo_distribution"
           context: "household.geo_unit"
 
@@ -261,11 +266,12 @@ assignment_rules:
         priority: 2
         description: "Partner assignment based on primary_adult ethnicity"
         assignment:
-          type: "partnership"
+          strategy: "partnership"
           data_source: "pair_probabilities"
+          partner_role: "primary_adult"
           context: ["household.geo_unit", "primary_adult.ethnicity"]
           fallback:
-            type: "probabilistic"
+            strategy: "probabilistic"
             data_source: "geo_distribution"
             context: "household.geo_unit"
 
@@ -273,7 +279,7 @@ assignment_rules:
       - role: "extra_adult"
         priority: 3
         assignment:
-          type: "probabilistic"
+          strategy: "probabilistic"
           data_source: "geo_distribution"
           context: "household.geo_unit"
 
@@ -282,34 +288,27 @@ assignment_rules:
         priority: 4
         description: "Children inherit based on parent combination (W+W=W, W+A=M, etc.)"
         assignment:
-          type: "inheritance"
+          strategy: "inheritance"
           inherit_from:
             roles: ["primary_adult", "secondary_adult"]
           logic:
             # Both parents same ethnicity → child gets same ethnicity
-            - when: "count(unique_adult_values) == 1"
-              then: "adult_values[0]"
+            - when: "count(unique_values) == 1"
+              then: "values[0]"
               note: "W+W=W, A+A=A, B+B=B, O+O=O, M+M=M"
-
             # Parents have different ethnicities → child is Mixed
-            - when: "count(unique_adult_values) > 1"
+            - when: "count(unique_values) > 1"
               then: "M"
               note: "W+A=M, W+B=M, A+O=M, M+W=M, etc."
-
-            # No parents assigned (fallback - shouldn't happen in families)
-            - when: "count(adult_values) == 0"
-              then:
-                type: "probabilistic"
-                data_source: "geo_distribution"
-                context: "household.geo_unit"
 
       # Elderly: Reverse inheritance from primary_adult (parents of adults)
       - role: "primary_elder"
         priority: 5
         description: "First elder assigned using reverse inheritance from primary_adult"
         assignment:
-          type: "reverse_inheritance"
-          child_ethnicity: "primary_adult.ethnicity"
+          strategy: "reverse_inheritance"
+          inherit_from:
+            role: "primary_adult"
           logic:
             # For non-mixed ethnicities, both parents must be same
             - when: "primary_adult.ethnicity in ['W', 'A', 'B', 'O']"
@@ -317,17 +316,16 @@ assignment_rules:
             # For mixed ethnicity, parents must be different - pick first parent
             - when: "primary_adult.ethnicity == 'M'"
               then:
-                type: "probabilistic"
+                strategy: "probabilistic"
                 data_source: "geo_distribution"
-                context: "household.geo_unit"
-                exclude: []  # Will be set to exclude secondary_elder if assigned
 
       - role: "secondary_elder"
         priority: 6
         description: "Second elder using reverse inheritance (must match or differ from primary_elder)"
         assignment:
-          type: "reverse_inheritance"
-          child_ethnicity: "primary_adult.ethnicity"
+          strategy: "reverse_inheritance"
+          inherit_from:
+            role: "primary_adult"
           logic:
             # For non-mixed ethnicities, must match primary_elder
             - when: "primary_adult.ethnicity in ['W', 'A', 'B', 'O']"
@@ -335,16 +333,15 @@ assignment_rules:
             # For mixed ethnicity, must be different from primary_elder
             - when: "primary_adult.ethnicity == 'M'"
               then:
-                type: "probabilistic"
+                strategy: "probabilistic"
                 data_source: "geo_distribution"
-                context: "household.geo_unit"
-                exclude: ["primary_elder.ethnicity"]  # Must be different
+                exclude: ["primary_elder.ethnicity"]
 
       # Extra elderly: Independent assignment
       - role: "extra_elder"
         priority: 7
         assignment:
-          type: "probabilistic"
+          strategy: "probabilistic"
           data_source: "geo_distribution"
           context: "household.geo_unit"
 
@@ -360,7 +357,7 @@ assignment_rules:
       - role: "primary_adult"
         priority: 1
         assignment:
-          type: "probabilistic"
+          strategy: "probabilistic"
           data_source: "geo_distribution"
           context: "household.geo_unit"
 
@@ -369,11 +366,12 @@ assignment_rules:
         priority: 2
         description: "Partner assignment based on primary_adult ethnicity"
         assignment:
-          type: "partnership"
+          strategy: "partnership"
           data_source: "pair_probabilities"
+          partner_role: "primary_adult"
           context: ["household.geo_unit", "primary_adult.ethnicity"]
           fallback:
-            type: "probabilistic"
+            strategy: "probabilistic"
             data_source: "geo_distribution"
             context: "household.geo_unit"
 
@@ -381,7 +379,7 @@ assignment_rules:
       - role: "primary_elder"
         priority: 1
         assignment:
-          type: "probabilistic"
+          strategy: "probabilistic"
           data_source: "geo_distribution"
           context: "household.geo_unit"
 
@@ -390,11 +388,12 @@ assignment_rules:
         priority: 2
         description: "Partner assignment based on primary_elder ethnicity"
         assignment:
-          type: "partnership"
+          strategy: "partnership"
           data_source: "pair_probabilities"
+          partner_role: "primary_elder"
           context: ["household.geo_unit", "primary_elder.ethnicity"]
           fallback:
-            type: "probabilistic"
+            strategy: "probabilistic"
             data_source: "geo_distribution"
             context: "household.geo_unit"
 
@@ -410,7 +409,7 @@ assignment_rules:
       - role: ["primary_adult", "secondary_adult", "extra_adult", "primary_elder", "secondary_elder", "extra_elder", "independent_young"]
         priority: 1
         assignment:
-          type: "probabilistic"
+          strategy: "probabilistic"
           data_source: "geo_distribution"
           context: "household.geo_unit"
 
@@ -418,7 +417,7 @@ assignment_rules:
       - role: "children"
         priority: 1
         assignment:
-          type: "probabilistic"
+          strategy: "probabilistic"
           data_source: "geo_distribution"
           context: "household.geo_unit"
 
@@ -430,7 +429,7 @@ venue_assignment_rules:
   - venue_types: ["care_home", "boarding_school", "student_dorms"]
     description: "Simple geo-based assignment for venue residents"
     assignment:
-      type: "probabilistic"
+      strategy: "probabilistic"
       data_source: "geo_distribution"
       context: "venue.geo_unit"
 

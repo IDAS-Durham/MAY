@@ -19,6 +19,22 @@ logger = logging.getLogger("attribute_assignment.v2")
 
 
 @dataclass
+class DataSourceConfig:
+    """
+    Configuration for a data source (compatible with v1).
+
+    Data sources provide probability distributions for attribute values
+    based on context (e.g., geographical unit code, first person's ethnicity, etc.).
+    """
+    name: str
+    type: str
+    description: str
+    files: List[Dict[str, Any]] = field(default_factory=list)
+    fallbacks: List[Dict[str, Any]] = field(default_factory=list)
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class MatchingRule:
     """
     A rule for matching household patterns.
@@ -44,7 +60,9 @@ class MatchingRule:
             True if household matches this rule
         """
         original_pattern = household.properties.get('original_pattern', '')
-        actual_pattern = household.properties.get('actual_pattern', '')
+
+        # Compute actual pattern from household members
+        actual_pattern = self._compute_actual_pattern(household)
 
         if verbose:
             logger.debug(f"      Testing matching rule:")
@@ -89,6 +107,41 @@ class MatchingRule:
                 return True
         return False
 
+    def _compute_actual_pattern(self, household) -> str:
+        """
+        Compute the actual composition pattern from household members.
+
+        Args:
+            household: Venue object with members
+
+        Returns:
+            Pattern string like "2 0 2 0" (counts per category)
+        """
+        # Get age categories from household properties
+        age_categories = household.properties.get('_age_categories', [])
+        if not age_categories:
+            # Try to get from config if available
+            # For now, return empty string
+            return ''
+
+        # Count members in each category
+        counts = [0] * len(age_categories)
+
+        members = household.get_all_members()
+        for person in members:
+            # Get person's household category from activity_map
+            if "household" in person.activity_map and person.activity_map["household"]:
+                subset_name = person.activity_map["household"][0].subset_name
+
+                # Find which category this subset belongs to
+                for i, category in enumerate(age_categories):
+                    if category.name == subset_name:
+                        counts[i] += 1
+                        break
+
+        # Return as space-separated string
+        return ' '.join(str(c) for c in counts)
+
     def _pattern_matches(self, actual: str, template: str) -> bool:
         """
         Check if an actual pattern matches a template pattern.
@@ -99,8 +152,16 @@ class MatchingRule:
             actual="2 1 2 0", template="0 >=1 1 <=2" -> False (has kids)
             actual="0 1 1 1", template="0 >=1 1 <=2" -> True
         """
+        # Handle empty patterns
+        if not actual or not template:
+            return False
+
         # Parse actual pattern into counts
-        actual_counts = [int(x) for x in actual.split()]
+        try:
+            actual_counts = [int(x) for x in actual.split()]
+        except ValueError:
+            # If actual contains non-numeric values, it's invalid
+            return False
 
         # Parse template pattern using CompositionPattern
         template_pattern = CompositionPattern.from_string(template)
@@ -286,9 +347,22 @@ class AttributeAssignmentConfigV2:
 
         return structures
 
-    def _parse_data_sources(self) -> Dict[str, Dict[str, Any]]:
-        """Parse data sources (same as v1)."""
-        return self.raw_config.get('data_sources', {})
+    def _parse_data_sources(self) -> Dict[str, DataSourceConfig]:
+        """Parse data sources (wrapped in DataSourceConfig for compatibility with v1)."""
+        sources = {}
+        sources_config = self.raw_config.get('data_sources', {})
+
+        for source_name, source_data in sources_config.items():
+            sources[source_name] = DataSourceConfig(
+                name=source_name,
+                type=source_data.get('type', 'csv_lookup'),
+                description=source_data.get('description', ''),
+                files=source_data.get('files', []),
+                fallbacks=[source_data.get('fallback', {})],  # v2 uses 'fallback' not 'fallbacks'
+                config=source_data
+            )
+
+        return sources
 
     def _parse_assignment_rules(self) -> Dict[str, StructureAssignmentRulesV2]:
         """Parse structure-based assignment rules."""
@@ -368,8 +442,20 @@ class AttributeAssignmentConfigV2:
 
         struct_rules = self.assignment_rules[household_structure]
 
+        # Get roles that have rules defined for this structure
+        valid_roles_for_structure = set()
+        for rule in struct_rules.rules:
+            if isinstance(rule.role, list):
+                valid_roles_for_structure.update(rule.role)
+            else:
+                valid_roles_for_structure.add(rule.role)
+
         # Try each role in order until we find a matching one
         for role_name, role in self.roles.items():
+            # Skip roles that don't have rules for this structure
+            if role_name not in valid_roles_for_structure:
+                continue
+
             if verbose:
                 logger.debug(f"      Testing role '{role_name}':")
 

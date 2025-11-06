@@ -218,6 +218,21 @@ class Venue:
         """
         return sum(len(subset.members) for subset in self.subsets.values())
 
+    def has_category(self, category_name: str) -> bool:
+        """
+        Check if this venue has a subset with the given category name.
+
+        Args:
+            category_name: Name of the category to check for (e.g., "Adults", "Kids")
+
+        Returns:
+            bool: True if a subset with this name exists and has members
+        """
+        for subset in self.subsets.values():
+            if subset.subset_name == category_name and len(subset.members) > 0:
+                return True
+        return False
+
     def get_composition(self, categories=None):
         """
         Get composition by category (useful for household-type venues).
