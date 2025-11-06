@@ -49,11 +49,21 @@ class Distributor:
 
         self._assign_subsets()
         self._create_subsets_if_necessary()
-        
+
+    def _create_capacity_list(self):
+        """
+        Create a capacity list for membership tracking.
+
+        This is a separate function (not a lambda) to make the object pickle-compatible.
+        Returns a list of True values with length equal to the number of subsets.
+        """
+        return [True] * self.subset_distributor.n_subsets
+
     def _assign_subsets(self):
         self.subset_distributor = SubsetDistributor(self.venue_type,
                                                     example_venue.properties['subsets'])
-        self._venue_has_membership_capacity_by_subset = defaultdict(lambda: [True]*self.subset_distributor.n_subsets)
+        # Note: Using a method instead of lambda for pickle compatibility
+        self._venue_has_membership_capacity_by_subset = defaultdict(self._create_capacity_list)
         
     def __decide_potential_venues(self):
         """ Decides which venues to consider.

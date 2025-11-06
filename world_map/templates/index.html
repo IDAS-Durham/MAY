@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Map Visualization</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header>
+            <h1>🗺️ World Map Visualization</h1>
+            <div id="stats-summary"></div>
+        </header>
+
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <div class="sidebar-section">
+                <h3>Geography Levels</h3>
+                <div id="geography-levels"></div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Venue Types</h3>
+                <div id="venue-types"></div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Layers</h3>
+                <div id="layer-controls">
+                    <label>
+                        <input type="checkbox" id="show-population" checked>
+                        Population Markers
+                    </label>
+                    <label>
+                        <input type="checkbox" id="show-venues">
+                        Venue Markers
+                    </label>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Statistics</h3>
+                <div id="world-stats"></div>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div id="map"></div>
+
+        <!-- Info Panel -->
+        <div id="info-panel" class="hidden">
+            <button id="close-panel" class="close-btn">&times;</button>
+            <div id="info-content"></div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

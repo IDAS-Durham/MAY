@@ -41,6 +41,16 @@ class PopulationManager:
     def __len__(self):
         return len(self.people)
 
+    @staticmethod
+    def _create_nested_defaultdict():
+        """
+        Create a nested defaultdict for demographics storage.
+
+        This is a separate function (not a lambda) to make the object pickle-compatible.
+        Returns a defaultdict(dict) for storing age -> sex -> count mappings.
+        """
+        return defaultdict(dict)
+
     def load_demographics_from_csv(self, male_file="demographics_male.csv",
                                      female_file="demographics_female.csv"):
         """
@@ -78,7 +88,8 @@ class PopulationManager:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
-        self.precise_demographics = defaultdict(lambda: defaultdict(dict))
+        # Note: Using a regular function instead of lambda for pickle compatibility
+        self.precise_demographics = defaultdict(self._create_nested_defaultdict)
         total_people = 0
 
         logger.info("Processing male demographics...")

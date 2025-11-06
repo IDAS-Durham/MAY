@@ -1,0 +1,13 @@
+# World Map Visualization Requirements
+
+# Core dependencies
+Flask==3.0.0
+Flask-CORS==4.0.0
+
+# Optional: For loading saved worlds
+joblib==1.3.2
+# h5py==3.10.0
+
+# Note: The visualization runs in the browser using Leaflet.js via CDN
+# No Python geospatial libraries are required unless you want to
+# process shapefiles server-side
