@@ -1,7 +1,7 @@
 """
-Assignment strategies for V2 attribute assignment system.
+Assignment strategies for attribute assignment system.
 
-This module implements the simplified V2 strategies that work with:
+This module implements the simplified strategies that work with:
 - Roles mapped to subsets (no complex conditions)
 - Structure-based assignment (Family/Couple/Independents)
 - Simple inheritance and partnership rules
@@ -11,14 +11,14 @@ import logging
 import numpy as np
 from typing import Dict, List, Any, Optional
 
-logger = logging.getLogger("attribute_assignment.strategies_v2")
+logger = logging.getLogger("attribute_assignment.strategies")
 
 
-class AssignmentStrategyV2:
+class AssignmentStrategy:
     """
-    Base class for V2 assignment strategies.
+    Base class for assignment strategies.
 
-    V2 strategies are simpler than V1 - they don't evaluate complex conditions,
+    Strategies are simplified - they don't evaluate complex conditions,
     just perform straightforward assignments based on context.
     """
 
@@ -84,7 +84,7 @@ class AssignmentStrategyV2:
         return getattr(person, attribute_name, None)
 
 
-class ProbabilisticStrategyV2(AssignmentStrategyV2):
+class ProbabilisticStrategy(AssignmentStrategy):
     """
     Probabilistic assignment based on geographical distribution.
 
@@ -131,14 +131,14 @@ class ProbabilisticStrategyV2(AssignmentStrategyV2):
         return sampled
 
 
-class PartnershipStrategyV2(AssignmentStrategyV2):
+class PartnershipStrategy(AssignmentStrategy):
     """
     Partnership-based assignment using pair probabilities.
 
     Given the first person's ethnicity, samples the second person's ethnicity
     from conditional probability distribution. Used for couples and family secondary adults.
 
-    NEW in V2 - replaces the complex ConditionalStrategy from V1.
+    Replaces complex conditional strategies with role-based subset selection.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -207,14 +207,14 @@ class PartnershipStrategyV2(AssignmentStrategyV2):
             Sampled value from geo distribution
         """
         logger.debug("Falling back to geographical distribution")
-        fallback_strategy = ProbabilisticStrategyV2(
+        fallback_strategy = ProbabilisticStrategy(
             {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
             self.data_manager
         )
         return fallback_strategy.assign(person, household, context)
 
 
-class InheritanceStrategyV2(AssignmentStrategyV2):
+class InheritanceStrategy(AssignmentStrategy):
     """
     Forward inheritance: Parent → Child.
 
@@ -320,14 +320,14 @@ class InheritanceStrategyV2(AssignmentStrategyV2):
     def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
         """Fallback to geographical distribution if no parents found."""
         logger.debug("Falling back to geographical distribution")
-        fallback_strategy = ProbabilisticStrategyV2(
+        fallback_strategy = ProbabilisticStrategy(
             {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
             self.data_manager
         )
         return fallback_strategy.assign(person, household, context)
 
 
-class ReverseInheritanceStrategyV2(AssignmentStrategyV2):
+class ReverseInheritanceStrategy(AssignmentStrategy):
     """
     Reverse inheritance: Child → Parent.
 
@@ -335,7 +335,7 @@ class ReverseInheritanceStrategyV2(AssignmentStrategyV2):
     - Child is W/A/B/O → Both parents must be same (both W, both A, etc.)
     - Child is M → Parents must differ (sample two different ethnicities from geo distribution)
 
-    NEW in V2 - enables "kids first" assignment in certain household patterns.
+    Enables "kids first" assignment in certain household patterns.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -401,7 +401,7 @@ class ReverseInheritanceStrategyV2(AssignmentStrategyV2):
                         # Nested strategy - create and execute it
                         strategy_type = then_action.get('strategy')
                         if strategy_type == 'probabilistic':
-                            fallback_strategy = ProbabilisticStrategyV2(then_action, self.data_manager)
+                            fallback_strategy = ProbabilisticStrategy(then_action, self.data_manager)
                             return fallback_strategy.assign(person, household, context)
                         else:
                             logger.warning(f"Unknown nested strategy: {strategy_type}")
@@ -484,29 +484,29 @@ class ReverseInheritanceStrategyV2(AssignmentStrategyV2):
 
     def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
         """Fallback to geographical distribution."""
-        fallback_strategy = ProbabilisticStrategyV2(
+        fallback_strategy = ProbabilisticStrategy(
             {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
             self.data_manager
         )
         return fallback_strategy.assign(person, household, context)
 
 
-class StrategyFactoryV2:
+class StrategyFactory:
     """
-    Factory for creating V2 strategy instances.
+    Factory for creating strategy instances.
 
     Maps strategy type strings to strategy classes.
     """
 
     _strategy_map = {
-        'probabilistic': ProbabilisticStrategyV2,
-        'partnership': PartnershipStrategyV2,
-        'inheritance': InheritanceStrategyV2,
-        'reverse_inheritance': ReverseInheritanceStrategyV2,
+        'probabilistic': ProbabilisticStrategy,
+        'partnership': PartnershipStrategy,
+        'inheritance': InheritanceStrategy,
+        'reverse_inheritance': ReverseInheritanceStrategy,
     }
 
     @classmethod
-    def create_strategy(cls, config: Dict[str, Any], data_manager) -> AssignmentStrategyV2:
+    def create_strategy(cls, config: Dict[str, Any], data_manager) -> AssignmentStrategy:
         """
         Create strategy instance from configuration.
 

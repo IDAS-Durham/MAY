@@ -233,11 +233,11 @@ def main():
     world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
     logger.info(world)
 
-    # Assign attributes (e.g., ethnicity) using V2 system
+    # Assign attributes (e.g., ethnicity)
     attribute_config = config.get("attributes", {})
     if attribute_config.get("enabled", True):
-        ethnicity_config_path = attribute_config.get("ethnicity_config", "yaml/attribute_assignment_v2.yaml")
-        world.assign_attributes(ethnicity_config_path, use_v2=True)
+        ethnicity_config_path = attribute_config.get("ethnicity_config", "yaml/attribute_assignment.yaml")
+        world.assign_attributes(ethnicity_config_path)
 
     logger.info("")
     logger.info("=" * 60)

@@ -1,5 +1,5 @@
 # ============================================================================
-# Streamlined Attribute Assignment Configuration (V2)
+# Streamlined Attribute Assignment Configuration
 # ============================================================================
 # This configuration uses a simplified, flexible approach:
 # 1. Define ROLES and map them to household subsets (from household_config.yaml)

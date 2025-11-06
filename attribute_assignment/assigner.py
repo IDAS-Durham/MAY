@@ -1,7 +1,7 @@
 """
-V2 orchestrator for attribute assignment.
+Main orchestrator for attribute assignment.
 
-Simplified from v1:
+Simplified attribute assignment system:
 - Cleaner structure classification (Family/Couple/Independents)
 - Simple role assignment (primary/secondary/extra based on naming)
 - No complex condition evaluation
@@ -12,26 +12,26 @@ import logging
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
 
-from attribute_assignment.assignment_config_v2 import AttributeAssignmentConfigV2
+from attribute_assignment.assignment_config import AttributeAssignmentConfig
 from attribute_assignment.data_sources import DataSourceManager
-from attribute_assignment.strategies_v2 import StrategyFactoryV2
+from attribute_assignment.strategies import StrategyFactory
 
-logger = logging.getLogger("attribute_assignment.assigner_v2")
+logger = logging.getLogger("attribute_assignment.assigner")
 
 
-class AttributeAssignerV2:
+class AttributeAssigner:
     """
-    V2 orchestrator for attribute assignment.
+    Main orchestrator for attribute assignment.
 
-    Simpler than v1 - uses structure-based assignment with straightforward role logic.
+    Uses structure-based assignment with straightforward role logic.
     """
 
-    def __init__(self, config: AttributeAssignmentConfigV2, data_manager: DataSourceManager):
+    def __init__(self, config: AttributeAssignmentConfig, data_manager: DataSourceManager):
         """
-        Initialize V2 attribute assigner.
+        Initialize attribute assigner.
 
         Args:
-            config: V2 attribute assignment configuration
+            config: Attribute assignment configuration
             data_manager: Data source manager with loaded data
         """
         self.config = config
@@ -64,7 +64,7 @@ class AttributeAssignerV2:
         Returns:
             Dictionary with assignment statistics
         """
-        logger.info(f"Starting V2 attribute assignment for '{self.attribute_name}'...")
+        logger.info(f"Starting attribute assignment for '{self.attribute_name}'...")
         logger.info("=" * 80)
 
         # Get all venues
@@ -93,7 +93,7 @@ class AttributeAssignerV2:
         """
         Assign attribute to all people in a household.
 
-        Main V2 assignment flow:
+        Main assignment flow:
         1. Classify household structure
         2. Sort people by configured assignment order
         3. For each person:
@@ -188,7 +188,7 @@ class AttributeAssignerV2:
 
             # 3c. Create and execute strategy
             try:
-                strategy = StrategyFactoryV2.create_strategy(rule.assignment, self.data_manager)
+                strategy = StrategyFactory.create_strategy(rule.assignment, self.data_manager)
                 value = strategy.assign(person, household, context)
 
                 if value is not None:
@@ -309,20 +309,20 @@ class AttributeAssignerV2:
         logger.info("=" * 80)
 
 
-def assign_attributes_v2(venue_manager, config_path: str, geo_units: Optional[set] = None) -> Dict[str, Any]:
+def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] = None) -> Dict[str, Any]:
     """
-    Convenience function to assign attributes using V2 system.
+    Convenience function to assign attributes to a population.
 
     Args:
         venue_manager: VenueManager with households and venues
-        config_path: Path to V2 YAML configuration file
+        config_path: Path to YAML configuration file
         geo_units: Optional set of geo unit codes to preload data for
 
     Returns:
         Assignment statistics dictionary
     """
-    # Load V2 configuration
-    config = AttributeAssignmentConfigV2.from_yaml(config_path)
+    # Load configuration
+    config = AttributeAssignmentConfig.from_yaml(config_path)
 
     # Initialize data manager
     data_manager = DataSourceManager(config)
@@ -335,8 +335,8 @@ def assign_attributes_v2(venue_manager, config_path: str, geo_units: Optional[se
         logger.info("Loading all data sources...")
         data_manager.load_all()
 
-    # Create V2 assigner and run
-    assigner = AttributeAssignerV2(config, data_manager)
+    # Create assigner and run
+    assigner = AttributeAssigner(config, data_manager)
     stats = assigner.assign_all(venue_manager)
 
     return stats

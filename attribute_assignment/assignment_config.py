@@ -1,7 +1,7 @@
 """
-V2 Configuration system for attribute assignment.
+Configuration system for attribute assignment.
 
-Simplified from v1:
+Simplified attribute assignment configuration:
 - Roles are mapped to household subsets (Kids, Young Adults, Adults, Old Adults)
 - Household structures use flexible pattern matching with actual/original conditions
 - Assignment rules are organized by household structure type
@@ -15,13 +15,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from may.residence.composition_pattern import CompositionPattern
 
-logger = logging.getLogger("attribute_assignment.v2")
+logger = logging.getLogger("attribute_assignment.config")
 
 
 @dataclass
 class DataSourceConfig:
     """
-    Configuration for a data source (compatible with v1).
+    Configuration for a data source.
 
     Data sources provide probability distributions for attribute values
     based on context (e.g., geographical unit code, first person's ethnicity, etc.).
@@ -187,9 +187,9 @@ class MatchingRule:
 
 
 @dataclass
-class HouseholdStructureV2:
+class HouseholdStructure:
     """
-    V2 household structure with flexible matching rules.
+    Household structure with flexible matching rules.
     """
     name: str
     description: str
@@ -217,9 +217,9 @@ class HouseholdStructureV2:
 
 
 @dataclass
-class RoleV2:
+class Role:
     """
-    V2 role definition - maps to household subsets instead of conditions.
+    Role definition - maps to household subsets instead of conditions.
     """
     name: str
     description: str
@@ -242,9 +242,9 @@ class RoleV2:
 
 
 @dataclass
-class AssignmentRuleV2:
+class AssignmentRule:
     """
-    V2 assignment rule - simpler than v1.
+    Simplified assignment rule.
     """
     role: str  # Can also be list of roles (parsed from config)
     priority: int
@@ -259,27 +259,27 @@ class AssignmentRuleV2:
 
 
 @dataclass
-class StructureAssignmentRulesV2:
+class StructureAssignmentRules:
     """
     Assignment rules for a specific household structure.
     """
     structure_name: str
     description: str
-    rules: List[AssignmentRuleV2] = field(default_factory=list)
+    rules: List[AssignmentRule] = field(default_factory=list)
 
 
-class AttributeAssignmentConfigV2:
+class AttributeAssignmentConfig:
     """
-    V2 configuration loader for attribute assignment.
+    Configuration loader for attribute assignment.
 
-    Much simpler than v1:
+    Simplified configuration system:
     - Roles map to subsets
     - Structures use matching_rules
     - Assignment rules organized by structure
     """
 
     def __init__(self, config_path: Path):
-        """Load v2 configuration from YAML."""
+        """Load configuration from YAML."""
         self.config_path = Path(config_path)
 
         with open(self.config_path, 'r') as f:
@@ -294,7 +294,7 @@ class AttributeAssignmentConfigV2:
         self.venue_assignment_rules = self._parse_venue_assignment_rules()
         self.settings = self._parse_settings()
 
-        logger.info(f"Loaded v2 config for '{self.attribute_name}' from {self.config_path}")
+        logger.info(f"Loaded config for '{self.attribute_name}' from {self.config_path}")
         logger.info(f"  Roles: {len(self.roles)}")
         logger.info(f"  Household structures: {len(self.household_structures)}")
         logger.info(f"  Structure-based assignment rules: {len(self.assignment_rules)}")
@@ -303,7 +303,7 @@ class AttributeAssignmentConfigV2:
         """Parse attribute name."""
         return self.raw_config.get('attribute', {}).get('name', 'unknown')
 
-    def _parse_roles(self) -> Dict[str, RoleV2]:
+    def _parse_roles(self) -> Dict[str, Role]:
         """Parse role definitions."""
         roles = {}
         roles_config = self.raw_config.get('roles', {})
@@ -312,7 +312,7 @@ class AttributeAssignmentConfigV2:
             if not isinstance(role_data, dict):
                 continue
 
-            roles[role_name] = RoleV2(
+            roles[role_name] = Role(
                 name=role_name,
                 description=role_data.get('description', ''),
                 subsets=role_data.get('subsets', [])
@@ -320,7 +320,7 @@ class AttributeAssignmentConfigV2:
 
         return roles
 
-    def _parse_household_structures(self) -> Dict[str, HouseholdStructureV2]:
+    def _parse_household_structures(self) -> Dict[str, HouseholdStructure]:
         """Parse household structure definitions."""
         structures = {}
         structures_config = self.raw_config.get('household_structures', {})
@@ -338,7 +338,7 @@ class AttributeAssignmentConfigV2:
                     description=rule_data.get('description', '')
                 ))
 
-            structures[struct_name] = HouseholdStructureV2(
+            structures[struct_name] = HouseholdStructure(
                 name=struct_name,
                 description=struct_data.get('description', ''),
                 inheritance=struct_data.get('inheritance', False),
@@ -358,13 +358,13 @@ class AttributeAssignmentConfigV2:
                 type=source_data.get('type', 'csv_lookup'),
                 description=source_data.get('description', ''),
                 files=source_data.get('files', []),
-                fallbacks=[source_data.get('fallback', {})],  # v2 uses 'fallback' not 'fallbacks'
+                fallbacks=[source_data.get('fallback', {})],  # YAML uses 'fallback' key
                 config=source_data
             )
 
         return sources
 
-    def _parse_assignment_rules(self) -> Dict[str, StructureAssignmentRulesV2]:
+    def _parse_assignment_rules(self) -> Dict[str, StructureAssignmentRules]:
         """Parse structure-based assignment rules."""
         structure_rules = {}
         rules_config = self.raw_config.get('assignment_rules', {})
@@ -375,7 +375,7 @@ class AttributeAssignmentConfigV2:
 
             rules = []
             for rule_data in struct_rules_data.get('rules', []):
-                rules.append(AssignmentRuleV2(
+                rules.append(AssignmentRule(
                     role=rule_data.get('role'),  # Can be string or list
                     priority=rule_data.get('priority', 999),
                     description=rule_data.get('description', ''),
@@ -385,7 +385,7 @@ class AttributeAssignmentConfigV2:
             # Sort rules by priority
             rules.sort(key=lambda r: r.priority)
 
-            structure_rules[structure_name] = StructureAssignmentRulesV2(
+            structure_rules[structure_name] = StructureAssignmentRules(
                 structure_name=structure_name,
                 description=struct_rules_data.get('description', ''),
                 rules=rules
@@ -502,7 +502,7 @@ class AttributeAssignmentConfigV2:
         return None
 
     def get_assignment_rule(self, household_structure: str, role: str,
-                           verbose: bool = False) -> Optional[AssignmentRuleV2]:
+                           verbose: bool = False) -> Optional[AssignmentRule]:
         """
         Get assignment rule for a role within a structure.
         """
@@ -522,6 +522,6 @@ class AttributeAssignmentConfigV2:
         return None
 
     @classmethod
-    def from_yaml(cls, config_path: Path) -> 'AttributeAssignmentConfigV2':
+    def from_yaml(cls, config_path: Path) -> 'AttributeAssignmentConfig':
         """Load configuration from YAML file."""
         return cls(config_path)

@@ -104,7 +104,7 @@ class World:
 
         return stats
 
-    def assign_attributes(self, config_path: str, geo_units: Optional[Set[str]] = None, use_v2: bool = False):
+    def assign_attributes(self, config_path: str, geo_units: Optional[Set[str]] = None):
         """
         Assign attributes to all people in the world.
 
@@ -114,23 +114,15 @@ class World:
         Args:
             config_path: Path to attribute assignment YAML config file
             geo_units: Optional set of geo unit codes to preload data for
-            use_v2: If True, use V2 (simplified) assignment system. Default: False (V1)
 
         Returns:
             Dictionary with assignment statistics
         """
-        if use_v2:
-            from attribute_assignment import assign_attributes_v2
-            assign_func = assign_attributes_v2
-            version = "V2"
-        else:
-            from attribute_assignment import assign_attributes
-            assign_func = assign_attributes
-            version = "V1"
+        from attribute_assignment import assign_attributes
 
         logger.info("")
         logger.info("="*60)
-        logger.info(f"Assigning attributes ({version})...")
+        logger.info(f"Assigning attributes...")
         logger.info("="*60)
 
         # Get geo units from geography if not provided
@@ -138,7 +130,7 @@ class World:
             geo_units = {unit.name for unit in self.geography.get_all_units_list()}
 
         # Run attribute assignment
-        stats = assign_func(
+        stats = assign_attributes(
             venue_manager=self.venues,
             config_path=config_path,
             geo_units=geo_units
