@@ -338,8 +338,8 @@ class AttributeAssignmentConfig:
         return self.raw_config.get('attribute', {}).get('name', 'unknown')
 
     def _parse_assignment_level(self) -> str:
-        """Parse assignment level (household or person)."""
-        return self.raw_config.get('attribute', {}).get('assignment_level', 'household')
+        """Parse assignment level (person_by_household or person)."""
+        return self.raw_config.get('attribute', {}).get('assignment_level', 'person_by_household')
 
     def _parse_required_attributes(self) -> Dict[str, Any]:
         """Parse required attributes (dependencies)."""

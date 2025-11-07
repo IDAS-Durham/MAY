@@ -72,8 +72,11 @@ class AttributeAssigner:
         # Branch based on assignment level
         if self.config.assignment_level == "person":
             self._assign_all_people(venue_manager)
-        else:  # household (default)
+        elif self.config.assignment_level == "person_by_household":
             self._assign_all_households(venue_manager)
+        else:
+            raise ValueError(f"Unknown assignment_level: '{self.config.assignment_level}'. "
+                           f"Expected 'person' or 'person_by_household'.")
 
         # Report statistics
         self._report_statistics()
