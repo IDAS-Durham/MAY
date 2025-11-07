@@ -137,7 +137,7 @@ data_sources:
           region:
             attribute: "geographical_unit"
             type: "ancestor_lookup"
-            level: "LGU"
+            level: "XLGU"
             property: "name"
             mapping: "region_mapping"  # Apply region name mapping
 
