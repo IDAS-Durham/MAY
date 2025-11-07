@@ -144,14 +144,16 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
             venue_residents.append(person)
             allocated_people.append(person)
 
-        # Store residents in venue properties
+        # Store residents in venue properties and add to venue subsets
         if venue_residents:
             if 'residents' not in venue.properties:
                 venue.properties['residents'] = []
             venue.properties['residents'].extend(venue_residents)
 
-            # Set venue reference on each person (optional)
+            # Add people to venue's subset system so they're counted properly
             for person in venue_residents:
+                venue.add_to_subset(person)
+                # Set venue reference on each person (optional)
                 setattr(person, f'{venue_type}_venue', venue)
 
         if len(allocated_people) >= people_to_allocate:
@@ -535,7 +537,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                 allocation_stats[column_name] = 0
             allocation_stats[column_name] += allocated_count
 
-            # Store residents in venue (by attribute slot)
+            # Store residents in venue (by attribute slot) and add to venue subsets
             if venue_residents:
                 if 'residents' not in venue.properties:
                     venue.properties['residents'] = []
@@ -547,9 +549,11 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                     venue.properties[slot_key] = []
                 venue.properties[slot_key].extend(venue_residents)
 
-                # Set venue reference on each person
-                # for person in venue_residents:
-                #     setattr(person, f'{venue_type}_venue', venue)
+                # Add people to venue's subset system so they're counted properly
+                for person in venue_residents:
+                    venue.add_to_subset(person)
+                    # Set venue reference on each person
+                    # setattr(person, f'{venue_type}_venue', venue)
 
     # Mark allocated people
     if allocated_people:

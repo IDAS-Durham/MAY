@@ -194,7 +194,9 @@ class HouseholdPromoter:
                         added_to_this += 1
                         people_added += 1
 
+                    # Update the original pool to remove people we took
                     if added_to_this > 0:
+                        pools[cat_idx] = pools[cat_idx][added_to_this:]
                         logger.debug(f"    Added {added_to_this} {category_name} to household {household.id}")
 
         # Statistics
@@ -340,6 +342,9 @@ class HouseholdPromoter:
                     if not isinstance(available_people, deque):
                         available_people = deque(available_people)
 
+                    # Track how many we actually add for pool update
+                    people_added_this_category = 0
+
                     # Add people
                     for _ in range(category_can_add):
                         if not available_people:
@@ -352,6 +357,11 @@ class HouseholdPromoter:
                         self.distributor.allocated_people.add(person.id)
                         added_to_this_household += 1
                         people_added += 1
+                        people_added_this_category += 1
+
+                    # Update the original pool to remove people we took
+                    if people_added_this_category > 0:
+                        pools[cat_idx] = pools[cat_idx][people_added_this_category:]
 
                 if added_to_this_household > 0:
                     logger.debug(f"  Added {added_to_this_household} people to household {household.id}")

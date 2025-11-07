@@ -4,6 +4,15 @@ geography:
   # Path to geography data files
   data_dir: "data/geography"
 
+  # Define hierarchy levels (smallest to largest)
+  # If not specified, defaults to ["SGU", "MGU", "LGU"]
+  # Examples:
+  #   - ["SGU", "MGU", "LGU"]           # 3 levels (default)
+  #   - ["SGU", "MGU", "LGU", "XLGU"]   # 4 levels
+  #   - ["Block", "Tract", "County"]    # Custom names
+  # Current: Output Areas -> MSOAs -> Local Authorities -> Regions
+  levels: ["SGU", "MGU", "LGU", "XLGU"]
+
   # Load all geographical units (ignores all filters below if true)
   load_all: false
 

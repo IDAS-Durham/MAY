@@ -46,7 +46,10 @@ class AttributeAssigner:
         self.stats = {
             'total_people': 0,
             'people_in_households': 0,
+            'people_in_other_residences': 0,
             'households_processed': 0,
+            'other_residences_processed': 0,
+            'assignments_by_venue_type': defaultdict(int),
             'assignments_by_rule': defaultdict(int),
             'assignments_by_role': defaultdict(int),
             'assignments_by_strategy': defaultdict(int),
@@ -72,29 +75,37 @@ class AttributeAssigner:
         # Branch based on assignment level
         if self.config.assignment_level == "person":
             self._assign_all_people(venue_manager)
-        elif self.config.assignment_level == "person_by_household":
-            self._assign_all_households(venue_manager)
+        elif self.config.assignment_level in ["person_by_household", "person_by_residence"]:
+            self._assign_all_residences(venue_manager)
         else:
             raise ValueError(f"Unknown assignment_level: '{self.config.assignment_level}'. "
-                           f"Expected 'person' or 'person_by_household'.")
+                           f"Expected 'person', 'person_by_household', or 'person_by_residence'.")
 
         # Report statistics
         self._report_statistics()
 
         return self.stats
 
-    def _assign_all_households(self, venue_manager):
-        """Assign attributes at household level (existing logic)."""
+    def _assign_all_residences(self, venue_manager):
+        """Assign attributes at residence level (households and communal establishments)."""
         # Get all venues
         all_venues = venue_manager.get_all_venues_list()
         logger.info(f"Found {len(all_venues)} total venues")
 
-        # Get households only
+        # Count total people across ALL venues for accurate statistics
+        total_people_in_simulation = sum(venue.size() for venue in all_venues)
+
+        # Separate households from other residence venues
         households = [v for v in all_venues if v.type == "household"]
+        other_residences = [v for v in all_venues if v.type != "household"]
+        people_in_other_residences = sum(venue.size() for venue in other_residences)
+
         logger.info(f"  Households: {len(households)}")
+        if other_residences:
+            logger.info(f"  Other residences: {len(other_residences)} (containing {people_in_other_residences} people)")
         logger.info("")
 
-        # Assign households with progress tracking
+        # Process households with sophisticated structure-based logic
         logger.info("Processing households...")
         total = len(households)
         progress_interval = max(1, total // 20)  # Report every 5%
@@ -107,8 +118,97 @@ class AttributeAssigner:
                 progress = ((i + 1) / total) * 100
                 logger.info(f"  Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
 
-        logger.info(f"\n✓ Processed {self.stats['households_processed']} households")
+        logger.info(f"✓ Processed {self.stats['households_processed']} households")
         logger.info("")
+
+        # Process other residences (care homes, dorms, etc.) with simpler logic
+        people_assigned_in_other_residences = 0
+        if other_residences:
+            logger.info(f"Processing {len(other_residences)} other residences (care homes, dorms, etc.)...")
+            people_assigned_in_other_residences = self._assign_other_residences(other_residences)
+            logger.info(f"✓ Assigned {people_assigned_in_other_residences} people in other residences")
+            logger.info("")
+
+        # Update total_people stat to reflect actual total
+        self.stats['total_people'] = total_people_in_simulation
+        self.stats['unassigned_people'] = total_people_in_simulation - self.stats['people_in_households'] - people_assigned_in_other_residences
+
+    def _assign_other_residences(self, venues):
+        """
+        Assign attributes to people in non-household residences (care homes, dorms, etc.).
+        Uses rules defined in venue_assignment_rules section of config.
+
+        Args:
+            venues: List of non-household residence venues
+
+        Returns:
+            Number of people assigned
+        """
+        from .strategies import StrategyFactory
+
+        people_assigned = 0
+        venues_processed = 0
+
+        for venue in venues:
+            members = venue.get_all_members()
+            if not members:
+                continue
+
+            # Find the assignment rule for this venue type
+            venue_rule = None
+            for rule in self.config.venue_assignment_rules:
+                if venue.type in rule.get('venue_types', []):
+                    venue_rule = rule
+                    break
+
+            if not venue_rule:
+                logger.warning(f"No assignment rule found for venue type '{venue.type}', skipping")
+                continue
+
+            # Get the assignment strategy from the rule
+            assignment_config = venue_rule.get('assignment', {})
+
+            try:
+                strategy = StrategyFactory.create_strategy(assignment_config, self.data_manager)
+                venue_assigned = 0
+
+                # Assign each person
+                for person in members:
+                    # Skip if already assigned
+                    if self.attribute_name in person.properties:
+                        continue
+
+                    # Create context for strategy
+                    context = {
+                        'attribute_name': self.attribute_name,
+                        'venue_type': venue.type
+                    }
+
+                    value = strategy.assign(person, venue, context)
+
+                    if value is not None:
+                        person.properties[self.attribute_name] = value
+                        self.stats['attribute_distribution'][value] += 1
+                        self.stats['assignments_by_strategy'][f'venue_{venue.type}'] += 1
+                        self.stats['assignments_by_venue_type'][venue.type] += 1
+                        people_assigned += 1
+                        venue_assigned += 1
+                    else:
+                        self.stats['unassigned_people'] += 1
+                        logger.warning(f"Failed to assign {self.attribute_name} to person {person.id} in {venue.type}")
+
+                if venue_assigned > 0:
+                    venues_processed += 1
+
+            except Exception as e:
+                logger.error(f"Error assigning attributes to venue {venue.id} ({venue.type}): {e}")
+                continue
+
+        # Update stats
+        self.stats['people_in_other_residences'] = people_assigned
+        self.stats['other_residences_processed'] = venues_processed
+
+        return people_assigned
 
     def _assign_all_people(self, venue_manager):
         """Assign attributes at person level (new logic)."""
@@ -157,7 +257,7 @@ class AttributeAssigner:
                 progress = ((i + 1) / total) * 100
                 logger.info(f"  Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
 
-        logger.info(f"\n✓ Processed {len(all_people)} people")
+        logger.info(f"✓ Processed {len(all_people)} people")
         logger.info(f"✓ Assigned {self.stats['total_people'] - self.stats['unassigned_people']} people")
         logger.info(f"✓ Fallback used: {self.stats.get('fallback_count', 0)} times")
         logger.info("")
@@ -447,10 +547,21 @@ class AttributeAssigner:
         logger.info(f"Total people: {self.stats['total_people']}")
         if self.stats['people_in_households'] > 0:
             logger.info(f"  In households: {self.stats['people_in_households']}")
+        if self.stats['people_in_other_residences'] > 0:
+            logger.info(f"  In other residences: {self.stats['people_in_other_residences']}")
         if self.stats['households_processed'] > 0:
             logger.info(f"Households processed: {self.stats['households_processed']}")
+        if self.stats['other_residences_processed'] > 0:
+            logger.info(f"Other residences processed: {self.stats['other_residences_processed']}")
         logger.info(f"Unassigned people: {self.stats['unassigned_people']}")
         logger.info("")
+
+        # Show breakdown by venue type if applicable
+        if self.stats['assignments_by_venue_type']:
+            logger.info("Assignments by venue type:")
+            for venue_type, count in sorted(self.stats['assignments_by_venue_type'].items()):
+                logger.info(f"  {venue_type}: {count}")
+            logger.info("")
 
         # Household structure distribution (only if household-level)
         if self.stats['household_structure_counts']:
