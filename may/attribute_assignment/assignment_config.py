@@ -347,8 +347,33 @@ class AttributeAssignmentConfig:
         return self.raw_config.get('filters', {})
 
     def _parse_required_attributes(self) -> Dict[str, Any]:
-        """Parse required attributes (dependencies)."""
-        return self.raw_config.get('required_attributes', {})
+        """Parse required attributes (dependencies).
+
+        Supports two formats:
+        1. Dict format: {attr_name: {description: "...", required: true, ...}}
+        2. List format: [{name: "attr_name", description: "...", required: true, ...}]
+
+        Returns a dict format for backward compatibility.
+        """
+        raw_attrs = self.raw_config.get('required_attributes', {})
+
+        # If it's already a dict, return it
+        if isinstance(raw_attrs, dict):
+            return raw_attrs
+
+        # If it's a list, convert to dict using 'name' field as key
+        if isinstance(raw_attrs, list):
+            result = {}
+            for attr in raw_attrs:
+                if 'name' not in attr:
+                    raise ValueError(f"Required attribute entry missing 'name' field: {attr}")
+                name = attr['name']
+                # Copy all fields except 'name' into the config
+                config = {k: v for k, v in attr.items() if k != 'name'}
+                result[name] = config
+            return result
+
+        return {}
 
     def _parse_categories(self) -> List[Dict[str, Any]]:
         """Parse categories (e.g., age bands)."""

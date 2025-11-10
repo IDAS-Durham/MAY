@@ -23,7 +23,7 @@ attribute:
 # ============================================================================
 # Attributes that must be assigned before this one
 required_attributes:
-  ethnicity:
+  - name: "ethnicity"
     description: "Ethnicity attribute must be assigned first"
     required: true
     error_if_missing: true
@@ -39,7 +39,7 @@ required_attributes:
 # ============================================================================
 # Region Mapping
 # ============================================================================
-# Map LGU names to CSV region names
+# Map GU names to CSV names
 region_mapping:
   "East of England": "East"
   "East Midlands": "East Midlands"

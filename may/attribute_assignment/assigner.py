@@ -457,24 +457,41 @@ class AttributeAssigner:
         """
         # Check filters (if configured)
         if hasattr(self.config, 'filters') and self.config.filters:
-            # Age filters
-            age_filters = self.config.filters.get('age', {})
-            if age_filters:
-                person_age = getattr(person, 'age', None)
-                if person_age is not None:
-                    min_age = age_filters.get('min')
-                    max_age = age_filters.get('max')
+            # Loop through all filters generically
+            for filter_key, filter_config in self.config.filters.items():
+                # Get the attribute to filter on
+                attr_name = filter_config.get('attribute')
+                filter_type = filter_config.get('type')
 
-                    if min_age is not None and person_age < min_age:
+                if not attr_name:
+                    continue
+
+                # Get the person's value for this attribute
+                # First check properties, then object attributes
+                if hasattr(person, 'properties') and attr_name in person.properties:
+                    person_value = person.properties[attr_name]
+                else:
+                    person_value = getattr(person, attr_name, None)
+
+                if person_value is None:
+                    continue
+
+                # Apply filter based on type
+                if filter_type == 'numerical':
+                    numerical_config = filter_config.get('numerical', {})
+                    min_value = numerical_config.get('min')
+                    max_value = numerical_config.get('max')
+
+                    if min_value is not None and person_value < min_value:
                         if debug:
-                            logger.debug(f"    ⚠️  Person age {person_age} below minimum {min_age}, skipping")
+                            logger.debug(f"    ⚠️  Person {attr_name} {person_value} below minimum {min_value}, skipping")
                         self.stats['total_people'] += 1
                         self.stats['filtered_people'] += 1
                         return
 
-                    if max_age is not None and person_age > max_age:
+                    if max_value is not None and person_value > max_value:
                         if debug:
-                            logger.debug(f"    ⚠️  Person age {person_age} above maximum {max_age}, skipping")
+                            logger.debug(f"    ⚠️  Person {attr_name} {person_value} above maximum {max_value}, skipping")
                         self.stats['total_people'] += 1
                         self.stats['filtered_people'] += 1
                         return

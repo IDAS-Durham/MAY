@@ -36,9 +36,12 @@ additional_attributes:
 # ============================================================================
 filters:
   age:
-    min: 18
-    max: 65
+    attribute: "age"
+    type: "numerical"
     description: "Working age population"
+    numerical:
+      min: 18
+      max: 65
 
 # ============================================================================
 # Data Sources
