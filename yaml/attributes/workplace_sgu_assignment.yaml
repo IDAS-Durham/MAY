@@ -52,13 +52,18 @@ data_sources:
         # Key column: Match person's workplace LGU (from properties)
         key_column: "LGU"
 
-        # Map of SGU codes to their employment totals
-        # The loader will need to aggregate all SGUs for each LGU
+        # Geographical unit column: specifies which GU level to sample
+        # The loader will aggregate all GUs at this level for each parent
         # and create a probability distribution
-        sgu_column: "SGU"
+        geographical_unit_column:
+          name: "SGU"  # CSV column name
+          level: "SGU"  # Geographical level (SGU, MGU, LGU, etc.)
+
         weight_column: "Total"
+
         exclude_rows:
-          SGU: ["ALL"]  # Exclude aggregate rows
+          - column: "SGU"
+            values: ["ALL"]  # Exclude aggregate rows
 
 # ============================================================================
 # Assignment Rules (Person-Level)
@@ -68,11 +73,11 @@ assignment_rules:
     description: "Sample SGU within workplace LGU weighted by employment"
 
     rules:
-      - description: "Probabilistic SGU selection weighted by total employment"
+      - description: "Probabilistic geographical unit selection weighted by total employment"
         priority: 1
 
         assignment:
-          strategy: "sgu_sampler"  # Custom strategy for sampling SGU codes
+          strategy: "geographical_unit_sampler"  # Generic strategy for sampling any GU level
           data_source: "sgu_employment_distribution"
 
 # ============================================================================

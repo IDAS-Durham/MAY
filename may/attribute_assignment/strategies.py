@@ -681,20 +681,21 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         return None
 
 
-class SGUSamplerStrategy(AssignmentStrategy):
+class GUSamplerStrategy(AssignmentStrategy):
     """
-    Samples SGU within workplace LGU based on employment distribution.
+    Samples a geographical unit within a parent GU based on weighted distribution.
+    Generic strategy that works with any geographical hierarchy level.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
-        """Initialize SGU sampler strategy."""
+        """Initialize geographical unit sampler strategy."""
         super().__init__(config, data_manager)
         self.data_source_name = config.get('data_source')
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """
-        Sample SGU within person's workplace LGU.
-        Falls back to home LGU if workplace LGU has no data.
+        Sample a geographical unit within person's parent GU.
+        Falls back to home parent GU if workplace parent GU has no data.
 
         Args:
             person: Person object
@@ -702,52 +703,52 @@ class SGUSamplerStrategy(AssignmentStrategy):
             context: Assignment context
 
         Returns:
-            Sampled SGU code
+            Sampled geographical unit code
         """
         # Get workplace_location from person properties
-        workplace_lgu = person.properties.get('workplace_location')
-        if not workplace_lgu:
+        workplace_parent_gu = person.properties.get('workplace_location')
+        if not workplace_parent_gu:
             logger.warning(f"No workplace_location found for person {person.id}")
             return None
 
-        # Look up SGU distribution for this LGU
+        # Look up GU distribution for this parent GU
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
             logger.warning(f"Data source '{self.data_source_name}' not found")
             return None
 
-        sgu_probs = source.lookup(workplace_lgu)
+        gu_probs = source.lookup(workplace_parent_gu)
 
-        # Fallback: if no data for workplace LGU, try home LGU
-        if not sgu_probs:
-            # Get person's home LGU from their geographical_unit
-            home_lgu = None
+        # Fallback: if no data for workplace parent GU, try home parent GU
+        if not gu_probs:
+            # Get person's home parent GU from their geographical_unit
+            home_parent_gu = None
             if person.geographical_unit:
-                home_lgu_obj = person.geographical_unit.get_ancestor_by_level('LGU')
-                if home_lgu_obj:
-                    home_lgu = home_lgu_obj.name
+                home_parent_gu_obj = person.geographical_unit.get_ancestor_by_level('LGU')
+                if home_parent_gu_obj:
+                    home_parent_gu = home_parent_gu_obj.name
                 else:
-                    logger.debug(f"Person {person.id} SGU '{person.geographical_unit.name}' has no LGU ancestor")
+                    logger.debug(f"Person {person.id} GU '{person.geographical_unit.name}' has no LGU ancestor")
             else:
                 logger.debug(f"Person {person.id} has no geographical_unit set")
 
-            if home_lgu:
-                logger.debug(f"No SGU distribution for workplace LGU '{workplace_lgu}', "
-                           f"falling back to home LGU '{home_lgu}'")
-                sgu_probs = source.lookup(home_lgu)
+            if home_parent_gu:
+                logger.debug(f"No GU distribution for workplace parent GU '{workplace_parent_gu}', "
+                           f"falling back to home parent GU '{home_parent_gu}'")
+                gu_probs = source.lookup(home_parent_gu)
 
-            if not sgu_probs:
-                logger.warning(f"No SGU distribution found for LGU '{workplace_lgu}' "
-                             f"or home LGU '{home_lgu}'")
+            if not gu_probs:
+                logger.warning(f"No GU distribution found for parent GU '{workplace_parent_gu}' "
+                             f"or home parent GU '{home_parent_gu}'")
                 return None
 
-        # Sample SGU weighted by employment
-        sgu_codes = list(sgu_probs.keys())
-        probabilities = list(sgu_probs.values())
-        sampled_sgu = np.random.choice(sgu_codes, p=probabilities)
+        # Sample GU weighted by distribution
+        gu_codes = list(gu_probs.keys())
+        probabilities = list(gu_probs.values())
+        sampled_gu = np.random.choice(gu_codes, p=probabilities)
 
-        logger.debug(f"SGU Sampler: {sampled_sgu} for person {person.id} in LGU {workplace_lgu}")
-        return sampled_sgu
+        logger.debug(f"GU Sampler: {sampled_gu} for person {person.id} in parent GU {workplace_parent_gu}")
+        return sampled_gu
 
 
 class CategoricalSamplerStrategy(AssignmentStrategy):
@@ -821,7 +822,7 @@ class StrategyFactory:
         'reverse_inheritance': ReverseInheritanceStrategy,
         'probabilistic_conditions': ProbabilisticConditionsStrategy,
         'commuting_likelihood': CommutingLikelihoodStrategy,
-        'sgu_sampler': SGUSamplerStrategy,
+        'geographical_unit_sampler': GUSamplerStrategy,
         'categorical_sampler': CategoricalSamplerStrategy,
     }
 

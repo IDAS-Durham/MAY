@@ -728,22 +728,23 @@ class OriginDestinationMatrixSource(DataSource):
         return self._lookup.get(origin, [])
 
 
-class SGUSamplerSource(DataSource):
+class GUSamplerSource(DataSource):
     """
-    Data source for sampling SGUs within an LGU weighted by employment.
+    Data source for sampling geographical units within a parent GU weighted by distribution.
+    Generic source that works with any geographical hierarchy level.
 
-    Returns SGU codes as categorical values with employment-based weights.
+    Returns GU codes as categorical values with distribution-based weights.
     """
 
     def __init__(self, name: str, config: Dict[str, Any]):
-        """Initialize SGU sampler source."""
+        """Initialize geographical unit sampler source."""
         super().__init__(name, config)
-        # Lookup: lgu_name -> {sgu_code: employment_weight}
+        # Lookup: parent_gu_name -> {child_gu_code: weight}
         self._lookup: Dict[str, Dict[str, float]] = {}
         self._file_configs = config.get('files', [])
 
     def load_data(self, geo_units: Optional[set] = None):
-        """Load SGU employment distribution by LGU."""
+        """Load GU distribution by parent GU."""
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
@@ -754,29 +755,48 @@ class SGUSamplerSource(DataSource):
                     df = pd.read_csv(file_path)
 
                     lgu_column = file_config.get('key_column', 'LGU')
-                    sgu_column = file_config.get('sgu_column', 'SGU')
                     weight_column = file_config.get('weight_column', 'Total')
-                    exclude_rows = file_config.get('exclude_rows', {})
 
-                    # Apply row filters
-                    for col, exclude_values in exclude_rows.items():
-                        if col in df.columns:
-                            df = df[~df[col].isin(exclude_values)]
+                    # Handle geographical_unit_column (new format) or sgu_column (old format)
+                    geo_unit_config = file_config.get('geographical_unit_column')
+                    if geo_unit_config:
+                        # New format: {name: "SGU", level: "SGU"}
+                        geo_unit_column = geo_unit_config.get('name')
+                        geo_unit_level = geo_unit_config.get('level', 'SGU')
+                    else:
+                        # Old format: backward compatibility
+                        geo_unit_column = file_config.get('sgu_column', 'SGU')
+                        geo_unit_level = 'SGU'
 
-                    # Group by LGU and build SGU distribution
-                    for lgu_name, group in df.groupby(lgu_column):
-                        sgu_dist = {}
+                    # Handle exclude_rows (supports both old dict and new list format)
+                    exclude_rows_config = file_config.get('exclude_rows', [])
+                    if isinstance(exclude_rows_config, dict):
+                        # Old format: {column: [values]}
+                        for col, exclude_values in exclude_rows_config.items():
+                            if col in df.columns:
+                                df = df[~df[col].isin(exclude_values)]
+                    elif isinstance(exclude_rows_config, list):
+                        # New format: [{column: "col", values: [vals]}]
+                        for exclude_rule in exclude_rows_config:
+                            col = exclude_rule.get('column')
+                            exclude_values = exclude_rule.get('values', [])
+                            if col and col in df.columns:
+                                df = df[~df[col].isin(exclude_values)]
+
+                    # Group by parent GU and build child GU distribution
+                    for parent_name, group in df.groupby(lgu_column):
+                        geo_dist = {}
                         for _, row in group.iterrows():
-                            sgu_code = row[sgu_column]
+                            geo_code = row[geo_unit_column]
                             weight = float(row[weight_column])
-                            if weight > 0:  # Only include SGUs with workers
-                                sgu_dist[sgu_code] = weight
+                            if weight > 0:  # Only include GUs with workers
+                                geo_dist[geo_code] = weight
 
                         # Normalize to probabilities
-                        if sgu_dist:
-                            self._lookup[lgu_name] = self._normalize_probabilities(sgu_dist)
+                        if geo_dist:
+                            self._lookup[parent_name] = self._normalize_probabilities(geo_dist)
 
-                    logger.info(f"  ✓ Loaded SGU distributions for {len(self._lookup)} LGUs from {file_path.name}")
+                    logger.info(f"  ✓ Loaded {geo_unit_level} distributions for {len(self._lookup)} parent GUs from {file_path.name}")
 
                 except Exception as e:
                     logger.warning(f"  ✗ Error loading {file_path}: {e}")
@@ -785,20 +805,20 @@ class SGUSamplerSource(DataSource):
 
         self._data_loaded = True
 
-    def lookup(self, lgu_name: str) -> Dict[str, float]:
+    def lookup(self, parent_gu_name: str) -> Dict[str, float]:
         """
-        Look up SGU probability distribution for an LGU.
+        Look up GU probability distribution for a parent GU.
 
         Args:
-            lgu_name: LGU name (e.g., "Nuneaton and Bedworth")
+            parent_gu_name: Parent GU name (e.g., "Nuneaton and Bedworth")
 
         Returns:
-            Dictionary mapping SGU codes to probabilities
+            Dictionary mapping child GU codes to probabilities
         """
         if not self._data_loaded:
             return {}
 
-        return self._lookup.get(lgu_name, {})
+        return self._lookup.get(parent_gu_name, {})
 
 
 class DataSourceManager:
@@ -851,9 +871,10 @@ class DataSourceManager:
                         source_name, source_config.config
                     )
                 elif ('sgu' in source_name.lower() and 'sampler' in source_name.lower()) or \
+                     (file_config.get('geographical_unit_column') and file_config.get('weight_column')) or \
                      (file_config.get('sgu_column') and file_config.get('weight_column')):
-                    # SGU sampler: has sgu_column and weight_column for employment distribution
-                    self.sources[source_name] = SGUSamplerSource(
+                    # Geographical unit sampler: has geographical_unit_column (or sgu_column) and weight_column for distribution
+                    self.sources[source_name] = GUSamplerSource(
                         source_name, source_config.config
                     )
                 else:
