@@ -105,8 +105,11 @@ attributes:
   # Sequential attribute assignment configurations
   # Each config is applied in order (dependencies must be satisfied)
   configs:
-    - "yaml/attribute_assignment.yaml"           # Ethnicity (household-level)
-    - "yaml/comorbidity_assignment.yaml"         # Comorbidities (person-level, depends on ethnicity)
+    - "yaml/attributes/attribute_assignment.yaml"           # Ethnicity (household-level)
+    - "yaml/attributes/comorbidity_assignment.yaml"         # Comorbidities (person-level, depends on ethnicity)
+    - "yaml/attributes/workplace_assignment.yaml"           # Stage 1: Workplace LGU + work mode (person-level, 18-65)
+    - "yaml/attributes/workplace_sgu_assignment.yaml"       # Stage 2: Workplace SGU within LGU (depends on workplace_location)
+    - "yaml/attributes/work_sector_assignment.yaml"         # Stage 3: Work sector by LGU+Sex (depends on workplace_location, workplace_sgu)
 
 # ========================================
 # EXAMPLES

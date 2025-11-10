@@ -313,6 +313,7 @@ class AttributeAssignmentConfig:
         # Parse sections
         self.attribute_name = self._parse_attribute()
         self.assignment_level = self._parse_assignment_level()
+        self.filters = self._parse_filters()
         self.required_attributes = self._parse_required_attributes()
         self.region_mapping = self.raw_config.get('region_mapping', {})
         self.categories = self._parse_categories()
@@ -340,6 +341,10 @@ class AttributeAssignmentConfig:
     def _parse_assignment_level(self) -> str:
         """Parse assignment level (person_by_household or person)."""
         return self.raw_config.get('attribute', {}).get('assignment_level', 'person_by_household')
+
+    def _parse_filters(self) -> Dict[str, Any]:
+        """Parse filters (e.g., activity-based filtering)."""
+        return self.raw_config.get('filters', {})
 
     def _parse_required_attributes(self) -> Dict[str, Any]:
         """Parse required attributes (dependencies)."""

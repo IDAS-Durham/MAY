@@ -439,6 +439,14 @@ class MultiKeyLookupSource(DataSource):
                 try:
                     df = pd.read_csv(file_path)
 
+                    # Apply row filters if specified
+                    row_filter = file_config.get('row_filter', {})
+                    if row_filter:
+                        for col, value in row_filter.items():
+                            if col in df.columns:
+                                df = df[df[col] == value]
+                                logger.info(f"  Applied filter: {col} == '{value}' ({len(df)} rows remaining)")
+
                     # Get key and value columns
                     self._key_columns = list(file_config.get('key_columns', {}).keys())
                     self._key_columns_config = file_config.get('key_columns', {})
@@ -512,6 +520,9 @@ class MultiKeyLookupSource(DataSource):
         if debug:
             logger.debug(f"    [LOOKUP] ✓ Found data: {list(result.keys())[:3]}...")
 
+        # Normalize the result (convert counts to probabilities)
+        result = self._normalize_probabilities(result)
+
         return result
 
     def _resolve_key_value(self, col_config, person, household, context):
@@ -583,6 +594,213 @@ class MultiKeyLookupSource(DataSource):
         return None
 
 
+class OriginDestinationMatrixSource(DataSource):
+    """
+    Data source for origin-destination flow matrices.
+
+    Used for commuting patterns, migration flows, etc.
+    Returns all possible destinations for a given origin with associated likelihoods.
+    """
+
+    def __init__(self, name: str, config: Dict[str, Any]):
+        """Initialize O-D matrix source."""
+        super().__init__(name, config)
+        # Lookup: origin_code -> [(destination, metadata_dict, likelihood), ...]
+        self._lookup: Dict[str, List[Tuple[str, Dict[str, Any], float]]] = {}
+        self._file_configs = config.get('files', [])
+
+    def load_data(self, geo_units: Optional[set] = None):
+        """Load origin-destination flow data from CSV."""
+        logger.info(f"Loading data for source '{self.name}'...")
+
+        for file_config in self._file_configs:
+            file_path = Path(file_config['path'])
+
+            if file_path.exists():
+                try:
+                    df = pd.read_csv(file_path)
+
+                    # Get column configuration
+                    key_columns_config = file_config.get('key_columns', {})
+                    destination_column = file_config.get('destination_column')
+                    likelihood_column = file_config.get('likelihood_column')
+                    metadata_columns = file_config.get('metadata_columns', {})
+                    exclude_destinations = file_config.get('exclude_destinations', [])
+
+                    # Origin column is the first key in key_columns
+                    # e.g., if key_columns has 'LGU_origin_code', use that
+                    if key_columns_config:
+                        origin_column = list(key_columns_config.keys())[0]
+                    else:
+                        origin_column = 'LGU_origin_code'
+
+                    # Don't filter O-D matrix by geo_units - it uses different geography levels
+                    # The lookup will handle finding the right origin dynamically
+
+                    # Parse DataFrame
+                    self._lookup = self._parse_od_dataframe(
+                        df,
+                        origin_column,
+                        destination_column,
+                        likelihood_column,
+                        metadata_columns,
+                        exclude_destinations
+                    )
+
+                    logger.info(f"  ✓ Loaded {len(self._lookup)} origins from {file_path.name}")
+
+                except Exception as e:
+                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+            else:
+                logger.warning(f"  ✗ File not found: {file_path}")
+
+        self._data_loaded = True
+
+    def _parse_od_dataframe(self, df: pd.DataFrame,
+                           origin_column: str,
+                           destination_column: str,
+                           likelihood_column: str,
+                           metadata_columns: Dict[str, str],
+                           exclude_destinations: List[str]) -> Dict[str, List[Tuple[str, Dict[str, Any], float]]]:
+        """
+        Parse O-D DataFrame into lookup dictionary.
+
+        Args:
+            df: DataFrame to parse
+            origin_column: Column with origin codes
+            destination_column: Column with destination codes
+            likelihood_column: Column with likelihood/probability values
+            metadata_columns: Additional columns to include (e.g., work_mode)
+            exclude_destinations: List of destination codes to exclude
+
+        Returns:
+            Dictionary mapping origin codes to list of (destination, metadata, likelihood) tuples
+        """
+        lookup = {}
+
+        # Group by origin
+        for origin, group in df.groupby(origin_column):
+            destinations = []
+
+            for _, row in group.iterrows():
+                destination = row[destination_column]
+
+                # Skip excluded destinations
+                if destination in exclude_destinations:
+                    continue
+
+                likelihood = float(row[likelihood_column])
+
+                # Collect metadata
+                metadata = {}
+                for meta_key, meta_column in metadata_columns.items():
+                    if meta_column in df.columns:
+                        metadata[meta_key] = row[meta_column]
+
+                destinations.append((destination, metadata, likelihood))
+
+            # Normalize likelihoods to sum to 1.0
+            total_likelihood = sum(lik for _, _, lik in destinations)
+            if total_likelihood > 0:
+                destinations = [
+                    (dest, meta, lik / total_likelihood)
+                    for dest, meta, lik in destinations
+                ]
+
+            lookup[origin] = destinations
+
+        return lookup
+
+    def lookup(self, origin: str) -> List[Tuple[str, Dict[str, Any], float]]:
+        """
+        Look up possible destinations for a given origin.
+
+        Args:
+            origin: Origin code (e.g., SGU code)
+
+        Returns:
+            List of (destination, metadata, likelihood) tuples
+        """
+        if not self._data_loaded:
+            logger.warning(f"Data not loaded for source '{self.name}'")
+            return []
+
+        return self._lookup.get(origin, [])
+
+
+class SGUSamplerSource(DataSource):
+    """
+    Data source for sampling SGUs within an LGU weighted by employment.
+
+    Returns SGU codes as categorical values with employment-based weights.
+    """
+
+    def __init__(self, name: str, config: Dict[str, Any]):
+        """Initialize SGU sampler source."""
+        super().__init__(name, config)
+        # Lookup: lgu_name -> {sgu_code: employment_weight}
+        self._lookup: Dict[str, Dict[str, float]] = {}
+        self._file_configs = config.get('files', [])
+
+    def load_data(self, geo_units: Optional[set] = None):
+        """Load SGU employment distribution by LGU."""
+        logger.info(f"Loading data for source '{self.name}'...")
+
+        for file_config in self._file_configs:
+            file_path = Path(file_config['path'])
+
+            if file_path.exists():
+                try:
+                    df = pd.read_csv(file_path)
+
+                    lgu_column = file_config.get('key_column', 'LGU')
+                    sgu_column = file_config.get('sgu_column', 'SGU')
+                    weight_column = file_config.get('weight_column', 'Total')
+                    exclude_rows = file_config.get('exclude_rows', {})
+
+                    # Apply row filters
+                    for col, exclude_values in exclude_rows.items():
+                        if col in df.columns:
+                            df = df[~df[col].isin(exclude_values)]
+
+                    # Group by LGU and build SGU distribution
+                    for lgu_name, group in df.groupby(lgu_column):
+                        sgu_dist = {}
+                        for _, row in group.iterrows():
+                            sgu_code = row[sgu_column]
+                            weight = float(row[weight_column])
+                            if weight > 0:  # Only include SGUs with workers
+                                sgu_dist[sgu_code] = weight
+
+                        # Normalize to probabilities
+                        if sgu_dist:
+                            self._lookup[lgu_name] = self._normalize_probabilities(sgu_dist)
+
+                    logger.info(f"  ✓ Loaded SGU distributions for {len(self._lookup)} LGUs from {file_path.name}")
+
+                except Exception as e:
+                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+            else:
+                logger.warning(f"  ✗ File not found: {file_path}")
+
+        self._data_loaded = True
+
+    def lookup(self, lgu_name: str) -> Dict[str, float]:
+        """
+        Look up SGU probability distribution for an LGU.
+
+        Args:
+            lgu_name: LGU name (e.g., "Nuneaton and Bedworth")
+
+        Returns:
+            Dictionary mapping SGU codes to probabilities
+        """
+        if not self._data_loaded:
+            return {}
+
+        return self._lookup.get(lgu_name, {})
+
+
 class DataSourceManager:
     """
     Manager for all data sources.
@@ -611,7 +829,13 @@ class DataSourceManager:
                 file_config = source_config.config.get('files', [{}])[0]
                 key_columns = file_config.get('key_columns')
 
-                if isinstance(key_columns, dict) and any(
+                # Check for O-D matrix format
+                output_format = file_config.get('output_format')
+                if output_format == 'origin_destination_matrix':
+                    self.sources[source_name] = OriginDestinationMatrixSource(
+                        source_name, source_config.config
+                    )
+                elif isinstance(key_columns, dict) and any(
                     isinstance(v, dict) for v in key_columns.values()
                 ):
                     # Multi-key lookup (values are dicts with 'attribute', 'type', etc.)
@@ -626,11 +850,20 @@ class DataSourceManager:
                     self.sources[source_name] = PairProbabilitySource(
                         source_name, source_config.config
                     )
+                elif ('sgu' in source_name.lower() and 'sampler' in source_name.lower()) or \
+                     (file_config.get('sgu_column') and file_config.get('weight_column')):
+                    # SGU sampler: has sgu_column and weight_column for employment distribution
+                    self.sources[source_name] = SGUSamplerSource(
+                        source_name, source_config.config
+                    )
                 else:
                     # Default to geo distribution
                     self.sources[source_name] = GeoDistributionSource(
                         source_name, source_config.config
                     )
+            elif source_type == 'constant':
+                # Constant source (for fallbacks) - skip for now
+                logger.debug(f"Skipping constant source: {source_name}")
             else:
                 logger.warning(f"Unknown data source type: {source_type}")
 

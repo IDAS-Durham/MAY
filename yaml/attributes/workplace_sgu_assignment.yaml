@@ -1,0 +1,102 @@
+# ============================================================================
+# Workplace SGU Assignment Configuration
+# ============================================================================
+# Assigns specific SGU within the workplace LGU based on employment distribution.
+# This provides fine-grained spatial workplace location.
+#
+# Assignment Level: person
+# - Samples SGU within the workplace LGU weighted by total employment
+# - More workers → higher probability of working in that SGU
+#
+# Dependencies: workplace_location (LGU name must be assigned first)
+# ============================================================================
+
+attribute:
+  name: "workplace_sgu"
+  description: "Assigns specific SGU within workplace LGU"
+  data_type: "categorical"
+  assignment_level: "person"
+
+# ============================================================================
+# Filters - Only assign to working-age people (18-65)
+# ============================================================================
+filters:
+  age:
+    min: 18
+    max: 65
+    description: "Working age population"
+
+# ============================================================================
+# Required Attributes (Dependencies)
+# ============================================================================
+required_attributes:
+  workplace_location:
+    description: "Workplace LGU must be assigned first"
+    required: true
+    error_if_missing: true
+
+# ============================================================================
+# Data Sources
+# ============================================================================
+data_sources:
+  sgu_employment_distribution:
+    type: "csv_lookup"
+    description: "SGU employment totals within each LGU for spatial distribution"
+
+    files:
+      - path: "data/activities/work/EW_workers_by_industry_by_OA.csv"
+
+        # Key column: Match person's workplace LGU (from properties)
+        key_column: "LGU"
+
+        # Map of SGU codes to their employment totals
+        # The loader will need to aggregate all SGUs for each LGU
+        # and create a probability distribution
+        sgu_column: "SGU"
+        weight_column: "Total"
+        exclude_rows:
+          SGU: ["ALL"]  # Exclude aggregate rows
+
+# ============================================================================
+# Assignment Rules (Person-Level)
+# ============================================================================
+assignment_rules:
+  person:
+    description: "Sample SGU within workplace LGU weighted by employment"
+
+    rules:
+      - description: "Probabilistic SGU selection weighted by total employment"
+        priority: 1
+
+        assignment:
+          strategy: "sgu_sampler"  # Custom strategy for sampling SGU codes
+          data_source: "sgu_employment_distribution"
+
+# ============================================================================
+# Settings
+# ============================================================================
+settings:
+  random_seed: null
+  normalize_probabilities: true
+  cache_lookups: true
+
+  error_handling:
+    missing_workplace_location: "skip_person"
+    missing_lookup_data: "skip_person"
+
+  logging:
+    level: "INFO"
+    detailed_assignment_logging: false
+    show_samples: true
+    sample_size: 10
+
+# ============================================================================
+# Notes
+# ============================================================================
+# This assignment distributes workers within a workplace LGU to specific SGUs
+# based on employment density. SGUs with more jobs have higher probability.
+#
+# Example:
+# - Person assigned to workplace_location = "Nuneaton and Bedworth" (LGU)
+# - This config samples a specific SGU like "E00186958" within that LGU
+# - Probability proportional to Total workers in each SGU

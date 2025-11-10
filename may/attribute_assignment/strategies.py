@@ -540,6 +540,273 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         return selected_conditions
 
 
+class CommutingLikelihoodStrategy(AssignmentStrategy):
+    """
+    Assigns workplace location based on origin-destination commuting flows.
+
+    Samples from an origin-destination matrix weighted by likelihood.
+    Can assign multiple attributes (e.g., workplace_location and work_mode).
+    """
+
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize commuting likelihood strategy."""
+        super().__init__(config, data_manager)
+        self.data_source_name = config.get('data_source')
+        self.outputs = config.get('outputs', {})
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """
+        Assign workplace location and work mode based on commuting flows.
+
+        Args:
+            person: Person object
+            household: Household object (optional, may be None for person-level assignment)
+            context: Assignment context
+
+        Returns:
+            If single output: returns the assigned value
+            If multiple outputs: returns dict with all assigned values
+        """
+        # Get person's origin (residence) geographical unit
+        # Need to resolve to the correct level (e.g., LGU name) based on data source config
+        origin_geo_unit = getattr(person, 'geographical_unit', None)
+        if not origin_geo_unit:
+            logger.warning(f"No geographical unit found for person {person.id}")
+            return self._get_fallback(person, household, context)
+
+        # Get the data source to check its configuration
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            logger.warning(f"Data source '{self.data_source_name}' not found")
+            return self._get_fallback(person, household, context)
+
+        # Resolve origin based on data source key configuration
+        # Check if this is an O-D matrix source with key_columns config
+        if hasattr(source, '_file_configs') and source._file_configs:
+            file_config = source._file_configs[0]
+            key_columns = file_config.get('key_columns', {})
+
+            if key_columns:
+                # Get first key column config (origin)
+                first_key_config = list(key_columns.values())[0]
+
+                # Check if we need to traverse hierarchy
+                if isinstance(first_key_config, dict):
+                    lookup_type = first_key_config.get('type')
+                    if lookup_type == 'ancestor_lookup':
+                        level = first_key_config.get('level')
+                        property_name = first_key_config.get('property', 'name')
+
+                        # Traverse to ancestor level
+                        ancestor = origin_geo_unit.get_ancestor_by_level(level)
+                        if ancestor:
+                            origin_code = getattr(ancestor, property_name)
+                        else:
+                            logger.warning(f"Could not find {level} ancestor for {origin_geo_unit.name}")
+                            return self._get_fallback(person, household, context)
+                    else:
+                        origin_code = origin_geo_unit.name
+                else:
+                    origin_code = origin_geo_unit.name
+            else:
+                origin_code = origin_geo_unit.name
+        else:
+            origin_code = origin_geo_unit.name
+
+        # Look up destinations from O-D matrix
+        destinations = source.lookup(origin_code)
+        if not destinations:
+            logger.warning(f"No destinations found for origin {origin_code}")
+            return self._get_fallback(person, household, context)
+
+        # Sample from destinations weighted by likelihood
+        # destinations is List[(destination, metadata_dict, likelihood)]
+        dest_codes = [dest for dest, meta, lik in destinations]
+        likelihoods = [lik for dest, meta, lik in destinations]
+        metadata_list = [meta for dest, meta, lik in destinations]
+
+        # Sample one destination
+        idx = np.random.choice(len(dest_codes), p=likelihoods)
+        sampled_dest = dest_codes[idx]
+        sampled_metadata = metadata_list[idx]
+
+        # Build output based on configured outputs
+        if len(self.outputs) == 1:
+            # Single output - return just the value
+            output_attr, output_source = list(self.outputs.items())[0]
+            if output_source == 'destination':
+                return sampled_dest
+            elif output_source in sampled_metadata:
+                return sampled_metadata[output_source]
+            else:
+                logger.warning(f"Output source '{output_source}' not found in metadata")
+                return sampled_dest
+        else:
+            # Multiple outputs - return dict
+            result = {}
+            for output_attr, output_source in self.outputs.items():
+                if output_source == 'destination':
+                    result[output_attr] = sampled_dest
+                elif output_source in sampled_metadata:
+                    result[output_attr] = sampled_metadata[output_source]
+                else:
+                    logger.warning(f"Output source '{output_source}' not found")
+
+            logger.debug(f"Commuting: {person.id} -> {result}")
+            return result
+
+    def _get_fallback(self, person, household, context):
+        """Get fallback value when commuting data not available."""
+        # Default fallback: work in same location as residence
+        fallback_config = self.config.get('fallback', {})
+        fallback_strategy_type = fallback_config.get('strategy')
+
+        if fallback_strategy_type == 'constant':
+            # Return constant values
+            data_source_name = fallback_config.get('data_source')
+            if data_source_name:
+                fallback_source = self.data_manager.get_source(data_source_name)
+                if fallback_source:
+                    return fallback_source.lookup(person)
+
+            # Hard-coded fallback: work at home
+            if len(self.outputs) == 1:
+                return person.geographical_unit.name
+            else:
+                return {
+                    'workplace_location': person.geographical_unit.name,
+                    'work_mode': 'Normal'
+                }
+
+        return None
+
+
+class SGUSamplerStrategy(AssignmentStrategy):
+    """
+    Samples SGU within workplace LGU based on employment distribution.
+    """
+
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize SGU sampler strategy."""
+        super().__init__(config, data_manager)
+        self.data_source_name = config.get('data_source')
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """
+        Sample SGU within person's workplace LGU.
+        Falls back to home LGU if workplace LGU has no data.
+
+        Args:
+            person: Person object
+            household: Household object (optional)
+            context: Assignment context
+
+        Returns:
+            Sampled SGU code
+        """
+        # Get workplace_location from person properties
+        workplace_lgu = person.properties.get('workplace_location')
+        if not workplace_lgu:
+            logger.warning(f"No workplace_location found for person {person.id}")
+            return None
+
+        # Look up SGU distribution for this LGU
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            logger.warning(f"Data source '{self.data_source_name}' not found")
+            return None
+
+        sgu_probs = source.lookup(workplace_lgu)
+
+        # Fallback: if no data for workplace LGU, try home LGU
+        if not sgu_probs:
+            # Get person's home LGU from their geographical_unit
+            home_lgu = None
+            if person.geographical_unit:
+                home_lgu_obj = person.geographical_unit.get_ancestor_by_level('LGU')
+                if home_lgu_obj:
+                    home_lgu = home_lgu_obj.name
+                else:
+                    logger.debug(f"Person {person.id} SGU '{person.geographical_unit.name}' has no LGU ancestor")
+            else:
+                logger.debug(f"Person {person.id} has no geographical_unit set")
+
+            if home_lgu:
+                logger.debug(f"No SGU distribution for workplace LGU '{workplace_lgu}', "
+                           f"falling back to home LGU '{home_lgu}'")
+                sgu_probs = source.lookup(home_lgu)
+
+            if not sgu_probs:
+                logger.warning(f"No SGU distribution found for LGU '{workplace_lgu}' "
+                             f"or home LGU '{home_lgu}'")
+                return None
+
+        # Sample SGU weighted by employment
+        sgu_codes = list(sgu_probs.keys())
+        probabilities = list(sgu_probs.values())
+        sampled_sgu = np.random.choice(sgu_codes, p=probabilities)
+
+        logger.debug(f"SGU Sampler: {sampled_sgu} for person {person.id} in LGU {workplace_lgu}")
+        return sampled_sgu
+
+
+class CategoricalSamplerStrategy(AssignmentStrategy):
+    """
+    Samples ONE category from a probability distribution.
+
+    Works with MultiKeyLookupSource that returns {category: probability} dicts.
+    Unlike ProbabilisticConditionsStrategy which samples multiple yes/no conditions,
+    this samples exactly one mutually-exclusive category (e.g., one industry sector).
+    """
+
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize categorical sampler strategy."""
+        super().__init__(config, data_manager)
+        self.data_source_name = config.get('data_source')
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """
+        Sample one category from probability distribution.
+
+        Args:
+            person: Person object
+            household: Household object (optional)
+            context: Assignment context
+
+        Returns:
+            Sampled category value
+        """
+        # Get data source
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            logger.warning(f"Data source '{self.data_source_name}' not found")
+            return None
+
+        # Look up probability distribution
+        probs = source.lookup(person, household, context)
+        if not probs:
+            logger.warning(f"No probabilities found for person {person.id}")
+            return None
+
+        # Sample one category
+        categories = list(probs.keys())
+        probabilities = list(probs.values())
+
+        # Normalize if needed
+        total = sum(probabilities)
+        if total <= 0:
+            logger.warning(f"Invalid probabilities (sum={total}) for person {person.id}")
+            return None
+
+        if abs(total - 1.0) > 0.01:  # Not normalized
+            probabilities = [p / total for p in probabilities]
+
+        sampled = np.random.choice(categories, p=probabilities)
+
+        logger.debug(f"Categorical: {sampled} for person {person.id}")
+        return sampled
+
+
 class StrategyFactory:
     """
     Factory for creating strategy instances.
@@ -553,6 +820,9 @@ class StrategyFactory:
         'inheritance': InheritanceStrategy,
         'reverse_inheritance': ReverseInheritanceStrategy,
         'probabilistic_conditions': ProbabilisticConditionsStrategy,
+        'commuting_likelihood': CommutingLikelihoodStrategy,
+        'sgu_sampler': SGUSamplerStrategy,
+        'categorical_sampler': CategoricalSamplerStrategy,
     }
 
     @classmethod

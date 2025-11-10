@@ -126,8 +126,9 @@ class World:
         logger.info("="*60)
 
         # Get geo units from geography if not provided
+        # For data loading, we only need SGU codes (most granular level)
         if geo_units is None and self.geography:
-            geo_units = {unit.name for unit in self.geography.get_all_units_list()}
+            geo_units = {unit.name for unit in self.geography.get_all_units_list() if unit.level == "SGU"}
 
         # Run attribute assignment
         stats = assign_attributes(

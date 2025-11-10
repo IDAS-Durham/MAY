@@ -56,6 +56,8 @@ class AttributeAssigner:
             'attribute_distribution': defaultdict(int),
             'household_structure_counts': defaultdict(int),
             'unassigned_people': 0,
+            'filtered_people': 0,  # People filtered out by age/activity filters
+            'assigned_people': 0,  # People successfully assigned
         }
 
     def assign_all(self, venue_manager) -> Dict[str, Any]:
@@ -258,7 +260,9 @@ class AttributeAssigner:
                 logger.info(f"  Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
 
         logger.info(f"✓ Processed {len(all_people)} people")
-        logger.info(f"✓ Assigned {self.stats['total_people'] - self.stats['unassigned_people']} people")
+        logger.info(f"✓ Filtered {self.stats['filtered_people']} people (age/activity filters)")
+        logger.info(f"✓ Assigned {self.stats['assigned_people']} people")
+        logger.info(f"✓ Unassigned {self.stats['unassigned_people']} people (failed assignment)")
         logger.info(f"✓ Fallback used: {self.stats.get('fallback_count', 0)} times")
         logger.info("")
 
@@ -451,6 +455,59 @@ class AttributeAssigner:
             person: Person object
             debug: If True, log detailed debug information
         """
+        # Check filters (if configured)
+        if hasattr(self.config, 'filters') and self.config.filters:
+            # Age filters
+            age_filters = self.config.filters.get('age', {})
+            if age_filters:
+                person_age = getattr(person, 'age', None)
+                if person_age is not None:
+                    min_age = age_filters.get('min')
+                    max_age = age_filters.get('max')
+
+                    if min_age is not None and person_age < min_age:
+                        if debug:
+                            logger.debug(f"    ⚠️  Person age {person_age} below minimum {min_age}, skipping")
+                        self.stats['total_people'] += 1
+                        self.stats['filtered_people'] += 1
+                        return
+
+                    if max_age is not None and person_age > max_age:
+                        if debug:
+                            logger.debug(f"    ⚠️  Person age {person_age} above maximum {max_age}, skipping")
+                        self.stats['total_people'] += 1
+                        self.stats['filtered_people'] += 1
+                        return
+
+            # Activity filters
+            activity_filters = self.config.filters.get('activities', {})
+            if activity_filters:
+                include_activities = activity_filters.get('include', [])
+                exclude_activities = activity_filters.get('exclude', [])
+
+                # Check if person has required activities
+                person_activities = getattr(person, 'activities', [])
+
+                if include_activities:
+                    # Person must have at least one of the included activities
+                    has_required_activity = any(activity in person_activities for activity in include_activities)
+                    if not has_required_activity:
+                        if debug:
+                            logger.debug(f"    ⚠️  Person doesn't have required activities {include_activities}, skipping")
+                        self.stats['total_people'] += 1
+                        self.stats['filtered_people'] += 1
+                        return
+
+                if exclude_activities:
+                    # Person must not have any of the excluded activities
+                    has_excluded_activity = any(activity in person_activities for activity in exclude_activities)
+                    if has_excluded_activity:
+                        if debug:
+                            logger.debug(f"    ⚠️  Person has excluded activities {exclude_activities}, skipping")
+                        self.stats['total_people'] += 1
+                        self.stats['filtered_people'] += 1
+                        return
+
         # Check dependencies
         for attr_name, attr_config in self.config.required_attributes.items():
             if attr_config.get('required', False):
@@ -491,24 +548,59 @@ class AttributeAssigner:
             value = strategy.assign(person, household, context)
 
             if value is not None:
-                person.properties[self.attribute_name] = value
-                self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
-                self.stats['attribute_distribution'][str(value)] += 1
-                self.stats['total_people'] += 1
+                # Handle single value or multiple values (dict)
+                if isinstance(value, dict):
+                    # Multiple attributes returned (e.g., workplace_location and work_mode)
+                    for attr_name, attr_value in value.items():
+                        person.properties[attr_name] = attr_value
+                        if attr_name == self.attribute_name:
+                            self.stats['attribute_distribution'][str(attr_value)] += 1
+                    if debug:
+                        logger.debug(f"    ✓ Assigned: {value}")
+                else:
+                    # Single attribute
+                    person.properties[self.attribute_name] = value
+                    self.stats['attribute_distribution'][str(value)] += 1
+                    if debug:
+                        logger.debug(f"    ✓ Assigned: {value}")
 
-                if debug:
-                    logger.debug(f"    ✓ Assigned: {value}")
+                self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
+                self.stats['assigned_people'] += 1
+                self.stats['total_people'] += 1
             else:
+                # Strategy returned None - log detailed failure info
+                logger.warning(f"Failed to assign {self.attribute_name} to person {person.id}")
+                logger.warning(f"  Person details: age={person.age}, sex={person.sex}, geo_unit={person.geographical_unit.name if person.geographical_unit else 'None'}")
+
+                # Show residence information
+                if household:
+                    logger.warning(f"  Residence: Household {household.id} in {household.geographical_unit.name if household.geographical_unit else 'None'}")
+                else:
+                    # Check activity_map for other residence types
+                    residence_activities = [act for act in person.activity_map.keys() if act in ['care_home', 'student_dorms', 'boarding_school']]
+                    if residence_activities:
+                        res_type = residence_activities[0]
+                        res_venue = person.activity_map[res_type][0].venue if person.activity_map[res_type] else None
+                        logger.warning(f"  Residence: {res_type} {res_venue.id if res_venue else 'unknown'} (type={res_venue.type if res_venue else 'unknown'})")
+                    else:
+                        logger.warning(f"  Residence: None (no household or care facility)")
+
+                logger.warning(f"  Existing attributes: {list(person.properties.keys())}")
+                logger.warning(f"  Strategy: {strategy.strategy_type}, Data source: {rule.assignment.get('data_source', 'N/A')}")
                 if debug:
                     logger.debug(f"    ⚠️  Strategy returned None")
                 self.stats['unassigned_people'] += 1
                 self.stats['total_people'] += 1
 
         except Exception as e:
+            # Exception during assignment - log detailed error info
+            logger.error(f"Exception assigning {self.attribute_name} to person {person.id}: {e}")
+            logger.error(f"  Person details: age={person.age}, sex={person.sex}, geo_unit={person.geographical_unit.name if person.geographical_unit else 'None'}")
+            logger.error(f"  Existing attributes: {list(person.properties.keys())}")
+            logger.error(f"  Strategy: {strategy.strategy_type if 'strategy' in locals() else 'unknown'}")
             if debug:
-                logger.error(f"    ❌ Error: {e}")
-            else:
-                logger.error(f"Error assigning to {person}: {e}")
+                import traceback
+                logger.error(f"    Traceback:\n{traceback.format_exc()}")
             self.stats['unassigned_people'] += 1
             self.stats['total_people'] += 1
 
@@ -545,6 +637,16 @@ class AttributeAssigner:
         logger.info("ASSIGNMENT STATISTICS")
         logger.info("=" * 80)
         logger.info(f"Total people: {self.stats['total_people']}")
+
+        # Show filtered/assigned/unassigned breakdown
+        if self.stats.get('filtered_people', 0) > 0:
+            logger.info(f"Filtered people (age/activity): {self.stats['filtered_people']}")
+        if self.stats.get('assigned_people', 0) > 0:
+            logger.info(f"Assigned people: {self.stats['assigned_people']}")
+        if self.stats['unassigned_people'] > 0:
+            logger.info(f"Unassigned people (failures): {self.stats['unassigned_people']}")
+
+        # Household-specific stats
         if self.stats['people_in_households'] > 0:
             logger.info(f"  In households: {self.stats['people_in_households']}")
         if self.stats['people_in_other_residences'] > 0:
@@ -553,7 +655,6 @@ class AttributeAssigner:
             logger.info(f"Households processed: {self.stats['households_processed']}")
         if self.stats['other_residences_processed'] > 0:
             logger.info(f"Other residences processed: {self.stats['other_residences_processed']}")
-        logger.info(f"Unassigned people: {self.stats['unassigned_people']}")
         logger.info("")
 
         # Show breakdown by venue type if applicable
