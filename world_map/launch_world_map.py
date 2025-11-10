@@ -165,7 +165,7 @@ Examples:
     parser.add_argument(
         '--map-bounds',
         type=str,
-        help='Geographic bounds for custom image: "south,west,north,east" (required if --map-background=image). Example: "50.0,-5.0,55.0,2.0"'
+        help='Geographic bounds for custom image: "north,east,south,west" (required if --map-background=image). Example: "55.0,2.0,50.0,-5.0"'
     )
 
     parser.add_argument(
@@ -229,7 +229,7 @@ Examples:
             if len(bounds_values) != 4:
                 raise ValueError("Expected 4 values")
 
-            south, west, north, east = bounds_values
+            north, east, south, west = bounds_values
 
             # Validate bounds
             if not (-90 <= south < north <= 90):
@@ -241,8 +241,8 @@ Examples:
 
         except Exception as e:
             print(f"\nERROR: Invalid bounds format: {e}")
-            print("Expected format: 'south,west,north,east'")
-            print("Example: '50.0,-5.0,55.0,2.0'\n")
+            print("Expected format: 'north,east,south,west'")
+            print("Example: '55.0,2.0,50.0,-5.0'\n")
             sys.exit(1)
 
         # Check if image file exists (if it's a local path)

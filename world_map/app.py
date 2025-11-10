@@ -112,6 +112,7 @@ def get_geography_level(level):
     Get all geographical units at a specific level as GeoJSON.
 
     Returns point features with coordinates and metadata.
+    
     """
     try:
         world = get_world()

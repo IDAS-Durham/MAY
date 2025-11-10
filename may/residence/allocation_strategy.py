@@ -13,7 +13,9 @@ from .venue_allocator import _allocate_to_venue_type
 logger = logging.getLogger("allocation_strategy")
 
 
-def execute_allocation_strategy(population, venues, household_distributor,
+def execute_allocation_strategy(population,
+                                venues,
+                                household_distributor,
                                 strategy_file: str = "data/households/allocation_strategy.yaml"):
     """
     Execute a unified allocation strategy from YAML configuration.
@@ -25,10 +27,11 @@ def execute_allocation_strategy(population, venues, household_distributor,
         population: PopulationManager
         venues: VenueManager
         household_distributor: HouseholdDistributor
-        strategy_file: Path to YAML strategy file (relative or absolute)
+        strategy_file (str, optional): Path to YAML strategy file (relative or absolute). Default is "data/households/allocation_strategy.yaml". 
 
     Returns:
         dict: Complete statistics for all steps
+    
     """
     logger.info("=" * 60)
     logger.info("Executing Unified Allocation Strategy")
