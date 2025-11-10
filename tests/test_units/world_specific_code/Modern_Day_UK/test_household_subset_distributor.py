@@ -1,5 +1,5 @@
 import pytest
-from world_specific_code.household_distributors import HouseholdSubsetDistributor
+from world_specific_code.Modern_Day_UK.household_distributors import HouseholdSubsetDistributor
 from may.population import Person
 from may.geography import GeographicalUnit
 
