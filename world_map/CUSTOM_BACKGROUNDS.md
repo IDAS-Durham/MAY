@@ -106,7 +106,7 @@ python launch_world_map.py --world-file world.joblib
 
 ### Geographic Referencing
 
-1. User provides image and four corner coordinates (south, west, north, east)
+1. User provides image and four corner coordinates (north, east, south, west)
 2. Backend stores this configuration
 3. Frontend fetches configuration via `/api/map/config`
 4. Leaflet creates an `imageOverlay` with the specified bounds
@@ -163,7 +163,7 @@ L.imageOverlay(imageUrl, bounds, {
 
 ### Bounds Format
 
-- **Input**: `"south,west,north,east"` (comma-separated string)
+- **Input**: `"north,east,south,west"` (comma-separated string)
 - **Parsed**: `[[south, west], [north, east]]` (nested array)
 - **Leaflet**: `L.latLngBounds(L.latLng(south, west), L.latLng(north, east))`
 
