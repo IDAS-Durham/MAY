@@ -72,6 +72,14 @@ eligibility:
   # (prevents double-allocation)
   require_unassigned: true
 
+  # Global eligibility filters (apply to ALL allocation phases)
+  # IMPORTANT: These filters apply to Phase 1 (special cases), Phase 2 (mandatory/optional groups), AND Phase 3 (normal allocation)
+  global_filters:
+    - attribute: "residence.type"
+      type: "categorical"
+      description: "Only allocate people living in households or boarding schools (exclude university dorms, care homes, etc.)"
+      values: ["household", "boarding_school"]
+
   # Mandatory allocation groups (MUST be allocated, even if capacity full)
   # These groups are prioritized and can overflow venue capacity
   mandatory_allocation:
@@ -81,7 +89,7 @@ eligibility:
     groups:
       # Group 1: School-age children (MANDATORY - cannot be left unallocated)
       - name: "mandatory_school_age"
-        description: "Children aged 5-17 MUST attend school"
+        description: "Children aged 5-17 MUST attend school (only if living in household or boarding school)"
         priority: 1  # Highest priority
         allow_overflow: true  # Can exceed venue capacity, but still respects age/gender constraints
 
@@ -91,9 +99,14 @@ eligibility:
             min: 5
             max: 17
 
+          - attribute: "residence.type"
+            type: "categorical"
+            description: "Only allocate people living in households or boarding schools (not university dorms)"
+            values: ["household", "boarding_school"]
+
       # Group 2: Sixth form / Further education (OPTIONAL - second priority)
       - name: "optional_sixth_form"
-        description: "Students aged 18-19 (optional, second priority)"
+        description: "Students aged 18-19 (optional, second priority, only if living in household or boarding school)"
         priority: 2  # Second priority
         allow_overflow: false  # Respect capacity limits
 
@@ -103,9 +116,14 @@ eligibility:
             min: 18
             max: 19
 
+          - attribute: "residence.type"
+            type: "categorical"
+            description: "Only allocate people living in households or boarding schools (not university dorms)"
+            values: ["household", "boarding_school"]
+
       # Group 3: Early childhood (OPTIONAL - only if space available)
       - name: "optional_early_childhood"
-        description: "Children under 5 (optional, third priority)"
+        description: "Children under 5 (optional, third priority, only if living in household or boarding school)"
         priority: 3  # Lowest priority
         allow_overflow: false  # Respect capacity limits
 
@@ -114,6 +132,11 @@ eligibility:
             type: "numerical"
             min: 0
             max: 4
+
+          - attribute: "residence.type"
+            type: "categorical"
+            description: "Only allocate people living in households or boarding schools (not university dorms)"
+            values: ["household", "boarding_school"]
 
   # General attribute-based filtering (applies to all groups)
   attributes:

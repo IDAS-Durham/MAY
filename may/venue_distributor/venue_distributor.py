@@ -114,6 +114,10 @@ class VenueDistributor:
         eligible = []
         already_assigned = 0
         missing_attrs = 0
+        filtered_by_global = 0
+
+        # Get global filters (apply to ALL allocation phases)
+        global_filters = self.config.get('eligibility', {}).get('global_filters', [])
 
         for person in world.people:
             # Check if already assigned
@@ -129,10 +133,15 @@ class VenueDistributor:
                     logger.debug(f"Person {person.id} missing required attributes. Has: {dir(person)}")
                 continue
 
+            # Check global filters (e.g., residence type)
+            if global_filters and not self._person_matches_filters(person, global_filters):
+                filtered_by_global += 1
+                continue
+
             eligible.append(person)
 
         if self.verbose:
-            logger.info(f"Eligibility check: {already_assigned} already assigned, {missing_attrs} missing attributes, {len(eligible)} eligible")
+            logger.info(f"Eligibility check: {already_assigned} already assigned, {missing_attrs} missing attributes, {filtered_by_global} filtered by global rules, {len(eligible)} eligible")
 
         return eligible
 
@@ -244,21 +253,72 @@ class VenueDistributor:
         """Check if person matches all filters in a mandatory group."""
         for filter_rule in filters:
             attr_name = filter_rule.get('attribute')
+            filter_type = filter_rule.get('type', 'numerical')
             min_val = filter_rule.get('min')
             max_val = filter_rule.get('max')
             value = filter_rule.get('value')
+            values = filter_rule.get('values', [])  # For categorical filters with multiple allowed values
 
-            person_value = getattr(person, attr_name, None)
-            if person_value is None:
-                return False
+            # Handle nested attributes (e.g., "residence.type")
+            if '.' in attr_name:
+                # Special handling for residence.type - check activity_map
+                if attr_name == 'residence.type':
+                    person_value = None
+                    # Check all possible residence types in activity_map
+                    # Residences are stored as person.activity_map[venue_type] = [Subset, ...]
+                    residence_types = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
 
-            # Range check
-            if min_val is not None and person_value < min_val:
-                return False
-            if max_val is not None and person_value > max_val:
-                return False
+                    for residence_type in residence_types:
+                        if residence_type in person.activity_map and person.activity_map[residence_type]:
+                            residence = person.activity_map[residence_type]
+                            # activity_map stores a list of Subsets
+                            if isinstance(residence, list) and residence:
+                                # Get the venue from the first subset
+                                subset = residence[0]
+                                if hasattr(subset, 'venue'):
+                                    person_value = subset.venue.type
+                                else:
+                                    person_value = residence_type
+                            else:
+                                person_value = residence_type
+                            break
 
-            # Exact value check
+                    # If still no residence found, treat as 'household' (default)
+                    if person_value is None:
+                        person_value = 'household'
+                else:
+                    # Generic nested attribute handling
+                    parts = attr_name.split('.')
+                    person_value = person
+                    for part in parts:
+                        person_value = getattr(person_value, part, None)
+                        if person_value is None:
+                            return False
+            else:
+                person_value = getattr(person, attr_name, None)
+                if person_value is None:
+                    return False
+
+            # Numerical filters: Range check
+            if filter_type == 'numerical':
+                if min_val is not None and person_value < min_val:
+                    return False
+                if max_val is not None and person_value > max_val:
+                    return False
+
+            # Categorical filters: Check if value is in allowed list
+            elif filter_type == 'categorical':
+                if values:  # Check against list of allowed values
+                    if person_value not in values:
+                        # Debug logging for residence type filtering
+                        if self.verbose and attr_name == 'residence.type':
+                            logger.debug(f"Person age {person.age} filtered out: residence_type={person_value}, allowed={values}")
+                        return False
+                elif value is not None:  # Check against single value
+                    if person_value != value:
+                        return False
+
+            # Fallback: Exact value check for legacy filters
             if value is not None and person_value != value:
                 return False
 
@@ -289,22 +349,20 @@ class VenueDistributor:
 
             lat, lon = sgu.coordinates
 
-            # Find eligible venues
-            eligible_venues = self._find_eligible_venues_for_location((lat, lon), venues)
-
-            if not eligible_venues:
-                if allow_overflow:
-                    # For mandatory allocation, use all venues if no "eligible" ones
-                    eligible_venues = venues
-                else:
-                    continue
-
             # Allocate each person in this batch
             for person in sgu_people:
-                # Filter venues by person attributes
-                # IMPORTANT: Even for mandatory allocation, we respect age/gender constraints
-                # We only allow overflow of CAPACITY, not violation of eligibility rules
-                person_venues = self._filter_venues_by_person(person, eligible_venues)
+                # CRITICAL FIX: Filter by person attributes (age/sex) FIRST, then find closest
+                # This ensures we find the 5 closest schools that ACCEPT this child's age/sex,
+                # not just the 5 closest schools in general
+
+                # Step 1: Filter ALL venues by person attributes (age/gender)
+                person_eligible_venues = self._filter_venues_by_person(person, venues)
+
+                # Step 2: Find closest venues from the filtered list
+                if person_eligible_venues:
+                    person_venues = self._find_eligible_venues_for_location((lat, lon), person_eligible_venues)
+                else:
+                    person_venues = []
 
                 if person_venues:
                     venue = self._select_venue(person, person_venues, (lat, lon))
@@ -315,7 +373,7 @@ class VenueDistributor:
                     # For mandatory allocation, if no venues accept this person,
                     # log a warning but don't force allocation to ineligible venues
                     if self.verbose:
-                        logger.debug(f"Mandatory person (age {person.age}) has no eligible venues - cannot allocate")
+                        logger.debug(f"Mandatory person (age {person.age}, sex {person.sex}) has no eligible venues - cannot allocate (age/sex matched venues: {len(person_eligible_venues)})")
 
         return allocated_count
 
@@ -892,16 +950,25 @@ class VenueDistributor:
 
                 venue = person.activity_map[self.activity_map_key]
 
-                # Get residence type
+                # Get residence type - check all possible residence keys in activity_map
                 residence_type = 'unknown'
-                if 'household' in person.activity_map:
-                    residence = person.activity_map['household']
-                    if isinstance(residence, list):
-                        if residence:
-                            residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
-                            residence_type = residence_venue.type
-                    else:
-                        residence_type = residence.type if hasattr(residence, 'type') else 'household'
+                # Residences are stored as person.activity_map[venue_type] = [Subset, ...]
+                residence_types_to_check = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
+
+                for res_type in residence_types_to_check:
+                    if res_type in person.activity_map and person.activity_map[res_type]:
+                        residence = person.activity_map[res_type]
+                        # activity_map stores a list of Subsets
+                        if isinstance(residence, list) and residence:
+                            # Get the venue from the first subset
+                            subset = residence[0]
+                            if hasattr(subset, 'venue'):
+                                residence_type = subset.venue.type
+                            else:
+                                residence_type = res_type
+                        else:
+                            residence_type = res_type
+                        break
 
                 # Get SGU name
                 sgu_name = person.geographical_unit.name if person.geographical_unit else 'unknown'
