@@ -680,8 +680,17 @@ class OriginDestinationMatrixSource(DataSource):
                     else:
                         origin_column = 'LGU_origin_code'
 
-                    # Don't filter O-D matrix by geo_units - it uses different geography levels
-                    # The lookup will handle finding the right origin dynamically
+                    # PERFORMANCE OPTIMIZATION: Filter to only relevant geographical units
+                    # Only filter if geo_units values actually match origin column values
+                    if geo_units and origin_column and origin_column in df.columns:
+                        # Check if there's any overlap between geo_units and origin values
+                        origin_values = set(df[origin_column].unique())
+                        overlap = origin_values.intersection(geo_units)
+
+                        if overlap:  # Only filter if there's matching values
+                            original_len = len(df)
+                            df = df[df[origin_column].isin(geo_units)]
+                            logger.info(f"  Filtered O-D matrix from {original_len} to {len(df)} rows based on {len(overlap)} matching origins")
 
                     # Parse DataFrame
                     self._lookup = self._parse_od_dataframe(
@@ -802,12 +811,18 @@ class GUSamplerSource(DataSource):
                     lgu_column = file_config.get('key_column', 'LGU')
                     weight_column = file_config.get('weight_column', 'Total')
 
-                    # Handle geographical_unit_column 
+                    # Handle geographical_unit_column
                     geo_unit_config = file_config.get('geographical_unit_column')
                     if geo_unit_config:
                         # format: {name: "SGU", level: "SGU"}
                         geo_unit_column = geo_unit_config.get('name')
                         geo_unit_level = geo_unit_config.get('level', 'SGU')
+
+                    # PERFORMANCE OPTIMIZATION: Filter to only relevant geographical units
+                    if geo_units and geo_unit_column and geo_unit_column in df.columns:
+                        original_len = len(df)
+                        df = df[df[geo_unit_column].isin(geo_units)]
+                        logger.info(f"  Filtered CSV from {original_len} to {len(df)} rows based on {len(geo_units)} geographical units")
 
                     # Handle exclude_rows (supports both old dict and new list format)
                     exclude_rows_config = file_config.get('exclude_rows', [])

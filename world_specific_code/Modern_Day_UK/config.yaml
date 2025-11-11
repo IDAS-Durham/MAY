@@ -112,6 +112,29 @@ attributes:
     - "yaml/attributes/work_sector_assignment.yaml"         # Stage 3: Work sector by LGU+Sex (depends on workplace_location, workplace_sgu)
 
 # ========================================
+# VENUE DISTRIBUTORS
+# ========================================
+
+distributors:
+  # Enable venue distribution (set to false to skip)
+  enabled: true
+
+  # Sequential distributor configurations
+  # Each distributor assigns people to venues and sets activity_map
+  # Order matters: Earlier distributors have priority
+  configs:
+    - "yaml/distributors/school_distributor.yaml"           # Allocate students to schools (sets primary_activity)
+    # - "yaml/distributors/workplace_distributor.yaml"      # Allocate workers to companies (sets work)
+    # - "yaml/distributors/hospital_distributor.yaml"       # Assign nearest hospital (sets primary_hospital)
+    # - "yaml/distributors/gym_distributor.yaml"            # Allocate gym members (sets leisure)
+
+  # Notes:
+  # - Distributors run AFTER attribute assignment
+  # - Each distributor sets person.activity_map[key] = venue
+  # - People already assigned an activity are skipped by subsequent distributors
+  # - Special cases (e.g., boarding school students) are handled first
+
+# ========================================
 # EXAMPLES
 # ========================================
 

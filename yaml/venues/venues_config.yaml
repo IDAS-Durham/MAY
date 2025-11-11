@@ -17,7 +17,7 @@ venue_types:
 
   school:
     enabled: true
-    filename: schools.csv
+    filename: schools/Schools_EW.csv
     description: "Educational institutions for primary and secondary education"
 
   university:

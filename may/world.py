@@ -48,6 +48,27 @@ class World:
             return self.venues.get_venues_by_type("household")
         return []
 
+    def venues_by_type(self, venue_type: str):
+        """
+        Get all venues of a specific type.
+
+        Args:
+            venue_type: Type of venue (e.g., 'school', 'hospital', 'company')
+
+        Returns:
+            List of venues of the specified type
+        """
+        if self.venues:
+            return self.venues.get_venues_by_type(venue_type)
+        return []
+
+    @property
+    def people(self):
+        """Convenience property to access all people in the population."""
+        if self.population:
+            return self.population.get_all_people()
+        return []
+
     def __repr__(self):
         geo_str = f"{len(self.geography.get_all_units())} units" if self.geography else "no geography"
         pop_str = f"{len(self.population.get_all_people()):,} people" if self.population else "no population"
@@ -126,9 +147,17 @@ class World:
         logger.info("="*60)
 
         # Get geo units from geography if not provided
-        # For data loading, we only need SGU codes (most granular level)
+        # Include all hierarchy levels (SGU, MGU, LGU) for efficient filtering across all data sources
         if geo_units is None and self.geography:
-            geo_units = {unit.name for unit in self.geography.get_all_units_list() if unit.level == "SGU"}
+            geo_units = set()
+            for unit in self.geography.get_all_units_list():
+                # Add the unit's name/code
+                geo_units.add(unit.name)
+                # Also add parent names at all levels for O-D matrix filtering
+                current = unit
+                while current.parent:
+                    geo_units.add(current.parent.name)
+                    current = current.parent
 
         # Run attribute assignment
         stats = assign_attributes(

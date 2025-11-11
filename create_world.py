@@ -10,6 +10,7 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World, setup_households
+from may.venue_distributor import VenueDistributor
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -189,8 +190,19 @@ def main():
     logger.info("June Zero - World Creation")
     logger.info("=" * 60)
 
-    # Load config file
-    with open("world_specific_code/Modern_Day_UK/config.yaml", "r") as f:
+    # Load config file (support command-line argument)
+    import argparse
+    parser = argparse.ArgumentParser(description="Create a simulated world from configuration")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="world_specific_code/Modern_Day_UK/config.yaml",
+        help="Path to configuration YAML file (default: world_specific_code/Modern_Day_UK/config.yaml)"
+    )
+    args = parser.parse_args()
+
+    logger.info(f"Loading configuration from: {args.config}")
+    with open(args.config, "r") as f:
         config = yaml.safe_load(f)
 
     # Setup geography from config and command-line arguments
@@ -246,6 +258,38 @@ def main():
         for config_path in configs:
             logger.info(f"Assigning attributes from: {config_path}")
             world.assign_attributes(config_path)
+
+    # Distribute people to venues
+    distributor_config = config.get("distributors", {})
+    if distributor_config.get("enabled", True):
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("VENUE DISTRIBUTION")
+        logger.info("=" * 60)
+
+        # Support list of distributor configs
+        distributor_configs = distributor_config.get("configs", [])
+
+        if not distributor_configs:
+            logger.info("No distributors configured")
+        else:
+            # Execute each distributor in sequence
+            for dist_config_path in distributor_configs:
+                logger.info("")
+                logger.info(f"Running distributor: {dist_config_path}")
+                try:
+                    distributor = VenueDistributor.from_yaml(dist_config_path)
+                    distributor.allocate(world)
+
+                    # Export allocations to CSV
+                    venue_type = distributor.venue_type
+                    output_file = f"{venue_type}_allocations.csv"
+                    distributor.export_allocations(world, output_file)
+                    logger.info(f"Saved allocations to: {output_file}")
+
+                except Exception as e:
+                    logger.error(f"Failed to run distributor {dist_config_path}: {e}")
+                    logger.exception(e)
 
     logger.info("")
     logger.info("=" * 60)

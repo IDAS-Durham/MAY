@@ -92,11 +92,21 @@ class VenueManager:
             if col not in venue_df.columns:
                 raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
 
-        # Optional coordinate columns
-        has_coords = 'latitude' in venue_df.columns and 'longitude' in venue_df.columns
+        # Optional coordinate columns (check both lowercase and capitalized)
+        lat_col = None
+        lon_col = None
+
+        # Check for latitude column (case-insensitive)
+        for col in venue_df.columns:
+            if col.lower() == 'latitude':
+                lat_col = col
+            elif col.lower() == 'longitude':
+                lon_col = col
+
+        has_coords = lat_col is not None and lon_col is not None
 
         # Get additional property columns
-        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
+        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude', 'Latitude', 'Longitude'}
         property_cols = [col for col in venue_df.columns if col not in reserved_cols]
         properties={}
 
@@ -121,8 +131,8 @@ class VenueManager:
 
             # Get coordinates if provided
             coordinates = None
-            if has_coords and pd.notna(row['latitude']) and pd.notna(row['longitude']):
-                coordinates = (row['latitude'], row['longitude'])
+            if has_coords and pd.notna(row[lat_col]) and pd.notna(row[lon_col]):
+                coordinates = (row[lat_col], row[lon_col])
 
             # Add additional properties
             properties = {}
