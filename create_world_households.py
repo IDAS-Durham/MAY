@@ -11,15 +11,19 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager
 from may.population import PopulationManager
 from may.world import World
-from world_specific_code.Modern_Day_UK.household_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager
+from world_specific_code.Modern_Day_UK.household_distributors import HouseholdDistributor, HouseholdSubsetDistributor, HouseholdManager, assign_home_activity
 from world_specific_code.Modern_Day_UK.care_home_distributor import CareHomeDistributor, CareHomeSubsetDistributor
 from world_specific_code.Modern_Day_UK.student_dorms import StudentDormDistributor, StudentDormSubsetDistributor
 from world_specific_code.Modern_Day_UK.prisons import PrisonDistributor, PrisonSubsetDistributor
 
+# NEW: Import activity assigner
+from may.distributor.activity_assigner import (
+    ActivityAssigner,
+    create_simple_assigner,
+    create_modern_assigner
+)
+
 from may.stats import StatMakerVenues, StatMaker, StatMakerPop, print_world_examples
-
-
-
 
 
 logger = logging.getLogger("create_world")
@@ -34,37 +38,86 @@ logging.basicConfig(
 # Suppress numexpr logging
 logging.getLogger('numexpr').setLevel(logging.WARNING)
 
-default_data_dir = "world_specific_data/Modern_Day_UK/data"
+
+def create_custom_activity_assigner():
+    """
+    Create a custom activity assigner tailored to your specific needs.
+
+    This example shows how to create a modern UK activity assigner with
+    custom probabilities and rules.
+
+    Returns:
+        ActivityAssigner: Configured activity assigner
+    """
+    assigner = ActivityAssigner()
+
+    # INDEPENDENT RULES - Activities that can coexist
+
+    # Everyone needs a home
+    assigner.add_independent_rule(
+        'home',
+        lambda p: True,
+        probability=1.0,
+        description="Universal home activity"
+    )
+
+    # Childcare for young children
+    assigner.add_independent_rule(
+        'childcare',
+        lambda p: 2 <= p.age <= 4,
+        probability=0.64,
+        description="Childcare/nursery for young children"
+    )
+
+    # School for children
+    assigner.add_independent_rule(
+        'school',
+        lambda p: 5 <= p.age <= 18,
+        probability=0.95,
+        description="School education"
+    )
+
+    # Higher education for young adults
+    assigner.add_independent_rule(
+        'higher_education',
+        lambda p: 18 <= p.age <= 25,
+        probability=0.49,
+        description="University/college education"
+    )
+
+    # Leisure activities for adults
+    assigner.add_independent_rule(
+        'leisure',
+        lambda p: 18 <= p.age,
+        probability=1.0,
+        description="Leisure and social activities"
+    )
+
+    # CHOICE RULES - Mutually exclusive activities
+
+    # Employment status for working-age adults (only ONE will be assigned)
+    assigner.add_choice_rule(
+        choice_name='employment_status',
+        condition=lambda p: 19 <= p.age <= 64,
+        options=[
+            ('employed', 0.75),      # 75% employed
+            ('unemployed', 0.05),    # 5% unemployed (actively seeking)
+            ('inactive', 0.20)       # 20% economically inactive
+        ],
+        description="Employment status for working-age adults"
+    )
+ 
+    return assigner
 
 
-# if os.environ.get('PYTHONHASHSEED') is None:
-#     os.environ['PYTHONHASHSEED'] = '0'
-#     os.execv(sys.executable, [sys.executable] + sys.argv)
-
-# def set_random_seed(seed=999):
-#     """
-#     Sets global seeds for testing in numpy, random, and numbaised numpy.
-#     """
-
-#     @nb.njit(cache=True)
-#     def set_seed_numba(seed):
-#         random.seed(seed)
-#         return np.random.seed(seed)
-
-#     np.random.seed(seed)
-#     set_seed_numba(seed)
-#     random.seed(seed)
-#     return
-
-#set_random_seed(0)
 
 def main():
     starttime = time.perf_counter()
     """
-    Main entry point for world creation.
+    Main entry point for world creation with activity assignment.
     """
     logger.info("=" * 60)
-    logger.info("June Zero - World Creation")
+    logger.info("June Zero - World Creation with Activity Assigner")
     logger.info("=" * 60)
 
     # Load config file
@@ -79,11 +132,11 @@ def main():
 
     logger.info("Setting up Geography took {:.2g}s".format(time.perf_counter()-starttime))
     laptime = time.perf_counter()
-    
+
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir=config.get("venues",{}).get('data_dir',os.path.join(default_data_dir,'venues')))
+    venues = VenueManager(geography=geo, data_dir='world_specific_code/Modern_Day_UK/data/venues')
     for venue_type, phile in [('care_home', 'msoa_care_homes.csv'),
                               ('hospital', 'hospitals.csv'),
                               ('company', 'companies.csv'),
@@ -92,153 +145,63 @@ def main():
                               ('school', 'schools.csv'),
                               ('student_dorm', 'msoa_student_dorms.csv')]:
         venues.load_venue_type_from_csv(venue_type, filename=phile)
-    #venues.load_from_csv()
     logger.info("Loading venues took {:.2g}s".format(time.perf_counter()-laptime))
     laptime = time.perf_counter()
-    
+
     # Load population
     logger.info("")
     logger.info("Loading population...")
     pop_config = config.get("population", {})
     population = PopulationManager(
         geography=geo,
-        data_dir=pop_config.get("data_dir",os.path.join(default_data_dir,'population'))
+        data_dir="world_specific_code/Modern_Day_UK/data/population"
     )
-    logger.info("Loading population took {:.2g}s".format(time.perf_counter()-laptime))
-    laptime = time.perf_counter()
-    
+
     # Load demographic data
     male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
     female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
     population.load_demographics_from_csv(male_file, female_file)
 
-    logger.info("Loading demographic data took {:.2g}s".format(time.perf_counter()-laptime))
-    laptime = time.perf_counter()
-    
-    # Generate population
-    population.generate_population(activities=set('home'))
+    # Generate population WITHOUT activities (we'll assign them next)
+    logger.info("")
+    logger.info("Generating population...")
+    population.generate_population()  
 
     logger.info("Creating population took {:.2g}s".format(time.perf_counter()-laptime))
     laptime = time.perf_counter()
+
+    logger.info("")
+    logger.info("Creating activity assigner...")
+    activity_assigner = create_custom_activity_assigner()
+
+    # Apply activity assigner to population
+    activity_stats = activity_assigner.assign_activities_to_population(population.get_all_people())
+    # Print activity stats
+    logger.info("Activity stats:")        
+    for key, value in activity_stats.items():
+        logger.info(f"    {key}    {value:,}")
+
+    logger.info("Activity assignment took {:.2g}s".format(time.perf_counter()-laptime))
+    laptime = time.perf_counter()
+    # ==========================================================================
+
+    # Create Households
+    logger.info("Loading households...")
+    household_manager = HouseholdManager(geography=geo, data_dir=config.get("households",{}).get("data_dir",'data/households'), filter_by_geography=True)
+    household_manager.load_venue_type_from_csv('household', 'households.csv')
+
+    # Extend the venues object to add the households on. 
+    venues.extend(household_manager)
     
-    # # Create Households
-    # logger.info("Loading households...")
-    # household_manager = HouseholdManager(geography=geo, data_dir=config.get("households",{}).get("data_dir",'data/households'), filter_by_geography=True)
-    # household_manager.load_venue_type_from_csv('household', 'households.csv')
+    logger.info("Loading and creating household data took {:.2g}s".format(time.perf_counter()-laptime))
+    laptime = time.perf_counter()
 
-    # logger.info("Loading and creating household data took {:.2g}s".format(time.perf_counter()-laptime))
-    # laptime = time.perf_counter()
+    # Assign home activity to venues
+    logger.info("Distributing pop to households")
+    assign_home_activity(geo, venues)
+    logger.info("Distributing pop to households took {:.2g}s".format(time.perf_counter()-laptime))
+    laptime = time.perf_counter()
 
-    # # Extend the venues object to add the households on. 
-    # venues.extend(household_manager)
-    # # Distribute people to households by smallest geographical unit.
-    # smallest_geo_unit_dict = geo.units_by_level[geo.levels[0]]
-    
-    # logger.info("Allocating people to venues geo-unit by geo-unit...")
-    # i, printed, num_geo_units = 0, set(), len(smallest_geo_unit_dict)
-    # for geo_unit in smallest_geo_unit_dict.values():
-    #     still_unallocated_people = geo_unit.people
-
-    #     # Distribute people to Student Dorms
-    #     potential_venues = geo_unit.get_venues_by_type('student_dorm')
-    #     if potential_venues:
-    #         logger.debug(f"Doing student dorm {potential_venues[0].name} in {potential_venues[0].geographical_unit.name}")
-    #         student_dorm_distributor = StudentDormDistributor(
-    #             'student_dorm',
-    #             venues,
-    #             still_unallocated_people,
-    #             potential_venues=potential_venues
-    #         )
-    #         student_dorm_distributor.assign_people_venues(
-    #             'home',
-    #             'student_dorm',
-    #             people=still_unallocated_people
-    #         )
-    #         still_unallocated_people = student_dorm_distributor.unallocated_people
-
-    #     # Distribute people to Care Homes
-    #     potential_venues = geo_unit.get_venues_by_type('care_home')
-    #     if potential_venues:
-    #         logger.debug(f"Doing care home {potential_venues[0].name} in {potential_venues[0].geographical_unit.name}")            
-    #         care_home_distributor = CareHomeDistributor(
-    #             'care_home',
-    #             venues,
-    #             still_unallocated_people,
-    #             potential_venues=potential_venues
-    #         )
-    #         care_home_distributor.assign_people_venues(
-    #             'home',
-    #             'care_home',
-    #             people=still_unallocated_people
-    #         )
-    #         still_unallocated_people = care_home_distributor.unallocated_people
-        
-    #     # Distribute people to Households with expansion
-    #     potential_venues = geo_unit.get_venues_by_type('household')
-    #     if potential_venues:
-    #         household_distributor = HouseholdDistributor(
-    #             'household',
-    #             venues,
-    #             still_unallocated_people,
-    #             potential_venues=geo_unit.get_venues_by_type('household')
-    #         )
-    #         # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
-    #         # Don't do too many passes, as will go through them again after allocating to prisons. 
-    #         household_distributor.num_passes = 2
-    #         household_distributor.assign_people_venues_multi_pass('home', 'household')
-    #         still_unallocated_people = household_distributor.unallocated_people
-        
-    #     # Fill prisons
-    #     potential_venues = geo_unit.parent.get_venues_by_type('prison')
-    #     if potential_venues:
-    #         prison_distributor = PrisonDistributor(
-    #             'prison',
-    #             venues,
-    #             still_unallocated_people,
-    #             potential_venues=potential_venues,
-    #         )
-    #         prison_distributor.assign_people_venues('home','prison')
-    #         still_unallocated_people = prison_distributor.unallocated_people
-
-    #     # Restart household distributor
-    #     potential_venues = geo_unit.get_venues_by_type('household')
-    #     if potential_venues and still_unallocated_people:
-    #         household_distributor = HouseholdDistributor(
-    #             'household',
-    #             venues,
-    #             still_unallocated_people,
-    #             potential_venues=geo_unit.get_venues_by_type('household')
-    #         )
-    #         # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
-    #         # Don't do too many passes, as will go through them again after allocating to prisons. 
-    #         household_distributor.num_passes = 5
-    #         household_distributor.assign_people_venues_multi_pass('home',
-    #                                                               'household')
-    #         still_unallocated_people = household_distributor.unallocated_people
-
-    #         if household_distributor.allocation_rate < 99.999999:
-    #             logger.info(f"--Low allocation rate of {household_distributor.allocation_rate:.1f}% in geo_unit {geo_unit.name}")
-    #             logger.info(f"--Printing stats of unallocated people: ")
-    #             my_statmaker = StatMakerPop(household_distributor.unallocated_people)
-    #             my_statmaker.get_sex_breakdown()
-    #             my_statmaker.get_age_group_breakdown()
-    #             for p in household_distributor.unallocated_people:
-    #                 logger.info(f"Person = {p}")
-    #             # morestats = my_statmaker.get_age_stats()
-    #             # for key, val in morestats.items():
-    #             #     logger.info(f"    {key} : {val}")
-                    
-    #     i+=1
-    #     percent=int(i/num_geo_units*100)
-    #     milestone = (percent // 10) * 10
-    #     if milestone not in printed and milestone % 10 == 0:
-    #         logger.info(f"             ...{milestone}% complete")
-    #         printed.add(milestone)              
-            
-    
-            
-    # logger.info("Distributing pop to venues took {:.2g}s".format(time.perf_counter()-laptime))
-    # laptime = time.perf_counter()
     
     # Create World object
     logger.info("")
@@ -249,8 +212,11 @@ def main():
     logger.info("Creating world took {:.2g}s".format(time.perf_counter()-laptime))
     laptime = time.perf_counter()
 
-    joblib.dump(world, 'my_world.joblib', compress=3)
-    logger.info("Saving world to took {:.2g}s".format(time.perf_counter()-laptime))
+    # Save world
+    output_file = 'my_world_with_activities.joblib'
+    joblib.dump(world, output_file, compress=0)
+    logger.info(f"Saved world to {output_file}")
+    logger.info("Saving world took {:.2g}s".format(time.perf_counter()-laptime))
     laptime = time.perf_counter()
 
     logger.info("")
@@ -262,8 +228,12 @@ def main():
     logger.info("=" * 60)
 
     # Show examples of what was created
-    #print_world_examples(world)
+    logger.info("")
+    logger.info("Sample people with activities:")
+    for i, person in enumerate(random.sample(population.get_all_people(),10)):
+        logger.info(f"  Person {i+1}: Age {person.age}, Sex {person.sex}, Activities: {person.activities}")
 
+    logger.info("")
     logger.info("Script completed in {:.2g}s".format(time.perf_counter()-starttime))
 
     return world
