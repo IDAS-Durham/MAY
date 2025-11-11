@@ -1,0 +1,59 @@
+# Simple Activity Configuration Example
+# Demonstrates both independent rules and choice rules
+
+# Independent rules: Activities that can be assigned independently
+# Multiple independent rules can apply to the same person
+independent_rules:
+  - activity: home
+    description: "Everyone needs a home"
+    condition: {}  # Empty = applies to all
+    probability: 1.0
+
+  - activity: education
+    description: "School age children"
+    condition:
+      age: [5, 18]
+    probability: 0.95
+
+  - activity: higher_education
+    description: "University students"
+    condition:
+      age: [18, 24]
+    probability: 0.40
+
+  - activity: leisure
+    description: "Adult leisure activities"
+    condition:
+      age_min: 18
+    probability: 0.70
+
+  - activity: care_home_resident
+    description: "Very elderly in care homes"
+    condition:
+      age_min: 85
+    probability: 0.15
+
+# Choice rules: Pick ONE activity from multiple mutually exclusive options
+# Each person gets at most one activity from each choice group
+choice_rules:
+  - name: employment_status
+    description: "Employment status for working age adults"
+    condition:
+      age: [19, 64]
+    options:
+      - activity: employed
+        weight: 0.75
+      - activity: unemployed
+        weight: 0.15
+      - activity: not_in_labor_force
+        weight: 0.10
+
+  - name: childcare_status
+    description: "Childcare attendance for young children"
+    condition:
+      age: [0, 4]
+    options:
+      - activity: in_childcare
+        weight: 0.60
+      - activity: home_care
+        weight: 0.40

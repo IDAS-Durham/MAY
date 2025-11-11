@@ -1,0 +1,164 @@
+# Activity Configuration for Modern UK
+# Each activity has its own set of rules, making it easy to add/remove activities
+
+settings:
+  world_type: "modern_uk"
+  description: "Contemporary UK activity patterns"
+
+# Metadata about each activity type
+activity_definitions:
+  home:
+    description: "Residential activities"
+    venue_types: ["household", "care_home", "student_dorm"]
+    required: true
+
+  work:
+    description: "Employment activities"
+    venue_types: ["company", "factory", "office"]
+    required: false
+
+  education:
+    description: "School attendance"
+    venue_types: ["school"]
+    required: false
+
+  higher_education:
+    description: "University attendance"
+    venue_types: ["university"]
+    required: false
+
+  childcare:
+    description: "Nursery and childcare"
+    venue_types: ["childcare_center"]
+    required: false
+
+  leisure:
+    description: "Social and recreational activities"
+    venue_types: ["pub", "cinema", "park", "gym"]
+    required: false
+
+  care_home_resident:
+    description: "Living in care facility"
+    venue_types: ["care_home"]
+    required: false
+
+# Geographical classifications (optional)
+geo_classifications:
+  urban:
+    - "E02000001"
+    - "E02000002"
+  rural:
+    - "E02000100"
+    - "E02000101"
+
+# Activity rules organized by activity type
+activities:
+  # HOME ACTIVITY
+  home:
+    rules:
+      - name: "Everyone needs a home"
+        conditions: {}  # No conditions = applies to everyone
+        probability: 1.0
+        enabled: true
+
+  # CHILDCARE ACTIVITY
+  childcare:
+    rules:
+      - name: "Young children in childcare"
+        conditions:
+          age: [0, 4]
+        probability: 0.60
+        enabled: true
+        metadata:
+          notes: "60% of 0-4 year olds in childcare in UK"
+
+  # EDUCATION ACTIVITY
+  education:
+    rules:
+      - name: "Primary school children"
+        conditions:
+          age: [5, 11]
+        probability: 0.98
+        enabled: true
+
+      - name: "Secondary school children"
+        conditions:
+          age: [12, 18]
+        probability: 0.96
+        enabled: true
+
+  # HIGHER_EDUCATION ACTIVITY
+  higher_education:
+    rules:
+      - name: "University students"
+        conditions:
+          age: [18, 24]
+        probability: 0.42
+        enabled: true
+        metadata:
+          notes: "42% of 18-24 year olds in higher education"
+
+  # WORK ACTIVITY
+  work:
+    rules:
+      - name: "Working age adults - urban"
+        conditions:
+          age: [19, 64]
+          geo_unit_type: "urban"
+        probability: 0.82
+        enabled: true
+        metadata:
+          notes: "Higher employment in urban areas"
+
+      - name: "Working age adults - rural"
+        conditions:
+          age: [19, 64]
+          geo_unit_type: "rural"
+        probability: 0.76
+        enabled: true
+        metadata:
+          notes: "Lower employment in rural areas"
+
+      - name: "Working age adults - general"
+        conditions:
+          age: [19, 64]
+        probability: 0.79
+        enabled: true
+        metadata:
+          notes: "Fallback for areas without classification"
+
+  # LEISURE ACTIVITY
+  leisure:
+    rules:
+      - name: "Working age leisure"
+        conditions:
+          age: [19, 64]
+        probability: 0.75
+        enabled: true
+
+      - name: "Retirement age leisure"
+        conditions:
+          age_min: 65
+        probability: 0.95
+        enabled: true
+        metadata:
+          notes: "Retired people have more leisure time"
+
+  # CARE_HOME_RESIDENT ACTIVITY
+  care_home_resident:
+    rules:
+      - name: "Elderly in care homes"
+        conditions:
+          age_min: 85
+        probability: 0.15
+        enabled: true
+        metadata:
+          notes: "Approximately 15% of people 85+ live in care homes"
+
+      - name: "Very elderly in care homes"
+        conditions:
+          age_min: 95
+        probability: 0.35
+        enabled: true
+        metadata:
+          notes: "Higher proportion of 95+ in care homes"

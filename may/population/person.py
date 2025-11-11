@@ -33,7 +33,7 @@ class Person:
         'activity_map',
     ]
 
-    def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"]=None, activities: Optional[list[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
+    def __init__(self, age: float, sex: str, geographical_unit: Optional["GeographicalUnit"]=None, activities: Optional[set[str]]=None, properties: Optional[dict]=None, activity_map: Optional[DefaultDict[str,list["Subset"]]]=None):
         """
         Initialize a Person.
 
@@ -55,7 +55,7 @@ class Person:
         self.age = age
         self.sex = sex
         self.geographical_unit = geographical_unit
-        self.activities = activities if activities is not None else []
+        self.activities = activities if activities is not None else set()
         self.properties = properties if properties is not None else {}
         if activity_map is None:
             self.activity_map = defaultdict(list)
@@ -72,8 +72,8 @@ class Person:
         Args:
             activity (str): Name of the activity to add
         """
-        if activity not in self.activities:
-            self.activities.append(activity)
+        #if activity not in self.activities:
+        self.activities.add(activity)
 
     def remove_activity(self, activity):
         """
@@ -82,8 +82,11 @@ class Person:
         Args:
             activity (str): Name of the activity to remove
         """
-        if activity in self.activities:
-            self.activities.remove(activity)
+        #if activity in self.activities:
+        self.activities.remove(activity)
+
+    def add_activities(self, activities):
+        self.activities.update(activities)
 
     def has_activity(self, activity):
         """
