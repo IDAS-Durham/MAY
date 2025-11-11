@@ -1,12 +1,3 @@
-"""
-Assignment strategies for attribute assignment system.
-
-This module implements the simplified strategies that work with:
-- Roles mapped to subsets (no complex conditions)
-- Structure-based assignment (Family/Couple/Independents)
-- Simple inheritance and partnership rules
-"""
-
 import logging
 import numpy as np
 from typing import Dict, List, Any, Optional
@@ -546,6 +537,8 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
 
     Samples from an origin-destination matrix weighted by likelihood.
     Can assign multiple attributes (e.g., workplace_location and work_mode).
+
+    Supports batch assignment to reduce repeated lookups.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -554,31 +547,27 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         self.data_source_name = config.get('data_source')
         self.outputs = config.get('outputs', {})
 
-    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+    def _resolve_origin_code(self, person) -> Optional[str]:
         """
-        Assign workplace location and work mode based on commuting flows.
+        Resolve person's origin geographical unit to the correct level for O-D matrix lookup.
+
+        This handles complex data source configurations like ancestor lookups.
 
         Args:
             person: Person object
-            household: Household object (optional, may be None for person-level assignment)
-            context: Assignment context
 
         Returns:
-            If single output: returns the assigned value
-            If multiple outputs: returns dict with all assigned values
+            Origin code string, or None if resolution fails
         """
         # Get person's origin (residence) geographical unit
-        # Need to resolve to the correct level (e.g., LGU name) based on data source config
         origin_geo_unit = getattr(person, 'geographical_unit', None)
         if not origin_geo_unit:
-            logger.warning(f"No geographical unit found for person {person.id}")
-            return self._get_fallback(person, household, context)
+            return None
 
         # Get the data source to check its configuration
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
-            logger.warning(f"Data source '{self.data_source_name}' not found")
-            return self._get_fallback(person, household, context)
+            return None
 
         # Resolve origin based on data source key configuration
         # Check if this is an O-D matrix source with key_columns config
@@ -600,18 +589,134 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
                         # Traverse to ancestor level
                         ancestor = origin_geo_unit.get_ancestor_by_level(level)
                         if ancestor:
-                            origin_code = getattr(ancestor, property_name)
+                            return getattr(ancestor, property_name)
                         else:
-                            logger.warning(f"Could not find {level} ancestor for {origin_geo_unit.name}")
-                            return self._get_fallback(person, household, context)
+                            return None
                     else:
-                        origin_code = origin_geo_unit.name
+                        return origin_geo_unit.name
                 else:
-                    origin_code = origin_geo_unit.name
+                    return origin_geo_unit.name
             else:
-                origin_code = origin_geo_unit.name
+                return origin_geo_unit.name
         else:
-            origin_code = origin_geo_unit.name
+            return origin_geo_unit.name
+
+    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
+        """
+        Batch assignment to minimize repeated O-D matrix lookups.
+
+        Groups people by origin code and processes each group together.
+
+        Args:
+            people_list: List of Person objects
+            households_list: List of Household objects (parallel to people_list)
+            contexts_list: List of context dicts (parallel to people_list)
+
+        Returns:
+            List of assigned values (parallel to people_list)
+            - If single output: list of values
+            - If multiple outputs: list of dicts
+        """
+        from collections import defaultdict
+
+        # Get data source
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            logger.warning(f"Data source '{self.data_source_name}' not found")
+            return [self._get_fallback(person, household, context)
+                    for person, household, context in zip(people_list, households_list, contexts_list)]
+
+        # Group people by origin_code
+        origin_groups = defaultdict(list)
+
+        for i, person in enumerate(people_list):
+            origin_code = self._resolve_origin_code(person)
+            if origin_code:
+                origin_groups[origin_code].append(i)
+
+        # Results array
+        results = [None] * len(people_list)
+
+        # Process each origin group
+        for origin_code, indices in origin_groups.items():
+            # Look up destinations from O-D matrix
+            destinations = source.lookup(origin_code)
+            if not destinations:
+                logger.warning(f"No destinations found for origin {origin_code}")
+                # Fill with fallback for this group
+                for idx in indices:
+                    person = people_list[idx]
+                    household = households_list[idx]
+                    context = contexts_list[idx]
+                    results[idx] = self._get_fallback(person, household, context)
+                continue
+
+            # Prepare sampling arrays
+            # destinations is List[(destination, metadata_dict, likelihood)]
+            dest_codes = [dest for dest, meta, lik in destinations]
+            likelihoods = [lik for dest, meta, lik in destinations]
+            metadata_list = [meta for dest, meta, lik in destinations]
+
+            # BATCH SAMPLE: Sample destinations for all people in this origin group at once
+            n_samples = len(indices)
+            sampled_indices = np.random.choice(len(dest_codes), size=n_samples, p=likelihoods)
+
+            # Build outputs for each person
+            for idx, sampled_idx in zip(indices, sampled_indices):
+                sampled_dest = dest_codes[sampled_idx]
+                sampled_metadata = metadata_list[sampled_idx]
+
+                # Build output based on configured outputs
+                if len(self.outputs) == 1:
+                    # Single output - return just the value
+                    output_attr, output_source = list(self.outputs.items())[0]
+                    if output_source == 'destination':
+                        results[idx] = sampled_dest
+                    elif output_source in sampled_metadata:
+                        results[idx] = sampled_metadata[output_source]
+                    else:
+                        logger.warning(f"Output source '{output_source}' not found in metadata")
+                        results[idx] = sampled_dest
+                else:
+                    # Multiple outputs - return dict
+                    result = {}
+                    for output_attr, output_source in self.outputs.items():
+                        if output_source == 'destination':
+                            result[output_attr] = sampled_dest
+                        elif output_source in sampled_metadata:
+                            result[output_attr] = sampled_metadata[output_source]
+                        else:
+                            logger.warning(f"Output source '{output_source}' not found")
+
+                    results[idx] = result
+                    logger.debug(f"Commuting (batch): person at index {idx} -> {result}")
+
+        return results
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """
+        Assign workplace location and work mode based on commuting flows.
+
+        Args:
+            person: Person object
+            household: Household object (optional, may be None for person-level assignment)
+            context: Assignment context
+
+        Returns:
+            If single output: returns the assigned value
+            If multiple outputs: returns dict with all assigned values
+        """
+        # Resolve person's origin to correct geographical level
+        origin_code = self._resolve_origin_code(person)
+        if not origin_code:
+            logger.warning(f"Could not resolve origin code for person {person.id}")
+            return self._get_fallback(person, household, context)
+
+        # Get data source
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            logger.warning(f"Data source '{self.data_source_name}' not found")
+            return self._get_fallback(person, household, context)
 
         # Look up destinations from O-D matrix
         destinations = source.lookup(origin_code)
@@ -685,12 +790,87 @@ class GUSamplerStrategy(AssignmentStrategy):
     """
     Samples a geographical unit within a parent GU based on weighted distribution.
     Generic strategy that works with any geographical hierarchy level.
+
+    Supports batch assignment to reduce repeated lookups.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
         """Initialize geographical unit sampler strategy."""
         super().__init__(config, data_manager)
         self.data_source_name = config.get('data_source')
+
+    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
+        """
+        Batch assignment to minimize repeated data lookups.
+
+        Groups people by (workplace_parent_gu, home_parent_gu) and processes each group together.
+        Falls back from workplace to home GU if workplace has no data.
+
+        Args:
+            people_list: List of Person objects
+            households_list: List of Household objects (parallel to people_list)
+            contexts_list: List of context dicts (parallel to people_list)
+
+        Returns:
+            List of sampled geographical unit codes (parallel to people_list)
+        """
+        from collections import defaultdict
+
+        # Get data source
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            logger.warning(f"Data source '{self.data_source_name}' not found")
+            return [None] * len(people_list)
+
+        # Group people by (workplace_parent_gu, home_parent_gu)
+        # This allows efficient batch sampling with fallback logic
+        gu_groups = defaultdict(list)
+
+        for i, person in enumerate(people_list):
+            # Get workplace parent GU
+            workplace_parent_gu = person.properties.get('workplace_location')
+
+            # Get home parent GU for fallback
+            home_parent_gu = None
+            if person.geographical_unit:
+                home_parent_gu_obj = person.geographical_unit.get_ancestor_by_level('LGU')
+                if home_parent_gu_obj:
+                    home_parent_gu = home_parent_gu_obj.name
+
+            if workplace_parent_gu:
+                gu_groups[(workplace_parent_gu, home_parent_gu)].append(i)
+
+        # Results array
+        results = [None] * len(people_list)
+
+        # Process each group
+        for (workplace_parent_gu, home_parent_gu), indices in gu_groups.items():
+            # Try workplace parent GU first
+            gu_probs = source.lookup(workplace_parent_gu)
+
+            # Fallback: if no data for workplace parent GU, try home parent GU
+            if not gu_probs and home_parent_gu:
+                logger.debug(f"No GU distribution for workplace parent GU '{workplace_parent_gu}', "
+                           f"falling back to home parent GU '{home_parent_gu}'")
+                gu_probs = source.lookup(home_parent_gu)
+
+            if not gu_probs:
+                logger.warning(f"No GU distribution found for parent GU '{workplace_parent_gu}' "
+                             f"or home parent GU '{home_parent_gu}'")
+                continue
+
+            # BATCH SAMPLE: Sample GUs for all people in this group at once
+            gu_codes = list(gu_probs.keys())
+            probabilities = list(gu_probs.values())
+            n_samples = len(indices)
+            sampled_gus = np.random.choice(gu_codes, size=n_samples, p=probabilities)
+
+            # Assign results
+            for idx, sampled_gu in zip(indices, sampled_gus):
+                results[idx] = sampled_gu
+                logger.debug(f"GU Sampler (batch): {sampled_gu} for person at index {idx} in parent GU {workplace_parent_gu}")
+
+        return results
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """
@@ -758,12 +938,78 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
     Works with MultiKeyLookupSource that returns {category: probability} dicts.
     Unlike ProbabilisticConditionsStrategy which samples multiple yes/no conditions,
     this samples exactly one mutually-exclusive category (e.g., one industry sector).
+
+    Supports batch assignment to reduce repeated lookups.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
         """Initialize categorical sampler strategy."""
         super().__init__(config, data_manager)
         self.data_source_name = config.get('data_source')
+
+    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
+        """
+        Batch assignment to minimize repeated data lookups.
+
+        Groups people by their lookup keys and processes each group together.
+
+        Args:
+            people_list: List of Person objects
+            households_list: List of Household objects (parallel to people_list)
+            contexts_list: List of context dicts (parallel to people_list)
+
+        Returns:
+            List of sampled category values (parallel to people_list)
+        """
+        from collections import defaultdict
+
+        # Get data source
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            logger.warning(f"Data source '{self.data_source_name}' not found")
+            return [None] * len(people_list)
+
+        # Group people by their lookup keys
+        # lookup_key_groups: {lookup_key: [indices]}
+        lookup_key_groups = defaultdict(list)
+
+        for i, (person, household, context) in enumerate(zip(people_list, households_list, contexts_list)):
+            # Look up probability distribution
+            probs = source.lookup(person, household, context)
+            if probs:
+                # Create a hashable key from the probabilities
+                lookup_key = tuple(sorted(probs.items()))
+                lookup_key_groups[lookup_key].append((i, probs))
+
+        # Results array
+        results = [None] * len(people_list)
+
+        # Process each group
+        for lookup_key, group_data in lookup_key_groups.items():
+            indices = [idx for idx, _ in group_data]
+            probs = group_data[0][1]  # All have same probs for this key
+
+            # Sample one category
+            categories = list(probs.keys())
+            probabilities = list(probs.values())
+
+            # Normalize if needed
+            total = sum(probabilities)
+            if total <= 0:
+                continue
+
+            if abs(total - 1.0) > 0.01:  # Not normalized
+                probabilities = [p / total for p in probabilities]
+
+            # BATCH SAMPLE: Sample for all people in this group at once
+            n_samples = len(indices)
+            sampled_values = np.random.choice(categories, size=n_samples, p=probabilities)
+
+            # Assign results
+            for idx, value in zip(indices, sampled_values):
+                results[idx] = value
+
+        return results
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """

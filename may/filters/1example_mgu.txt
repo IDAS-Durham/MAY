@@ -1,0 +1,4 @@
+# Example MGU filter file
+# One code per line, comments allowed (lines starting with #)
+
+E02006476

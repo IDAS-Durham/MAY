@@ -1,13 +1,3 @@
-"""
-Main orchestrator for attribute assignment.
-
-Simplified attribute assignment system:
-- Cleaner structure classification (Family/Couple/Independents)
-- Simple role assignment (primary/secondary/extra based on naming)
-- No complex condition evaluation
-- Structure-based rule lookup
-"""
-
 import logging
 import numpy as np
 from typing import Dict, List, Any, Optional
@@ -19,7 +9,37 @@ from .strategies import StrategyFactory
 
 logger = logging.getLogger("may.attribute_assignment.assigner")
 
+def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] = None) -> Dict[str, Any]:
+    """
+    Convenience function to assign attributes to a population.
 
+    Args:
+        venue_manager: VenueManager with households and venues
+        config_path: Path to YAML configuration file
+        geo_units: Optional set of geo unit codes to preload data for
+
+    Returns:
+        Assignment statistics dictionary
+    """
+    # Load configuration
+    config = AttributeAssignmentConfig.from_yaml(config_path)
+
+    # Initialize data manager
+    data_manager = DataSourceManager(config)
+
+    # Load data
+    if geo_units:
+        logger.info(f"Preloading data for {len(geo_units)} geographical units...")
+        data_manager.load_all(geo_units)
+    else:
+        logger.info("Loading all data sources...")
+        data_manager.load_all()
+
+    # Create assigner and run
+    assigner = AttributeAssigner(config, data_manager)
+    stats = assigner.assign_all(venue_manager)
+
+    return stats
 class AttributeAssigner:
     """
     Main orchestrator for attribute assignment.
@@ -42,6 +62,9 @@ class AttributeAssigner:
         # Logging settings
         self.verbose = config.settings.get('logging', {}).get('detailed_assignment_logging', False)
 
+        # Cache strategy objects to avoid repeated creation
+        self._strategy_cache = {}  # Maps strategy config hash to strategy instance
+
         # Statistics
         self.stats = {
             'total_people': 0,
@@ -59,6 +82,29 @@ class AttributeAssigner:
             'filtered_people': 0,  # People filtered out by age/activity filters
             'assigned_people': 0,  # People successfully assigned
         }
+
+    def _get_or_create_strategy(self, assignment_config):
+        """
+        Get cached strategy or create new one.
+
+        Args:
+            assignment_config: Strategy configuration dict (from AttributeAssignmentRule)
+
+        Returns:
+            Strategy instance
+        """
+        # Use object id as cache key
+
+        config_key = id(assignment_config)
+
+        # Check cache
+        if config_key not in self._strategy_cache:
+            # Create new strategy
+            self._strategy_cache[config_key] = StrategyFactory.create_strategy(
+                assignment_config, self.data_manager
+            )
+
+        return self._strategy_cache[config_key]
 
     def assign_all(self, venue_manager) -> Dict[str, Any]:
         """
@@ -107,7 +153,7 @@ class AttributeAssigner:
             logger.info(f"  Other residences: {len(other_residences)} (containing {people_in_other_residences} people)")
         logger.info("")
 
-        # Process households with sophisticated structure-based logic
+        # Process households with structure-based logic
         logger.info("Processing households...")
         total = len(households)
         progress_interval = max(1, total // 20)  # Report every 5%
@@ -146,8 +192,6 @@ class AttributeAssigner:
         Returns:
             Number of people assigned
         """
-        from .strategies import StrategyFactory
-
         people_assigned = 0
         venues_processed = 0
 
@@ -171,7 +215,7 @@ class AttributeAssigner:
             assignment_config = venue_rule.get('assignment', {})
 
             try:
-                strategy = StrategyFactory.create_strategy(assignment_config, self.data_manager)
+                strategy = self._get_or_create_strategy(assignment_config)
                 venue_assigned = 0
 
                 # Assign each person
@@ -212,8 +256,84 @@ class AttributeAssigner:
 
         return people_assigned
 
+    def _passes_filters(self, person):
+        """
+        Check if person passes all configured filters.
+
+        Args:
+            person: Person object
+
+        Returns:
+            bool: True if person passes all filters
+        """
+        # Check filters (if configured)
+        if hasattr(self.config, 'filters') and self.config.filters:
+            # Loop through all filters generically
+            for _, filter_config in self.config.filters.items():
+                # Get the attribute to filter on
+                attr_name = filter_config.get('attribute')
+                filter_type = filter_config.get('type')
+
+                if not attr_name:
+                    continue
+
+                # Get the person's value for this attribute
+                # First check properties, then object attributes
+                if hasattr(person, 'properties') and attr_name in person.properties:
+                    person_value = person.properties[attr_name]
+                else:
+                    person_value = getattr(person, attr_name, None)
+
+                if person_value is None:
+                    continue
+
+                # Apply filter based on type
+                if filter_type == 'numerical':
+                    numerical_config = filter_config.get('numerical', {})
+                    min_value = numerical_config.get('min')
+                    max_value = numerical_config.get('max')
+
+                    if min_value is not None and person_value < min_value:
+                        return False
+
+                    if max_value is not None and person_value > max_value:
+                        return False
+
+            # Activity filters
+            activity_filters = self.config.filters.get('activities', {})
+            if activity_filters:
+                include_activities = activity_filters.get('include', [])
+                exclude_activities = activity_filters.get('exclude', [])
+
+                # Check if person has required activities
+                person_activities = getattr(person, 'activities', [])
+
+                if include_activities:
+                    # Person must have at least one of the included activities
+                    has_required_activity = any(activity in person_activities for activity in include_activities)
+                    if not has_required_activity:
+                        return False
+
+                if exclude_activities:
+                    # Person must not have any of the excluded activities
+                    has_excluded_activity = any(activity in person_activities for activity in exclude_activities)
+                    if has_excluded_activity:
+                        return False
+
+        # Check dependencies
+        for attr_name, attr_config in self.config.required_attributes.items():
+            if attr_config.get('required', False):
+                if attr_name not in person.properties:
+                    if attr_config.get('error_if_missing', False):
+                        return False
+
+        return True
+
     def _assign_all_people(self, venue_manager):
-        """Assign attributes at person level (new logic)."""
+        """
+        Assign attributes at person level.
+
+        """
         # Get all people from venue manager
         all_people = []
         for venue in venue_manager.get_all_venues_list():
@@ -225,19 +345,108 @@ class AttributeAssigner:
         # Check required attributes
         self._check_required_attributes(all_people)
 
-        # Assign each person
-        logger.info("Processing people...")
-        total = len(all_people)
+        # Pre-filter all people once
+        logger.info("Pre-filtering people by age/activity filters...")
+        eligible_people = []
+        for person in all_people:
+            if self._passes_filters(person):
+                eligible_people.append(person)
+            else:
+                self.stats['filtered_people'] += 1
+
+        self.stats['total_people'] = len(all_people)
+        logger.info(f"  ✓ Eligible for assignment: {len(eligible_people)} / {len(all_people)} people")
+        logger.info(f"  ✓ Filtered out: {self.stats['filtered_people']} people")
+        logger.info("")
+
+        # Get assignment rule and strategy
+        rule = self.config.get_person_assignment_rule()
+        if not rule:
+            logger.warning(f"No assignment rule for person-level attribute '{self.attribute_name}'")
+            self.stats['unassigned_people'] = len(eligible_people)
+            logger.info("")
+            return
+
+        strategy = self._get_or_create_strategy(rule.assignment)
+
+        # Check if strategy supports batch assignment
+        if hasattr(strategy, 'assign_batch') and callable(getattr(strategy, 'assign_batch')):
+            logger.info("Using BATCH assignment mode for better performance...")
+            self._assign_all_people_batch(eligible_people, strategy)
+        else:
+            logger.info("Using standard assignment mode...")
+            self._assign_all_people_sequential(eligible_people, strategy)
+
+        logger.info(f"✓ Processed {len(all_people)} people")
+        logger.info(f"✓ Filtered {self.stats['filtered_people']} people (age/activity filters)")
+        logger.info(f"✓ Assigned {self.stats['assigned_people']} people")
+        logger.info(f"✓ Unassigned {self.stats['unassigned_people']} people (failed assignment)")
+        logger.info(f"✓ Fallback used: {self.stats.get('fallback_count', 0)} times")
+        logger.info("")
+
+    def _assign_all_people_batch(self, eligible_people, strategy):
+        """
+        Batch assignment mode.
+
+        Uses strategy's assign_batch method to process all people together.
+
+        Args:
+            eligible_people: List of pre-filtered people
+            strategy: Assignment strategy with assign_batch method
+        """
+        logger.info("Processing people in batch mode...")
+        total = len(eligible_people)
+
+        # Prepare batch data
+        households = [self._get_person_household(p) for p in eligible_people]
+        contexts = [{'attribute_name': self.attribute_name} for _ in eligible_people]
+
+        # Call batch assignment
+        results = strategy.assign_batch(eligible_people, households, contexts)
+
+        # Assign results to people
+        for person, value in zip(eligible_people, results):
+            if value is not None:
+                # Handle single value or multiple values (dict)
+                if isinstance(value, dict):
+                    # Multiple attributes returned
+                    for attr_name, attr_value in value.items():
+                        person.properties[attr_name] = attr_value
+                        if attr_name == self.attribute_name:
+                            self.stats['attribute_distribution'][str(attr_value)] += 1
+                else:
+                    # Single attribute
+                    person.properties[self.attribute_name] = value
+                    self.stats['attribute_distribution'][str(value)] += 1
+
+                self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
+                self.stats['assigned_people'] += 1
+            else:
+                self.stats['unassigned_people'] += 1
+
+        logger.info(f"✓ Batch processed {total:,} people")
+
+    def _assign_all_people_sequential(self, eligible_people, strategy):
+        """
+        Standard sequential assignment mode.
+
+        Args:
+            eligible_people: List of pre-filtered people
+            strategy: Assignment strategy (already created, reuse it!)
+        """
+        logger.info("Processing people sequentially...")
+        total = len(eligible_people)
 
         # Progress tracking
         progress_interval = max(1, total // 20)  # Report every 5%
 
         # Sample tracking for debugging
-        sample_size = min(10, total)
-        sample_indices = set(np.random.choice(total, sample_size, replace=False))
+        sample_size = min(10, total) if total > 0 else 0
+        sample_indices = set(np.random.choice(total, sample_size, replace=False)) if total > 0 else set()
         samples_logged = []
 
-        for i, person in enumerate(all_people):
+        # Process each person with the pre-created strategy
+        for i, person in enumerate(eligible_people):
             # Track if this is a sample person
             is_sample = i in sample_indices
 
@@ -247,7 +456,31 @@ class AttributeAssigner:
                 logger.debug(f"    Geo Unit: {person.geographical_unit.name if person.geographical_unit else 'None'}")
                 logger.debug(f"    Existing attributes: {list(person.properties.keys())}")
 
-            self._assign_person(person, debug=is_sample)
+            # Pass strategy directly instead of looking it up again
+            household = self._get_person_household(person)
+            context = {'attribute_name': self.attribute_name, 'debug': is_sample}
+
+            try:
+                value = strategy.assign(person, household, context)
+
+                if value is not None:
+                    # Handle single value or multiple values (dict)
+                    if isinstance(value, dict):
+                        for attr_name, attr_value in value.items():
+                            person.properties[attr_name] = attr_value
+                            if attr_name == self.attribute_name:
+                                self.stats['attribute_distribution'][str(attr_value)] += 1
+                    else:
+                        person.properties[self.attribute_name] = value
+                        self.stats['attribute_distribution'][str(value)] += 1
+
+                    self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
+                    self.stats['assigned_people'] += 1
+                else:
+                    self.stats['unassigned_people'] += 1
+            except Exception as e:
+                logger.error(f"Exception assigning {self.attribute_name} to person {person.id}: {e}")
+                self.stats['unassigned_people'] += 1
 
             if is_sample:
                 result = person.properties.get(self.attribute_name, "NOT_ASSIGNED")
@@ -258,13 +491,6 @@ class AttributeAssigner:
             if (i + 1) % progress_interval == 0 or (i + 1) == total:
                 progress = ((i + 1) / total) * 100
                 logger.info(f"  Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
-
-        logger.info(f"✓ Processed {len(all_people)} people")
-        logger.info(f"✓ Filtered {self.stats['filtered_people']} people (age/activity filters)")
-        logger.info(f"✓ Assigned {self.stats['assigned_people']} people")
-        logger.info(f"✓ Unassigned {self.stats['unassigned_people']} people (failed assignment)")
-        logger.info(f"✓ Fallback used: {self.stats.get('fallback_count', 0)} times")
-        logger.info("")
 
     def _assign_household(self, household):
         """
@@ -323,7 +549,7 @@ class AttributeAssigner:
 
         # 2. Sort people based on configured assignment order
         sorted_members = self._sort_members_by_assignment_order(
-            members, household, structure
+            members, structure
         )
 
         # 3. Assign each person in order
@@ -365,7 +591,7 @@ class AttributeAssigner:
 
             # 3c. Create and execute strategy
             try:
-                strategy = StrategyFactory.create_strategy(rule.assignment, self.data_manager)
+                strategy = self._get_or_create_strategy(rule.assignment)
                 value = strategy.assign(person, household, context)
 
                 if value is not None:
@@ -397,7 +623,7 @@ class AttributeAssigner:
         self.stats['people_in_households'] += len(members)
         self.stats['total_people'] += len(members)
 
-    def _sort_members_by_assignment_order(self, members, household, structure: str):
+    def _sort_members_by_assignment_order(self, members, structure: str):
         """
         Sort household members by configured assignment order.
 
@@ -447,95 +673,18 @@ class AttributeAssigner:
             return person.activity_map["household"][0].subset_name
         return "unknown"
 
-    def _assign_person(self, person, debug=False):
+
+    def _assign_person_without_filter_check(self, person, debug=False):
         """
         Assign attribute to a single person (person-level assignment).
+        Assumes filtering has already been done.
+
+        Skips filter checks for pre-filtered people.
 
         Args:
             person: Person object
             debug: If True, log detailed debug information
         """
-        # Check filters (if configured)
-        if hasattr(self.config, 'filters') and self.config.filters:
-            # Loop through all filters generically
-            for filter_key, filter_config in self.config.filters.items():
-                # Get the attribute to filter on
-                attr_name = filter_config.get('attribute')
-                filter_type = filter_config.get('type')
-
-                if not attr_name:
-                    continue
-
-                # Get the person's value for this attribute
-                # First check properties, then object attributes
-                if hasattr(person, 'properties') and attr_name in person.properties:
-                    person_value = person.properties[attr_name]
-                else:
-                    person_value = getattr(person, attr_name, None)
-
-                if person_value is None:
-                    continue
-
-                # Apply filter based on type
-                if filter_type == 'numerical':
-                    numerical_config = filter_config.get('numerical', {})
-                    min_value = numerical_config.get('min')
-                    max_value = numerical_config.get('max')
-
-                    if min_value is not None and person_value < min_value:
-                        if debug:
-                            logger.debug(f"    ⚠️  Person {attr_name} {person_value} below minimum {min_value}, skipping")
-                        self.stats['total_people'] += 1
-                        self.stats['filtered_people'] += 1
-                        return
-
-                    if max_value is not None and person_value > max_value:
-                        if debug:
-                            logger.debug(f"    ⚠️  Person {attr_name} {person_value} above maximum {max_value}, skipping")
-                        self.stats['total_people'] += 1
-                        self.stats['filtered_people'] += 1
-                        return
-
-            # Activity filters
-            activity_filters = self.config.filters.get('activities', {})
-            if activity_filters:
-                include_activities = activity_filters.get('include', [])
-                exclude_activities = activity_filters.get('exclude', [])
-
-                # Check if person has required activities
-                person_activities = getattr(person, 'activities', [])
-
-                if include_activities:
-                    # Person must have at least one of the included activities
-                    has_required_activity = any(activity in person_activities for activity in include_activities)
-                    if not has_required_activity:
-                        if debug:
-                            logger.debug(f"    ⚠️  Person doesn't have required activities {include_activities}, skipping")
-                        self.stats['total_people'] += 1
-                        self.stats['filtered_people'] += 1
-                        return
-
-                if exclude_activities:
-                    # Person must not have any of the excluded activities
-                    has_excluded_activity = any(activity in person_activities for activity in exclude_activities)
-                    if has_excluded_activity:
-                        if debug:
-                            logger.debug(f"    ⚠️  Person has excluded activities {exclude_activities}, skipping")
-                        self.stats['total_people'] += 1
-                        self.stats['filtered_people'] += 1
-                        return
-
-        # Check dependencies
-        for attr_name, attr_config in self.config.required_attributes.items():
-            if attr_config.get('required', False):
-                if attr_name not in person.properties:
-                    if attr_config.get('error_if_missing', False):
-                        if debug:
-                            logger.debug(f"    ⚠️  Missing required attribute '{attr_name}', skipping")
-                        self.stats['unassigned_people'] += 1
-                        self.stats['total_people'] += 1
-                        return
-
         # Get household (if person is in one)
         household = self._get_person_household(person)
         if debug:
@@ -546,7 +695,6 @@ class AttributeAssigner:
         if not rule:
             logger.warning(f"No assignment rule for person-level attribute '{self.attribute_name}'")
             self.stats['unassigned_people'] += 1
-            self.stats['total_people'] += 1
             return
 
         # Create context
@@ -557,7 +705,7 @@ class AttributeAssigner:
 
         # Create and execute strategy
         try:
-            strategy = StrategyFactory.create_strategy(rule.assignment, self.data_manager)
+            strategy = self._get_or_create_strategy(rule.assignment)
             if debug:
                 logger.debug(f"    Strategy: {strategy.strategy_type}")
                 logger.debug(f"    Data source: {rule.assignment.get('data_source', 'N/A')}")
@@ -583,7 +731,6 @@ class AttributeAssigner:
 
                 self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
                 self.stats['assigned_people'] += 1
-                self.stats['total_people'] += 1
             else:
                 # Strategy returned None - log detailed failure info
                 logger.warning(f"Failed to assign {self.attribute_name} to person {person.id}")
@@ -607,7 +754,6 @@ class AttributeAssigner:
                 if debug:
                     logger.debug(f"    ⚠️  Strategy returned None")
                 self.stats['unassigned_people'] += 1
-                self.stats['total_people'] += 1
 
         except Exception as e:
             # Exception during assignment - log detailed error info
@@ -619,7 +765,6 @@ class AttributeAssigner:
                 import traceback
                 logger.error(f"    Traceback:\n{traceback.format_exc()}")
             self.stats['unassigned_people'] += 1
-            self.stats['total_people'] += 1
 
     def _get_person_household(self, person):
         """Get household venue for a person, if any."""
@@ -702,44 +847,21 @@ class AttributeAssigner:
                 logger.info(f"  {strategy}: {count}")
             logger.info("")
 
-        # Attribute distribution
-        logger.info(f"{self.attribute_name.capitalize()} distribution:")
-        total_assigned = sum(self.stats['attribute_distribution'].values())
-        for value, count in sorted(self.stats['attribute_distribution'].items()):
-            percentage = (count / total_assigned * 100) if total_assigned > 0 else 0
-            logger.info(f"  {value}: {count:6d} ({percentage:5.2f}%)")
-        logger.info("")
+        # Attribute distribution (can be disabled via settings)
+        show_distribution = self.config.settings.get('logging', {}).get('show_attribute_distribution', True)
+
+        if show_distribution:
+            logger.info(f"{self.attribute_name.capitalize()} distribution:")
+            total_assigned = sum(self.stats['attribute_distribution'].values())
+            for value, count in sorted(self.stats['attribute_distribution'].items()):
+                percentage = (count / total_assigned * 100) if total_assigned > 0 else 0
+                logger.info(f"  {value}: {count:6d} ({percentage:5.2f}%)")
+            logger.info("")
+        else:
+            # Still show summary count even when distribution is hidden
+            unique_values = len(self.stats['attribute_distribution'])
+            total_assigned = sum(self.stats['attribute_distribution'].values())
+            logger.info(f"{self.attribute_name.capitalize()} distribution: {unique_values} unique values, {total_assigned} total assignments")
+            logger.info("")
+
         logger.info("=" * 80)
-
-
-def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] = None) -> Dict[str, Any]:
-    """
-    Convenience function to assign attributes to a population.
-
-    Args:
-        venue_manager: VenueManager with households and venues
-        config_path: Path to YAML configuration file
-        geo_units: Optional set of geo unit codes to preload data for
-
-    Returns:
-        Assignment statistics dictionary
-    """
-    # Load configuration
-    config = AttributeAssignmentConfig.from_yaml(config_path)
-
-    # Initialize data manager
-    data_manager = DataSourceManager(config)
-
-    # Load data
-    if geo_units:
-        logger.info(f"Preloading data for {len(geo_units)} geographical units...")
-        data_manager.load_all(geo_units)
-    else:
-        logger.info("Loading all data sources...")
-        data_manager.load_all()
-
-    # Create assigner and run
-    assigner = AttributeAssigner(config, data_manager)
-    stats = assigner.assign_all(venue_manager)
-
-    return stats

@@ -97,6 +97,7 @@ settings:
     detailed_assignment_logging: false
     show_samples: true
     sample_size: 10
+    show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
 
 # ============================================================================
 # Notes
@@ -108,3 +109,8 @@ settings:
 # - Person assigned to workplace_location = "Nuneaton and Bedworth" (LGU)
 # - This config samples a specific SGU like "E00186958" within that LGU
 # - Probability proportional to Total workers in each SGU
+#
+# Statistics:
+# - show_attribute_distribution is set to false to avoid printing hundreds of
+#   thousands of SGU codes in the logs. You'll still see the total count of
+#   unique values and assignments
