@@ -478,7 +478,7 @@ class MultiKeyLookupSource(DataSource):
         """
         Look up probabilities based on person demographics using dictionary lookup.
 
-        PERFORMANCE OPTIMIZED: Uses caching for repeated lookups with same keys.
+        Uses caching for repeated lookups with same keys.
 
         Args:
             person: Person object
@@ -680,7 +680,7 @@ class OriginDestinationMatrixSource(DataSource):
                     else:
                         origin_column = 'LGU_origin_code'
 
-                    # PERFORMANCE OPTIMIZATION: Filter to only relevant geographical units
+                    # Filter to only relevant geographical units
                     # Only filter if geo_units values actually match origin column values
                     if geo_units and origin_column and origin_column in df.columns:
                         # Check if there's any overlap between geo_units and origin values
@@ -818,7 +818,7 @@ class GUSamplerSource(DataSource):
                         geo_unit_column = geo_unit_config.get('name')
                         geo_unit_level = geo_unit_config.get('level', 'SGU')
 
-                    # PERFORMANCE OPTIMIZATION: Filter to only relevant geographical units
+                    # Filter to only relevant geographical units
                     if geo_units and geo_unit_column and geo_unit_column in df.columns:
                         original_len = len(df)
                         df = df[df[geo_unit_column].isin(geo_units)]
