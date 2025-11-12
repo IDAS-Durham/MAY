@@ -74,11 +74,26 @@ eligibility:
 
   # Global eligibility filters (apply to ALL allocation phases)
   # IMPORTANT: These filters apply to Phase 1 (special cases), Phase 2 (mandatory/optional groups), AND Phase 3 (normal allocation)
+  # FILTER ORDER MATTERS: More restrictive filters should come first for efficiency
   global_filters:
+    # 1. Age filter (FIRST - most restrictive, filters out most people)
+    - attribute: "age"
+      type: "numerical"
+      description: "Only consider people of school age (0-19 years)"
+      min: 0
+      max: 19
+
+    # 2. Residence type filter (SECOND - only checked for people who pass age filter)
     - attribute: "residence.type"
       type: "categorical"
       description: "Only allocate people living in households or boarding schools (exclude university dorms, care homes, etc.)"
       values: ["household", "boarding_school"]
+
+  # Exclusion rules (apply to ALL allocation phases)
+  # Exclude people based on household properties
+  exclude:
+    households:
+      original_pattern: "0 >=0 0 0"  # Exclude people from households with this pattern
 
   # Mandatory allocation groups (MUST be allocated, even if capacity full)
   # These groups are prioritized and can overflow venue capacity
@@ -297,7 +312,7 @@ settings:
   # Logging
   verbose: true
   log_summary: true  # Print allocation statistics
-  debug: true  # Enable debug-level logging for troubleshooting
+  debug: false  # Enable debug-level logging for troubleshooting
 
   # Performance
   use_spatial_index: true  # Use KDTree for distance queries
@@ -390,6 +405,21 @@ validation:
 #      1. Ages 18-19 (sixth form, if space available)
 #      2. Ages 0-4 (early childhood, if space available)
 #    - System checks and warns if any mandatory students are unallocated
+#
+# GLOBAL FILTER PRIORITY:
+#    - Filters are checked in order: age → residence type → exclusions
+#    - Age filter (0-19) is FIRST to eliminate most ineligible people efficiently
+#    - Residence type filter is SECOND (only checked for people who pass age)
+#    - This order minimizes unnecessary checks and reduces log noise
+#    - Example: A 50-year-old in a care home is filtered by age, never checks residence
+#
+# EXCLUSION RULES:
+#    - The 'exclude' section filters people BEFORE any allocation happens
+#    - Supports filtering by household properties (stored in household.properties dict)
+#    - Example: exclude.households.original_pattern = "0 >=0 0 0"
+#      → Excludes all people living in households with that specific pattern
+#    - This is applied to ALL phases (special cases, mandatory, and normal allocation)
+#    - Use this to exclude specific household types from school allocation
 #
 # EXAMPLE USAGE IN CODE:
 #

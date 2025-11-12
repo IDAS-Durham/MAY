@@ -165,7 +165,7 @@ venue_types:
         # Format: {column_name: {age_band: [min, max], sex: "male/female"}}
         column_mappings:
           n_16_24:
-            age_band: [16, 24]
+            age_band: [18, 24]
           n_25_34:
             age_band: [25, 34]
           n_35_49:

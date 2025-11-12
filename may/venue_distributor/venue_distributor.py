@@ -96,11 +96,11 @@ class VenueDistributor:
 
         # Phase 2: Mandatory allocation (if configured)
         if remaining_people:
-            remaining_people = self._handle_mandatory_allocation(remaining_people, venues, world)
+            remaining_people = self._handle_mandatory_allocation(remaining_people, venues)
 
         # Phase 3: Normal allocation (optional groups)
         if remaining_people:
-            self._allocate_normal(remaining_people, venues, world)
+            self._allocate_normal(remaining_people, venues)
 
         # Log summary
         if self.config.get('settings', {}).get('log_summary', True):
@@ -115,9 +115,13 @@ class VenueDistributor:
         already_assigned = 0
         missing_attrs = 0
         filtered_by_global = 0
+        filtered_by_exclusions = 0
 
         # Get global filters (apply to ALL allocation phases)
         global_filters = self.config.get('eligibility', {}).get('global_filters', [])
+
+        # Get exclusion rules
+        exclude_config = self.config.get('eligibility', {}).get('exclude', {})
 
         for person in world.people:
             # Check if already assigned
@@ -138,10 +142,15 @@ class VenueDistributor:
                 filtered_by_global += 1
                 continue
 
+            # Check exclusion rules
+            if exclude_config and self._person_excluded(person, exclude_config):
+                filtered_by_exclusions += 1
+                continue
+
             eligible.append(person)
 
         if self.verbose:
-            logger.info(f"Eligibility check: {already_assigned} already assigned, {missing_attrs} missing attributes, {filtered_by_global} filtered by global rules, {len(eligible)} eligible")
+            logger.info(f"Eligibility check: {already_assigned} already assigned, {missing_attrs} missing attributes, {filtered_by_global} filtered by global rules, {filtered_by_exclusions} filtered by exclusions, {len(eligible)} eligible")
 
         return eligible
 
@@ -173,7 +182,7 @@ class VenueDistributor:
         else:
             logger.warning("No venues with coordinates found for spatial index")
 
-    def _handle_mandatory_allocation(self, people: List, venues: List, world) -> List:
+    def _handle_mandatory_allocation(self, people: List, venues: List) -> List:
         """
         Handle mandatory allocation groups (e.g., school-age children MUST be allocated).
 
@@ -229,7 +238,7 @@ class VenueDistributor:
                 original_when_full = self.config.get('allocation', {}).get('when_full', 'exclude')
                 self.config.setdefault('allocation', {})['when_full'] = 'overflow'
 
-            allocated_count = self._allocate_group(group_people, venues, world, allow_overflow=allow_overflow)
+            allocated_count = self._allocate_group(group_people, venues, allow_overflow=allow_overflow)
 
             if allow_overflow:
                 # Restore original setting
@@ -324,7 +333,49 @@ class VenueDistributor:
 
         return True
 
-    def _allocate_group(self, people: List, venues: List, world, allow_overflow: bool = False) -> int:
+    def _person_excluded(self, person, exclude_config: dict) -> bool:
+        """
+        Check if person should be excluded based on exclusion rules.
+
+        Supports simple syntax like:
+            exclude:
+                households:
+                    original_pattern: "0 >=0 0 0"
+
+        Returns True if person should be EXCLUDED (filtered out).
+        """
+        # Check household exclusions
+        household_exclusions = exclude_config.get('households', {})
+        if household_exclusions:
+            # Get person's household from activity_map
+            if 'household' not in person.activity_map:
+                # No household = not excluded by household rules
+                return False
+
+            residence = person.activity_map['household']
+
+            # Handle list of subsets
+            if isinstance(residence, list):
+                if not residence:
+                    return False
+                residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
+            else:
+                residence_venue = residence
+
+            # Check each household property exclusion
+            for property_name, exclude_value in household_exclusions.items():
+                if hasattr(residence_venue, 'properties') and isinstance(residence_venue.properties, dict):
+                    actual_value = residence_venue.properties.get(property_name)
+
+                    # If value matches exclusion, person should be excluded
+                    if actual_value == exclude_value:
+                        if self.verbose:
+                            logger.debug(f"Person {person.id}/{person.age}{person.sex} excluded: household.properties['{property_name}'] = '{actual_value}'")
+                        return True
+
+        return False
+
+    def _allocate_group(self, people: List, venues: List, allow_overflow: bool = False) -> int:
         """
         Allocate a specific group of people (e.g., mandatory school-age children).
 
@@ -565,16 +616,16 @@ class VenueDistributor:
                 return None
         return value
 
-    def _allocate_normal(self, people: List, venues: List, world):
+    def _allocate_normal(self, people: List, venues: List):
         """Normal allocation for people not handled by special cases."""
         batch_by = self.config.get('allocation', {}).get('batch_by', 'geo_unit')
 
         if batch_by == 'geo_unit':
-            self._allocate_by_geo_unit(people, venues, world)
+            self._allocate_by_geo_unit(people, venues)
         else:
             self._allocate_individual(people, venues)
 
-    def _allocate_by_geo_unit(self, people: List, venues: List, world):
+    def _allocate_by_geo_unit(self, people: List, venues: List):
         """Batch allocation by geo_unit for performance."""
         # Group people by geo_unit
         people_by_sgu = {}
@@ -695,19 +746,33 @@ class VenueDistributor:
             # Fallback: calculate all distances
             return self._find_closest_venues_brute_force(location, venues, count)
 
-        # Query KDTree (query single point, returns 1D array)
-        k = min(count, len(self.venue_list))
-        distances, indices = self.spatial_index.query(location, k=k)
+        # Create a set of allowed venue IDs for fast lookup
+        allowed_venue_ids = {id(venue) for venue in venues}
+
+        # BUG FIX: If venues list is filtered, we need to query MORE venues from the spatial index
+        # and then filter the results to only include venues in our allowed list.
+        # Query enough venues to ensure we get at least 'count' after filtering.
+        max_query = min(len(self.venue_list), count * 10)  # Query 10x to be safe
+
+        # Query KDTree for closest venues from ALL venues
+        distances, indices = self.spatial_index.query(location, k=max_query)
 
         # Handle single result (scalar) vs multiple (array)
         if np.isscalar(indices):
             indices = [indices]
         else:
-            # indices is already a 1D numpy array, convert to list
             indices = indices.tolist()
 
-        # Filter out invalid indices and get venues
-        closest_venues = [self.venue_list[i] for i in indices if 0 <= i < len(self.venue_list)]
+        # Filter results to only include venues in our allowed set
+        closest_venues = []
+        for i in indices:
+            if 0 <= i < len(self.venue_list):
+                venue = self.venue_list[i]
+                if id(venue) in allowed_venue_ids:
+                    closest_venues.append(venue)
+                    if len(closest_venues) >= count:
+                        break
+
         return closest_venues
 
     def _find_closest_venues_brute_force(
@@ -808,14 +873,14 @@ class VenueDistributor:
         min_col = venue_constraints.get('min_column')
         max_col = venue_constraints.get('max_column')
 
+        # Check minimum age constraint
         if min_col:
-            # Look in venue.properties dict
             min_val = venue.properties.get(min_col)
             if min_val is not None and person_value < min_val:
                 return False
 
+        # Check maximum age constraint
         if max_col:
-            # Look in venue.properties dict
             max_val = venue.properties.get(max_col)
             if max_val is not None and person_value > max_val:
                 return False
@@ -853,7 +918,7 @@ class VenueDistributor:
 
     def _select_venue(
         self, person, venues: List, person_location: Tuple[float, float]
-    ) -> Optional:
+    ) -> Optional[Any]:
         """Select final venue from eligible list based on strategy."""
         if not venues:
             return None
