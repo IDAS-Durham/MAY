@@ -54,17 +54,50 @@ class VenueDistributor:
         self.activity_map_key = self.config.get('activity_map_key')
         self.verbose = self.config.get('settings', {}).get('verbose', False)
 
+        # Geographical level configuration (default to SGU for backward compatibility)
+        self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level', 'SGU')
+
         # Set logging level
         if self.config.get('settings', {}).get('debug', False):
             logger.setLevel(logging.DEBUG)
 
-        logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}'")
+        logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at geo_level='{self.venue_geo_level}'")
 
     def _load_config(self) -> Dict:
         """Load and parse YAML configuration file."""
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
         return config
+
+    def _get_geo_unit_at_level(self, person):
+        """
+        Get the person's geographical unit at the configured venue_geo_level.
+
+        This enables flexibility: if venues are at MGU or LGU level but people are at SGU,
+        we automatically traverse up the hierarchy to find the matching ancestor.
+
+        Args:
+            person: Person object with geographical_unit attribute
+
+        Returns:
+            GeographicalUnit at the configured level, or None if not found
+        """
+        if not hasattr(person, 'geographical_unit') or person.geographical_unit is None:
+            return None
+
+        person_geo_unit = person.geographical_unit
+
+        # If person is already at the target level, return it
+        if person_geo_unit.level == self.venue_geo_level:
+            return person_geo_unit
+
+        # Otherwise, traverse up to find ancestor at target level
+        ancestor = person_geo_unit.get_ancestor_by_level(self.venue_geo_level)
+
+        if ancestor is None and self.verbose:
+            logger.debug(f"Person at {person_geo_unit.level} '{person_geo_unit.name}' has no ancestor at {self.venue_geo_level}")
+
+        return ancestor
 
     def allocate(self, world):
         """
@@ -455,9 +488,9 @@ class VenueDistributor:
         """
         Allocate a specific group of people (e.g., mandatory school-age children).
 
-        PERFORMANCE OPTIMIZATION: SGU-level caching
-        - Compute closest venues ONCE per SGU (not per person)
-        - Group people by attribute combinations within each SGU
+        PERFORMANCE OPTIMIZATION: Geo-unit level caching
+        - Compute closest venues ONCE per geo_unit (not per person)
+        - Group people by attribute combinations within each geo_unit
         - Filter venues ONCE per unique attribute combo (not per person)
 
         This reduces spatial queries by 99% and attribute filtering by 95%.
@@ -475,23 +508,25 @@ class VenueDistributor:
         selection_config = self.config.get('venue_selection', {})
         target_count = selection_config.get('count', 5)
 
-        # Group by geo_unit for batching
-        people_by_sgu = {}
+        # Group by geo_unit for batching (at the configured venue_geo_level)
+        people_by_geo_unit = {}
         for person in people:
-            sgu = person.geographical_unit
-            if sgu not in people_by_sgu:
-                people_by_sgu[sgu] = []
-            people_by_sgu[sgu].append(person)
+            geo_unit = self._get_geo_unit_at_level(person)
+            if geo_unit is None:
+                continue
+            if geo_unit not in people_by_geo_unit:
+                people_by_geo_unit[geo_unit] = []
+            people_by_geo_unit[geo_unit].append(person)
 
         # Process each geo_unit
-        for sgu, sgu_people in people_by_sgu.items():
+        for geo_unit, geo_unit_people in people_by_geo_unit.items():
             # Get coordinates
-            if sgu.coordinates is None or len(sgu.coordinates) != 2:
+            if geo_unit.coordinates is None or len(geo_unit.coordinates) != 2:
                 continue
 
-            lat, lon = sgu.coordinates
+            lat, lon = geo_unit.coordinates
 
-            # OPTIMIZATION: Find closest venues ONCE per SGU (not per person!)
+            # OPTIMIZATION: Find closest venues ONCE per geo_unit (not per person!)
             total_venues = len(venues)
             search_attempts = [
                 min(50, total_venues),
@@ -501,21 +536,21 @@ class VenueDistributor:
             search_attempts = sorted(set(search_attempts))
 
             # Try to find nearby venues with fallback
-            sgu_nearby_venues = []
+            geo_unit_nearby_venues = []
             for search_count in search_attempts:
-                sgu_nearby_venues = self._find_closest_venues((lat, lon), venues, search_count)
-                if sgu_nearby_venues:
+                geo_unit_nearby_venues = self._find_closest_venues((lat, lon), venues, search_count)
+                if geo_unit_nearby_venues:
                     break
 
-            if not sgu_nearby_venues:
+            if not geo_unit_nearby_venues:
                 if self.verbose:
-                    logger.debug(f"SGU {sgu.code if hasattr(sgu, 'code') else sgu} has no nearby venues")
+                    logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}) has no nearby venues")
                 continue
 
             # OPTIMIZATION: Group people by their attribute values (generic!)
             # This works with ANY attributes defined in YAML (age/sex/income/disability/etc)
             people_by_attributes = {}
-            for person in sgu_people:
+            for person in geo_unit_people:
                 # Create cache key from person's attribute values
                 # e.g., if attributes are ["age", "sex"] → key = (17, "male")
                 # e.g., if attributes are ["age", "sex", "disability"] → key = (17, "male", False)
@@ -530,16 +565,16 @@ class VenueDistributor:
                 # Filter venues based on this attribute combination
                 # Use first person in group as representative (they all have same attributes)
                 representative_person = people_group[0]
-                eligible_venues = self._filter_venues_by_person(representative_person, sgu_nearby_venues)
+                eligible_venues = self._filter_venues_by_person(representative_person, geo_unit_nearby_venues)
 
-                if not eligible_venues and len(sgu_nearby_venues) < total_venues:
+                if not eligible_venues and len(geo_unit_nearby_venues) < total_venues:
                     # Fallback: try expanding search if needed
                     for search_count in search_attempts[1:]:  # Skip first, already tried
                         expanded_venues = self._find_closest_venues((lat, lon), venues, search_count)
                         eligible_venues = self._filter_venues_by_person(representative_person, expanded_venues)
                         if eligible_venues:
                             if self.verbose:
-                                logger.debug(f"SGU {sgu.code if hasattr(sgu, 'code') else sgu} attributes {attr_values} required expanded search ({search_count} venues)")
+                                logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}) with attributes {attr_values} required expanded search ({search_count} venues)")
                             break
 
                 # Assign all people in this group to eligible venues
@@ -555,7 +590,7 @@ class VenueDistributor:
                     # For mandatory allocation, log if no venues accept this attribute combo
                     if self.verbose:
                         attr_display = ", ".join(f"{name}={val}" for name, val in zip(attribute_names, attr_values))
-                        logger.debug(f"SGU {sgu.code if hasattr(sgu, 'code') else sgu}: {len(people_group)} people with [{attr_display}] have no eligible venues")
+                        logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}): {len(people_group)} people with [{attr_display}] have no eligible venues")
 
         return allocated_count
 
@@ -631,26 +666,35 @@ class VenueDistributor:
         if 'person_residence_type' in condition:
             required_type = condition['person_residence_type']
 
-            # Check if person has a residence in activity_map
-            if 'household' not in person.activity_map:
+            # Check all possible residence types in activity_map
+            residence_types_to_check = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
+            residence_venue = None
+
+            for res_type in residence_types_to_check:
+                if res_type in person.activity_map and person.activity_map[res_type]:
+                    residence = person.activity_map[res_type]
+                    # Handle both single venue and list of subsets
+                    if isinstance(residence, list):
+                        if not residence:
+                            continue
+                        # Get venue from first subset
+                        residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
+                    else:
+                        residence_venue = residence
+                    break
+
+            # Check if we found a residence and if it matches the required type
+            if residence_venue is None:
                 return False
-
-            # Get residence from activity_map (could be a list of Subsets)
-            residence = person.activity_map['household']
-
-            # Handle both single venue and list of subsets
-            if isinstance(residence, list):
-                if not residence:
-                    return False
-                # Get venue from first subset
-                residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
-            else:
-                residence_venue = residence
-
-            # Check venue type
             if not hasattr(residence_venue, 'type'):
                 return False
             if residence_venue.type != required_type:
+                return False
+
+        # Check filters (e.g., age range)
+        if 'filters' in condition:
+            filters = condition['filters']
+            if not self._person_matches_filters(person, filters):
                 return False
 
         return True
@@ -663,24 +707,62 @@ class VenueDistributor:
             True if successfully allocated, False otherwise
         """
         allocation_rule = case.get('allocation_rule', {})
+        strategy = allocation_rule.get('strategy')
         match_by = allocation_rule.get('match_by', [])
 
-        # Find matching venue
-        for venue in venues:
-            if self._venue_matches_criteria(person, venue, match_by):
-                # Allocate!
-                person.activity_map[self.activity_map_key] = venue
+        selected_venue = None
 
-                if self.verbose:
-                    logger.debug(f"Special case: Allocated person to {venue.name}")
+        # Strategy-based allocation (closest, random, etc.)
+        if strategy:
+            # Get person's location
+            geo_unit = self._get_geo_unit_at_level(person)
+            if geo_unit and geo_unit.coordinates:
+                person_location = geo_unit.coordinates
 
-                return True
+                if strategy == 'closest':
+                    # Find closest venue
+                    min_dist = float('inf')
+                    for venue in venues:
+                        if venue.coordinates and len(venue.coordinates) == 2:
+                            dist = self._haversine_distance(person_location, venue.coordinates)
+                            if dist < min_dist:
+                                min_dist = dist
+                                selected_venue = venue
+                elif strategy == 'random':
+                    if venues:
+                        selected_venue = np.random.choice(venues)
+
+        # Fallback: match_by criteria (existing logic)
+        elif match_by:
+            # Debug: log what we're looking for
+            residence_name = self._get_nested_value_person(person, 'residence.name')
+            residence_geo = self._get_nested_value_person(person, 'residence.geographical_unit.name')
+            logger.info(f"Person {person.id}: Looking for venue matching name='{residence_name}', geo_unit='{residence_geo}'")
+            logger.info(f"Checking against {len(venues)} venues")
+
+            # Sample first 3 venues to see what we're checking against
+            for i, venue in enumerate(venues[:3]):
+                venue_geo = self._get_nested_value(venue, 'geographical_unit.name')
+                logger.info(f"  Sample venue {i}: name='{venue.name}', geo_unit='{venue_geo}'")
+
+            for venue in venues:
+                if self._venue_matches_criteria(person, venue, match_by):
+                    selected_venue = venue
+                    logger.info(f"Person {person.id}: MATCHED to venue '{venue.name}'")
+                    break
+
+        # Allocate if venue found
+        if selected_venue:
+            person.activity_map[self.activity_map_key] = selected_venue
+            if self.verbose:
+                logger.debug(f"Special case: Allocated person {person.id} to {selected_venue.name}")
+            return True
 
         # No match found
         residence_name = self._get_nested_value_person(person, 'residence.name')
         if_no_match = allocation_rule.get('if_no_match', 'error')
         if if_no_match == 'error':
-            raise ValueError(f"Special case mandatory allocation failed for person {person.id} with residence '{residence_name}'")
+            raise ValueError(f"Special case mandatory allocation failed for person {person.id} (age: {person.age}) with residence '{residence_name}'")
         elif if_no_match == 'warn':
             logger.warning(f"Special case: No matching venue found for person {person.id} with residence '{residence_name}'")
 
@@ -703,6 +785,10 @@ class VenueDistributor:
             # Compare
             if match_type == 'exact':
                 if source_value != target_value:
+                    # Debug logging - always log for first few failures (limit output)
+                    if person.id == 22406:  # Only log for the problematic person
+                        logger.info(f"Person {person.id} vs Venue '{venue.name}': Match failed on {field}: "
+                                   f"'{source_value}' != '{target_value}'")
                     return False
 
         return True
@@ -711,27 +797,33 @@ class VenueDistributor:
         """
         Get value from person with special handling for residence.
 
-        For paths like 'residence.name' or 'residence.geo_unit',
-        this looks in person.activity_map['household'].
+        For paths like 'residence.name' or 'residence.geographical_unit.name',
+        this looks in person.activity_map for any residence type.
         """
         if path.startswith('residence.'):
-            # Get residence from activity_map
-            if 'household' not in person.activity_map:
+            # Get residence from activity_map - check all residence types
+            residence_types_to_check = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
+            residence_venue = None
+
+            for res_type in residence_types_to_check:
+                if res_type in person.activity_map and person.activity_map[res_type]:
+                    residence = person.activity_map[res_type]
+                    # Handle list of subsets
+                    if isinstance(residence, list):
+                        if not residence:
+                            continue
+                        residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
+                    else:
+                        residence_venue = residence
+                    break
+
+            if residence_venue is None:
                 return None
 
-            residence = person.activity_map['household']
-
-            # Handle list of subsets
-            if isinstance(residence, list):
-                if not residence:
-                    return None
-                residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
-            else:
-                residence_venue = residence
-
-            # Get the requested attribute
-            attr_name = path.replace('residence.', '')
-            return getattr(residence_venue, attr_name, None)
+            # Get the requested attribute (handle nested paths like 'geographical_unit.name')
+            attr_path = path.replace('residence.', '')
+            # Use _get_nested_value to handle nested attributes
+            return self._get_nested_value(residence_venue, attr_path)
 
         # Normal attribute access
         return self._get_nested_value(person, path)
@@ -758,28 +850,29 @@ class VenueDistributor:
 
     def _allocate_by_geo_unit(self, people: List, venues: List):
         """Batch allocation by geo_unit for performance."""
-        # Group people by geo_unit
-        people_by_sgu = {}
+        # Group people by geo_unit (at the configured venue_geo_level)
+        people_by_geo_unit = {}
         for person in people:
-            # Person.geographical_unit is already the GeographicalUnit object
-            sgu = person.geographical_unit
-            if sgu not in people_by_sgu:
-                people_by_sgu[sgu] = []
-            people_by_sgu[sgu].append(person)
+            geo_unit = self._get_geo_unit_at_level(person)
+            if geo_unit is None:
+                continue
+            if geo_unit not in people_by_geo_unit:
+                people_by_geo_unit[geo_unit] = []
+            people_by_geo_unit[geo_unit].append(person)
 
-        logger.info(f"Batching: {len(people_by_sgu)} geo_units to process")
+        logger.info(f"Batching: {len(people_by_geo_unit)} geo_units to process at {self.venue_geo_level} level")
 
         # Process each geo_unit
         allocated_count = 0
-        for sgu, sgu_people in people_by_sgu.items():
-            # sgu is already a GeographicalUnit object, no lookup needed
+        for geo_unit, geo_unit_people in people_by_geo_unit.items():
+            # geo_unit is already a GeographicalUnit object at the configured level
 
             # Get coordinates from GeographicalUnit
-            if sgu.coordinates is None or len(sgu.coordinates) != 2:
-                logger.warning(f"Geo unit {sgu.name} has no coordinates, skipping batch")
+            if geo_unit.coordinates is None or len(geo_unit.coordinates) != 2:
+                logger.warning(f"Geo unit {geo_unit.name} ({geo_unit.level}) has no coordinates, skipping batch")
                 continue
 
-            lat, lon = sgu.coordinates
+            lat, lon = geo_unit.coordinates
 
             # Find eligible venues for this batch (once per geo_unit)
             eligible_venues = self._find_eligible_venues_for_location(
@@ -790,7 +883,7 @@ class VenueDistributor:
                 continue
 
             # Allocate each person in this batch
-            for person in sgu_people:
+            for person in geo_unit_people:
                 # Filter venues by person attributes
                 person_venues = self._filter_venues_by_person(person, eligible_venues)
 
@@ -836,9 +929,9 @@ class VenueDistributor:
             if hasattr(person.residence, 'geo_unit'):
                 # This would need to look up the geo_unit object
                 # For now, simplified:
-                sgu_code = person.residence.geo_unit
-                # Would need: sgu = world.geography.get_geo_unit(sgu_code)
-                # Return (sgu.lat, sgu.lon)
+                geo_unit_code = person.residence.geo_unit
+                # Would need: geo_unit = world.geography.get_geo_unit(geo_unit_code)
+                # Return (geo_unit.lat, geo_unit.lon)
                 pass
 
         # Fallback: try direct coordinates
@@ -1130,7 +1223,13 @@ class VenueDistributor:
 
     def _log_allocation_summary(self, world):
         """Log summary statistics of allocation."""
-        allocated = sum(1 for p in world.people if self.activity_map_key in p.activity_map)
+        # Count only people allocated to THIS venue type (not just any primary_activity)
+        allocated = sum(
+            1 for p in world.people
+            if self.activity_map_key in p.activity_map
+            and hasattr(p.activity_map[self.activity_map_key], 'type')
+            and p.activity_map[self.activity_map_key].type == self.venue_type
+        )
         total = len(world.people)
 
         logger.info(f"Allocation Summary:")
@@ -1159,7 +1258,7 @@ class VenueDistributor:
                 'person_sex',
                 'person_age',
                 'residence_type',
-                'residence_sgu',
+                'residence_geo_unit',
                 'venue_name',
                 'venue_type',
             ]
@@ -1182,6 +1281,10 @@ class VenueDistributor:
 
                 venue = person.activity_map[self.activity_map_key]
 
+                # Only export people allocated to THIS venue type
+                if not hasattr(venue, 'type') or venue.type != self.venue_type:
+                    continue
+
                 # Get residence type - check all possible residence keys in activity_map
                 residence_type = 'unknown'
                 # Residences are stored as person.activity_map[venue_type] = [Subset, ...]
@@ -1202,8 +1305,8 @@ class VenueDistributor:
                             residence_type = res_type
                         break
 
-                # Get SGU name
-                sgu_name = person.geographical_unit.name if person.geographical_unit else 'unknown'
+                # Get geographical unit name
+                geo_unit_name = person.geographical_unit.name if person.geographical_unit else 'unknown'
 
                 # Build row
                 row = [
@@ -1211,7 +1314,7 @@ class VenueDistributor:
                     person.sex,
                     person.age,
                     residence_type,
-                    sgu_name,
+                    geo_unit_name,
                     venue.name,
                     venue.type,
                 ]

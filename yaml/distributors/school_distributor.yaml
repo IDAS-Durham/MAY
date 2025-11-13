@@ -50,8 +50,8 @@ special_cases:
           match_type: "exact"  # Must match exactly
 
         - field: "geo_unit"
-          source: "person.residence.geo_unit"
-          target: "venue.geo_unit"
+          source: "person.residence.geographical_unit.name"
+          target: "venue.geographical_unit.name"
           match_type: "exact"
 
       # This is a mandatory assignment
@@ -220,18 +220,32 @@ venue_selection:
   # max_distance_unit: "km"  # "km", "miles", "meters"
 
   # --------------------------------
+  # Geographical level configuration
+  # --------------------------------
+  # FLEXIBILITY: What geographical level are venues assigned to?
+  # This allows the system to work when venue data is at different granularity than person data
+  # If person level differs from venue level, the system will automatically traverse the hierarchy
+  venue_geo_level: "SGU"  # Options: "SGU", "MGU", "LGU"
+  # Examples:
+  #   - "SGU": Schools usually have precise small geographical unit locations
+  #   - "MGU": Some venues might only have medium geographical unit data
+  #   - "LGU": Large venues (universities, hospitals) might only have large geographical unit data
+  # Note: People are always at SGU level, system will traverse up to match venue level if needed
+
+  # --------------------------------
   # Location calculation
   # --------------------------------
   # Where to measure distance FROM
   person_location_source: "geographical_unit.coordinates"
   # Options:
-  #   - "geographical_unit.coordinates": Use person's SGU coordinates (lat/lon)
+  #   - "geographical_unit.coordinates": Use person's geographical unit coordinates (lat/lon)
+  #                                     Will automatically use the ancestor at venue_geo_level
 
   # Where to measure distance TO
   venue_location_source: "coordinates"
   # Options:
   #   - "coordinates": Use venue's (Latitude, Longitude) from CSV
-  #   - "geo_unit.coordinates": Use venue's SGU centroid
+  #   - "geo_unit.coordinates": Use venue's geographical unit centroid
 
   # Distance calculation method
   distance_metric: "haversine"  # "haversine" (great-circle), "euclidean"

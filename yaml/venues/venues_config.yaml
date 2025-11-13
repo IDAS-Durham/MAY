@@ -22,7 +22,7 @@ venue_types:
 
   university:
     enabled: true
-    filename: universities.csv
+    filename: universities/uk_universities.csv
     description: "Higher education institutions"
 
   care_home:
