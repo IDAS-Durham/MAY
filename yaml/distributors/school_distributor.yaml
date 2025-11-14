@@ -95,18 +95,18 @@ eligibility:
     households:
       original_pattern: "0 >=0 0 0"  # Exclude people from households with this pattern
 
-  # Mandatory allocation groups (MUST be allocated, even if capacity full)
-  # These groups are prioritized and can overflow venue capacity
-  mandatory_allocation:
+  # Priority allocation groups (processed first, before normal allocation)
+  # These groups are prioritized and can optionally overflow venue capacity
+  priority_allocation:
     enabled: true
     priority_order: "age_desc"  # Allocate older students first (17->5)
 
     groups:
-      # Group 1: School-age children (MANDATORY - cannot be left unallocated)
-      - name: "mandatory_school_age"
-        description: "Children aged 5-17 MUST attend school (only if living in household or boarding school)"
+      # Group 1: School-age children (highest priority, can overflow)
+      - name: "high_priority_school_age"
+        description: "Children aged 5-17 (highest priority, can overflow capacity)"
         priority: 1  # Highest priority
-        allow_overflow: true  # Can exceed venue capacity, but still respects age/gender constraints
+        allow_overflow: true  # This makes it a 'mandatory group'. Can exceed venue capacity, but still respects age/gender constraints
 
         filters:
           - attribute: "age"
@@ -119,9 +119,9 @@ eligibility:
             description: "Only allocate people living in households or boarding schools (not university dorms)"
             values: ["household", "boarding_school"]
 
-      # Group 2: Sixth form / Further education (OPTIONAL - second priority)
-      - name: "optional_sixth_form"
-        description: "Students aged 18-19 (optional, second priority, only if living in household or boarding school)"
+      # Group 2: Sixth form / Further education (second priority, respects capacity)
+      - name: "second_priority_sixth_form"
+        description: "Students aged 18-19 (second priority, respects capacity limits)"
         priority: 2  # Second priority
         allow_overflow: false  # Respect capacity limits
 
@@ -291,10 +291,10 @@ allocation:
   track_capacity: true
 
   # What to do when venue is full
-  # NOTE: This is overridden by mandatory_allocation.allow_overflow for mandatory groups
+  # NOTE: This is overridden by priority_allocation.allow_overflow for priority groups
   when_full: "exclude"  # "exclude" (remove from options), "overflow" (allow over-capacity)
 
-  # Overflow behavior for mandatory allocations
+  # Overflow behavior for priority allocations
   overflow_behavior:
     distribute_evenly: true  # Spread overflow across all venues proportionally
     max_overflow_per_venue: null  # null = unlimited, or set a max (e.g., 1.5x capacity)

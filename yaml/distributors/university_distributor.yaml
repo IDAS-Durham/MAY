@@ -17,7 +17,7 @@ special_cases:
         - attribute: "age"
           type: "numerical"
           min: 18
-          max: 25
+          max: null
 
     # Allocation rule: Assign to closest university
     allocation_rule:
@@ -33,21 +33,38 @@ eligibility:
       type: "numerical"
       description: "Only consider people of university age (0-19 years)"
       min: 18
-      max: 25
+      max: 24
 
     - attribute: "residence.type"
       type: "categorical"
       description: "Only allocate people living in households or student dorms"
       values: ["household", "student_dorms"]
 
-  mandatory_allocation:
+  priority_allocation:
     enabled: true
 
     groups:
-      - name: "mandatory_uni_age"
-        description: "--"
+      - name: "high_priority_uni_age"
+        description: "Students aged 18-22 (highest priority, can overflow, SGU-specific probabilities)"
         priority: 1  # Highest priority
         allow_overflow: true  # Can exceed venue capacity, but still respects age/gender constraints
+
+        # Probability of allocation (reflects that not all 18-22 year olds attend university)
+        probability_config:
+          type: "file"
+          file_path: "data/activities/university/university_probabilities.csv"
+
+          # Which column in CSV to match against
+          lookup_column: "geo_unit"
+
+          # Which person attribute to use for matching (geographical_unit.name)
+          lookup_attribute: "geographical_unit.name"
+
+          # Which column contains the probability values
+          probability_column: "prob_uni_18_22"
+
+          # Fallback if geo_unit not found in CSV
+          default: 0.35
 
         filters:
           - attribute: "age"
@@ -55,16 +72,25 @@ eligibility:
             min: 18
             max: 22
 
-      - name: "optional_postgrads"
-        description: "Students aged 23-25"
+      - name: "second_priority_postgrads"
+        description: "Students aged 23-24 (second priority, respects capacity, SGU-specific probabilities)"
         priority: 2  # Second priority
         allow_overflow: false  # Respect capacity limits
+
+        # Probability of allocation for postgrad students
+        probability_config:
+          type: "file"
+          file_path: "data/activities/university/university_probabilities.csv"
+          lookup_column: "geo_unit"
+          lookup_attribute: "geographical_unit.name"
+          probability_column: "prob_uni_23_24"
+          default: 0.15
 
         filters:
           - attribute: "age"
             type: "numerical"
             min: 23
-            max: 25
+            max: 24
 
 venue_selection:
 

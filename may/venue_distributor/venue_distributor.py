@@ -11,6 +11,7 @@ to venues based on flexible rules including:
 
 import yaml
 import numpy as np
+import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from scipy.spatial import cKDTree
@@ -49,6 +50,10 @@ class VenueDistributor:
         self.venue_attribute_cache = {}  # venue_id -> pre-processed attribute data
         self.attribute_index_built = False
 
+        # Probability allocation cache
+        # Maps (file_path, probability_column) -> {geo_unit_name: probability}
+        self.probability_cache = {}
+
         # Extract key config values
         self.venue_type = self.config.get('venue_type')
         self.activity_map_key = self.config.get('activity_map_key')
@@ -56,6 +61,9 @@ class VenueDistributor:
 
         # Geographical level configuration (default to SGU for backward compatibility)
         self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level', 'SGU')
+
+        # Load probability files for priority allocation groups
+        self._load_probability_files()
 
         # Set logging level
         if self.config.get('settings', {}).get('debug', False):
@@ -68,6 +76,82 @@ class VenueDistributor:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
         return config
+
+    def _load_probability_files(self):
+        """
+        Load probability CSV files for priority allocation groups.
+
+        Builds a cache of {geo_unit_name: probability} for fast lookup during allocation.
+        """
+        priority_config = self.config.get('eligibility', {}).get('priority_allocation', {})
+
+        if not priority_config.get('enabled', False):
+            return
+
+        groups = priority_config.get('groups', [])
+
+        for group in groups:
+            prob_config = group.get('probability_config')
+
+            # Skip if no probability config or if it's a simple float
+            if not prob_config or isinstance(prob_config, (int, float)):
+                continue
+
+            # Only load file-based probabilities
+            if prob_config.get('type') != 'file':
+                continue
+
+            file_path = prob_config.get('file_path')
+            lookup_column = prob_config.get('lookup_column', 'geo_unit')
+            probability_column = prob_config.get('probability_column')
+            default_prob = prob_config.get('default', 0.0)
+
+            if not file_path or not probability_column:
+                logger.warning(f"Group '{group.get('name')}': probability_config missing file_path or probability_column")
+                continue
+
+            # Create cache key
+            cache_key = (file_path, probability_column)
+
+            # Skip if already loaded
+            if cache_key in self.probability_cache:
+                continue
+
+            # Load CSV file
+            full_path = Path(file_path)
+            if not full_path.is_absolute():
+                # Make relative to project root
+                # config_path is yaml/distributors/xxx.yaml
+                # We need to go up to yaml/, then up to project root
+                project_root = self.config_path.parent.parent.parent
+                full_path = project_root / file_path
+
+            try:
+                logger.info(f"Loading probability file: {full_path}")
+                df = pd.read_csv(full_path)
+
+                # Validate columns exist
+                if lookup_column not in df.columns:
+                    logger.error(f"Column '{lookup_column}' not found in {file_path}")
+                    continue
+
+                if probability_column not in df.columns:
+                    logger.error(f"Column '{probability_column}' not found in {file_path}")
+                    continue
+
+                # Build lookup dict: {geo_unit_name: probability}
+                prob_dict = dict(zip(df[lookup_column], df[probability_column]))
+
+                # Store in cache
+                self.probability_cache[cache_key] = {
+                    'lookup': prob_dict,
+                    'default': default_prob
+                }
+
+                logger.info(f"Loaded {len(prob_dict)} probabilities from column '{probability_column}'")
+
+            except Exception as e:
+                logger.error(f"Failed to load probability file {full_path}: {e}")
 
     def _get_geo_unit_at_level(self, person):
         """
@@ -123,23 +207,35 @@ class VenueDistributor:
         # Build attribute index for fast filtering (critical performance optimization)
         self._build_attribute_index(venues)
 
-        # Get eligible people (not already assigned this activity)
-        eligible_people = self._get_eligible_people(world)
-        logger.info(f"Found {len(eligible_people)} eligible people")
+        # Phase 1: Handle special cases FIRST (bypasses global filters)
+        # Special cases get ALL unassigned people (e.g., student_dorms residents can be any age)
+        all_unassigned = self._get_unassigned_people(world)
+        logger.info(f"Found {len(all_unassigned)} unassigned people")
 
-        if not eligible_people:
-            logger.info("No eligible people to allocate")
+        if not all_unassigned:
+            logger.info("No unassigned people to allocate")
             return
 
-        # Phase 1: Handle special cases (e.g., boarding school students)
-        remaining_people = self._handle_special_cases(eligible_people, venues, world)
+        remaining_people = self._handle_special_cases(all_unassigned, venues, world)
         logger.info(f"{len(remaining_people)} people remaining after special cases")
 
-        # Phase 2: Mandatory allocation (if configured)
-        if remaining_people:
-            remaining_people = self._handle_mandatory_allocation(remaining_people, venues)
+        # Now apply global filters for priority/normal allocation
+        eligible_people = self._apply_global_filters(remaining_people)
+        logger.info(f"{len(eligible_people)} people eligible after global filters (special cases excluded)")
 
-        # Phase 3: Normal allocation (optional groups)
+        if not eligible_people:
+            logger.info("No eligible people remaining for priority/normal allocation")
+            # Log summary for special cases only
+            if self.config.get('settings', {}).get('log_summary', True):
+                self._log_allocation_summary(world)
+            return
+
+        # Phase 2: Priority allocation (if configured)
+        remaining_people = eligible_people
+        if remaining_people:
+            remaining_people = self._handle_priority_allocation(remaining_people, venues)
+
+        # Phase 3: Normal allocation (remaining people)
         if remaining_people:
             self._allocate_normal(remaining_people, venues)
 
@@ -147,22 +243,18 @@ class VenueDistributor:
         if self.config.get('settings', {}).get('log_summary', True):
             self._log_allocation_summary(world)
 
-            # Check for unallocated mandatory people
-            self._check_mandatory_coverage(world)
+            # Check for unallocated priority people
+            self._check_priority_coverage(world)
 
-    def _get_eligible_people(self, world) -> List:
-        """Get people who don't already have this activity assigned."""
-        eligible = []
+    def _get_unassigned_people(self, world) -> List:
+        """
+        Get people who don't already have this activity assigned.
+
+        Does NOT apply global filters - special cases need access to all unassigned people.
+        """
+        unassigned = []
         already_assigned = 0
         missing_attrs = 0
-        filtered_by_global = 0
-        filtered_by_exclusions = 0
-
-        # Get global filters (apply to ALL allocation phases)
-        global_filters = self.config.get('eligibility', {}).get('global_filters', [])
-
-        # Get exclusion rules
-        exclude_config = self.config.get('eligibility', {}).get('exclude', {})
 
         for person in world.people:
             # Check if already assigned
@@ -174,11 +266,35 @@ class VenueDistributor:
             required_attrs = self.config.get('validation', {}).get('required_person_attributes', [])
             if not self._has_required_attributes(person, required_attrs):
                 missing_attrs += 1
-                if self.verbose and len(eligible) == 0:  # Log first failure
+                if self.verbose and len(unassigned) == 0:  # Log first failure
                     logger.debug(f"Person {person.id} missing required attributes. Has: {dir(person)}")
                 continue
 
-            # Check global filters (e.g., residence type)
+            unassigned.append(person)
+
+        if self.verbose:
+            logger.info(f"Unassigned people: {already_assigned} already assigned, {missing_attrs} missing attributes, {len(unassigned)} unassigned")
+
+        return unassigned
+
+    def _apply_global_filters(self, people: List) -> List:
+        """
+        Apply global filters and exclusions to a list of people.
+
+        Used after special cases to filter people for priority/normal allocation.
+        """
+        eligible = []
+        filtered_by_global = 0
+        filtered_by_exclusions = 0
+
+        # Get global filters (apply to priority and normal allocation only)
+        global_filters = self.config.get('eligibility', {}).get('global_filters', [])
+
+        # Get exclusion rules
+        exclude_config = self.config.get('eligibility', {}).get('exclude', {})
+
+        for person in people:
+            # Check global filters (e.g., age, residence type)
             if global_filters and not self._person_matches_filters(person, global_filters):
                 filtered_by_global += 1
                 continue
@@ -191,7 +307,7 @@ class VenueDistributor:
             eligible.append(person)
 
         if self.verbose:
-            logger.info(f"Eligibility check: {already_assigned} already assigned, {missing_attrs} missing attributes, {filtered_by_global} filtered by global rules, {filtered_by_exclusions} filtered by exclusions, {len(eligible)} eligible")
+            logger.info(f"Global filters: {filtered_by_global} filtered by global rules, {filtered_by_exclusions} filtered by exclusions, {len(eligible)} eligible")
 
         return eligible
 
@@ -291,34 +407,34 @@ class VenueDistributor:
         self.attribute_index_built = True
         logger.info(f"Built attribute index for {len(venues)} venues with {len(attributes)} attributes")
 
-    def _handle_mandatory_allocation(self, people: List, venues: List) -> List:
+    def _handle_priority_allocation(self, people: List, venues: List) -> List:
         """
-        Handle mandatory allocation groups (e.g., school-age children MUST be allocated).
+        Handle priority allocation groups (processed before normal allocation).
 
         Returns:
-            List of people NOT in mandatory groups (for normal allocation)
+            List of people NOT in priority groups (for normal allocation)
         """
-        mandatory_config = self.config.get('eligibility', {}).get('mandatory_allocation', {})
+        priority_config = self.config.get('eligibility', {}).get('priority_allocation', {})
 
-        if not mandatory_config.get('enabled', False):
-            return people  # No mandatory allocation configured
+        if not priority_config.get('enabled', False):
+            return people  # No priority allocation configured
 
-        groups = mandatory_config.get('groups', [])
+        groups = priority_config.get('groups', [])
         if not groups:
             return people
 
         logger.info("")
         logger.info("=" * 60)
-        logger.info("MANDATORY ALLOCATION")
+        logger.info("PRIORITY ALLOCATION")
         logger.info("=" * 60)
 
         # Sort groups by priority (lowest number = highest priority)
         groups_sorted = sorted(groups, key=lambda g: g.get('priority', 999))
 
         remaining_people = list(people)
-        all_mandatory_people = []
+        all_priority_people = []
 
-        # Process each mandatory group
+        # Process each priority group
         for group in groups_sorted:
             group_name = group.get('name', 'unnamed')
             allow_overflow = group.get('allow_overflow', False)
@@ -334,12 +450,23 @@ class VenueDistributor:
                 logger.info(f"Group '{group_name}': 0 people match")
                 continue
 
+            # Apply probability filtering (reflects that not all eligible people will be allocated)
+            prob_config = group.get('probability_config')
+            if prob_config:
+                group_people_before_prob = len(group_people)
+                group_people = self._apply_probability_filter(group_people, prob_config, group_name)
+                logger.info(f"Group '{group_name}': {group_people_before_prob} matched filters, {len(group_people)} selected by probability")
+
+            if not group_people:
+                logger.info(f"Group '{group_name}': 0 people after probability filtering")
+                continue
+
             # Sort by age descending (older first) if priority_order is age_desc
-            priority_order = mandatory_config.get('priority_order')
+            priority_order = priority_config.get('priority_order')
             if priority_order == 'age_desc':
                 group_people.sort(key=lambda p: p.age, reverse=True)
 
-            logger.info(f"Group '{group_name}': {len(group_people)} people (overflow={'allowed' if allow_overflow else 'not allowed'})")
+            logger.info(f"Group '{group_name}': {len(group_people)} people to allocate (overflow={'allowed' if allow_overflow else 'not allowed'})")
 
             # Allocate this group
             if allow_overflow:
@@ -355,20 +482,20 @@ class VenueDistributor:
 
             logger.info(f"  → Allocated {allocated_count}/{len(group_people)} from group '{group_name}'")
 
-            # Track all mandatory people
-            all_mandatory_people.extend(group_people)
+            # Track all priority people
+            all_priority_people.extend(group_people)
 
-        # Remove mandatory people from remaining pool
-        mandatory_ids = {p.id for p in all_mandatory_people}
-        remaining_people = [p for p in remaining_people if p.id not in mandatory_ids]
+        # Remove priority people from remaining pool
+        priority_ids = {p.id for p in all_priority_people}
+        remaining_people = [p for p in remaining_people if p.id not in priority_ids]
 
-        logger.info(f"Mandatory allocation complete: {len(all_mandatory_people)} people processed, {len(remaining_people)} remaining for optional allocation")
+        logger.info(f"Priority allocation complete: {len(all_priority_people)} people processed, {len(remaining_people)} remaining for normal allocation")
         logger.info("=" * 60)
 
         return remaining_people
 
     def _person_matches_filters(self, person, filters: List[Dict]) -> bool:
-        """Check if person matches all filters in a mandatory group."""
+        """Check if person matches all filters in a group."""
         for filter_rule in filters:
             attr_name = filter_rule.get('attribute')
             filter_type = filter_rule.get('type', 'numerical')
@@ -442,6 +569,70 @@ class VenueDistributor:
 
         return True
 
+    def _apply_probability_filter(self, people: List, prob_config, group_name: str) -> List:
+        """
+        Apply probability filtering to a list of people.
+
+        Args:
+            people: List of people who matched filters
+            prob_config: Probability configuration (can be float or dict)
+            group_name: Name of the group (for logging)
+
+        Returns:
+            List of people selected by probability
+        """
+        if not prob_config:
+            return people
+
+        # Simple case: probability is a float (apply same probability to everyone)
+        if isinstance(prob_config, (int, float)):
+            probability = float(prob_config)
+            selected = [p for p in people if np.random.random() < probability]
+            return selected
+
+        # Complex case: file-based probabilities
+        if prob_config.get('type') == 'file':
+            file_path = prob_config.get('file_path')
+            probability_column = prob_config.get('probability_column')
+            lookup_attribute = prob_config.get('lookup_attribute', 'geographical_unit.name')
+            default_prob = prob_config.get('default', 0.0)
+
+            # Get cached probabilities
+            cache_key = (file_path, probability_column)
+            cached_data = self.probability_cache.get(cache_key)
+
+            if not cached_data:
+                logger.warning(f"Group '{group_name}': No cached probabilities found for {cache_key}, using default={default_prob}")
+                # Fallback to default probability
+                selected = [p for p in people if np.random.random() < default_prob]
+                return selected
+
+            prob_lookup = cached_data['lookup']
+            default_prob = cached_data['default']
+
+            # Apply probabilities
+            selected = []
+            for person in people:
+                # Get lookup value from person (e.g., geographical_unit.name)
+                lookup_value = self._get_nested_value(person, lookup_attribute)
+
+                if lookup_value is None:
+                    # Person doesn't have the lookup attribute
+                    probability = default_prob
+                else:
+                    # Look up probability in cache
+                    probability = prob_lookup.get(lookup_value, default_prob)
+
+                # Apply probability
+                if np.random.random() < probability:
+                    selected.append(person)
+
+            return selected
+
+        # Unknown probability config type
+        logger.warning(f"Group '{group_name}': Unknown probability_config type, not applying probability filter")
+        return people
+
     def _person_excluded(self, person, exclude_config: dict) -> bool:
         """
         Check if person should be excluded based on exclusion rules.
@@ -486,7 +677,7 @@ class VenueDistributor:
 
     def _allocate_group(self, people: List, venues: List, allow_overflow: bool = False) -> int:
         """
-        Allocate a specific group of people (e.g., mandatory school-age children).
+        Allocate a specific group of people (e.g., priority school-age children).
 
         PERFORMANCE OPTIMIZATION: Geo-unit level caching
         - Compute closest venues ONCE per geo_unit (not per person)
@@ -587,25 +778,25 @@ class VenueDistributor:
                             person.activity_map[self.activity_map_key] = venue
                             allocated_count += 1
                 elif allow_overflow:
-                    # For mandatory allocation, log if no venues accept this attribute combo
+                    # For priority allocation, log if no venues accept this attribute combo
                     if self.verbose:
                         attr_display = ", ".join(f"{name}={val}" for name, val in zip(attribute_names, attr_values))
                         logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}): {len(people_group)} people with [{attr_display}] have no eligible venues")
 
         return allocated_count
 
-    def _check_mandatory_coverage(self, world):
-        """Check that all mandatory groups are fully allocated."""
-        mandatory_config = self.config.get('eligibility', {}).get('mandatory_allocation', {})
+    def _check_priority_coverage(self, world):
+        """Check that all priority groups with overflow enabled are fully allocated."""
+        priority_config = self.config.get('eligibility', {}).get('priority_allocation', {})
 
-        if not mandatory_config.get('enabled', False):
+        if not priority_config.get('enabled', False):
             return
 
-        groups = mandatory_config.get('groups', [])
+        groups = priority_config.get('groups', [])
 
         for group in groups:
             if not group.get('allow_overflow', False):
-                continue  # Only check mandatory groups
+                continue  # Only check groups with overflow enabled
 
             group_name = group.get('name', 'unnamed')
             filters = group.get('filters', [])
@@ -620,10 +811,10 @@ class VenueDistributor:
                     unallocated.append(person)
 
             if unallocated:
-                logger.warning(f"⚠️  MANDATORY GROUP '{group_name}': {len(unallocated)} people NOT allocated!")
-                logger.warning(f"   This should not happen for mandatory groups. Check venue capacity and constraints.")
+                logger.warning(f"⚠️  PRIORITY GROUP '{group_name}': {len(unallocated)} people NOT allocated!")
+                logger.warning(f"   This may indicate insufficient venue capacity or constraint mismatches.")
             else:
-                logger.info(f"✓ MANDATORY GROUP '{group_name}': All people allocated")
+                logger.info(f"✓ PRIORITY GROUP '{group_name}': All people allocated")
 
     def _handle_special_cases(self, people: List, venues: List, world) -> List:
         """
@@ -737,18 +928,18 @@ class VenueDistributor:
             # Debug: log what we're looking for
             residence_name = self._get_nested_value_person(person, 'residence.name')
             residence_geo = self._get_nested_value_person(person, 'residence.geographical_unit.name')
-            logger.info(f"Person {person.id}: Looking for venue matching name='{residence_name}', geo_unit='{residence_geo}'")
-            logger.info(f"Checking against {len(venues)} venues")
+            logger.debug(f"Person {person.id}: Looking for venue matching name='{residence_name}', geo_unit='{residence_geo}'")
+            logger.debug(f"Checking against {len(venues)} venues")
 
             # Sample first 3 venues to see what we're checking against
             for i, venue in enumerate(venues[:3]):
                 venue_geo = self._get_nested_value(venue, 'geographical_unit.name')
-                logger.info(f"  Sample venue {i}: name='{venue.name}', geo_unit='{venue_geo}'")
+                logger.debug(f"  Sample venue {i}: name='{venue.name}', geo_unit='{venue_geo}'")
 
             for venue in venues:
                 if self._venue_matches_criteria(person, venue, match_by):
                     selected_venue = venue
-                    logger.info(f"Person {person.id}: MATCHED to venue '{venue.name}'")
+                    logger.debug(f"Person {person.id}: MATCHED to venue '{venue.name}'")
                     break
 
         # Allocate if venue found
@@ -762,7 +953,7 @@ class VenueDistributor:
         residence_name = self._get_nested_value_person(person, 'residence.name')
         if_no_match = allocation_rule.get('if_no_match', 'error')
         if if_no_match == 'error':
-            raise ValueError(f"Special case mandatory allocation failed for person {person.id} (age: {person.age}) with residence '{residence_name}'")
+            raise ValueError(f"Special case allocation failed for person {person.id} (age: {person.age}) with residence '{residence_name}'")
         elif if_no_match == 'warn':
             logger.warning(f"Special case: No matching venue found for person {person.id} with residence '{residence_name}'")
 
