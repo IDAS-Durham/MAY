@@ -44,8 +44,8 @@ eligibility:
     enabled: true
 
     groups:
-      - name: "high_priority_uni_age"
-        description: "Students aged 18-22 (highest priority, can overflow, SGU-specific probabilities)"
+      - name: "highest_priority_young_adults_from_specific_households"
+        description: "Students aged 18-22 from households with pattern '0 >=0 0 0' (highest priority, can overflow, SGU-specific probabilities)"
         priority: 1  # Highest priority
         allow_overflow: true  # Can exceed venue capacity, but still respects age/gender constraints
 
@@ -72,9 +72,42 @@ eligibility:
             min: 18
             max: 22
 
-      - name: "second_priority_postgrads"
-        description: "Students aged 23-24 (second priority, respects capacity, SGU-specific probabilities)"
+          - attribute: "residence.properties.original_pattern"
+            type: "categorical"
+            description: "Only students from households with pattern '0 >=0 0 0'"
+            values: ["0 >=0 0 0"]
+
+      - name: "high_priority_uni_age"
+        description: "Students aged 18-22 (second priority, can overflow, SGU-specific probabilities)"
         priority: 2  # Second priority
+        allow_overflow: true  # Can exceed venue capacity, but still respects age/gender constraints
+
+        # Probability of allocation (reflects that not all 18-22 year olds attend university)
+        probability_config:
+          type: "file"
+          file_path: "data/activities/university/university_probabilities.csv"
+
+          # Which column in CSV to match against
+          lookup_column: "geo_unit"
+
+          # Which person attribute to use for matching (geographical_unit.name)
+          lookup_attribute: "geographical_unit.name"
+
+          # Which column contains the probability values
+          probability_column: "prob_uni_18_22"
+
+          # Fallback if geo_unit not found in CSV
+          default: 0.35
+
+        filters:
+          - attribute: "age"
+            type: "numerical"
+            min: 18
+            max: 22
+
+      - name: "second_priority_postgrads"
+        description: "Students aged 23-24 (third priority, respects capacity, SGU-specific probabilities)"
+        priority: 3  # Third priority
         allow_overflow: false  # Respect capacity limits
 
         # Probability of allocation for postgrad students

@@ -532,11 +532,35 @@ class VenueDistributor:
                     if person_value is None:
                         person_value = 'household'
                 else:
-                    # Generic nested attribute handling
-                    parts = attr_name.split('.')
-                    person_value = person
-                    for part in parts:
-                        person_value = getattr(person_value, part, None)
+                    # Generic nested attribute handling with support for dictionaries
+                    # Handle residence.* paths specially (stored in activity_map)
+                    if attr_name.startswith('residence.'):
+                        # Get residence from activity_map
+                        residence = None
+                        residence_types = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
+
+                        for residence_type in residence_types:
+                            if residence_type in person.activity_map and person.activity_map[residence_type]:
+                                residence_data = person.activity_map[residence_type]
+                                # activity_map stores a list of Subsets
+                                if isinstance(residence_data, list) and residence_data:
+                                    subset = residence_data[0]
+                                    if hasattr(subset, 'venue'):
+                                        residence = subset.venue
+                                        break
+
+                        if residence is None:
+                            return False
+
+                        # Now traverse the rest of the path from residence
+                        # e.g., "residence.properties.original_pattern" -> "properties.original_pattern"
+                        remaining_path = attr_name.replace('residence.', '')
+                        person_value = self._get_nested_value_with_dict_support(residence, remaining_path)
+                        if person_value is None:
+                            return False
+                    else:
+                        # Normal nested attribute (with dict support)
+                        person_value = self._get_nested_value_with_dict_support(person, attr_name)
                         if person_value is None:
                             return False
             else:
@@ -1030,6 +1054,33 @@ class VenueDistributor:
                 return None
         return value
 
+    def _get_nested_value_with_dict_support(self, obj, path: str):
+        """
+        Get value from nested path supporting both object attributes and dictionaries.
+
+        Examples:
+            - 'name' -> getattr(obj, 'name')
+            - 'properties.original_pattern' -> obj.properties['original_pattern'] if properties is a dict
+            - 'geo_unit.name' -> obj.geo_unit.name
+        """
+        parts = path.split('.')
+        value = obj
+
+        for part in parts:
+            if value is None:
+                return None
+
+            # Check if current value is a dictionary
+            if isinstance(value, dict):
+                value = value.get(part)
+            # Check if it's an object with the attribute
+            elif hasattr(value, part):
+                value = getattr(value, part)
+            else:
+                return None
+
+        return value
+
     def _allocate_normal(self, people: List, venues: List):
         """Normal allocation for people not handled by special cases."""
         batch_by = self.config.get('allocation', {}).get('batch_by', 'geo_unit')
@@ -1449,6 +1500,7 @@ class VenueDistributor:
                 'person_sex',
                 'person_age',
                 'residence_type',
+                'residence_original_pattern',
                 'residence_geo_unit',
                 'venue_name',
                 'venue_type',
@@ -1476,8 +1528,10 @@ class VenueDistributor:
                 if not hasattr(venue, 'type') or venue.type != self.venue_type:
                     continue
 
-                # Get residence type - check all possible residence keys in activity_map
+                # Get residence type and venue - check all possible residence keys in activity_map
                 residence_type = 'unknown'
+                residence_original_pattern = ''
+                residence_venue = None
                 # Residences are stored as person.activity_map[venue_type] = [Subset, ...]
                 residence_types_to_check = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
 
@@ -1489,12 +1543,18 @@ class VenueDistributor:
                             # Get the venue from the first subset
                             subset = residence[0]
                             if hasattr(subset, 'venue'):
-                                residence_type = subset.venue.type
+                                residence_venue = subset.venue
+                                residence_type = residence_venue.type
                             else:
                                 residence_type = res_type
                         else:
                             residence_type = res_type
                         break
+
+                # Extract original_pattern from residence venue properties if available
+                if residence_venue and hasattr(residence_venue, 'properties'):
+                    if isinstance(residence_venue.properties, dict):
+                        residence_original_pattern = residence_venue.properties.get('original_pattern', '')
 
                 # Get geographical unit name
                 geo_unit_name = person.geographical_unit.name if person.geographical_unit else 'unknown'
@@ -1505,6 +1565,7 @@ class VenueDistributor:
                     person.sex,
                     person.age,
                     residence_type,
+                    residence_original_pattern,
                     geo_unit_name,
                     venue.name,
                     venue.type,
