@@ -62,6 +62,14 @@ class VenueDistributor:
         # Geographical level configuration (default to SGU for backward compatibility)
         self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level', 'SGU')
 
+        # Batch geographical level (for grouping people during allocation)
+        # Defaults to venue_geo_level if not specified
+        self.batch_geo_level = self.config.get('venue_selection', {}).get('batch_geo_level', self.venue_geo_level)
+
+        # Person location attribute (default to 'geographical_unit' for backward compatibility)
+        # Can be set to custom attributes like 'workplace_location'
+        self.person_location_attribute = self.config.get('venue_selection', {}).get('person_location_attribute', 'geographical_unit')
+
         # Load probability files for priority allocation groups
         self._load_probability_files()
 
@@ -69,7 +77,10 @@ class VenueDistributor:
         if self.config.get('settings', {}).get('debug', False):
             logger.setLevel(logging.DEBUG)
 
-        logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at geo_level='{self.venue_geo_level}'")
+        if self.batch_geo_level != self.venue_geo_level:
+            logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at venue_geo_level='{self.venue_geo_level}', batch_geo_level='{self.batch_geo_level}', using location='{self.person_location_attribute}'")
+        else:
+            logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at geo_level='{self.venue_geo_level}' using location='{self.person_location_attribute}'")
 
     def _load_config(self) -> Dict:
         """Load and parse YAML configuration file."""
@@ -153,33 +164,68 @@ class VenueDistributor:
             except Exception as e:
                 logger.error(f"Failed to load probability file {full_path}: {e}")
 
-    def _get_geo_unit_at_level(self, person):
+    def _get_geo_unit_at_level(self, person, world=None, target_level=None):
         """
-        Get the person's geographical unit at the configured venue_geo_level.
+        Get the person's geographical unit at a specified level.
 
         This enables flexibility: if venues are at MGU or LGU level but people are at SGU,
         we automatically traverse up the hierarchy to find the matching ancestor.
 
+        Supports custom location attributes (e.g., workplace_location) via person_location_attribute config.
+
         Args:
-            person: Person object with geographical_unit attribute
+            person: Person object with geographical_unit or custom location attribute
+            world: World object (required if using custom location attribute)
+            target_level: Target geographical level (defaults to self.venue_geo_level)
 
         Returns:
-            GeographicalUnit at the configured level, or None if not found
+            GeographicalUnit at the target level, or None if not found
         """
-        if not hasattr(person, 'geographical_unit') or person.geographical_unit is None:
-            return None
+        if target_level is None:
+            target_level = self.venue_geo_level
+        # Get the base geographical unit (either residence or custom location)
+        if self.person_location_attribute == 'geographical_unit':
+            # Default: use residence location
+            if not hasattr(person, 'geographical_unit') or person.geographical_unit is None:
+                return None
+            person_geo_unit = person.geographical_unit
+        else:
+            # Custom attribute (e.g., workplace_location or properties.workplace_sgu)
+            # This may be a direct attribute or in person.properties dict
+            if self.person_location_attribute.startswith('properties.'):
+                # Extract from properties dict
+                prop_name = self.person_location_attribute.replace('properties.', '')
+                location_value = person.properties.get(prop_name) if hasattr(person, 'properties') else None
+            else:
+                # Direct attribute
+                location_value = getattr(person, self.person_location_attribute, None)
 
-        person_geo_unit = person.geographical_unit
+            if location_value is None:
+                return None
+
+            # If it's already a GeographicalUnit object, use it
+            if hasattr(location_value, 'level') and hasattr(location_value, 'name'):
+                person_geo_unit = location_value
+            else:
+                # It's a string/code, need to look it up via world.geography
+                if world is None or not hasattr(world, 'geography'):
+                    logger.warning(f"Cannot resolve {self.person_location_attribute}='{location_value}' without world.geography")
+                    return None
+                person_geo_unit = world.geography.get_unit(location_value)
+                if person_geo_unit is None:
+                    if self.verbose:
+                        logger.debug(f"Could not find geo_unit '{location_value}' from {self.person_location_attribute}")
+                    return None
 
         # If person is already at the target level, return it
-        if person_geo_unit.level == self.venue_geo_level:
+        if person_geo_unit.level == target_level:
             return person_geo_unit
 
         # Otherwise, traverse up to find ancestor at target level
-        ancestor = person_geo_unit.get_ancestor_by_level(self.venue_geo_level)
+        ancestor = person_geo_unit.get_ancestor_by_level(target_level)
 
         if ancestor is None and self.verbose:
-            logger.debug(f"Person at {person_geo_unit.level} '{person_geo_unit.name}' has no ancestor at {self.venue_geo_level}")
+            logger.debug(f"Person at {person_geo_unit.level} '{person_geo_unit.name}' has no ancestor at {target_level}")
 
         return ancestor
 
@@ -190,6 +236,9 @@ class VenueDistributor:
         Args:
             world: World object containing people, venues, geography
         """
+        # Store world reference for use in helper methods (needed for custom location attributes)
+        self.world = world
+
         logger.info(f"Starting allocation for {self.venue_type}")
 
         # Get venues of this type
@@ -248,17 +297,23 @@ class VenueDistributor:
 
     def _get_unassigned_people(self, world) -> List:
         """
-        Get people who don't already have this activity assigned.
+        Get people for allocation based on require_unassigned setting.
+
+        If require_unassigned=True (default): Only consider people without this activity assigned
+        If require_unassigned=False: Consider all people, even if already assigned
 
         Does NOT apply global filters - special cases need access to all unassigned people.
         """
+        # Read require_unassigned from eligibility config (default True for backward compatibility)
+        require_unassigned = self.config.get('eligibility', {}).get('require_unassigned', True)
+
         unassigned = []
         already_assigned = 0
         missing_attrs = 0
 
         for person in world.people:
-            # Check if already assigned
-            if self.activity_map_key in person.activity_map:
+            # Check if already assigned (only if require_unassigned is True)
+            if require_unassigned and self.activity_map_key in person.activity_map:
                 already_assigned += 1
                 continue
 
@@ -273,7 +328,10 @@ class VenueDistributor:
             unassigned.append(person)
 
         if self.verbose:
-            logger.info(f"Unassigned people: {already_assigned} already assigned, {missing_attrs} missing attributes, {len(unassigned)} unassigned")
+            if require_unassigned:
+                logger.info(f"Unassigned people: {already_assigned} already assigned, {missing_attrs} missing attributes, {len(unassigned)} unassigned")
+            else:
+                logger.info(f"Eligible people (require_unassigned=False): {missing_attrs} missing attributes, {len(unassigned)} eligible")
 
         return unassigned
 
@@ -706,10 +764,11 @@ class VenueDistributor:
         selection_config = self.config.get('venue_selection', {})
         target_count = selection_config.get('count', 5)
 
-        # Group by geo_unit for batching (at the configured venue_geo_level)
+        # Group by geo_unit for batching (at the configured batch_geo_level)
         people_by_geo_unit = {}
         for person in people:
-            geo_unit = self._get_geo_unit_at_level(person)
+            # Use batch_geo_level for grouping people (may differ from venue_geo_level)
+            geo_unit = self._get_geo_unit_at_level(person, self.world, target_level=self.batch_geo_level)
             if geo_unit is None:
                 continue
             if geo_unit not in people_by_geo_unit:
@@ -913,7 +972,7 @@ class VenueDistributor:
         # Strategy-based allocation (closest, random, etc.)
         if strategy:
             # Get person's location
-            geo_unit = self._get_geo_unit_at_level(person)
+            geo_unit = self._get_geo_unit_at_level(person, self.world)
             if geo_unit and geo_unit.coordinates:
                 person_location = geo_unit.coordinates
 
@@ -1075,34 +1134,52 @@ class VenueDistributor:
 
     def _allocate_by_geo_unit(self, people: List, venues: List):
         """Batch allocation by geo_unit for performance."""
-        # Group people by geo_unit (at the configured venue_geo_level)
+        # Group people by geo_unit (at the configured batch_geo_level)
         people_by_geo_unit = {}
         for person in people:
-            geo_unit = self._get_geo_unit_at_level(person)
+            # Use batch_geo_level for grouping people (may differ from venue_geo_level)
+            geo_unit = self._get_geo_unit_at_level(person, self.world, target_level=self.batch_geo_level)
             if geo_unit is None:
                 continue
             if geo_unit not in people_by_geo_unit:
                 people_by_geo_unit[geo_unit] = []
             people_by_geo_unit[geo_unit].append(person)
 
-        logger.info(f"Batching: {len(people_by_geo_unit)} geo_units to process at {self.venue_geo_level} level")
+        logger.info(f"Batching: {len(people_by_geo_unit)} geo_units to process at {self.batch_geo_level} level")
 
         # Process each geo_unit
         allocated_count = 0
         for geo_unit, geo_unit_people in people_by_geo_unit.items():
-            # geo_unit is already a GeographicalUnit object at the configured level
+            # geo_unit is already a GeographicalUnit object at batch_geo_level
 
-            # Get coordinates from GeographicalUnit
+            # If venues are at a different level than batch, get the appropriate parent unit
+            if self.batch_geo_level != self.venue_geo_level:
+                # Find venues in the parent geographical unit at venue_geo_level
+                venue_search_unit = geo_unit.get_ancestor_by_level(self.venue_geo_level)
+                if venue_search_unit is None:
+                    if self.verbose:
+                        logger.debug(f"Batch geo_unit {geo_unit.name} ({self.batch_geo_level}) has no parent at {self.venue_geo_level}")
+                    continue
+            else:
+                venue_search_unit = geo_unit
+
+            # Get coordinates from GeographicalUnit (for distance-based selection)
             if geo_unit.coordinates is None or len(geo_unit.coordinates) != 2:
                 logger.warning(f"Geo unit {geo_unit.name} ({geo_unit.level}) has no coordinates, skipping batch")
                 continue
 
             lat, lon = geo_unit.coordinates
 
-            # Find eligible venues for this batch (once per geo_unit)
-            eligible_venues = self._find_eligible_venues_for_location(
-                (lat, lon), venues
-            )
+            # Filter venues to those in the appropriate geographical unit
+            # For companies: find all companies in the parent MGU
+            if self.config.get('venue_selection', {}).get('consider_by') == 'geo_unit':
+                # Filter venues by geographical unit
+                eligible_venues = [v for v in venues if v.geographical_unit.name == venue_search_unit.name]
+            else:
+                # Use distance-based selection
+                eligible_venues = self._find_eligible_venues_for_location(
+                    (lat, lon), venues
+                )
 
             if not eligible_venues:
                 continue
@@ -1308,8 +1385,10 @@ class VenueDistributor:
                 attr_name = rule.get('name')
                 attr_type = rule.get('type')
 
-                # Get person's attribute value
+                # Get person's attribute value (check direct attribute first, then properties dict)
                 person_value = getattr(person, attr_name, None)
+                if person_value is None and hasattr(person, 'properties') and attr_name in person.properties:
+                    person_value = person.properties[attr_name]
                 if person_value is None:
                     return False
 
@@ -1346,7 +1425,10 @@ class VenueDistributor:
             attr_name = rule.get('name')
             attr_type = rule.get('type')
 
+            # Check direct attribute first, then properties dict
             person_value = getattr(person, attr_name, None)
+            if person_value is None and hasattr(person, 'properties') and attr_name in person.properties:
+                person_value = person.properties[attr_name]
             if person_value is None:
                 return False
 

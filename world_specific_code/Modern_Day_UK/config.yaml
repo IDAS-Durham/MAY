@@ -124,8 +124,8 @@ distributors:
   # Order matters: Earlier distributors have priority
   configs:
     - "yaml/distributors/school_distributor.yaml"           # Allocate students to schools (sets primary_activity)
-    - "yaml/distributors/university_distributor.yaml"
-    # - "yaml/distributors/workplace_distributor.yaml"      # Allocate workers to companies (sets work)
+    - "yaml/distributors/university_distributor.yaml"       # Allocate students to universities (sets primary_activity)
+    - "yaml/distributors/company_distributor.yaml"          # Allocate workers to companies (sets primary_activity)
     # - "yaml/distributors/hospital_distributor.yaml"       # Assign nearest hospital (sets primary_hospital)
     # - "yaml/distributors/gym_distributor.yaml"            # Allocate gym members (sets leisure)
 
