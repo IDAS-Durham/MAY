@@ -67,45 +67,45 @@ data_sources:
 
         # Value columns: 18 industry sectors (exact CSV column names)
         value_columns:
-          agriculture: "Agriculture; Forestry; Fishing"
-          mining: "Mining and Quarrying"
-          manufacturing: "Manufacturing"
-          electricity: "Electricity, Gas, Steam and Air Conditioning Supply"
-          water: "Water Supply; Sewage; Waste Management and Remediation activities"
-          construction: "Construction"
-          retail: "Wholesale and Retail trade; Repair of Motor Vehicles and Motorcycles"
-          transport: "Transport and Storage"
-          accommodation: "Accommodation and Food Service Activities"
-          information: "Information and Communication"
-          finance: "Financial and Insurance Activities"
-          real_estate: "Real Estate Activities"
-          professional: "Professional Scientific and Technical Activities"
-          admin: "Administrative and Support Service Activities"
-          public_admin: "Public Administration and Defence; Compulsory Social Security"
-          education: "Education"
-          health: "Human Health and Social Work Activities"
-          other: "Other"
+          A: "Agriculture; Forestry; Fishing"
+          B: "Mining and Quarrying"
+          C: "Manufacturing"
+          D: "Electricity, Gas, Steam and Air Conditioning Supply"
+          E: "Water Supply; Sewage; Waste Management and Remediation activities"
+          F: "Construction"
+          G: "Wholesale and Retail trade; Repair of Motor Vehicles and Motorcycles"
+          H: "Transport and Storage"
+          I: "Accommodation and Food Service Activities"
+          J: "Information and Communication"
+          K: "Financial and Insurance Activities"
+          L: "Real Estate Activities"
+          M: "Professional Scientific and Technical Activities"
+          N: "Administrative and Support Service Activities"
+          O: "Public Administration and Defence; Compulsory Social Security"
+          P: "Education"
+          Q: "Human Health and Social Work Activities"
+          Other: "Other"
 
     fallback:
       # National fallback (approximate UK 2021 employment distribution)
-      agriculture: 0.01
-      mining: 0.002
-      manufacturing: 0.08
-      electricity: 0.005
-      water: 0.007
-      construction: 0.07
-      retail: 0.15
-      transport: 0.05
-      accommodation: 0.07
-      information: 0.045
-      finance: 0.035
-      real_estate: 0.02
-      professional: 0.09
-      admin: 0.08
-      public_admin: 0.045
-      education: 0.09
-      health: 0.13
-      other: 0.04
+      A: 0.01
+      B: 0.002
+      C: 0.08
+      D: 0.005
+      E: 0.007
+      F: 0.07
+      G: 0.15
+      H: 0.05
+      I: 0.07
+      J: 0.045
+      K: 0.035
+      L: 0.02
+      M: 0.09
+      N: 0.08
+      O: 0.045
+      P: 0.09
+      Q: 0.13
+      Other: 0.04
 
 # ============================================================================
 # Assignment Rules (Person-Level)
@@ -146,21 +146,21 @@ settings:
 # Industry Sector Labels (for reference)
 # ============================================================================
 sector_labels:
-  agriculture: "Agriculture, Forestry, and Fishing"
-  mining: "Mining and Quarrying"
-  manufacturing: "Manufacturing"
-  electricity: "Electricity, Gas, Steam and Air Conditioning Supply"
-  water: "Water Supply, Sewage, Waste Management and Remediation"
-  construction: "Construction"
-  retail: "Wholesale and Retail Trade, Motor Vehicle Repair"
-  transport: "Transport and Storage"
-  accommodation: "Accommodation and Food Service Activities"
-  information: "Information and Communication"
-  finance: "Financial and Insurance Activities"
-  real_estate: "Real Estate Activities"
-  professional: "Professional, Scientific and Technical Activities"
-  admin: "Administrative and Support Service Activities"
-  public_admin: "Public Administration and Defence, Compulsory Social Security"
-  education: "Education"
-  health: "Human Health and Social Work Activities"
-  other: "Other Services"
+  A: "Agriculture, Forestry, and Fishing"
+  B: "Mining and Quarrying"
+  C: "Manufacturing"
+  D: "Electricity, Gas, Steam and Air Conditioning Supply"
+  E: "Water Supply, Sewage, Waste Management and Remediation"
+  F: "Construction"
+  G: "Wholesale and Retail Trade, Motor Vehicle Repair"
+  H: "Transport and Storage"
+  I: "Accommodation and Food Service Activities"
+  J: "Information and Communication"
+  K: "Financial and Insurance Activities"
+  L: "Real Estate Activities"
+  M: "Professional, Scientific and Technical Activities"
+  N: "Administrative and Support Service Activities"
+  O: "Public Administration and Defence, Compulsory Social Security"
+  P: "Education"
+  Q: "Human Health and Social Work Activities"
+  Other: "Other Services"

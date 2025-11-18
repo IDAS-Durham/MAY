@@ -113,35 +113,42 @@ class VenueManager:
         property_cols = [col for col in venue_df.columns if col not in reserved_cols]
         properties={}
 
+        # Filter DataFrame upfront if geography filtering is enabled
+        venues_skipped = 0
+        if self.filter_by_geography:
+            original_count = len(venue_df)
+            venue_df = venue_df[venue_df['geo_unit'].isin(self._loaded_geo_units)]
+            venues_skipped = original_count - len(venue_df)
+            logger.info(f"Pre-filtered {venue_type} venues: {len(venue_df)} venues in loaded geography ({venues_skipped} filtered out)")
+
         # Create venues
         venues_created = 0
-        venues_skipped = 0
-        for idx, row in venue_df.iterrows():
-            name = row.get('name', str(idx))
-            geo_unit_name = row['geo_unit']
-
-            # Check if geo unit is in loaded geography
-            if self.filter_by_geography and geo_unit_name not in self._loaded_geo_units:
-                venues_skipped += 1
-                continue
+        for row in venue_df.itertuples():
+            name = getattr(row, 'name', None) if hasattr(row, 'name') else None
+            if name is None or pd.isna(name):
+                name = str(row.Index)
+            geo_unit_name = row.geo_unit
 
             # Get geographical unit
             geo_unit = self.geography.get_unit(geo_unit_name)
             if not geo_unit:
                 logger.warning(f"Geographical unit '{geo_unit_name}' not found for venue '{name}'. Skipping.")
-                venues_skipped += 1
                 continue
 
             # Get coordinates if provided
             coordinates = None
-            if has_coords and pd.notna(row[lat_col]) and pd.notna(row[lon_col]):
-                coordinates = (row[lat_col], row[lon_col])
+            if has_coords:
+                lat_val = getattr(row, lat_col, None)
+                lon_val = getattr(row, lon_col, None)
+                if lat_val is not None and lon_val is not None and pd.notna(lat_val) and pd.notna(lon_val):
+                    coordinates = (lat_val, lon_val)
 
             # Add additional properties
             properties = {}
             for prop_col in property_cols:
-                if pd.notna(row[prop_col]):
-                    properties[prop_col] = row[prop_col]
+                prop_val = getattr(row, prop_col, None)
+                if prop_val is not None and pd.notna(prop_val):
+                    properties[prop_col] = prop_val
 
             # Create venue (ID auto-generated per type)
             venue = self.create_venue(
@@ -151,7 +158,7 @@ class VenueManager:
             )
 
             # Override name if provided
-            if pd.notna(row.get('name')):
+            if name and pd.notna(name):
                 venue.name = name
 
             # Set coordinates if available
@@ -160,10 +167,7 @@ class VenueManager:
 
             venues_created += 1
 
-        if venues_skipped > 0:
-            logger.info(f"Created {venues_created} {venue_type} venues ({venues_skipped} skipped due to geography filter)")
-        else:
-            logger.info(f"Created {venues_created} {venue_type} venues")
+        logger.info(f"Created {venues_created} {venue_type} venues")
         
 
     def load_venue_type_from_csv(self, venue_type, filename=None):
