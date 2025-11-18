@@ -174,7 +174,7 @@ class PartnershipStrategy(AssignmentStrategy):
             return self._fallback_probabilistic(person, household, context)
 
         # Get first person's attribute value
-        attribute_name = context.get('attribute_name', 'ethnicity')
+        attribute_name = context.get('attribute_name')
         first_value = self._get_attribute_value(first_person, attribute_name)
         if not first_value:
             logger.warning(f"No {attribute_name} found for {self.partner_role}")

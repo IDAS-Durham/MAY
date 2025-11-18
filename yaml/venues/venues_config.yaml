@@ -7,28 +7,43 @@
 # Each venue type can specify:
 #   - enabled: Whether to load this venue type (default: true)
 #   - filename: CSV file to load from (default: {venue_type}s.csv)
+#   - is_residence: Whether people live at this venue type (default: false)
 #   - properties: Optional metadata about this venue type
 
 venue_types:
+  # =============================================
+  # SPECIAL: Household (created dynamically)
+  # =============================================
+  # This venue type is NOT loaded from CSV - it's created by the household
+  # distributor during world creation. We list it here only to mark it as
+  # a residence type.
+  household:
+    enabled: false  # Not loaded from CSV (created dynamically)
+    is_residence: true  # People live here
+    description: "Residential households (created by household distributor)"
   hospital:
     enabled: true
     filename: hospitals.csv
     description: "Healthcare facilities providing medical treatment"
+    is_residence: false  # Not a place where people live
 
   school:
     enabled: true
     filename: schools/Schools_EW.csv
     description: "Educational institutions for primary and secondary education"
+    is_residence: false  # Not a place where people live
 
   university:
     enabled: true
     filename: universities/uk_universities.csv
     description: "Higher education institutions"
+    is_residence: false  # Not a place where people live
 
   care_home:
     enabled: true
     filename: care_homes.csv
     description: "Residential care facilities for elderly or disabled persons"
+    is_residence: true  # People live here
 
     # Capacity configuration for attribute-aware allocation
     capacity_config:
@@ -88,16 +103,19 @@ venue_types:
     enabled: false
     filename: prisons.csv
     description: "Correctional institutions"
+    is_residence: true  # People live here
 
   company:
     enabled: true
     filename: companies.csv
     description: "Commercial workplaces and businesses"
-  
+    is_residence: false  # Not a place where people live
+
   boarding_school:
     enabled: true
     filename: boarding_schools.csv
     description: "Communal residence for school kids"
+    is_residence: true  # People live here
 
     # Capacity configuration for attribute-aware allocation
     capacity_config:
@@ -148,6 +166,7 @@ venue_types:
     enabled: true
     filename: student_dorms.csv
     description: "Communal residence for university students"
+    is_residence: true  # People live here
 
     # Capacity configuration for attribute-aware allocation
     capacity_config:

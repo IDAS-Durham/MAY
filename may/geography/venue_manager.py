@@ -26,6 +26,9 @@ class VenueManager:
         # Get set of loaded geographical unit names for filtering
         self._loaded_geo_units = set(self.geography.get_all_units().keys())
 
+        # Store full venue type configurations from YAML
+        self.venue_configs = {}         # {venue_type: full_config_dict}
+
         # Store capacity configurations by venue type
         self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
@@ -314,6 +317,9 @@ class VenueManager:
         disabled_types = []
 
         for venue_type, type_config in venue_types_config.items():
+            # Store full config for this venue type (for later reference)
+            self.venue_configs[venue_type] = type_config
+
             # Check if enabled (default: true)
             if not type_config.get('enabled', True):
                 disabled_types.append(venue_type)
@@ -498,6 +504,63 @@ class VenueManager:
 
         logger.info(f"Exported {len(rows)} venues to {output_path}")
         return output_path
+
+    def get_residence_types(self):
+        """
+        Get all venue types marked as residences.
+
+        Returns:
+            List of residence type strings (e.g., ['household', 'care_home', ...])
+
+        Example:
+            >>> venue_manager.get_residence_types()
+            ['household', 'care_home', 'student_dorms', 'boarding_school']
+        """
+        residence_types = []
+
+        # Get all residence types from venue_configs
+        for venue_type, config in self.venue_configs.items():
+            if config.get('is_residence', False):
+                residence_types.append(venue_type)
+
+        return residence_types
+
+    def is_residence_type(self, venue_type: str) -> bool:
+        """
+        Check if a venue type is a residence.
+
+        Args:
+            venue_type: Venue type string (e.g., 'household', 'school')
+
+        Returns:
+            True if this venue type is marked as a residence
+
+        Example:
+            >>> venue_manager.is_residence_type('household')
+            True
+            >>> venue_manager.is_residence_type('school')
+            False
+        """
+        # Check config
+        config = self.venue_configs.get(venue_type, {})
+        return config.get('is_residence', False)
+
+    def get_all_residences(self):
+        """
+        Get all residence venues across all residence types.
+
+        Returns:
+            List of all residence Venue objects
+
+        Example:
+            >>> residences = venue_manager.get_all_residences()
+            >>> len(residences)
+            15234  # All households, care homes, dorms, etc.
+        """
+        residences = []
+        for venue_type in self.get_residence_types():
+            residences.extend(self.get_venues_by_type(venue_type))
+        return residences
 
     def _log_summary(self):
         """Log summary statistics about venues"""

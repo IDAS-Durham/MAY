@@ -508,25 +508,8 @@ class VenueDistributor:
             if '.' in attr_name:
                 # Special handling for residence.type - check activity_map
                 if attr_name == 'residence.type':
-                    person_value = None
-                    # Check all possible residence types in activity_map
-                    # Residences are stored as person.activity_map[venue_type] = [Subset, ...]
-                    residence_types = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
-
-                    for residence_type in residence_types:
-                        if residence_type in person.activity_map and person.activity_map[residence_type]:
-                            residence = person.activity_map[residence_type]
-                            # activity_map stores a list of Subsets
-                            if isinstance(residence, list) and residence:
-                                # Get the venue from the first subset
-                                subset = residence[0]
-                                if hasattr(subset, 'venue'):
-                                    person_value = subset.venue.type
-                                else:
-                                    person_value = residence_type
-                            else:
-                                person_value = residence_type
-                            break
+                    # Use the new residence property for clean access
+                    person_value = person.residence_type
 
                     # If still no residence found, treat as 'household' (default)
                     if person_value is None:
@@ -762,7 +745,7 @@ class VenueDistributor:
                     logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}) has no nearby venues")
                 continue
 
-            # OPTIMIZATION: Group people by their attribute values (generic!)
+            # Group people by their attribute values 
             # This works with ANY attributes defined in YAML (age/sex/income/disability/etc)
             people_by_attributes = {}
             for person in geo_unit_people:
@@ -775,7 +758,7 @@ class VenueDistributor:
                     people_by_attributes[attr_values] = []
                 people_by_attributes[attr_values].append(person)
 
-            # OPTIMIZATION: For each unique attribute combo, filter venues ONCE
+            # For each unique attribute combo, filter venues ONCE
             for attr_values, people_group in people_by_attributes.items():
                 # Filter venues based on this attribute combination
                 # Use first person in group as representative (they all have same attributes)
@@ -1528,33 +1511,9 @@ class VenueDistributor:
                 if not hasattr(venue, 'type') or venue.type != self.venue_type:
                     continue
 
-                # Get residence type and venue - check all possible residence keys in activity_map
-                residence_type = 'unknown'
-                residence_original_pattern = ''
-                residence_venue = None
-                # Residences are stored as person.activity_map[venue_type] = [Subset, ...]
-                residence_types_to_check = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
-
-                for res_type in residence_types_to_check:
-                    if res_type in person.activity_map and person.activity_map[res_type]:
-                        residence = person.activity_map[res_type]
-                        # activity_map stores a list of Subsets
-                        if isinstance(residence, list) and residence:
-                            # Get the venue from the first subset
-                            subset = residence[0]
-                            if hasattr(subset, 'venue'):
-                                residence_venue = subset.venue
-                                residence_type = residence_venue.type
-                            else:
-                                residence_type = res_type
-                        else:
-                            residence_type = res_type
-                        break
-
-                # Extract original_pattern from residence venue properties if available
-                if residence_venue and hasattr(residence_venue, 'properties'):
-                    if isinstance(residence_venue.properties, dict):
-                        residence_original_pattern = residence_venue.properties.get('original_pattern', '')
+                # Get residence type and venue using the new residence property
+                residence_type = person.residence_type if person.residence_type else 'unknown'
+                residence_original_pattern = person.get_residence_property('original_pattern', '')
 
                 # Get geographical unit name
                 geo_unit_name = person.geographical_unit.name if person.geographical_unit else 'unknown'

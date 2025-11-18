@@ -42,10 +42,51 @@ class World:
         self.venues = venues
         self.household_distributor = household_distributor
 
+        # Register residence types from venue configuration with Person class
+        if venues:
+            from may.population.person import Person
+            residence_types = venues.get_residence_types()
+            Person.register_residence_types(residence_types)
+            logger.info(f"Registered {len(residence_types)} residence types: {residence_types}")
+
     def get_households(self):
-        """Get all household venues from VenueManager."""
+        """
+        Get household-type residences (backwards compatible).
+
+        Returns:
+            List of Venue objects with type='household'
+        """
         if self.venues:
             return self.venues.get_venues_by_type("household")
+        return []
+
+    def get_all_residences(self):
+        """
+        Get all residence venues (households, care homes, dorms, etc.).
+
+        Returns:
+            List of all residence Venue objects
+        """
+        if self.venues:
+            return self.venues.get_all_residences()
+        return []
+
+    def get_residences_by_type(self, residence_type: str):
+        """
+        Get all residences of a specific type.
+
+        Args:
+            residence_type: Type of residence (e.g., 'care_home', 'prison', 'farm')
+
+        Returns:
+            List of Venue objects
+
+        Example:
+            >>> world.get_residences_by_type('care_home')
+            [<Venue #0: care_home_0 (care_home) in E02000173>, ...]
+        """
+        if self.venues:
+            return self.venues.get_venues_by_type(residence_type)
         return []
 
     def venues_by_type(self, venue_type: str):

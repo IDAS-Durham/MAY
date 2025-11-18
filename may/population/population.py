@@ -22,7 +22,7 @@ class PopulationManager:
     across geographical units according to specified distributions.
     """
 
-    def __init__(self, geography, data_dir="data/population"):
+    def __init__(self, geography, data_dir):
         """
         Initialize the PopulationManager.
 
@@ -211,36 +211,6 @@ class PopulationManager:
         logger.info(f"Generated {total_people:,} people across {geo_units_with_data} {smallest_level}s")
         if geo_units_with_data > 0:
             logger.info(f"Average: {total_people / geo_units_with_data:.1f} people per {smallest_level}")
-
-    def _assign_activities(self, person):
-        """
-        Assign activities to a person based on their age.
-
-        This is a generic activity assignment based on life stages.
-        Users can customize this logic.
-
-        Args:
-            person (Person): The person to assign activities to
-        """
-        age = person.age
-
-        # Generic life stage activities
-        if 0 <= age <= 4:
-            # Young children
-            person.add_activity("home")
-        elif 5 <= age <= 18:
-            # School age
-            person.add_activity("education")
-            person.add_activity("home")
-        elif 19 <= age <= 64:
-            # Working age
-            person.add_activity("work")
-            person.add_activity("home")
-            person.add_activity("leisure")
-        else:
-            # Retirement age
-            person.add_activity("home")
-            person.add_activity("leisure")
 
     def get_person(self, person_id):
         """

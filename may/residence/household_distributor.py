@@ -44,7 +44,7 @@ class HouseholdDistributor:
 
     def __init__(self, geography: Geography, population: PopulationManager,
                  venue_manager: VenueManager,
-                 data_dir: str = "data/households", config_file: str = "households_config.yaml"):
+                 data_dir, config_file):
         """
         Initialize the household distributor.
 
@@ -1193,15 +1193,18 @@ class HouseholdDistributor:
         """
         logger.warning("Resetting all household allocations...")
 
-        # Clear household activity from all allocated people
+        # Clear all residence activities from all allocated people
+        residence_types = self.venue_manager.get_residence_types()
+
         for person_id in self.allocated_people:
             person = self.population.get_person(person_id)
             if person:
-                # Remove household activity and activity_map entries
-                if "household" in person.activities:
-                    person.remove_activity("household")
-                if "household" in person.activity_map:
-                    del person.activity_map["household"]
+                # Remove all residence activities and activity_map entries
+                for res_type in residence_types:
+                    if res_type in person.activities:
+                        person.remove_activity(res_type)
+                    if res_type in person.activity_map:
+                        del person.activity_map[res_type]
 
         # Clear all data
         # Note: Households are stored in VenueManager, cleared separately if needed
