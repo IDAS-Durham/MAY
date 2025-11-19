@@ -26,7 +26,7 @@ geography:
     level: LGU
 
     # Codes to filter (for small lists, comma-separated)
-    codes: ["County Durham"]
+    codes: ["Newcastle upon Tyne", "County Durham"]
 
     # Or specify a file path with codes (for large lists)
     # File should have one code per line
@@ -125,6 +125,8 @@ distributors:
   configs:
     - "yaml/distributors/school_distributor.yaml"           # Allocate students to schools (sets primary_activity)
     - "yaml/distributors/university_distributor.yaml"       # Allocate students to universities (sets primary_activity)
+    - "yaml/distributors/specific_workplace_hospitals_distributor.yaml"  # Allocate Q sector workers to hospitals (sets primary_activity)
+    - "yaml/distributors/specific_workplace_care_homes_distributor.yaml"  # Allocate Q sector workers to care homes (sets primary_activity)
     - "yaml/distributors/company_distributor.yaml"          # Allocate workers to companies (sets primary_activity)
     # - "yaml/distributors/hospital_distributor.yaml"       # Assign nearest hospital (sets primary_hospital)
     # - "yaml/distributors/gym_distributor.yaml"            # Allocate gym members (sets leisure)

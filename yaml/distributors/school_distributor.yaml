@@ -212,7 +212,7 @@ venue_selection:
   consider_by: "count"
 
   # Count-based parameters (when consider_by = "count")
-  count: 5
+  count: 10
   criteria: "closest"  # "closest", "random", "largest_capacity"
 
   # Distance-based parameters (when consider_by = "distance")
