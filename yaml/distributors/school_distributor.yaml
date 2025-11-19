@@ -22,6 +22,9 @@ description: "Distribute people to schools based on age, gender, and proximity"
 # Access: person.activity_map['primary_activity'] will return the school Venue object
 activity_map_key: "primary_activity"
 
+# Subset to add students to
+subset_key: "student"
+
 # ============================================================================
 # SPECIAL CASES: Priority allocation rules
 # ============================================================================

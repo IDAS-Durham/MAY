@@ -21,6 +21,9 @@ description: "Distribute health sector (Q) workers to hospitals"
 # Access: person.activity_map['primary_activity'] will return the hospital venue object
 activity_map_key: "primary_activity"
 
+# Subset to add workers to
+subset_key: "worker"
+
 # ============================================================================
 # ELIGIBILITY: Who can be allocated?
 # ============================================================================

@@ -4,6 +4,9 @@ description: "Distribute people to university based on age and proximity"
 
 activity_map_key: "primary_activity"
 
+# Subset to add students to
+subset_key: "student"
+
 special_cases:
   - name: "student_dorms_students"
     description: "Students in student dorms MUST attend university"

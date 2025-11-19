@@ -22,6 +22,9 @@ description: "Distribute health sector (Q) workers to care homes"
 # Access: person.activity_map['primary_activity'] will return the care_home venue object
 activity_map_key: "primary_activity"
 
+# Subset to add workers to
+subset_key: "worker"
+
 # ============================================================================
 # ELIGIBILITY: Who can be allocated?
 # ============================================================================

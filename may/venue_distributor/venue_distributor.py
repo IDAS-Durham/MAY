@@ -65,6 +65,7 @@ class VenueDistributor:
         # Extract key config values
         self.venue_type = self.config.get('venue_type')
         self.activity_map_key = self.config.get('activity_map_key')
+        self.subset_key = self.config.get('subset_key', None)
         self.verbose = self.config.get('settings', {}).get('verbose', False)
 
         # Geographical level configuration (default to SGU for backward compatibility)
@@ -978,7 +979,7 @@ class VenueDistributor:
                         if venues_with_capacity:
                             venue = self._select_venue(person, venues_with_capacity, (lat, lon))
                             if venue:
-                                venue.add_to_subset(person, activity_name=self.activity_map_key)
+                                venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key)
                                 self._increment_venue_count(venue)
                                 allocated_count += 1
                                 allocated = True
@@ -988,7 +989,7 @@ class VenueDistributor:
                             selection_pool = eligible_venues[:target_count]
                             venue = self._select_venue(person, selection_pool, (lat, lon))
                             if venue:
-                                venue.add_to_subset(person, activity_name=self.activity_map_key)
+                                venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key)
                                 self._increment_venue_count(venue)
                                 allocated_count += 1
                                 if self.verbose:
@@ -1149,7 +1150,7 @@ class VenueDistributor:
 
         # Allocate if venue found
         if selected_venue:
-            selected_venue.add_to_subset(person, activity_name=self.activity_map_key)
+            selected_venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key)
             self._increment_venue_count(selected_venue)
             if self.verbose:
                 logger.debug(f"Special case: Allocated person {person.id} to {selected_venue.name}")
@@ -1323,7 +1324,7 @@ class VenueDistributor:
                     if venues_with_capacity:
                         venue = self._select_venue(person, venues_with_capacity, (lat, lon))
                         if venue:
-                            venue.add_to_subset(person, activity_name=self.activity_map_key)
+                            venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key)
                             self._increment_venue_count(venue)
                             allocated_count += 1
 
@@ -1351,7 +1352,7 @@ class VenueDistributor:
                 if venues_with_capacity:
                     venue = self._select_venue(person, venues_with_capacity, location)
                     if venue:
-                        venue.add_to_subset(person, activity_name=self.activity_map_key)
+                        venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key)
                         self._increment_venue_count(venue)
                         allocated_count += 1
 
