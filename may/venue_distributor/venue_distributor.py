@@ -676,21 +676,11 @@ class VenueDistributor:
                         person_value = 'household'
                 else:
                     # Generic nested attribute handling with support for dictionaries
-                    # Handle residence.* paths specially (stored in activity_map)
+                    # Handle residence.* paths specially
                     if attr_name.startswith('residence.'):
-                        # Get residence from activity_map
-                        residence = None
-                        residence_types = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
-
-                        for residence_type in residence_types:
-                            if residence_type in person.activity_map and person.activity_map[residence_type]:
-                                residence_data = person.activity_map[residence_type]
-                                # activity_map stores a list of Subsets
-                                if isinstance(residence_data, list) and residence_data:
-                                    subset = residence_data[0]
-                                    if hasattr(subset, 'venue'):
-                                        residence = subset.venue
-                                        break
+                        # Get residence using person.residence property
+                        # This works for all residence types (now using 'residence' activity)
+                        residence = person.residence
 
                         if residence is None:
                             return False
@@ -1043,26 +1033,13 @@ class VenueDistributor:
         """Check if person matches special case condition."""
         condition = case.get('condition', {})
 
-        # Check residence type (residence is stored in activity_map)
+        # Check residence type (use person.residence property)
         if 'person_residence_type' in condition:
             required_type = condition['person_residence_type']
 
-            # Check all possible residence types in activity_map
-            residence_types_to_check = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
-            residence_venue = None
-
-            for res_type in residence_types_to_check:
-                if res_type in person.activity_map and person.activity_map[res_type]:
-                    residence = person.activity_map[res_type]
-                    # Handle both single venue and list of subsets
-                    if isinstance(residence, list):
-                        if not residence:
-                            continue
-                        # Get venue from first subset
-                        residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
-                    else:
-                        residence_venue = residence
-                    break
+            # Get residence using person.residence property
+            # This works for all residence types (now using 'residence' activity)
+            residence_venue = person.residence
 
             # Check if we found a residence and if it matches the required type
             if residence_venue is None:
@@ -1183,21 +1160,9 @@ class VenueDistributor:
         this looks in person.activity_map for any residence type.
         """
         if path.startswith('residence.'):
-            # Get residence from activity_map - check all residence types
-            residence_types_to_check = ['household', 'care_home', 'student_dorms', 'boarding_school', 'prison']
-            residence_venue = None
-
-            for res_type in residence_types_to_check:
-                if res_type in person.activity_map and person.activity_map[res_type]:
-                    residence = person.activity_map[res_type]
-                    # Handle list of subsets
-                    if isinstance(residence, list):
-                        if not residence:
-                            continue
-                        residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
-                    else:
-                        residence_venue = residence
-                    break
+            # Get residence using person.residence property
+            # This works for all residence types (now using 'residence' activity)
+            residence_venue = person.residence
 
             if residence_venue is None:
                 return None

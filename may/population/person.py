@@ -133,12 +133,9 @@ class Person:
         Get the venue where this person resides.
 
         This property automatically finds the person's residence by checking
-        all residence-type activities in their activity_map. Works with any
-        residence type defined in the venues configuration.
-
-        NOTE: Residence types must be registered via Person.register_residence_types()
-        before this property can work. This is done automatically when creating
-        a World object.
+        for the 'residence' activity in their activity_map. All residence types
+        (household, care_home, boarding_school, student_dorms, etc.) are
+        registered under the 'residence' activity.
 
         Returns:
             Venue object where person lives, or None if no residence assigned
@@ -157,18 +154,18 @@ class Person:
             >>> person.residence.type
             'care_home'
         """
-        # Check if residence types have been registered
-        if not Person._residence_types_registry:
-            # No residence types registered - cannot determine residence
-            # This happens if Person is used standalone without World initialization
-            # Return None to avoid errors (graceful degradation)
-            return None
+        # Check for 'residence' activity in activity_map
+        # All residence types now use the generic 'residence' activity name
+        if 'residence' in self.activity_map and self.activity_map['residence']:
+            # Return the venue from the first subset
+            return self.activity_map['residence'][0].venue
 
-        # Check each residence type in activity_map
-        for res_type in Person._residence_types_registry:
-            if res_type in self.activity_map and self.activity_map[res_type]:
-                # Return the venue from the first subset
-                return self.activity_map[res_type][0].venue
+        # Fallback: Check old residence types for backward compatibility
+        # This supports old code that may have used specific residence type names
+        if Person._residence_types_registry:
+            for res_type in Person._residence_types_registry:
+                if res_type in self.activity_map and self.activity_map[res_type]:
+                    return self.activity_map[res_type][0].venue
 
         return None
 

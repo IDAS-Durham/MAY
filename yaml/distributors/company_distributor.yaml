@@ -15,7 +15,7 @@ eligibility:
       min: 18
       max: 64
 
-    - attribute: "properties.workplace_location"
+    - attribute: "properties.workplace_sgu"
       type: "categorical"
       description: "Geographical unit name for where they are supposed to work"
 
@@ -105,7 +105,7 @@ settings:
   random_seed: null
   verbose: true
   log_summary: true
-  debug: true  # Enable debug logging to see why allocation is failing
+  debug: false  # Enable debug logging to see why allocation is failing
 
 fallback:
   strategy: "skip"  # Skip if no matching companies found

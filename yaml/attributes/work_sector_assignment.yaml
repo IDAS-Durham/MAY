@@ -28,7 +28,7 @@ filters:
     description: "Working age population"
     numerical:
       min: 18
-      max: 65
+      max: 64
 
 # ============================================================================
 # Required Attributes (Dependencies)

@@ -143,9 +143,12 @@ class AttributeAssigner:
         # Count total people across ALL venues for accurate statistics
         total_people_in_simulation = sum(venue.size() for venue in all_venues)
 
-        # Separate households from other residence venues
-        households = [v for v in all_venues if v.type == "household"]
-        other_residences = [v for v in all_venues if v.type != "household"]
+        # Get household venue types from config (defaults to ["household"])
+        household_venue_types = self.config.household_venue_types or ["household"]
+
+        # Separate households from other residence venues based on config
+        households = [v for v in all_venues if v.type in household_venue_types]
+        other_residences = [v for v in all_venues if v.type not in household_venue_types]
         people_in_other_residences = sum(venue.size() for venue in other_residences)
 
         logger.info(f"  Households: {len(households)}")

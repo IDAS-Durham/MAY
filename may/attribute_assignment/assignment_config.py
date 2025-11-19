@@ -254,11 +254,14 @@ class Role:
         """
         Check if person's subset matches this role.
         """
-        # Get person's subset from household allocation
-        if "household" not in person.activity_map or not person.activity_map["household"]:
+        # Get person's subset from residence allocation
+        # All residence types use 'residence' activity, but we need to check venue type
+        if "residence" not in person.activity_map or not person.activity_map["residence"]:
             return False
 
-        person_subset = person.activity_map["household"][0].subset_name
+        # Get the residence venue
+        residence_subset = person.activity_map["residence"][0]
+        person_subset = residence_subset.subset_name
 
         if verbose:
             logger.debug(f"        Testing role '{self.name}': person_subset='{person_subset}', role_subsets={self.subsets}")
@@ -313,6 +316,7 @@ class AttributeAssignmentConfig:
         # Parse sections
         self.attribute_name = self._parse_attribute()
         self.assignment_level = self._parse_assignment_level()
+        self.household_venue_types = self._parse_household_venue_types()
         self.filters = self._parse_filters()
         self.required_attributes = self._parse_required_attributes()
         self.region_mapping = self.raw_config.get('region_mapping', {})
@@ -341,6 +345,10 @@ class AttributeAssignmentConfig:
     def _parse_assignment_level(self) -> str:
         """Parse assignment level (person_by_household or person)."""
         return self.raw_config.get('attribute', {}).get('assignment_level', 'person_by_household')
+
+    def _parse_household_venue_types(self) -> List[str]:
+        """Parse household venue types (which residence types to apply household structure-based rules to)."""
+        return self.raw_config.get('attribute', {}).get('household_venue_types', ['household'])
 
     def _parse_filters(self) -> Dict[str, Any]:
         """Parse filters (e.g., activity-based filtering)."""

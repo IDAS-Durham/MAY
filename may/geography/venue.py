@@ -159,13 +159,15 @@ class Venue:
         Args:
             person: Person object to add
             subset_key: Key for the subset (if None, uses first subset or creates default)
-            activity_name: Activity name to register (if None, uses venue type)
+            activity_name: Activity name to register (if None, uses 'residence' for residence types, venue type otherwise)
         """
         from may.population import Subset
 
-        # Use venue type as default activity if not specified
+        # Use 'residence' for all residence types, venue type otherwise
         if activity_name is None:
-            activity_name = self.type
+            # Check if this venue is a residence type
+            is_residence = self.properties.get('is_residence', False)
+            activity_name = 'residence' if is_residence else self.type
 
         # If no subset_key specified, use the first existing subset or create one
         if subset_key is None:

@@ -72,11 +72,19 @@ class VenueManager:
         # Generate type-scoped ID
         venue_id = self._generate_id(venue_type)
 
+        # Prepare properties, adding is_residence from config if available
+        venue_properties = properties or {}
+
+        # Add is_residence from venue_configs if available
+        if venue_type in self.venue_configs:
+            is_residence = self.venue_configs[venue_type].get('is_residence', False)
+            venue_properties['is_residence'] = is_residence
+
         venue = Venue(
             name=f"{venue_type}_{venue_id}",
             venue_type=venue_type,
             geographical_unit=geo_unit,
-            properties=properties or {}
+            properties=venue_properties
         )
 
         # Set the ID on the venue
