@@ -45,7 +45,7 @@ class VenueDistributor:
         self.spatial_index = None
         self.venue_list = None
 
-        # Performance optimization: Cache pre-processed venue attribute data
+        # Cache pre-processed venue attribute data
         # This avoids repeated dict lookups and string operations in hot path
         self.venue_attribute_cache = {}  # venue_id -> pre-processed attribute data
         self.attribute_index_built = False
@@ -845,20 +845,17 @@ class VenueDistributor:
         # Check household exclusions
         household_exclusions = exclude_config.get('households', {})
         if household_exclusions:
-            # Get person's household from activity_map
-            if 'household' not in person.activity_map:
-                # No household = not excluded by household rules
+            # Get person's residence using person.residence property
+            # This works for all residence types (now using 'residence' activity)
+            residence_venue = person.residence
+
+            # No residence = not excluded by household rules
+            if residence_venue is None:
                 return False
 
-            residence = person.activity_map['household']
-
-            # Handle list of subsets
-            if isinstance(residence, list):
-                if not residence:
-                    return False
-                residence_venue = residence[0].venue if hasattr(residence[0], 'venue') else residence[0]
-            else:
-                residence_venue = residence
+            # Only apply household exclusions to people living in household-type residences
+            if residence_venue.type != 'household':
+                return False
 
             # Check each household property exclusion
             for property_name, exclude_value in household_exclusions.items():
@@ -877,7 +874,7 @@ class VenueDistributor:
         """
         Allocate a specific group of people (e.g., priority school-age children).
 
-        PERFORMANCE OPTIMIZATION: Geo-unit level caching
+        Geo-unit level caching
         - Compute closest venues ONCE per geo_unit (not per person)
         - Group people by attribute combinations within each geo_unit
         - Filter venues ONCE per unique attribute combo (not per person)
@@ -916,7 +913,7 @@ class VenueDistributor:
 
             lat, lon = geo_unit.coordinates
 
-            # OPTIMIZATION: Find closest venues ONCE per geo_unit (not per person!)
+            # Find closest venues ONCE per geo_unit (not per person!)
             total_venues = len(venues)
             search_attempts = [
                 min(50, total_venues),
