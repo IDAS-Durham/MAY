@@ -54,6 +54,9 @@ class VenueDistributor:
         # Maps (file_path, probability_column) -> {geo_unit_name: probability}
         self.probability_cache = {}
 
+        # Capacity tracking: Maps venue_id -> current_count
+        self.venue_capacity_tracker = {}
+
         # Extract key config values
         self.venue_type = self.config.get('venue_type')
         self.activity_map_key = self.config.get('activity_map_key')
@@ -163,6 +166,105 @@ class VenueDistributor:
 
             except Exception as e:
                 logger.error(f"Failed to load probability file {full_path}: {e}")
+
+    def _get_venue_capacity(self, venue) -> int:
+        """
+        Get the capacity of a venue based on the configured capacity_column.
+
+        Args:
+            venue: Venue object
+
+        Returns:
+            Capacity as integer, or 0 if not found/configured
+        """
+        allocation_config = self.config.get('allocation', {})
+        capacity_column = allocation_config.get('capacity_column')
+
+        if not capacity_column:
+            return 0
+
+        # Get capacity from venue properties
+        capacity = venue.properties.get(capacity_column, 0)
+
+        # Handle missing/zero capacity based on config
+        capacity_handling = allocation_config.get('capacity_handling', {})
+        if capacity is None or (isinstance(capacity, (int, float)) and pd.isna(capacity)):
+            if_missing = capacity_handling.get('if_missing', 'skip')
+            if if_missing == 'skip':
+                return 0
+            else:
+                # Could set a default capacity here if needed
+                return 0
+
+        if capacity == 0:
+            if_zero = capacity_handling.get('if_zero', 'skip')
+            if if_zero == 'skip':
+                return 0
+
+        return int(capacity) if capacity else 0
+
+    def _get_venue_current_count(self, venue) -> int:
+        """
+        Get the current number of people allocated to this venue.
+
+        Args:
+            venue: Venue object
+
+        Returns:
+            Current count
+        """
+        venue_id = id(venue)
+        return self.venue_capacity_tracker.get(venue_id, 0)
+
+    def _venue_has_capacity(self, venue) -> bool:
+        """
+        Check if a venue has available capacity.
+
+        Args:
+            venue: Venue object
+
+        Returns:
+            True if venue has space, False otherwise
+        """
+        capacity = self._get_venue_capacity(venue)
+        if capacity == 0:
+            # No capacity configured = skip this venue
+            return False
+
+        current_count = self._get_venue_current_count(venue)
+        return current_count < capacity
+
+    def _increment_venue_count(self, venue):
+        """
+        Increment the allocation count for a venue.
+
+        Args:
+            venue: Venue object
+        """
+        venue_id = id(venue)
+        self.venue_capacity_tracker[venue_id] = self.venue_capacity_tracker.get(venue_id, 0) + 1
+
+    def _filter_venues_by_capacity(self, venues: List) -> List:
+        """
+        Filter venues to only include those with available capacity.
+
+        Args:
+            venues: List of venue objects
+
+        Returns:
+            List of venues with available capacity
+        """
+        allocation_config = self.config.get('allocation', {})
+
+        # Check if capacity tracking is enabled
+        track_capacity = allocation_config.get('track_capacity', False)
+        if not track_capacity:
+            # No capacity tracking - return all venues
+            return venues
+
+        # Filter to venues with capacity
+        venues_with_capacity = [v for v in venues if self._venue_has_capacity(v)]
+        return venues_with_capacity
 
     def _get_geo_unit_at_level(self, person, world=None, target_level=None):
         """
@@ -836,13 +938,35 @@ class VenueDistributor:
 
                 # Assign all people in this group to eligible venues
                 if eligible_venues:
-                    selection_pool = eligible_venues[:target_count]
+                    # TWO-PASS ALLOCATION:
+                    # Pass 1: Try to allocate to venues with available capacity
+                    # Pass 2: If allow_overflow and no capacity available, allocate anyway
 
                     for person in people_group:
-                        venue = self._select_venue(person, selection_pool, (lat, lon))
-                        if venue:
-                            person.activity_map[self.activity_map_key] = venue
-                            allocated_count += 1
+                        allocated = False
+
+                        # PASS 1: Try venues with capacity first
+                        venues_with_capacity = self._filter_venues_by_capacity(eligible_venues[:target_count])
+                        if venues_with_capacity:
+                            venue = self._select_venue(person, venues_with_capacity, (lat, lon))
+                            if venue:
+                                venue.add_to_subset(person, activity_name=self.activity_map_key)
+                                self._increment_venue_count(venue)
+                                allocated_count += 1
+                                allocated = True
+
+                        # PASS 2: If not allocated and overflow allowed, use any eligible venue
+                        if not allocated and allow_overflow:
+                            selection_pool = eligible_venues[:target_count]
+                            venue = self._select_venue(person, selection_pool, (lat, lon))
+                            if venue:
+                                venue.add_to_subset(person, activity_name=self.activity_map_key)
+                                self._increment_venue_count(venue)
+                                allocated_count += 1
+                                if self.verbose:
+                                    capacity = self._get_venue_capacity(venue)
+                                    current = self._get_venue_current_count(venue)
+                                    logger.debug(f"OVERFLOW: Person {person.id} allocated to {venue.name} (capacity: {capacity}, current: {current})")
                 elif allow_overflow:
                     # For priority allocation, log if no venues accept this attribute combo
                     if self.verbose:
@@ -1010,7 +1134,8 @@ class VenueDistributor:
 
         # Allocate if venue found
         if selected_venue:
-            person.activity_map[self.activity_map_key] = selected_venue
+            selected_venue.add_to_subset(person, activity_name=self.activity_map_key)
+            self._increment_venue_count(selected_venue)
             if self.verbose:
                 logger.debug(f"Special case: Allocated person {person.id} to {selected_venue.name}")
             return True
@@ -1190,10 +1315,14 @@ class VenueDistributor:
                 person_venues = self._filter_venues_by_person(person, eligible_venues)
 
                 if person_venues:
-                    venue = self._select_venue(person, person_venues, (lat, lon))
-                    if venue:
-                        person.activity_map[self.activity_map_key] = venue
-                        allocated_count += 1
+                    # Try to allocate to venues with capacity first
+                    venues_with_capacity = self._filter_venues_by_capacity(person_venues)
+                    if venues_with_capacity:
+                        venue = self._select_venue(person, venues_with_capacity, (lat, lon))
+                        if venue:
+                            venue.add_to_subset(person, activity_name=self.activity_map_key)
+                            self._increment_venue_count(venue)
+                            allocated_count += 1
 
         logger.info(f"Normal allocation: Allocated {allocated_count} people")
 
@@ -1214,10 +1343,14 @@ class VenueDistributor:
             person_venues = self._filter_venues_by_person(person, eligible_venues)
 
             if person_venues:
-                venue = self._select_venue(person, person_venues, location)
-                if venue:
-                    person.activity_map[self.activity_map_key] = venue
-                    allocated_count += 1
+                # Try to allocate to venues with capacity first
+                venues_with_capacity = self._filter_venues_by_capacity(person_venues)
+                if venues_with_capacity:
+                    venue = self._select_venue(person, venues_with_capacity, location)
+                    if venue:
+                        venue.add_to_subset(person, activity_name=self.activity_map_key)
+                        self._increment_venue_count(venue)
+                        allocated_count += 1
 
         logger.info(f"Normal allocation: Allocated {allocated_count} people")
 
@@ -1587,7 +1720,13 @@ class VenueDistributor:
                 if self.activity_map_key not in person.activity_map:
                     continue
 
-                venue = person.activity_map[self.activity_map_key]
+                # activity_map stores a list of Subsets
+                subsets = person.activity_map[self.activity_map_key]
+                if not subsets:
+                    continue
+
+                # Get the venue from the first subset
+                venue = subsets[0].venue
 
                 # Only export people allocated to THIS venue type
                 if not hasattr(venue, 'type') or venue.type != self.venue_type:

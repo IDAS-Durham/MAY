@@ -44,6 +44,98 @@ def set_random_seed(seed=999):
 set_random_seed(0)
 
 
+def export_venue_allocations(world, output_file="venue_allocations.csv"):
+    """
+    Export all venues (except households) with their allocation counts to CSV.
+
+    Args:
+        world: World object containing geography, population, and venues
+        output_file: Path to output CSV file
+    """
+    import csv
+
+    logger.info(f"Exporting venue allocations to {output_file}...")
+
+    venues = world.venues.get_all_venues().values()
+
+    # Collect venue allocation data
+    venue_data = []
+    for venue in venues:
+        # Skip households
+        if venue.type == "household":
+            continue
+
+        # Count allocated people
+        allocated_count = venue.size()
+
+        # Get capacity information from venue properties
+        # Different venue types may have different capacity column names
+        capacity_config = world.venues.get_capacity_config(venue.type)
+
+        if capacity_config and 'total_capacity_column' in capacity_config:
+            # Use the configured capacity column (e.g., 'bed_count' for care_home)
+            capacity_column = capacity_config['total_capacity_column']
+            total_capacity = venue.properties.get(capacity_column, 0)
+        else:
+            # Fallback to standard 'capacity' column
+            total_capacity = venue.properties.get('capacity', 0)
+
+        # Calculate utilization percentage
+        if total_capacity > 0:
+            utilization_pct = (allocated_count / total_capacity) * 100
+        else:
+            utilization_pct = 0.0
+
+        venue_data.append({
+            'venue_id': venue.id,
+            'venue_name': venue.name,
+            'venue_type': venue.type,
+            'geographical_unit': venue.geographical_unit.name,
+            'geographical_level': venue.geographical_unit.level,
+            'capacity': int(total_capacity) if total_capacity else 0,
+            'people_allocated': allocated_count,
+            'utilization_pct': f"{utilization_pct:.1f}",
+            'latitude': venue.coordinates[0] if venue.coordinates else None,
+            'longitude': venue.coordinates[1] if venue.coordinates else None,
+        })
+
+    # Sort by venue type and then by allocated count
+    venue_data.sort(key=lambda x: (x['venue_type'], -x['people_allocated']))
+
+    # Write to CSV
+    if venue_data:
+        with open(output_file, 'w', newline='') as f:
+            fieldnames = ['venue_id', 'venue_name', 'venue_type', 'geographical_unit',
+                         'geographical_level', 'capacity', 'people_allocated', 'utilization_pct',
+                         'latitude', 'longitude']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(venue_data)
+
+        logger.info(f"Exported {len(venue_data)} venues to {output_file}")
+
+        # Log summary statistics
+        total_allocated = sum(v['people_allocated'] for v in venue_data)
+        total_capacity = sum(v['capacity'] for v in venue_data)
+        venue_types = {}
+        for v in venue_data:
+            vtype = v['venue_type']
+            if vtype not in venue_types:
+                venue_types[vtype] = {'count': 0, 'allocated': 0, 'capacity': 0}
+            venue_types[vtype]['count'] += 1
+            venue_types[vtype]['allocated'] += v['people_allocated']
+            venue_types[vtype]['capacity'] += v['capacity']
+
+        overall_utilization = (total_allocated / total_capacity * 100) if total_capacity > 0 else 0.0
+        logger.info(f"Total capacity: {total_capacity:,}, Total allocated: {total_allocated:,} ({overall_utilization:.1f}% utilization)")
+        logger.info("Breakdown by venue type:")
+        for vtype, stats in sorted(venue_types.items()):
+            util_pct = (stats['allocated'] / stats['capacity'] * 100) if stats['capacity'] > 0 else 0.0
+            logger.info(f"  {vtype}: {stats['count']} venues, {stats['allocated']:,}/{stats['capacity']:,} people ({util_pct:.1f}%)")
+    else:
+        logger.info("No non-household venues to export")
+
+
 def print_world_examples(world):
     """
     Print examples of the created world to help users understand the data.
@@ -298,6 +390,9 @@ def main():
     logger.info(f"Venues: {len(world.venues.get_all_venues())} venues across {len(venues.get_venue_types())} types")
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
     logger.info("=" * 60)
+
+    # Export venue allocations
+    export_venue_allocations(world)
 
     # Show examples of what was created
     #print_world_examples(world)

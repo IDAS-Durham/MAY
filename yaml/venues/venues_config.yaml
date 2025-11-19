@@ -33,11 +33,19 @@ venue_types:
     description: "Educational institutions for primary and secondary education"
     is_residence: false  # Not a place where people live
 
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "SchoolCapacity"
+
   university:
     enabled: true
     filename: universities/uk_universities.csv
     description: "Higher education institutions"
     is_residence: false  # Not a place where people live
+
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "n_students"
 
   care_home:
     enabled: true
@@ -110,6 +118,10 @@ venue_types:
     filename: companies.csv
     description: "Commercial workplaces and businesses"
     is_residence: false  # Not a place where people live
+
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "employee_count"
 
   boarding_school:
     enabled: true
