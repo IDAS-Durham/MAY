@@ -50,6 +50,11 @@ class VenueDistributor:
         self.venue_attribute_cache = {}  # venue_id -> pre-processed attribute data
         self.attribute_index_built = False
 
+        # Categorical attribute index: Pre-group venues by categorical values
+        # For example: {('work_sector', 'A'): [venue1, venue5, ...], ('work_sector', 'B'): [...]}
+        # This allows filtering 1.27M companies down to ~67K per sector instantly
+        self.categorical_index = {}  # (attr_name, value) -> list of venues
+
         # Probability allocation cache
         # Maps (file_path, probability_column) -> {geo_unit_name: probability}
         self.probability_cache = {}
@@ -505,6 +510,9 @@ class VenueDistributor:
 
         This eliminates repeated dict lookups, string operations, and rule parsing
         in the hot path (_venue_accepts_person), providing 10-50x speedup.
+
+        Also builds categorical index to pre-group venues by categorical attributes,
+        enabling instant filtering (e.g., 1.27M companies → 67K per sector).
         """
         eligibility = self.config.get('eligibility', {})
         attributes = eligibility.get('attributes', [])
@@ -512,6 +520,9 @@ class VenueDistributor:
         if not attributes:
             logger.debug("No attributes to index")
             return
+
+        # Track which attributes should be indexed categorically
+        categorical_attrs_to_index = []
 
         for venue in venues:
             venue_cache = {}
@@ -561,11 +572,41 @@ class VenueDistributor:
                             'case_sensitive': case_sensitive
                         }
 
+                        # Build categorical index ONLY for identity mappings
+                        # Identity mapping: venue_value maps to itself (e.g., "A": ["A"])
+                        # NOT for rule-based mappings (e.g., "Mixed": ["male", "female"])
+                        # This optimization only works when person_value == venue_value
+                        allowed_values = matching_rules.get(venue_value, None)
+                        is_identity_mapping = (
+                            allowed_values is not None and
+                            len(allowed_values) == 1 and
+                            allowed_values[0] == venue_value
+                        )
+
+                        if is_identity_mapping:
+                            # Track this attribute for indexing
+                            if attr_name not in [a[0] for a in categorical_attrs_to_index]:
+                                categorical_attrs_to_index.append((attr_name, venue_column, case_sensitive))
+
+                            # Add this venue to the categorical index
+                            # Store venue ID (not object) for fast set operations
+                            index_key = (attr_name, venue_value)
+                            if index_key not in self.categorical_index:
+                                self.categorical_index[index_key] = set()
+                            self.categorical_index[index_key].add(id(venue))
+
             # Store cache using venue id (fast lookup)
             self.venue_attribute_cache[id(venue)] = venue_cache
 
         self.attribute_index_built = True
-        logger.info(f"Built attribute index for {len(venues)} venues with {len(attributes)} attributes")
+
+        # Log index statistics
+        if self.categorical_index:
+            total_indexed_venues = sum(len(v) for v in self.categorical_index.values())
+            logger.info(f"Built attribute index for {len(venues)} venues with {len(attributes)} attributes")
+            logger.info(f"Built categorical index: {len(self.categorical_index)} unique value combinations, {total_indexed_venues} total indexed entries")
+        else:
+            logger.info(f"Built attribute index for {len(venues)} venues with {len(attributes)} attributes")
 
     def _handle_priority_allocation(self, people: List, venues: List) -> List:
         """
@@ -1455,8 +1496,72 @@ class VenueDistributor:
 
         return c * r
 
+    def _prefilter_venues_by_categorical(self, person, venues: List) -> List:
+        """
+        Pre-filter venues using categorical index for massive speedup.
+
+        For attributes with categorical matching (e.g., work_sector), this uses
+        the pre-built index to instantly filter from 1.27M venues down to the
+        relevant subset (e.g., ~67K companies in sector 'A').
+
+        Returns:
+            Filtered venue list, or original list if no categorical filtering applies
+        """
+        if not self.categorical_index:
+            return venues  # No categorical index built, return all venues
+
+        eligibility = self.config.get('eligibility', {})
+        attributes = eligibility.get('attributes', [])
+
+        # Find categorical attributes to use for pre-filtering
+        categorical_filters = []
+        for rule in attributes:
+            if rule.get('type') == 'categorical' and rule.get('venue_column'):
+                attr_name = rule.get('name')
+                case_sensitive = rule.get('case_sensitive', False)
+
+                # Get person's value for this attribute
+                person_value = getattr(person, attr_name, None)
+                if person_value is None and hasattr(person, 'properties') and attr_name in person.properties:
+                    person_value = person.properties[attr_name]
+
+                if person_value is not None:
+                    # Apply case sensitivity
+                    if not case_sensitive:
+                        person_value = str(person_value).lower() if person_value else ''
+
+                    categorical_filters.append((attr_name, person_value))
+
+        # If we have categorical filters, use the index
+        if categorical_filters:
+            # Find venues that match ALL categorical filters
+            # Get first filter set
+            attr_name, person_value = categorical_filters[0]
+            index_key = (attr_name, person_value)
+            filtered_venue_ids = self.categorical_index.get(index_key, set())
+
+            # If multiple filters, intersect them (need to copy only if we modify)
+            if len(categorical_filters) > 1:
+                filtered_venue_ids = filtered_venue_ids.copy()
+                for attr_name, person_value in categorical_filters[1:]:
+                    index_key = (attr_name, person_value)
+                    filter_set = self.categorical_index.get(index_key, set())
+                    filtered_venue_ids &= filter_set
+
+            # Only keep venues that are in the original venue list
+            # (to respect geographical/distance filtering)
+            result = [v for v in venues if id(v) in filtered_venue_ids]
+
+            return result
+        else:
+            return venues  # No categorical filters, return all venues
+
     def _filter_venues_by_person(self, person, venues: List) -> List:
         """Filter venues based on person's attributes (age, gender, etc.)."""
+        # Step 1: Pre-filter using categorical index (instant filtering for large venue sets)
+        venues = self._prefilter_venues_by_categorical(person, venues)
+
+        # Step 2: Filter remaining venues by other attributes (age, gender, etc.)
         eligibility = self.config.get('eligibility', {})
         attributes = eligibility.get('attributes', [])
 
@@ -1629,12 +1734,15 @@ class VenueDistributor:
     def _log_allocation_summary(self, world):
         """Log summary statistics of allocation."""
         # Count only people allocated to THIS venue type (not just any primary_activity)
-        allocated = sum(
-            1 for p in world.people
-            if self.activity_map_key in p.activity_map
-            and hasattr(p.activity_map[self.activity_map_key], 'type')
-            and p.activity_map[self.activity_map_key].type == self.venue_type
-        )
+        # Note: activity_map stores a LIST of Subset objects
+        allocated = 0
+        for p in world.people:
+            if self.activity_map_key in p.activity_map:
+                subsets = p.activity_map[self.activity_map_key]
+                # Check if any subset's venue matches this venue type
+                if any(hasattr(s, 'venue') and s.venue.type == self.venue_type for s in subsets):
+                    allocated += 1
+
         total = len(world.people)
 
         logger.info(f"Allocation Summary:")

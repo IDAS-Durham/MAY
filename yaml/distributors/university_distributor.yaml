@@ -47,7 +47,7 @@ eligibility:
       - name: "highest_priority_young_adults_from_specific_households"
         description: "Students aged 18-22 from households with pattern '0 >=0 0 0' (highest priority, can overflow, SGU-specific probabilities)"
         priority: 1  # Highest priority
-        allow_overflow: true  # Can exceed venue capacity, but still respects age/gender constraints
+        allow_overflow: false  # Can exceed venue capacity, but still respects age/gender constraints
 
         # Probability of allocation (reflects that not all 18-22 year olds attend university)
         probability_config:
@@ -80,7 +80,7 @@ eligibility:
       - name: "high_priority_uni_age"
         description: "Students aged 18-22 (second priority, can overflow, SGU-specific probabilities)"
         priority: 2  # Second priority
-        allow_overflow: true  # Can exceed venue capacity, but still respects age/gender constraints
+        allow_overflow: false  # Can exceed venue capacity, but still respects age/gender constraints
 
         # Probability of allocation (reflects that not all 18-22 year olds attend university)
         probability_config:
