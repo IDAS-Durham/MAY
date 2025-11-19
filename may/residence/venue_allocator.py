@@ -150,9 +150,12 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
                 venue.properties['residents'] = []
             venue.properties['residents'].extend(venue_residents)
 
+            # Get subset_key from config (default to None for backwards compatibility)
+            subset_key = allocation_config.get('subset_key', None)
+
             # Add people to venue's subset system so they're counted properly
             for person in venue_residents:
-                venue.add_to_subset(person)
+                venue.add_to_subset(person, subset_key=subset_key)
                 # Set venue reference on each person (optional)
                 setattr(person, f'{venue_type}_venue', venue)
 
@@ -549,9 +552,12 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                     venue.properties[slot_key] = []
                 venue.properties[slot_key].extend(venue_residents)
 
+                # Get subset_key from config (default to None for backwards compatibility)
+                subset_key = allocation_config.get('subset_key', None)
+
                 # Add people to venue's subset system so they're counted properly
                 for person in venue_residents:
-                    venue.add_to_subset(person)
+                    venue.add_to_subset(person, subset_key=subset_key)
                     # Set venue reference on each person
                     # setattr(person, f'{venue_type}_venue', venue)
 

@@ -1,6 +1,0 @@
-# Example MGU filter file
-# One code per line, comments allowed (lines starting with #)
-
-E02004314
-E02004315
-E02007058
