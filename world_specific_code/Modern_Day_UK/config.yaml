@@ -112,30 +112,52 @@ attributes:
     - "yaml/attributes/work_sector_assignment.yaml"         # Stage 3: Work sector by LGU+Sex (depends on workplace_location, workplace_sgu)
 
 # ========================================
-# VENUE DISTRIBUTORS
+# VENUE PIPELINE - Unified distributors and child creators
 # ========================================
+# NEW STYLE: Interleave distributors and child creators in any order
+# This gives you full control over the sequence of operations
 
-distributors:
-  # Enable venue distribution (set to false to skip)
+venue_pipeline:
   enabled: true
 
-  # Sequential distributor configurations
-  # Each distributor assigns people to venues and sets activity_map
-  # Order matters: Earlier distributors have priority
-  configs:
-    - "yaml/distributors/school_distributor.yaml"           # Allocate students to schools (sets primary_activity)
-    - "yaml/distributors/university_distributor.yaml"       # Allocate students to universities (sets primary_activity)
-    - "yaml/distributors/specific_workplace_hospitals_distributor.yaml"  # Allocate Q sector workers to hospitals (sets primary_activity)
-    - "yaml/distributors/specific_workplace_care_homes_distributor.yaml"  # Allocate Q sector workers to care homes (sets primary_activity)
-    - "yaml/distributors/company_distributor.yaml"          # Allocate workers to companies (sets primary_activity)
-    # - "yaml/distributors/hospital_distributor.yaml"       # Assign nearest hospital (sets primary_hospital)
-    # - "yaml/distributors/gym_distributor.yaml"            # Allocate gym members (sets leisure)
+  steps:
+    # Step 1: Distribute students to schools
+    - type: distributor
+      config: "yaml/distributors/school_distributor.yaml"
+
+    # Step 2: Create classrooms within schools (based on student age)
+    - type: child_creator
+      config: "yaml/venue_child_creators/school_classrooms.yaml"
+
+    # Step 3: Distribute students to universities
+    - type: distributor
+      config: "yaml/distributors/university_distributor.yaml"
+
+    # Step 4: Create uni_year venues within universities (ages 18-22 individual, 23+ grouped)
+    - type: child_creator
+      config: "yaml/venue_child_creators/university_uni_years.yaml"
+
+    # Step 5: Distribute Q sector workers to hospitals
+    - type: distributor
+      config: "yaml/distributors/specific_workplace_hospitals_distributor.yaml"
+
+    # Step 6: Distribute Q sector workers to care homes
+    - type: distributor
+      config: "yaml/distributors/specific_workplace_care_homes_distributor.yaml"
+
+    # Step 7: Distribute workers to companies
+    - type: distributor
+      config: "yaml/distributors/company_distributor.yaml"
+
+    # Step 8: Create offices within companies
+    - type: child_creator
+      config: "yaml/venue_child_creators/company_offices.yaml"
 
   # Notes:
-  # - Distributors run AFTER attribute assignment
-  # - Each distributor sets person.activity_map[key] = venue
-  # - People already assigned an activity are skipped by subsequent distributors
-  # - Special cases (e.g., boarding school students) are handled first
+  # - Each step runs in sequence
+  # - Distributors assign people to parent venues
+  # - Child creators create sub-venues and redistribute people
+  # - Order matters: child creators should run AFTER their parent distributor
 
 # ========================================
 # EXAMPLES

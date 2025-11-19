@@ -21,6 +21,7 @@ venue_types:
     enabled: false  # Not loaded from CSV (created dynamically)
     is_residence: true  # People live here
     description: "Residential households (created by household distributor)"
+    
   hospital:
     enabled: true
     filename: hospitals.csv

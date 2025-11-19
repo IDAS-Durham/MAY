@@ -39,6 +39,8 @@ class Venue:
         'coordinates',
         'properties',
         'subsets',
+        'parent',      # Parent venue (e.g., School for a Classroom)
+        'children',    # List of child venues (e.g., Classrooms for a School)
     ]
 
     def __init__(self,
@@ -48,6 +50,8 @@ class Venue:
                  coordinates=None,
                  properties: dict=None,
                  subsets: dict[str, Subset] = None,
+                 parent=None,
+                 children=None,
                  ):
         self.id = id(self)              # Unique numeric ID (generated)
         self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
@@ -56,6 +60,8 @@ class Venue:
         self.coordinates = coordinates  # Optional (latitude, longitude) tuple
         self.properties = properties if properties is not None else {}
         self.subsets = subsets if subsets is not None else {} # dict(subset_name, Subset object)
+        self.parent = parent            # Parent venue reference
+        self.children = children if children is not None else []  # List of child venues
 
     def get_capacity_for_attributes(self, capacity_config, **attributes):
         """
@@ -259,3 +265,102 @@ class Venue:
                     composition[cat.name] += 1
                     break
         return composition
+
+    def add_child_venue(self, child):
+        """
+        Add a child venue and set this venue as its parent.
+        Child venue inherits geographical_unit from parent if not already set.
+
+        Args:
+            child: Child Venue object to add
+
+        Example:
+            >>> school = venue_manager.create_venue("school", geo_unit)
+            >>> classroom = venue_manager.create_venue("classroom", geo_unit)
+            >>> school.add_child_venue(classroom)
+        """
+        # Inherit geographical_unit from parent if child doesn't have one
+        if child.geographical_unit is None:
+            child.geographical_unit = self.geographical_unit
+
+        # Add to children list and set parent reference
+        self.children.append(child)
+        child.parent = self
+
+    def get_all_children(self):
+        """
+        Get all direct child venues.
+
+        Returns:
+            List of child Venue objects
+        """
+        return self.children
+
+    def get_all_descendants(self):
+        """
+        Get all descendant venues (children, grandchildren, etc.).
+
+        Returns:
+            List of all descendant Venue objects
+        """
+        descendants = []
+        for child in self.children:
+            descendants.append(child)
+            descendants.extend(child.get_all_descendants())
+        return descendants
+
+    def get_root_venue(self):
+        """
+        Get the top-level parent venue in the hierarchy.
+
+        Returns:
+            Root Venue object (or self if this is the root)
+        """
+        current = self
+        while current.parent is not None:
+            current = current.parent
+        return current
+
+    def is_root(self):
+        """
+        Check if this venue is a root (has no parent).
+
+        Returns:
+            bool: True if this is a root venue
+        """
+        return self.parent is None
+
+    def is_leaf(self):
+        """
+        Check if this venue is a leaf (has no children).
+
+        Returns:
+            bool: True if this venue has no children
+        """
+        return len(self.children) == 0
+
+    def get_depth(self):
+        """
+        Get the depth of this venue in the hierarchy (0 for root).
+
+        Returns:
+            int: Depth level (0 = root, 1 = child of root, etc.)
+        """
+        depth = 0
+        current = self.parent
+        while current is not None:
+            depth += 1
+            current = current.parent
+        return depth
+
+    def get_total_members_recursive(self):
+        """
+        Get total number of members including all child venues.
+
+        Returns:
+            int: Total members across this venue and all descendants
+        """
+        total = self.num_members
+        for child in self.children:
+            total += child.get_total_members_recursive()
+        return total

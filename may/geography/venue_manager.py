@@ -93,7 +93,98 @@ class VenueManager:
         # Add to manager
         self.add_venue(venue, geo_unit)
 
-        return venue       
+        return venue
+
+    def create_child_venue(self, parent_venue, child_venue_type, properties=None, geo_unit=None):
+        """
+        Create a child venue and attach it to a parent venue.
+        The child inherits the geographical_unit from the parent if not specified.
+
+        Args:
+            parent_venue: Parent Venue object
+            child_venue_type: Type of child venue (e.g., "classroom", "office")
+            properties: Venue-specific properties dict
+            geo_unit: Optional GeographicalUnit (defaults to parent's geo_unit)
+
+        Returns:
+            Child Venue object
+
+        Example:
+            >>> school = venue_manager.create_venue("school", some_sgu)
+            >>> classroom = venue_manager.create_child_venue(school, "classroom",
+            ...                                               properties={'grade': 1, 'capacity': 25})
+        """
+        # Use parent's geographical_unit if not specified
+        if geo_unit is None:
+            geo_unit = parent_venue.geographical_unit
+
+        # Create the child venue
+        child = self.create_venue(
+            venue_type=child_venue_type,
+            geo_unit=geo_unit,
+            properties=properties
+        )
+
+        # Establish parent-child relationship
+        parent_venue.add_child_venue(child)
+
+        return child
+
+    def create_venue_with_children(self, parent_type, geo_unit, children_spec, properties=None):
+        """
+        Create a parent venue with multiple child venues in one call.
+
+        Args:
+            parent_type: Type of parent venue (e.g., "school", "company")
+            geo_unit: GeographicalUnit where parent venue is located
+            children_spec: List of dicts specifying children, each with:
+                - 'type': Child venue type (required)
+                - 'count': Number of children to create (default: 1)
+                - 'properties': Properties dict for the child (optional)
+            properties: Properties for the parent venue
+
+        Returns:
+            Tuple of (parent_venue, list_of_child_venues)
+
+        Example:
+            >>> school, classrooms = venue_manager.create_venue_with_children(
+            ...     parent_type="school",
+            ...     geo_unit=some_sgu,
+            ...     children_spec=[
+            ...         {'type': 'classroom', 'count': 20, 'properties': {'capacity': 25}},
+            ...         {'type': 'gym', 'count': 1, 'properties': {'capacity': 100}}
+            ...     ],
+            ...     properties={'capacity': 500}
+            ... )
+        """
+        # Create parent venue
+        parent = self.create_venue(
+            venue_type=parent_type,
+            geo_unit=geo_unit,
+            properties=properties
+        )
+
+        # Create child venues
+        children = []
+        for spec in children_spec:
+            child_type = spec['type']
+            count = spec.get('count', 1)
+            child_properties = spec.get('properties', {})
+
+            for i in range(count):
+                # Add index to properties if creating multiple of same type
+                props = child_properties.copy()
+                if count > 1:
+                    props['index'] = i
+
+                child = self.create_child_venue(
+                    parent_venue=parent,
+                    child_venue_type=child_type,
+                    properties=props
+                )
+                children.append(child)
+
+        return parent, children       
 
     def load_venue_type_from_df(self, venue_type, venue_df):
         """ Creates venues from a given dataframe """
