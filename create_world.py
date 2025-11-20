@@ -158,7 +158,7 @@ def main():
                         # Export allocations to CSV
                         venue_type = distributor.venue_type
                         output_file = f"{venue_type}_allocations.csv"
-                        distributor.export_allocations(world, output_file)
+                        #distributor.export_allocations(world, output_file)
                         logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
@@ -175,7 +175,7 @@ def main():
                         # Export allocations to CSV
                         child_type = creator.child_venue_type
                         output_file = f"{child_type}_allocations.csv"
-                        creator.export_allocations(world, output_file)
+                        #creator.export_allocations(world, output_file)
                         logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
@@ -194,13 +194,17 @@ def main():
     logger.info("=" * 60)
 
     # Export venue allocations
-    export_venue_allocations(world)
+    #export_venue_allocations(world)
 
     # Export people data
-    export_people(world)
+    #export_people(world)
 
     # Show examples of what was created
     #print_world_examples(world)
+
+    # Export world to HDF5 for C++ simulation
+    # Uncomment to enable HDF5 export:
+    world.export_to_hdf5("world_state.h5")
 
     return world
 

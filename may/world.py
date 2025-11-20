@@ -209,6 +209,44 @@ class World:
 
         return stats
 
+    def export_to_hdf5(self, output_file, config_file="yaml/serialization_config.yaml"):
+        """
+        Export world state to HDF5 file for C++ simulation.
+
+        This method serializes the complete world state (geography, population,
+        venues, and relationships) to an HDF5 file that can be efficiently loaded
+        by the C++ simulation engine.
+
+        The serialization configuration (config_file) determines which properties
+        and attributes are included in the export.
+
+        Args:
+            output_file: Path to output HDF5 file
+            config_file: Path to serialization YAML config (default: yaml/serialization_config.yaml)
+
+        Returns:
+            dict: Export statistics (num_people, num_venues, etc.)
+
+        Example:
+            >>> world.export_to_hdf5("world_state.h5")
+            >>> world.export_to_hdf5("output/world.h5", "custom_serialization.yaml")
+        """
+        from may.serialization import WorldSerializer
+
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("EXPORTING WORLD TO HDF5")
+        logger.info("=" * 60)
+
+        serializer = WorldSerializer(config_file=config_file)
+        stats = serializer.export(self, output_file)
+
+        logger.info("")
+        logger.info(f"Successfully exported world to: {output_file}")
+        logger.info("=" * 60)
+
+        return stats
+
 
 def setup_households(geo, population, venues, config):
     """

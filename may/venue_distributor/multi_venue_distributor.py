@@ -200,51 +200,93 @@ class MultiVenueDistributor:
 
     def _allocate_venues(self, people: List, world):
         """
-        Allocate venues to each person.
+        Allocate venues to each person using geo_unit batching for performance.
 
-        For each person, finds N closest venues of each configured venue type
-        and stores them in person.activity_map[activity_map_key][venue_type].
+        Groups people by their geographical_unit coordinates to avoid redundant
+        spatial index queries. Since 100-300 people share the same S.G.U coordinates,
+        this reduces queries from ~millions to ~thousands.
 
         Args:
             people: List of eligible people
             world: World object
         """
+        # Step 1: Group people by geographical_unit
+        people_by_geo_unit = {}
+        for person in people:
+            geo_unit = person.geographical_unit
+            if geo_unit is None:
+                continue
+            if geo_unit not in people_by_geo_unit:
+                people_by_geo_unit[geo_unit] = []
+            people_by_geo_unit[geo_unit].append(person)
+
+        logger.info(f"Batching {len(people)} people into {len(people_by_geo_unit)} unique geo_units")
+
+        # Step 2: For each unique geo_unit, query spatial index once per venue_type
+        geo_unit_venue_cache = {}  # (geo_unit, venue_type) -> [venues]
+
+        for geo_unit in people_by_geo_unit.keys():
+            # Get geo_unit coordinates
+            if geo_unit.coordinates is None or len(geo_unit.coordinates) != 2:
+                logger.debug(f"Geo unit {geo_unit.name} has no coordinates, skipping")
+                continue
+
+            coords = list(geo_unit.coordinates)
+
+            # Query once per venue type for this geo_unit
+            for venue_type in self.venue_types:
+                cache_key = (geo_unit, venue_type)
+                geo_unit_venue_cache[cache_key] = self._find_closest_venues_for_coords(
+                    coords, venue_type
+                )
+
+        # Step 3: Assign cached venue results to all people in each geo_unit
         allocated_count = 0
 
-        for person in people:
-            # Initialize nested dict for this person
-            venue_dict = {}
+        for geo_unit, geo_unit_people in people_by_geo_unit.items():
+            for person in geo_unit_people:
+                venue_dict = {}
 
-            # For each venue type, find N closest venues
-            for venue_type in self.venue_types:
-                subsets = self._find_closest_venues(person, venue_type, world)
+                # Get cached venues for each venue type
+                for venue_type in self.venue_types:
+                    cache_key = (geo_unit, venue_type)
+                    venues = geo_unit_venue_cache.get(cache_key, [])
 
-                if subsets:
-                    venue_dict[venue_type] = subsets
+                    if venues:
+                        # Create subsets and add person to each
+                        subsets = []
+                        for venue in venues:
+                            subset = self._get_or_create_subset(venue)
+                            subset.add_member(person)
+                            subsets.append(subset)
 
-            # Store in activity_map if we found any venues
-            if venue_dict:
-                person.activity_map[self.activity_map_key] = venue_dict
+                        venue_dict[venue_type] = subsets
 
-                # Add activity to person's activities list
-                if self.activity_map_key not in person.activities:
-                    person.add_activity(self.activity_map_key)
+                # Store in activity_map if we found any venues
+                if venue_dict:
+                    person.activity_map[self.activity_map_key] = venue_dict
 
-                allocated_count += 1
+                    # Add activity to person's activities list
+                    if self.activity_map_key not in person.activities:
+                        person.add_activity(self.activity_map_key)
+
+                    allocated_count += 1
 
         logger.info(f"Allocated venues to {allocated_count} people")
 
-    def _find_closest_venues(self, person, venue_type: str, world) -> List:
+    def _find_closest_venues_for_coords(self, coords: List[float], venue_type: str) -> List:
         """
-        Find the N closest venues of a specific type for a person.
+        Find the N closest venues of a specific type for given coordinates.
+
+        This method is called once per geo_unit per venue_type (not per person),
+        enabling massive batching optimization.
 
         Args:
-            person: Person object
+            coords: [lat, lon] coordinates
             venue_type: Type of venue
-            world: World object
 
         Returns:
-            List of Subset objects for the closest venues
+            List of Venue objects (not subsets - those are created later)
         """
         # Get spatial index for this venue type
         spatial_index = self.spatial_indices.get(venue_type)
@@ -253,39 +295,27 @@ class MultiVenueDistributor:
         if spatial_index is None or not venue_list:
             return []
 
-        # Get person's location
-        person_coords = self._get_person_coordinates(person, world)
-        if person_coords is None:
-            return []
-
         # Query spatial index for N closest venues
         n_venues = min(self.max_venues_per_type, len(venue_list))
 
         try:
-            distances, indices = spatial_index.query(person_coords, k=n_venues)
+            distances, indices = spatial_index.query(coords, k=n_venues)
         except Exception as e:
-            logger.debug(f"Failed to query spatial index for person {person.id}: {e}")
+            logger.debug(f"Failed to query spatial index for coords {coords}: {e}")
             return []
 
         # Handle single result (not in array)
         if n_venues == 1:
             indices = [indices]
 
-        # Get venues and create subsets
-        subsets = []
+        # Get venues
+        venues = []
         for idx in indices:
             if idx < len(venue_list):
                 venue = venue_list[idx]
+                venues.append(venue)
 
-                # Get or create subset for this venue
-                subset = self._get_or_create_subset(venue)
-
-                # Add person to subset
-                subset.add_member(person)
-
-                subsets.append(subset)
-
-        return subsets
+        return venues
 
     def _get_person_coordinates(self, person, world) -> Optional[List[float]]:
         """
