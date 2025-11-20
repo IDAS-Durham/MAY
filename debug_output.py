@@ -159,7 +159,19 @@ def export_people(world, output_file="people.csv"):
             if activity_name == 'residence':
                 continue
 
-            if subsets and len(subsets) > 0:
+            # Check if this is a multi-venue activity (dict) or single-venue (list)
+            if isinstance(subsets, dict):
+                # Multi-venue activity (e.g., leisure with multiple types)
+                # Store count of venues per type
+                for venue_type, venue_subsets in subsets.items():
+                    if venue_subsets and len(venue_subsets) > 0:
+                        # Store count of venues for this type
+                        row[f'{activity_name}_{venue_type}_count'] = len(venue_subsets)
+                        # Optionally store first venue name
+                        first_venue = venue_subsets[0].venue
+                        row[f'{activity_name}_{venue_type}_first'] = first_venue.name
+            elif subsets and len(subsets) > 0:
+                # Single-venue activity (traditional)
                 venue = subsets[0].venue
                 row[f'{activity_name}_venue_name'] = venue.name
                 row[f'{activity_name}_venue_type'] = venue.type

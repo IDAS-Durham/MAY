@@ -157,11 +157,16 @@ venue_pipeline:
     - type: child_creator
       config: "yaml/venue_child_creators/company_offices.yaml"
 
+    # Step 10: Assign leisure venue options (cinema, grocery, gym, pub)
+    - type: distributor
+      config: "yaml/distributors/multi_venue_distributor.yaml"
+
   # Notes:
   # - Each step runs in sequence
   # - Distributors assign people to parent venues
   # - Child creators create sub-venues and redistribute people
   # - Order matters: child creators should run AFTER their parent distributor
+  # - Multi-venue distributors (like leisure) assign multiple venue options per person
 
 # ========================================
 # EXAMPLES

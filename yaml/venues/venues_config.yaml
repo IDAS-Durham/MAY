@@ -24,13 +24,13 @@ venue_types:
     
   hospital:
     enabled: true
-    filename: hospitals.csv
+    filename: medical/hospitals.csv
     description: "Healthcare facilities providing medical treatment"
     is_residence: false  # Not a place where people live
 
   school:
     enabled: true
-    filename: schools/Schools_EW.csv
+    filename: primary_activities/Schools_EW.csv
     description: "Educational institutions for primary and secondary education"
     is_residence: false  # Not a place where people live
 
@@ -40,7 +40,7 @@ venue_types:
 
   university:
     enabled: true
-    filename: universities/uk_universities.csv
+    filename: primary_activities/uk_universities.csv
     description: "Higher education institutions"
     is_residence: false  # Not a place where people live
 
@@ -50,7 +50,7 @@ venue_types:
 
   care_home:
     enabled: true
-    filename: care_homes.csv
+    filename: residences/care_homes.csv
     description: "Residential care facilities for elderly or disabled persons"
     is_residence: true  # People live here
 
@@ -116,7 +116,7 @@ venue_types:
 
   company:
     enabled: true
-    filename: companies.csv
+    filename: primary_activities/companies.csv
     description: "Commercial workplaces and businesses"
     is_residence: false  # Not a place where people live
 
@@ -126,7 +126,7 @@ venue_types:
 
   boarding_school:
     enabled: true
-    filename: boarding_schools.csv
+    filename: residences/boarding_schools.csv
     description: "Communal residence for school kids"
     is_residence: true  # People live here
 
@@ -177,7 +177,7 @@ venue_types:
 
   student_dorms:
     enabled: true
-    filename: student_dorms.csv
+    filename: residences/student_dorms.csv
     description: "Communal residence for university students"
     is_residence: true  # People live here
 
@@ -212,6 +212,31 @@ venue_types:
       # - "flexible": Allow overflow into other age/sex slots
       # - "strict": Only allocate to exact matches
       # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
+  
+  cinema:
+    enabled: true
+    filename: leisure/cinemas.csv
+    description: "Leisure location"
+    is_residence: false
+
+  grocery:
+    enabled: true
+    filename: leisure/groceries.csv
+    description: "Leisure location"
+    is_residence: false
+  
+  gym:
+    enabled: true
+    filename: leisure/gyms.csv
+    description: "Leisure location"
+    is_residence: false
+  
+  pub:
+    enabled: true
+    filename: leisure/pubs.csv
+    description: "Leisure location"
+    is_residence: false
+
 
 # Global venue settings
 settings:
