@@ -175,7 +175,7 @@ class VenueDistributor:
 
     def _get_venue_capacity(self, venue) -> int:
         """
-        Get the capacity of a venue based on the configured capacity_column.
+        Get the capacity of a venue based on the configured capacity_column or fixed_capacity.
 
         Args:
             venue: Venue object
@@ -184,6 +184,13 @@ class VenueDistributor:
             Capacity as integer, or 0 if not found/configured
         """
         allocation_config = self.config.get('allocation', {})
+
+        # Check for fixed_capacity first (takes precedence over capacity_column)
+        fixed_capacity = allocation_config.get('fixed_capacity')
+        if fixed_capacity is not None:
+            return int(fixed_capacity)
+
+        # Fallback to capacity_column
         capacity_column = allocation_config.get('capacity_column')
 
         if not capacity_column:

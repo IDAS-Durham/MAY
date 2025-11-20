@@ -145,11 +145,15 @@ venue_pipeline:
     - type: distributor
       config: "yaml/distributors/specific_workplace_care_homes_distributor.yaml"
 
-    # Step 7: Distribute workers to companies
+    # Step 7: Distribute P sector workers to schools
+    - type: distributor
+      config: "yaml/distributors/specific_workplace_classrooms_distributor.yaml"
+
+    # Step 8: Distribute workers to companies
     - type: distributor
       config: "yaml/distributors/company_distributor.yaml"
 
-    # Step 8: Create offices within companies
+    # Step 9: Create offices within companies
     - type: child_creator
       config: "yaml/venue_child_creators/company_offices.yaml"
 
