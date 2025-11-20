@@ -44,3 +44,20 @@ child_properties:
 #   'even' - Distribute students evenly across all uni_year venues for this age group
 #   'fill'  - Fill first uni_year venue to max before moving to next
 distribution_strategy: even
+
+# ========================================
+# ACTIVITY MANAGEMENT
+# ========================================
+# Control how students' activity_map is updated when moving to uni_year venues
+
+# Activity map key: Which activity to set when adding to uni_year
+activity_map_key: "primary_activity"
+
+# Subset key: Which subset to add students to in the uni_year
+subset_key: "student"
+
+# Replace parent activity: Replace university's primary_activity with uni_year
+replace_parent_activity: true
+
+# Remove from parent: Keep student in university's subset for reference
+remove_from_parent: false

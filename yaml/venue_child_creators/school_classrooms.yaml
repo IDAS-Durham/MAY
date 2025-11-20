@@ -33,3 +33,24 @@ child_properties:
 #   'even' - Distribute students evenly across all classrooms for this age
 #   'fill'  - Fill first classroom to max before moving to next
 distribution_strategy: even
+
+# ========================================
+# ACTIVITY MANAGEMENT
+# ========================================
+# Control how students' activity_map is updated when moving to classrooms
+
+# Activity map key: Which activity to set when adding to classroom
+# This should match the activity_map_key used in school_distributor.yaml
+activity_map_key: "primary_activity"
+
+# Subset key: Which subset to add students to in the classroom
+# This should match the subset_key used in school_distributor.yaml
+subset_key: "student"
+
+# Replace parent activity: If true, replaces school's primary_activity with classroom
+# If false, keeps both school and classroom in activity_map
+replace_parent_activity: true
+
+# Remove from parent: If true, removes student from school's subset
+# If false, keeps student in school's subset for reference (can still query all students in a school)
+remove_from_parent: false

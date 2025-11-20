@@ -165,6 +165,13 @@ def export_people(world, output_file="people.csv"):
                 row[f'{activity_name}_venue_type'] = venue.type
                 row[f'{activity_name}_venue_geo_unit'] = venue.geographical_unit.name if venue.geographical_unit else None
 
+                # Add parent venue information if it exists
+                if venue.parent:
+                    parent = venue.parent
+                    row[f'{activity_name}_parent_venue_name'] = parent.name
+                    row[f'{activity_name}_parent_venue_type'] = parent.type
+                    row[f'{activity_name}_parent_venue_geo_unit'] = parent.geographical_unit.name if parent.geographical_unit else None
+
         person_data.append(row)
 
     # Get all unique column names from all rows
@@ -184,7 +191,10 @@ def export_people(world, output_file="people.csv"):
     activity_venue_columns = sorted([col for col in all_columns
                                      if col.endswith('_venue_name') or
                                         col.endswith('_venue_type') or
-                                        col.endswith('_venue_geo_unit')])
+                                        col.endswith('_venue_geo_unit') or
+                                        col.endswith('_parent_venue_name') or
+                                        col.endswith('_parent_venue_type') or
+                                        col.endswith('_parent_venue_geo_unit')])
 
     # Combine all columns in order
     fieldnames = basic_columns + residence_columns + activity_columns + prop_columns + activity_venue_columns

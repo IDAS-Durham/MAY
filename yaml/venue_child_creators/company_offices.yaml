@@ -28,3 +28,20 @@ child_properties:
 
 # Distribution strategy
 distribution_strategy: even
+
+# ========================================
+# ACTIVITY MANAGEMENT
+# ========================================
+# Control how employees' activity_map is updated when moving to offices
+
+# Activity map key: Which activity to set when adding to office
+activity_map_key: "primary_activity"
+
+# Subset key: Which subset to add employees to in the office
+subset_key: "worker"
+
+# Replace parent activity: Replace company's primary_activity with office
+replace_parent_activity: true
+
+# Remove from parent: Keep employee in company's subset for reference
+remove_from_parent: false

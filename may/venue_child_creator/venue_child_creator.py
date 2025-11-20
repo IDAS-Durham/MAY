@@ -38,6 +38,10 @@ class VenueChildCreator:
         child_properties=None,
         distribution_strategy='even',
         attribute_mapping=None,
+        activity_map_key=None,
+        subset_key=None,
+        replace_parent_activity=True,
+        remove_from_parent=False,
     ):
         """
         Initialize VenueChildCreator.
@@ -53,6 +57,14 @@ class VenueChildCreator:
             attribute_mapping: Optional dict mapping attribute values to group keys.
                              Supports 'default' key for unmapped values.
                              Example: {18: "18", 19: "19", "default": "23+"}
+            activity_map_key: Activity key to use when adding to child venues (e.g., "primary_activity").
+                            If None, uses child_venue_type as activity name.
+            subset_key: Subset key to use when adding to child venues (e.g., "student").
+                       If None, uses default subset.
+            replace_parent_activity: If True, replaces parent's activity with child's activity.
+                                    If False, appends child's activity to existing.
+            remove_from_parent: If True, removes person from parent venue's subset.
+                               If False, keeps person in parent for reference.
         """
         self.parent_venue_type = parent_venue_type
         self.child_venue_type = child_venue_type
@@ -62,6 +74,10 @@ class VenueChildCreator:
         self.child_properties = child_properties or {}
         self.distribution_strategy = distribution_strategy
         self.attribute_mapping = attribute_mapping or {}
+        self.activity_map_key = activity_map_key
+        self.subset_key = subset_key
+        self.replace_parent_activity = replace_parent_activity
+        self.remove_from_parent = remove_from_parent
 
         # Statistics
         self.stats = {
@@ -107,6 +123,10 @@ class VenueChildCreator:
             child_properties=config.get('child_properties', {}),
             distribution_strategy=config.get('distribution_strategy', 'even'),
             attribute_mapping=config.get('attribute_mapping', {}),
+            activity_map_key=config.get('activity_map_key'),
+            subset_key=config.get('subset_key'),
+            replace_parent_activity=config.get('replace_parent_activity', True),
+            remove_from_parent=config.get('remove_from_parent', False),
         )
 
     def create_children(self, world):
@@ -283,6 +303,8 @@ class VenueChildCreator:
         """
         Distribute members across child venues.
 
+        Handles activity_map updates and parent venue cleanup based on configuration.
+
         Args:
             members: List of Person objects
             child_venues: List of child Venue objects
@@ -301,7 +323,7 @@ class VenueChildCreator:
                 for _ in range(count):
                     if member_index < len(members):
                         person = members[member_index]
-                        child_venue.add_to_subset(person)
+                        self._add_person_to_child(person, child_venue)
                         member_index += 1
 
         elif self.distribution_strategy == 'fill':
@@ -311,10 +333,41 @@ class VenueChildCreator:
                 for _ in range(self.max_capacity):
                     if member_index < len(members):
                         person = members[member_index]
-                        child_venue.add_to_subset(person)
+                        self._add_person_to_child(person, child_venue)
                         member_index += 1
                     else:
                         break
+
+    def _add_person_to_child(self, person, child_venue):
+        """
+        Add a person to a child venue with proper activity_map handling.
+
+        Args:
+            person: Person object
+            child_venue: Child Venue object
+        """
+        # Determine activity name to use
+        activity_name = self.activity_map_key if self.activity_map_key else self.child_venue_type
+
+        # If replacing parent activity, clear the existing activity first
+        if self.replace_parent_activity and self.activity_map_key:
+            if self.activity_map_key in person.activity_map:
+                person.activity_map[self.activity_map_key] = []
+
+        # Add person to child venue
+        child_venue.add_to_subset(
+            person,
+            subset_key=self.subset_key,
+            activity_name=activity_name
+        )
+
+        # Optionally remove from parent venue
+        if self.remove_from_parent:
+            parent = child_venue.parent
+            if parent:
+                for subset in parent.subsets.values():
+                    if person in subset.members:
+                        subset.members.remove(person)
 
     def export_allocations(self, world, output_file):
         """
