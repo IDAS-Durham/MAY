@@ -23,14 +23,14 @@ geography:
   filter:
     # Level to filter on: LGU, MGU, or SGU
     # Leave as null to load all units
-    level: LGU
+    level: MGU
 
     # Codes to filter (for small lists, comma-separated)
-    codes: ["Newcastle upon Tyne", "County Durham"]
+    codes: []
 
     # Or specify a file path with codes (for large lists)
     # File should have one code per line
-    #file: may/filters/example_mgu.txt
+    file: may/filters/example_mgu.txt
 
 # ========================================
 # POPULATION
@@ -167,6 +167,25 @@ venue_pipeline:
   # - Child creators create sub-venues and redistribute people
   # - Order matters: child creators should run AFTER their parent distributor
   # - Multi-venue distributors (like leisure) assign multiple venue options per person
+
+# ========================================
+# RELATIONSHIP PIPELINE - Build agent networks
+# ========================================
+# Build relationship networks between agents for disease modeling.
+# All relationship types are fully configurable via YAML.
+
+relationship_pipeline:
+  enabled: true
+
+  relationships:
+    # Social contacts network (for disease transmission)
+    - config: "yaml/relationships/social_contacts.yaml"
+
+  # Notes:
+  # - Each relationship config defines a different type of network
+  # - Relationships are built AFTER venue assignments (so activity_map is populated)
+  # - Connections are stored in person.properties (key defined in YAML config)
+  # - Add property names to serialization_config.yaml to include in HDF5 export
 
 # ========================================
 # EXAMPLES

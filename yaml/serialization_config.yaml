@@ -13,7 +13,8 @@ population:
     - ethnicity           # For differential susceptibility modeling
     - comorbidities       # For disease severity modeling
     # - work_sector       # Uncomment if needed
-    - work_mode         # Uncomment if needed
+    - work_mode           # Uncomment if needed
+    - social_contacts     # Relationship network for disease modeling
 
 # =============================================
 # GEOGRAPHY

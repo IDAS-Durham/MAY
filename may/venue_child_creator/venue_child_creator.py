@@ -182,7 +182,7 @@ class VenueChildCreator:
             logger.debug(f"  {parent_venue.name}: No members, skipping")
             return
 
-        logger.info(f"  {parent_venue.name}: {len(members)} members")
+        #logger.info(f"  {parent_venue.name}: {len(members)} members")
 
         # Group members by attribute if specified
         if self.group_by_attribute:
@@ -202,7 +202,7 @@ class VenueChildCreator:
             )
             total_children_created += children_created
 
-        logger.info(f"    → Created {total_children_created} {self.child_venue_type}(s)")
+        #logger.info(f"    → Created {total_children_created} {self.child_venue_type}(s)")
         self.stats['parents_processed'] += 1
 
     def _group_members_by_attribute(self, members, attribute_name):
@@ -271,7 +271,7 @@ class VenueChildCreator:
         # Calculate number of child venues needed
         num_children = math.ceil(num_members / self.max_capacity)
 
-        logger.info(f"    Group {group_key}: {num_members} members → {num_children} {self.child_venue_type}(s)")
+        #logger.info(f"    Group {group_key}: {num_members} members → {num_children} {self.child_venue_type}(s)")
 
         # Create child venues
         child_venues = []

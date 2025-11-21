@@ -82,3 +82,4 @@ hardcoded_ethnicity_distributor.py
 
 # pytest_cache
 .pytest_cache
+people.csv

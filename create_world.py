@@ -12,7 +12,48 @@ from may.population import PopulationManager
 from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
+from may.relationships import RelationshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples
+
+
+def export_relationships(world, property_key, output_file):
+    """Export relationships to CSV for inspection."""
+    import csv
+
+    logger.info(f"Exporting relationships to {output_file}...")
+
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['person_id', 'age', 'sex', 'sgu', 'subset_name', 'n_connections', 'connection_ids'])
+
+        for person in world.population.people:
+            connections = person.properties.get(property_key, [])
+
+            # Get subset name if available
+            subset_name = ""
+            if 'primary_activity' in person.activity_map and person.activity_map['primary_activity']:
+                activity_val = person.activity_map['primary_activity']
+                if isinstance(activity_val, list) and activity_val:
+                    subset_name = getattr(activity_val[0], 'subset_name', '')
+                elif isinstance(activity_val, dict):
+                    for v in activity_val.values():
+                        if isinstance(v, list) and v:
+                            subset_name = getattr(v[0], 'subset_name', '')
+                            break
+
+            sgu = person.geographical_unit.name if person.geographical_unit else ""
+
+            writer.writerow([
+                person.id,
+                person.age,
+                person.sex,
+                sgu,
+                subset_name,
+                len(connections),
+                ';'.join(map(str, connections))
+            ])
+
+    logger.info(f"Exported {len(world.population.people):,} people's relationships to {output_file}")
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -184,6 +225,37 @@ def main():
 
                 else:
                     logger.warning(f"Unknown pipeline step type: {step_type}")
+
+    # ========================================
+    # RELATIONSHIP PIPELINE - Build agent networks
+    # ========================================
+    relationship_config = config.get("relationship_pipeline", {})
+
+    if relationship_config.get("enabled", False):
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("RELATIONSHIP PIPELINE")
+        logger.info("=" * 60)
+
+        relationship_configs = relationship_config.get("relationships", [])
+
+        for rel_config in relationship_configs:
+            config_path = rel_config.get("config")
+
+            logger.info("")
+            logger.info(f"[RELATIONSHIP] {config_path}")
+
+            try:
+                builder = RelationshipBuilder(world, config_path)
+                builder.build_all(store=True)
+
+                # Export relationships to CSV
+                storage_key = builder.config.get('storage', {}).get('key', builder.name)
+                export_relationships(world, storage_key, f"{storage_key}.csv")
+
+            except Exception as e:
+                logger.error(f"Failed to build relationships from {config_path}: {e}")
+                logger.exception(e)
 
     logger.info("")
     logger.info("=" * 60)
