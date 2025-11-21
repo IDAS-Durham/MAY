@@ -338,7 +338,6 @@ class RelationshipBuilder:
 
         storage_key = self.config.get('storage', {}).get('key', self.name)
         sources = self.config['sources']
-        total_weight = sum(s['weight'] for s in sources)
 
         # Get connection counts
         connection_counts = self._get_connection_counts(n_people)
@@ -348,10 +347,10 @@ class RelationshipBuilder:
         all_connections = np.full((n_people, max_connections), -1, dtype=np.int32)
         current_counts = np.zeros(n_people, dtype=np.int8)
 
-        # Process each source
+        # Process each source with weight_fraction = 1.0
+        # Each source tries to fill up to target, stopping when full
         for source in sources:
             source_name = source.get('name', 'unnamed')
-            weight_fraction = np.float64(source['weight'] / total_weight)
             pool_type = source['pool']['type']
             filters = source.get('filters', [])
 
@@ -360,7 +359,6 @@ class RelationshipBuilder:
             # Parse filters
             age_range = np.int16(-1)  # -1 means no filter
             require_same_subset = False
-            check_duplicates = True
 
             for f in filters:
                 if f['attribute'] == 'age' and f['match'] == 'range':
@@ -368,9 +366,11 @@ class RelationshipBuilder:
                 elif f['attribute'] == 'subset_name' and f['match'] == 'same':
                     require_same_subset = True
 
+            # Use weight_fraction = 1.0 so each source fills remaining slots
+            weight_fraction = np.float64(1.0)
+
             if pool_type == 'activity':
                 starts, ends, people_flat = self._venue_data
-                # For activity source, don't check duplicates (first source)
                 _process_all_groups_numba(
                     starts, ends, people_flat,
                     self._ages, self._person_subset,
@@ -390,7 +390,7 @@ class RelationshipBuilder:
                     starts, ends, people_flat,
                     self._ages, self._person_subset,
                     all_connections, current_counts, connection_counts,
-                    weight_fraction, age_range, False, check_duplicates
+                    weight_fraction, age_range, False, True
                 )
 
         # Convert to dict and store
