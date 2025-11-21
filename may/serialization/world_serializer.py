@@ -228,8 +228,21 @@ class WorldSerializer:
 
         num_venues = len(all_venues)
 
+        # CRITICAL: Venue IDs in Python are TYPE-SCOPED (each type has its own ID counter starting at 0)
+        # This causes collisions: hospital_0, school_0, office_0 all have id=0
+        # For C++, we need GLOBAL unique IDs. Assign sequential global IDs here.
+
+        # Assign global IDs (0, 1, 2, ..., N-1)
+        global_ids = np.arange(num_venues, dtype=np.int32)
+
+        # Create mapping: (venue Python object id) -> global_id for subset/activity_map serialization
+        self._venue_to_global_id = {id(v): global_id for v, global_id in zip(all_venues, global_ids)}
+
+        # Also store type-scoped IDs for debugging/reference
+        type_scoped_ids = np.array([v.id for v in all_venues], dtype=np.int32)
+
         # Core attributes (always included)
-        ids = np.array([v.id for v in all_venues], dtype=np.int32)
+        ids = global_ids  # Use GLOBAL IDs for C++
         names = np.array([v.name for v in all_venues], dtype=h5py.string_dtype())
         types = np.array([v.type for v in all_venues], dtype=h5py.string_dtype())
 
@@ -240,8 +253,9 @@ class WorldSerializer:
         )
 
         # Parent venue IDs (-1 for root venues)
+        # IMPORTANT: Use global IDs for parents too!
         parent_ids = np.array(
-            [v.parent.id if v.parent else -1 for v in all_venues],
+            [self._venue_to_global_id.get(id(v.parent), -1) if v.parent else -1 for v in all_venues],
             dtype=np.int32
         )
 
@@ -327,7 +341,8 @@ class WorldSerializer:
         num_subsets = len(all_subsets)
 
         # Core attributes
-        venue_ids = np.array([s.venue.id for s in all_subsets], dtype=np.int32)
+        # IMPORTANT: Use global venue IDs (not type-scoped IDs)
+        venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets], dtype=np.int32)
         subset_indices = np.array([s.subset_index for s in all_subsets], dtype=np.int32)
         subset_names = np.array([s.subset_name for s in all_subsets], dtype=h5py.string_dtype())
 
@@ -433,10 +448,11 @@ class WorldSerializer:
                                 logger.warning(f"Person {person.id} activity '{activity_name}': invalid subset {type(subset)}")
                                 continue
 
+                            # IMPORTANT: Use global venue ID (not type-scoped ID)
                             activity_data.append([
                                 person.id,
                                 activity_idx,
-                                subset.venue.id,
+                                self._venue_to_global_id[id(subset.venue)],
                                 subset.subset_index
                             ])
 
@@ -447,10 +463,11 @@ class WorldSerializer:
                             logger.warning(f"Person {person.id} activity '{activity_name}': invalid subset {type(subset)}")
                             continue
 
+                        # IMPORTANT: Use global venue ID (not type-scoped ID)
                         activity_data.append([
                             person.id,
                             activity_idx,
-                            subset.venue.id,
+                            self._venue_to_global_id[id(subset.venue)],
                             subset.subset_index
                         ])
 
