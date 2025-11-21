@@ -141,6 +141,8 @@ settings:
     detailed_assignment_logging: false
     show_samples: true
     sample_size: 10
+    show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
+
 
 # ============================================================================
 # Work Mode Labels (for reference)
