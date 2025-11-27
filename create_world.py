@@ -30,16 +30,15 @@ def export_relationships(world, property_key, output_file):
             connections = person.properties.get(property_key, [])
 
             # Get subset name if available
+            # UNIFIED STRUCTURE: activity_map['primary_activity'][venue_type] = [subsets]
             subset_name = ""
             if 'primary_activity' in person.activity_map and person.activity_map['primary_activity']:
-                activity_val = person.activity_map['primary_activity']
-                if isinstance(activity_val, list) and activity_val:
-                    subset_name = getattr(activity_val[0], 'subset_name', '')
-                elif isinstance(activity_val, dict):
-                    for v in activity_val.values():
-                        if isinstance(v, list) and v:
-                            subset_name = getattr(v[0], 'subset_name', '')
-                            break
+                activity_dict = person.activity_map['primary_activity']
+                # Get first subset from any venue type
+                for subsets in activity_dict.values():
+                    if subsets:
+                        subset_name = getattr(subsets[0], 'subset_name', '')
+                        break
 
             sgu = person.geographical_unit.name if person.geographical_unit else ""
 
@@ -199,7 +198,7 @@ def main():
                         # Export allocations to CSV
                         venue_type = distributor.venue_type
                         output_file = f"{venue_type}_allocations.csv"
-                        #distributor.export_allocations(world, output_file)
+                        distributor.export_allocations(world, output_file)
                         logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
@@ -216,7 +215,7 @@ def main():
                         # Export allocations to CSV
                         child_type = creator.child_venue_type
                         output_file = f"{child_type}_allocations.csv"
-                        #creator.export_allocations(world, output_file)
+                        creator.export_allocations(world, output_file)
                         logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
@@ -251,7 +250,7 @@ def main():
 
                 # Export relationships to CSV
                 storage_key = builder.config.get('storage', {}).get('key', builder.name)
-                export_relationships(world, storage_key, f"{storage_key}.csv")
+                #export_relationships(world, storage_key, f"{storage_key}.csv")
 
             except Exception as e:
                 logger.error(f"Failed to build relationships from {config_path}: {e}")
@@ -266,7 +265,7 @@ def main():
     logger.info("=" * 60)
 
     # Export venue allocations
-    #export_venue_allocations(world)
+    export_venue_allocations(world)
 
     # Export people data
     #export_people(world)

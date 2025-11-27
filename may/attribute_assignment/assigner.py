@@ -640,10 +640,11 @@ class AttributeAssigner:
         """
         def get_sort_key(person):
             """Get sort key for person based on configured assignment order."""
-            if "household" not in person.activity_map or not person.activity_map["household"]:
+            # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
+            if "residence" not in person.activity_map or "household" not in person.activity_map["residence"] or not person.activity_map["residence"]["household"]:
                 return (999, person.id)  # Fallback
 
-            category = person.activity_map["household"][0].subset_name
+            category = person.activity_map["residence"]["household"][0].subset_name
 
             # Get assignment order configuration
             assignment_order = self.config.settings.get('assignment_order', {})
@@ -672,8 +673,9 @@ class AttributeAssigner:
         Returns:
             Category name or "unknown"
         """
-        if "household" in person.activity_map and person.activity_map["household"]:
-            return person.activity_map["household"][0].subset_name
+        # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
+        if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
+            return person.activity_map["residence"]["household"][0].subset_name
         return "unknown"
 
 
@@ -744,11 +746,15 @@ class AttributeAssigner:
                     logger.warning(f"  Residence: Household {household.id} in {household.geographical_unit.name if household.geographical_unit else 'None'}")
                 else:
                     # Check activity_map for other residence types
-                    residence_activities = [act for act in person.activity_map.keys() if act in ['care_home', 'student_dorms', 'boarding_school']]
-                    if residence_activities:
-                        res_type = residence_activities[0]
-                        res_venue = person.activity_map[res_type][0].venue if person.activity_map[res_type] else None
-                        logger.warning(f"  Residence: {res_type} {res_venue.id if res_venue else 'unknown'} (type={res_venue.type if res_venue else 'unknown'})")
+                    # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
+                    if 'residence' in person.activity_map:
+                        residence_types = [res_type for res_type in person.activity_map['residence'].keys() if res_type in ['care_home', 'student_dorms', 'boarding_school']]
+                        if residence_types:
+                            res_type = residence_types[0]
+                            res_venue = person.activity_map['residence'][res_type][0].venue if person.activity_map['residence'][res_type] else None
+                            logger.warning(f"  Residence: {res_type} {res_venue.id if res_venue else 'unknown'} (type={res_venue.type if res_venue else 'unknown'})")
+                        else:
+                            logger.warning(f"  Residence: None (no household or care facility)")
                     else:
                         logger.warning(f"  Residence: None (no household or care facility)")
 
@@ -771,8 +777,9 @@ class AttributeAssigner:
 
     def _get_person_household(self, person):
         """Get household venue for a person, if any."""
-        if "household" in person.activity_map and person.activity_map["household"]:
-            return person.activity_map["household"][0].venue
+        # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
+        if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
+            return person.activity_map["residence"]["household"][0].venue
         return None
 
     def _check_required_attributes(self, people):

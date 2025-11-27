@@ -432,9 +432,13 @@ class WorldSerializer:
 
                 activity_idx = activity_to_idx[activity_name]
 
-                # Handle two cases:
-                # 1. subsets_or_dict is a list of Subsets (e.g., 'residence', 'primary_activity')
-                # 2. subsets_or_dict is a dict mapping venue_type → list of Subsets (e.g., 'leisure')
+                # UNIFIED STRUCTURE: All activities now use nested dict format
+                # activity_map[activity_name][venue_type] = [subsets]
+                # Examples:
+                #   - activity_map['residence']['household'] = [subset]
+                #   - activity_map['primary_activity']['own_land'] = [subset]
+                #   - activity_map['primary_activity']['lords_demesne'] = [subset]
+                #   - activity_map['leisure']['cinema'] = [subset1, subset2]
 
                 if isinstance(subsets_or_dict, dict):
                     # Flatten the dict: iterate over all venue types
@@ -456,23 +460,9 @@ class WorldSerializer:
                                 subset.subset_index
                             ])
 
-                elif isinstance(subsets_or_dict, list):
-                    # Simple list of subsets
-                    for subset in subsets_or_dict:
-                        if not hasattr(subset, 'venue') or not hasattr(subset, 'subset_index'):
-                            logger.warning(f"Person {person.id} activity '{activity_name}': invalid subset {type(subset)}")
-                            continue
-
-                        # IMPORTANT: Use global venue ID (not type-scoped ID)
-                        activity_data.append([
-                            person.id,
-                            activity_idx,
-                            self._venue_to_global_id[id(subset.venue)],
-                            subset.subset_index
-                        ])
-
                 else:
-                    logger.warning(f"Person {person.id} activity '{activity_name}': unexpected type {type(subsets_or_dict)}")
+                    # ERROR: activity_map must be dict with unified structure
+                    raise TypeError(f"Person {person.id} activity '{activity_name}': expected dict, got {type(subsets_or_dict)}. All activities must use unified structure: activity_map[activity_name][venue_type] = [subsets]")
 
             activity_offsets.append(len(activity_data))
 

@@ -158,7 +158,7 @@ class Venue:
             total += subset.num_members
         return total
 
-    def add_to_subset(self, person, subset_key=None, activity_name=None):
+    def add_to_subset(self, person, subset_key=None, activity_name=None, activity_type=None):
         """
         Add a person to a subset of this venue and register the activity.
 
@@ -166,6 +166,9 @@ class Venue:
             person: Person object to add
             subset_key: Key for the subset (if None, uses first subset or creates default)
             activity_name: Activity name to register (if None, uses 'residence' for residence types, venue type otherwise)
+            activity_type: Type for nesting in activity_map dict (if None, uses self.type)
+                          This allows multiple venue types under the same activity_name
+                          Example: activity_name='primary_activity', activity_type='own_land'
         """
         from may.population import Subset
 
@@ -200,10 +203,27 @@ class Venue:
         if activity_name not in person.activities:
             person.add_activity(activity_name)
 
-        # Add subset to person's activity_map (check by venue ID to avoid equality check issues)
-        subset_already_added = any(s.venue.id == self.id for s in person.activity_map[activity_name])
+        # UNIFIED STRUCTURE: Use nested dict for all activities
+        # Structure: person.activity_map[activity_name][venue_type] = [subsets]
+
+        # Initialize nested dict if needed
+        if not isinstance(person.activity_map[activity_name], dict):
+            person.activity_map[activity_name] = {}
+
+        # Determine the venue type key for nesting (use override or default to self.type)
+        venue_type_key = activity_type if activity_type is not None else self.type
+
+        # Initialize list for this venue type if needed
+        if venue_type_key not in person.activity_map[activity_name]:
+            person.activity_map[activity_name][venue_type_key] = []
+
+        # Add subset to person's activity_map (check by venue ID to avoid duplicates)
+        subset_already_added = any(
+            s.venue.id == self.id
+            for s in person.activity_map[activity_name][venue_type_key]
+        )
         if not subset_already_added:
-            person.activity_map[activity_name].append(subset)
+            person.activity_map[activity_name][venue_type_key].append(subset)
 
     def get_all_members(self):
         """

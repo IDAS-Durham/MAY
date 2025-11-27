@@ -180,8 +180,9 @@ class MatchingRule:
         members = household.get_all_members()
         for person in members:
             # Get person's household category from activity_map
-            if "household" in person.activity_map and person.activity_map["household"]:
-                subset_name = person.activity_map["household"][0].subset_name
+            # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
+            if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
+                subset_name = person.activity_map["residence"]["household"][0].subset_name
 
                 # Find which category this subset belongs to
                 for i, category in enumerate(age_categories):
@@ -255,12 +256,25 @@ class Role:
         Check if person's subset matches this role.
         """
         # Get person's subset from residence allocation
-        # All residence types use 'residence' activity, but we need to check venue type
-        if "residence" not in person.activity_map or not person.activity_map["residence"]:
+        # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
+        if "residence" not in person.activity_map:
             return False
 
-        # Get the residence venue
-        residence_subset = person.activity_map["residence"][0]
+        if not person.activity_map["residence"]:
+            return False
+
+        # Get the residence subset from any residence type (household, care_home, etc.)
+        residence_dict = person.activity_map["residence"]
+        residence_subset = None
+
+        for venue_type, subsets in residence_dict.items():
+            if subsets and isinstance(subsets, list) and len(subsets) > 0:
+                residence_subset = subsets[0]
+                break
+
+        if residence_subset is None:  # Check for None explicitly, not truthiness (Subset has __len__)
+            return False
+
         person_subset = residence_subset.subset_name
 
         if verbose:

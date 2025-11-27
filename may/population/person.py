@@ -4,8 +4,7 @@ Person class for June Zero.
 Represents an individual agent with age, sex, geographical unit, and activities.
 """
 
-from collections import defaultdict
-from typing import TYPE_CHECKING, Any, DefaultDict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from may.geography.geography import GeographicalUnit
@@ -26,7 +25,6 @@ class Person:
     """
 
     _id_counter = 0
-    _residence_types_registry = None  # Class-level registry of residence types
 
     __slots__ = [
         'id',
@@ -45,7 +43,7 @@ class Person:
         geographical_unit: Optional["GeographicalUnit"] = None,
         activities: Optional[list[str]] = None,
         properties: Optional[dict[str, Any]] = None,
-        activity_map: Optional[DefaultDict[str, list["Subset"]]] = None
+        activity_map: Optional[dict[str, dict[str, list["Subset"]]]] = None
     ) -> None:
         """
         Initialize a Person.
@@ -56,11 +54,16 @@ class Person:
             geographical_unit (GeographicalUnit, optional): SGU where person lives
             activities (list[str], optional): List of activity names
             properties (dict, optional): Additional attributes
-            activity_map (dict[str,tuple[int,int,str]], optional):
-              Dictionary mapping an activity name (key being the activity name as a str matching that in self.activities),
-              to a tuple (id of the venue, index of the subgroup for that activity and venue, name of the subgroup).
+            activity_map (dict[str, dict[str, list[Subset]]], optional):
+              UNIFIED STRUCTURE: Nested dictionary mapping:
+                activity_name -> venue_type -> [subsets]
+              Examples:
+                - activity_map['residence']['household'] = [subset]
+                - activity_map['primary_activity']['own_land'] = [subset]
+                - activity_map['primary_activity']['lords_demesne'] = [subset]
+                - activity_map['leisure']['cinema'] = [subset1, subset2, subset3]
               Default = {}.
-        
+
         """
         self.id = Person._id_counter
         Person._id_counter += 1
@@ -70,8 +73,9 @@ class Person:
         self.geographical_unit = geographical_unit
         self.activities = activities if activities is not None else []
         self.properties = properties if properties is not None else {}
+        # UNIFIED STRUCTURE: activity_map[activity_name][venue_type] = [subsets]
         if activity_map is None:
-            self.activity_map = defaultdict(list)
+            self.activity_map = {}
 
     @classmethod
     def reset_counter(cls) -> None:
@@ -87,6 +91,11 @@ class Person:
         """
         if activity not in self.activities:
             self.activities.append(activity)
+
+        # Initialize activity_map with empty dict for unified structure
+        # Structure: activity_map[activity_name][venue_type] = [subsets]
+        if activity not in self.activity_map:
+            self.activity_map[activity] = {}
 
     def remove_activity(self, activity: str) -> None:
         """
@@ -155,17 +164,12 @@ class Person:
             'care_home'
         """
         # Check for 'residence' activity in activity_map
-        # All residence types now use the generic 'residence' activity name
+        # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
         if 'residence' in self.activity_map and self.activity_map['residence']:
-            # Return the venue from the first subset
-            return self.activity_map['residence'][0].venue
-
-        # Fallback: Check old residence types for backward compatibility
-        # This supports old code that may have used specific residence type names
-        if Person._residence_types_registry:
-            for res_type in Person._residence_types_registry:
-                if res_type in self.activity_map and self.activity_map[res_type]:
-                    return self.activity_map[res_type][0].venue
+            # Iterate through venue types (household, care_home, etc.) and return first found
+            for venue_type, subsets in self.activity_map['residence'].items():
+                if subsets:  # Check if list is not empty
+                    return subsets[0].venue
 
         return None
 

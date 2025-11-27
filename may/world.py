@@ -345,8 +345,9 @@ def setup_households(geo, population, venues, config):
 
         for person_id in example_person_ids:
             person = population.get_person(person_id)
-            if person and "household" in person.activity_map:
-                household_subsets = person.activity_map["household"]
+            # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
+            if person and "residence" in person.activity_map and "household" in person.activity_map["residence"]:
+                household_subsets = person.activity_map["residence"]["household"]
                 if household_subsets:
                     household_venue = household_subsets[0].venue
                     age_categories = household_venue.properties.get('_age_categories', [])
