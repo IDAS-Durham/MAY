@@ -243,29 +243,28 @@ class RelationshipBuilder:
             self._person_mgu[i] = mgu_idx
             people_by_mgu[mgu_idx].append(i)
 
-        # Venue indices and subset names
+        # Venue indices
         venue_to_idx = {}
-        subset_to_idx = {"": 0}
-        self._person_venue = np.full(n_people, -1, dtype=np.int32)
-        self._person_subset = np.zeros(n_people, dtype=np.int16)
         people_by_venue = defaultdict(list)
 
         for i, person in enumerate(self.world.population.people):
             if 'primary_activity' in person.activity_map:
                 activity_value = person.activity_map['primary_activity']
-                subset = self._get_first_subset(activity_value)
-                if subset and hasattr(subset, 'venue'):
-                    venue_id = subset.venue.id
-                    if venue_id not in venue_to_idx:
-                        venue_to_idx[venue_id] = len(venue_to_idx)
-                    venue_idx = venue_to_idx[venue_id]
-                    self._person_venue[i] = venue_idx
-                    people_by_venue[venue_idx].append(i)
 
-                    subset_name = subset.subset_name if hasattr(subset, 'subset_name') else ""
-                    if subset_name not in subset_to_idx:
-                        subset_to_idx[subset_name] = len(subset_to_idx)
-                    self._person_subset[i] = subset_to_idx[subset_name]
+                # Get ALL subsets for this activity (supports multiple jobs/venues)
+                all_subsets = self._get_all_subsets(activity_value)
+
+                # Add person to ALL their venues (bigger friend pool!)
+                for subset in all_subsets:
+                    if subset and hasattr(subset, 'venue'):
+                        venue_id = subset.venue.id
+                        if venue_id not in venue_to_idx:
+                            venue_to_idx[venue_id] = len(venue_to_idx)
+                        venue_idx = venue_to_idx[venue_id]
+                        people_by_venue[venue_idx].append(i)
+
+        # Dummy subset array (subset filtering not supported with multiple venues)
+        self._person_subset = np.zeros(n_people, dtype=np.int16)
 
         # Convert to flattened arrays for Numba (CSR-like format)
         self._sgu_data = self._flatten_groups(people_by_sgu)
@@ -299,14 +298,29 @@ class RelationshipBuilder:
         return starts, ends, people_flat
 
     def _get_first_subset(self, activity_value):
-        """Extract first subset from activity value (handles list or dict format)."""
+        """Extract first subset from activity value (dict format)."""
         if isinstance(activity_value, dict):
             for venue_type, subset_list in activity_value.items():
                 if isinstance(subset_list, list) and subset_list:
                     return subset_list[0]
-        elif isinstance(activity_value, list) and activity_value:
-            return activity_value[0]
         return None
+
+    def _get_all_subsets(self, activity_value):
+        """
+        Extract ALL subsets from activity value (dict format).
+
+        This allows people with multiple venues for the same activity (e.g., 2 jobs)
+        to build relationships from all their venues, not just the first one.
+
+        Returns:
+            List of all subsets for this activity
+        """
+        all_subsets = []
+        if isinstance(activity_value, dict):
+            for venue_type, subset_list in activity_value.items():
+                if isinstance(subset_list, list):
+                    all_subsets.extend(subset_list)
+        return all_subsets
 
     def _get_connection_counts(self, n_people: int) -> np.ndarray:
         """Generate connection counts for all people at once."""

@@ -153,6 +153,9 @@ venue_pipeline:
     - type: distributor
       config: "yaml/distributors/company_distributor.yaml"
 
+    - type: distributor
+      config: "yaml/distributors/company_distributor_2.yaml"
+
     # Step 9: Create offices within companies
     - type: child_creator
       config: "yaml/venue_child_creators/company_offices.yaml"

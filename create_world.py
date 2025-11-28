@@ -14,6 +14,7 @@ from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.relationships import RelationshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples
+from check_multiple_jobs import analyze_multiple_jobs
 
 
 def export_relationships(world, property_key, output_file):
@@ -225,6 +226,13 @@ def main():
                 else:
                     logger.warning(f"Unknown pipeline step type: {step_type}")
 
+        # Analyze multiple jobs after venue pipeline completes
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("MULTIPLE JOBS ANALYSIS")
+        logger.info("=" * 60)
+        analyze_multiple_jobs(world)
+
     # ========================================
     # RELATIONSHIP PIPELINE - Build agent networks
     # ========================================
@@ -268,7 +276,7 @@ def main():
     export_venue_allocations(world)
 
     # Export people data
-    #export_people(world)
+    export_people(world)
 
     # Show examples of what was created
     #print_world_examples(world)
