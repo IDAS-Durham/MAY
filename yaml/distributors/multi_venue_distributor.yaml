@@ -57,6 +57,11 @@ eligibility:
       min: 18  # Change as needed
       max: 120
 
+    - attribute: "residence.type"
+      type: "categorical"
+      description: "Only allocate people living in households or dorms"
+      values: ["household", "student_dorms"]
+
   # Require residence - FULLY CUSTOMIZABLE
   require_residence: true
 

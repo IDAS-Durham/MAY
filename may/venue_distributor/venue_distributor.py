@@ -355,6 +355,9 @@ class VenueDistributor:
         # Store world reference for use in helper methods (needed for custom location attributes)
         self.world = world
 
+        # Track allocations made during this run (for accurate summary statistics)
+        self.allocated_this_run = 0
+
         logger.info(f"Starting allocation for {self.venue_type}")
 
         # Get venues of this type
@@ -691,6 +694,9 @@ class VenueDistributor:
                 self.config['allocation']['when_full'] = original_when_full
 
             logger.info(f"  → Allocated {allocated_count}/{len(group_people)} from group '{group_name}'")
+
+            # Track allocations for summary
+            self.allocated_this_run += allocated_count
 
             # Track all priority people
             all_priority_people.extend(group_people)
@@ -1073,6 +1079,7 @@ class VenueDistributor:
 
         if allocated_count > 0:
             logger.info(f"Allocated {allocated_count} people via special cases")
+            self.allocated_this_run += allocated_count
 
         return remaining_people
 
@@ -1337,6 +1344,7 @@ class VenueDistributor:
                             allocated_count += 1
 
         logger.info(f"Normal allocation: Allocated {allocated_count} people")
+        self.allocated_this_run += allocated_count
 
     def _allocate_individual(self, people: List, venues: List):
         """Allocate people individually (slower, but more precise)."""
@@ -1365,6 +1373,7 @@ class VenueDistributor:
                         allocated_count += 1
 
         logger.info(f"Normal allocation: Allocated {allocated_count} people")
+        self.allocated_this_run += allocated_count
 
     def _get_person_location(self, person) -> Optional[Tuple[float, float]]:
         """Get person's location coordinates."""
@@ -1739,22 +1748,50 @@ class VenueDistributor:
 
     def _log_allocation_summary(self, world):
         """Log summary statistics of allocation."""
-        # Count only people allocated to THIS venue type (not just any primary_activity)
-        # Note: activity_map stores a LIST of Subset objects
-        allocated = 0
+        # Calculate total people
+        total_people = len(world.people)
+
+        # Calculate eligible people - ignore assignment status for this count
+        # We want to know who WOULD HAVE BEEN eligible (before allocation)
+        eligible_people = []
+        for person in world.people:
+            # Check required attributes
+            required_attrs = self.config.get('validation', {}).get('required_person_attributes', [])
+            if not self._has_required_attributes(person, required_attrs):
+                continue
+
+            # Apply global filters and exclusions (same as during allocation)
+            global_filters = self.config.get('eligibility', {}).get('global_filters', [])
+            if global_filters and not self._person_matches_filters(person, global_filters):
+                continue
+
+            exclude_config = self.config.get('eligibility', {}).get('exclude', {})
+            if exclude_config and self._person_excluded(person, exclude_config):
+                continue
+
+            eligible_people.append(person)
+
+        total_eligible = len(eligible_people)
+
+        # Use allocations made during THIS run (not all existing allocations)
+        allocated = self.allocated_this_run
+
+        # Also count total people currently with this venue type (for reference)
+        total_with_venue_type = 0
         for p in world.people:
             if self.activity_map_key in p.activity_map:
-                subsets = p.activity_map[self.activity_map_key]
-                # Check if any subset's venue matches this venue type
-                if any(hasattr(s, 'venue') and s.venue.type == self.venue_type for s in subsets):
-                    allocated += 1
-
-        total = len(world.people)
+                activity_venues = p.activity_map[self.activity_map_key]
+                if isinstance(activity_venues, dict) and self.venue_type in activity_venues:
+                    subsets = activity_venues[self.venue_type]
+                    if subsets:
+                        total_with_venue_type += 1
 
         logger.info(f"Allocation Summary:")
-        logger.info(f"  - Total people: {total}")
-        logger.info(f"  - Allocated to {self.venue_type}: {allocated} ({allocated/total*100:.1f}%)")
-        logger.info(f"  - Unallocated: {total - allocated}")
+        logger.info(f"  - Total people: {total_people}")
+        logger.info(f"  - Eligible people: {total_eligible} ({total_eligible/total_people*100:.1f}%)")
+        logger.info(f"  - Allocated during this run: {allocated} ({allocated/total_eligible*100:.1f}% of eligible)" if total_eligible > 0 else f"  - Allocated during this run: {allocated}")
+        logger.info(f"  - Total with {self.venue_type} assignments: {total_with_venue_type} (includes assignments from other systems)")
+        logger.info(f"  - Unallocated eligible: {total_eligible - allocated}")
 
     def export_allocations(self, world, output_path: str):
         """

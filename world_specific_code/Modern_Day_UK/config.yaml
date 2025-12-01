@@ -26,7 +26,7 @@ geography:
     level: LGU
 
     # Codes to filter (for small lists, comma-separated)
-    codes: ["County Durham"]
+    codes: ["County Durham", "Darlington"]
 
     # Or specify a file path with codes (for large lists)
     # File should have one code per line
@@ -159,6 +159,9 @@ venue_pipeline:
     # Step 9: Create offices within companies
     - type: child_creator
       config: "yaml/venue_child_creators/company_offices.yaml"
+
+    - type: distributor
+      config: "yaml/distributors/hospital_distributor.yaml"
 
     # Step 10: Assign leisure venue options (cinema, grocery, gym, pub)
     - type: distributor
