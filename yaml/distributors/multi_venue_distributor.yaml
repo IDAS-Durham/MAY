@@ -41,6 +41,23 @@ venue_types:
   - gym
   - pub
 
+# Per-venue-type configuration
+# Fully customizable - specify any attributes for filtering
+venue_type_config:
+  gym:
+    count: 1  # Override default count for gym
+    participation_filter:
+      data_file: "data/population/leisure_participation/gym_attendance.csv"
+      # Attributes to match against CSV rows
+      row_filters:
+        - person_attribute: "age"
+          csv_column: "age_band"
+          match_type: "age_range"  # Built-in: parses "16-24" format
+      # Attribute to select probability column
+      probability_column:
+        person_attribute: "sex"
+        column_template: "pct_{value}"  # {value} replaced with person.sex value
+
 # ============================================================================
 # ELIGIBILITY: Who can be allocated to these venues?
 # ============================================================================
@@ -142,6 +159,47 @@ validation:
 # ============================================================================
 # NOTES
 # ============================================================================
+#
+# PARTICIPATION FILTERING (FULLY FLEXIBLE):
+#
+# You can filter by ANY person attributes - not limited to age/sex!
+#
+# Example 1: Filter by ethnicity and income
+#   venue_type_config:
+#     venue_x:
+#       participation_filter:
+#         data_file: "data/participation_by_ethnicity.csv"
+#         row_filters:
+#           - person_attribute: "ethnicity"
+#             csv_column: "ethnicity_group"
+#             match_type: "exact"
+#           - person_attribute: "income"
+#             csv_column: "income_band"
+#             match_type: "numerical_range"
+#         probability_column:
+#           person_attribute: "employment_status"
+#           column_template: "pct_{value}"
+#
+# Example 2: Filter by age only
+#   venue_type_config:
+#     venue_y:
+#       participation_filter:
+#         data_file: "data/age_participation.csv"
+#         row_filters:
+#           - person_attribute: "age"
+#             csv_column: "age_group"
+#             match_type: "age_range"
+#         probability_column:
+#           column_name: "participation_rate"  # Fixed column name
+#
+# Supported match_types:
+#   - age_range: Parses "16-24" format from CSV, matches person.age
+#   - exact: Exact match between person attribute and CSV value
+#   - numerical_range: Parses numerical ranges like "0-1000"
+#
+# Probability column options:
+#   - column_template: Dynamic column based on person attribute
+#   - column_name: Fixed column name (no templating)
 #
 # ALLOCATION LOGIC:
 #

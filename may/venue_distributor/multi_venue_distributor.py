@@ -20,6 +20,7 @@ Example use cases:
 
 import yaml
 import numpy as np
+import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional
 from scipy.spatial import cKDTree
@@ -68,9 +69,18 @@ class MultiVenueDistributor:
 
         # Venue selection config
         venue_selection = self.config.get('venue_selection', {})
-        self.max_venues_per_type = venue_selection.get('count', 5)
+        self.default_venue_count = venue_selection.get('count', 5)
         self.venue_geo_level = venue_selection.get('venue_geo_level', 'SGU')
         self.distance_metric = venue_selection.get('distance_metric', 'haversine')
+
+        # Per-venue-type configuration
+        self.venue_type_config = self.config.get('venue_type_config', {})
+
+        # Load participation data for venue types that have it
+        self.participation_data = {}  # venue_type -> {data, row_filters, probability_column}
+        for venue_type, type_config in self.venue_type_config.items():
+            if 'participation_filter' in type_config:
+                self._load_participation_data(venue_type, type_config['participation_filter'])
 
         # Eligibility config
         eligibility = self.config.get('eligibility', {})
@@ -94,7 +104,16 @@ class MultiVenueDistributor:
         logger.info(f"  activity_map_key: '{self.activity_map_key}'")
         logger.info(f"  venue_types: {self.venue_types}")
         logger.info(f"  subset_key: '{self.subset_key}'")
-        logger.info(f"  max_venues_per_type: {self.max_venues_per_type}")
+        logger.info(f"  default_venue_count: {self.default_venue_count}")
+
+        # Log per-venue-type overrides
+        for venue_type in self.venue_types:
+            count = self._get_venue_count_for_type(venue_type)
+            if count != self.default_venue_count:
+                logger.info(f"    {venue_type}: {count} venues (override)")
+            if venue_type in self.participation_data:
+                logger.info(f"    {venue_type}: has participation filtering")
+
         if self.min_age is not None or self.max_age is not None:
             logger.info(f"  age_filter: [{self.min_age}, {self.max_age}]")
 
@@ -103,6 +122,327 @@ class MultiVenueDistributor:
         with open(self.config_path, 'r') as f:
             config = yaml.safe_load(f)
         return config
+
+    def _get_venue_count_for_type(self, venue_type: str) -> int:
+        """
+        Get the number of venues to assign for a specific venue type.
+
+        Args:
+            venue_type: Type of venue
+
+        Returns:
+            Number of venues to assign (from config override or default)
+        """
+        if venue_type in self.venue_type_config:
+            type_config = self.venue_type_config[venue_type]
+            if 'count' in type_config:
+                return type_config['count']
+        return self.default_venue_count
+
+    def _load_participation_data(self, venue_type: str, filter_config: Dict):
+        """
+        Load participation data for a venue type and build lookup index.
+
+        Args:
+            venue_type: Type of venue
+            filter_config: Participation filter configuration from YAML
+        """
+        data_file = filter_config.get('data_file')
+        if not data_file:
+            logger.warning(f"No data_file specified for {venue_type} participation filter")
+            return
+
+        try:
+            # Load CSV
+            df = pd.read_csv(data_file)
+            logger.info(f"Loaded participation data for '{venue_type}': {len(df)} rows from {data_file}")
+
+            row_filters = filter_config.get('row_filters', [])
+            prob_config = filter_config.get('probability_column', {})
+
+            # Build lookup index for fast O(1) access
+            # Index structure: {(filter_val1, filter_val2, ...): {sex: prob}}
+            lookup_index = {}
+
+            for _, row in df.iterrows():
+                # Extract filter keys from this row
+                filter_keys = []
+                for filter_cfg in row_filters:
+                    csv_column = filter_cfg.get('csv_column')
+                    value = row.get(csv_column)
+                    filter_keys.append(str(value))
+
+                # Build probability dict for this row
+                # If using column_template, we need all possible values
+                if 'column_template' in prob_config:
+                    # Extract all probability columns (e.g., pct_male, pct_female)
+                    prob_dict = {}
+                    template = prob_config['column_template']
+                    person_attr = prob_config.get('person_attribute')
+
+                    # Try to infer possible values from columns
+                    # For "pct_{value}", extract all columns matching pattern
+                    prefix = template.split('{')[0]  # e.g., "pct_"
+                    for col in row.index:
+                        if col.startswith(prefix):
+                            # Extract the value part: "pct_male" -> "male"
+                            attr_value = col[len(prefix):]
+                            prob_dict[attr_value] = float(row[col])
+
+                    lookup_index[tuple(filter_keys)] = prob_dict
+
+                elif 'column_name' in prob_config:
+                    # Fixed column - single probability value
+                    column_name = prob_config['column_name']
+                    lookup_index[tuple(filter_keys)] = float(row[column_name])
+
+            logger.info(f"Built participation lookup index for '{venue_type}': {len(lookup_index)} entries")
+
+            # Store the lookup index and configuration
+            self.participation_data[venue_type] = {
+                'lookup_index': lookup_index,
+                'row_filters': row_filters,
+                'probability_column': prob_config
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to load participation data for '{venue_type}': {e}")
+
+    def _match_row_filters(self, person, row, row_filters: List[Dict]) -> bool:
+        """
+        Check if a person matches a CSV row based on configured filters.
+
+        Supports multiple match types:
+        - age_range: Parses "16-24" format from CSV
+        - exact: Exact match between person attribute and CSV value
+        - numerical_range: Parses numerical ranges like "0-1000"
+
+        Args:
+            person: Person object
+            row: Pandas Series (CSV row)
+            row_filters: List of filter configurations
+
+        Returns:
+            True if all filters match, False otherwise
+        """
+        for filter_config in row_filters:
+            person_attr = filter_config.get('person_attribute')
+            csv_column = filter_config.get('csv_column')
+            match_type = filter_config.get('match_type', 'exact')
+
+            # Get person attribute value
+            person_value = getattr(person, person_attr, None)
+            if person_value is None:
+                return False
+
+            # Get CSV value
+            csv_value = row.get(csv_column)
+            if pd.isna(csv_value):
+                return False
+
+            # Apply match type
+            if match_type == 'age_range':
+                # Parse "16-24" format
+                try:
+                    parts = str(csv_value).split('-')
+                    if len(parts) == 2:
+                        min_val = int(parts[0])
+                        # Handle "65+" format
+                        if parts[1].endswith('+'):
+                            max_val = 200  # Arbitrary high value
+                        else:
+                            max_val = int(parts[1])
+
+                        if not (min_val <= person_value <= max_val):
+                            return False
+                    else:
+                        return False
+                except (ValueError, AttributeError):
+                    return False
+
+            elif match_type == 'numerical_range':
+                # Parse numerical ranges "0-1000"
+                try:
+                    parts = str(csv_value).split('-')
+                    if len(parts) == 2:
+                        min_val = float(parts[0])
+                        max_val = float(parts[1])
+                        if not (min_val <= person_value <= max_val):
+                            return False
+                    else:
+                        return False
+                except (ValueError, AttributeError):
+                    return False
+
+            elif match_type == 'exact':
+                # Exact match
+                if str(person_value).lower() != str(csv_value).lower():
+                    return False
+
+            else:
+                logger.warning(f"Unknown match_type: {match_type}")
+                return False
+
+        return True
+
+    def _get_probability_for_person(self, person, row, prob_config: Dict) -> Optional[float]:
+        """
+        Get participation probability for a person from a CSV row.
+
+        Supports:
+        - column_template: Dynamic column based on person attribute
+        - column_name: Fixed column name
+
+        Args:
+            person: Person object
+            row: Pandas Series (CSV row)
+            prob_config: Probability column configuration
+
+        Returns:
+            Probability value (0.0 to 1.0) or None if not found
+        """
+        # Option 1: Column template (e.g., "pct_{sex}")
+        if 'column_template' in prob_config:
+            template = prob_config['column_template']
+            person_attr = prob_config.get('person_attribute')
+
+            if person_attr:
+                person_value = getattr(person, person_attr, None)
+                if person_value is None:
+                    return None
+
+                # Replace {value} or {attribute_name} in template
+                column_name = template.replace('{value}', str(person_value).lower())
+                column_name = column_name.replace(f'{{{person_attr}}}', str(person_value).lower())
+
+                if column_name in row:
+                    return float(row[column_name])
+                else:
+                    logger.debug(f"Column '{column_name}' not found in CSV row")
+                    return None
+
+        # Option 2: Fixed column name
+        elif 'column_name' in prob_config:
+            column_name = prob_config['column_name']
+            if column_name in row:
+                return float(row[column_name])
+            else:
+                logger.debug(f"Column '{column_name}' not found in CSV row")
+                return None
+
+        return None
+
+    def _should_allocate_venue_type(self, person, venue_type: str) -> bool:
+        """
+        Check if a person should be allocated to a specific venue type.
+
+        Uses participation data if configured, otherwise returns True.
+
+        Args:
+            person: Person object
+            venue_type: Type of venue
+
+        Returns:
+            True if person should be allocated, False otherwise
+        """
+        # No participation filter = allocate to everyone
+        if venue_type not in self.participation_data:
+            return True
+
+        participation_config = self.participation_data[venue_type]
+        lookup_index = participation_config['lookup_index']
+        row_filters = participation_config['row_filters']
+        prob_config = participation_config['probability_column']
+
+        # Build lookup key from person attributes
+        lookup_keys = []
+        for filter_cfg in row_filters:
+            person_attr = filter_cfg.get('person_attribute')
+            match_type = filter_cfg.get('match_type', 'exact')
+
+            # Get person attribute value
+            person_value = getattr(person, person_attr, None)
+            if person_value is None:
+                return False
+
+            # Find matching CSV value based on match_type
+            csv_value = None
+
+            if match_type == 'age_range':
+                # Find which age range this person falls into
+                # Try all possible age ranges in the lookup index
+                for key_tuple in lookup_index.keys():
+                    # Extract the value for this filter position
+                    filter_idx = row_filters.index(filter_cfg)
+                    if filter_idx < len(key_tuple):
+                        age_band = key_tuple[filter_idx]
+                        # Parse "16-24" format
+                        try:
+                            parts = age_band.split('-')
+                            if len(parts) == 2:
+                                min_val = int(parts[0])
+                                # Handle "65+" format
+                                if parts[1].endswith('+'):
+                                    max_val = 200
+                                else:
+                                    max_val = int(parts[1])
+
+                                if min_val <= person_value <= max_val:
+                                    csv_value = age_band
+                                    break
+                        except (ValueError, AttributeError):
+                            continue
+
+            elif match_type == 'exact':
+                csv_value = str(person_value)
+
+            elif match_type == 'numerical_range':
+                # Similar to age_range but for numerical ranges
+                for key_tuple in lookup_index.keys():
+                    filter_idx = row_filters.index(filter_cfg)
+                    if filter_idx < len(key_tuple):
+                        range_val = key_tuple[filter_idx]
+                        try:
+                            parts = range_val.split('-')
+                            if len(parts) == 2:
+                                min_val = float(parts[0])
+                                max_val = float(parts[1])
+                                if min_val <= person_value <= max_val:
+                                    csv_value = range_val
+                                    break
+                        except (ValueError, AttributeError):
+                            continue
+
+            if csv_value is None:
+                return False
+
+            lookup_keys.append(csv_value)
+
+        # Look up probability in index
+        lookup_tuple = tuple(lookup_keys)
+        if lookup_tuple not in lookup_index:
+            return False
+
+        prob_value = lookup_index[lookup_tuple]
+
+        # Get probability based on configuration
+        probability = None
+
+        if isinstance(prob_value, dict):
+            # Template-based: select probability by person attribute
+            person_attr = prob_config.get('person_attribute')
+            attr_value = getattr(person, person_attr, None)
+            if attr_value:
+                probability = prob_value.get(str(attr_value).lower())
+        else:
+            # Fixed column: probability is a single value
+            probability = prob_value
+
+        if probability is None:
+            return False
+
+        # Probabilistic allocation
+        return np.random.random() < probability
 
     def allocate(self, world):
         """
@@ -249,6 +589,10 @@ class MultiVenueDistributor:
 
                 # Get cached venues for each venue type
                 for venue_type in self.venue_types:
+                    # Check if person should get this venue type (participation filtering)
+                    if not self._should_allocate_venue_type(person, venue_type):
+                        continue
+
                     cache_key = (geo_unit, venue_type)
                     venues = geo_unit_venue_cache.get(cache_key, [])
 
@@ -295,8 +639,9 @@ class MultiVenueDistributor:
         if spatial_index is None or not venue_list:
             return []
 
-        # Query spatial index for N closest venues
-        n_venues = min(self.max_venues_per_type, len(venue_list))
+        # Query spatial index for N closest venues (use per-venue-type count)
+        venue_count = self._get_venue_count_for_type(venue_type)
+        n_venues = min(venue_count, len(venue_list))
 
         try:
             distances, indices = spatial_index.query(coords, k=n_venues)
