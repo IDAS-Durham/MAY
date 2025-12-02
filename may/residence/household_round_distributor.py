@@ -160,6 +160,20 @@ class HouseholdRoundDistributor:
         if demotion_rules is None:
             demotion_rules = {}
 
+        # Calculate total households to allocate for progress tracking
+        total_households_to_allocate = 0
+        for geo_unit_code, compositions in self.distributor.household_counts_by_geo_unit.items():
+            for pattern_str, count in compositions.items():
+                # Only count if pattern matches filter
+                if pattern_set is None or pattern_str in pattern_set:
+                    total_households_to_allocate += count
+
+        # Progress tracking
+        households_processed = 0
+        progress_interval = max(1, total_households_to_allocate // 10)  # Update every 10%
+
+        logger.info(f"Allocating {total_households_to_allocate:,} households...")
+
         # Iterate through each geo_unit
         for geo_unit_code, compositions in self.distributor.household_counts_by_geo_unit.items():
             # Iterate through each composition type in this geo_unit
@@ -236,6 +250,12 @@ class HouseholdRoundDistributor:
                         households_created += 1
                     else:
                         logger.debug(f"  Failed to allocate household {i+1}/{count} of type '{pattern_str}' in {geo_unit_code}")
+
+                    # Update progress counter and log at intervals
+                    households_processed += 1
+                    if households_processed % progress_interval == 0 or households_processed == total_households_to_allocate:
+                        percent_complete = (households_processed / total_households_to_allocate) * 100
+                        logger.info(f"  Progress: {households_processed}/{total_households_to_allocate} households processed ({percent_complete:.1f}%) - {households_created} created")
 
                 # Break outer loop if limit reached
                 if max_households is not None and households_created >= max_households:

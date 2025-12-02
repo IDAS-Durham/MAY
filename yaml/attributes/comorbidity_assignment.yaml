@@ -221,5 +221,6 @@ settings:
   logging:
     level: "INFO"
     detailed_assignment_logging: false
-    show_samples: true
+    show_samples: false
     sample_size: 10
+    show_attribute_distribution: false  # Hide detailed comorbidity distribution output

@@ -901,6 +901,11 @@ class VenueDistributor:
         """
         allocated_count = 0
 
+        # Progress tracking
+        total_people = len(people)
+        people_processed = 0
+        progress_interval = max(1, total_people // 10)  # Update every 10%
+
         # Extract attribute names from config (generic, works with any attributes)
         eligibility = self.config.get('eligibility', {})
         attribute_rules = eligibility.get('attributes', [])
@@ -1010,11 +1015,24 @@ class VenueDistributor:
                                     capacity = self._get_venue_capacity(venue)
                                     current = self._get_venue_current_count(venue)
                                     logger.debug(f"OVERFLOW: Person {person.id} allocated to {venue.name} (capacity: {capacity}, current: {current})")
+
+                        # Update progress tracking
+                        people_processed += 1
+                        if people_processed % progress_interval == 0 or people_processed == total_people:
+                            percent_complete = (people_processed / total_people) * 100
+                            logger.info(f"    Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
                 elif allow_overflow:
                     # For priority allocation, log if no venues accept this attribute combo
                     if self.verbose:
                         attr_display = ", ".join(f"{name}={val}" for name, val in zip(attribute_names, attr_values))
                         logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}): {len(people_group)} people with [{attr_display}] have no eligible venues")
+
+                    # Still need to track progress for unallocated people
+                    for person in people_group:
+                        people_processed += 1
+                        if people_processed % progress_interval == 0 or people_processed == total_people:
+                            percent_complete = (people_processed / total_people) * 100
+                            logger.info(f"    Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
 
         return allocated_count
 
@@ -1291,6 +1309,11 @@ class VenueDistributor:
 
         logger.info(f"Batching: {len(people_by_geo_unit)} geo_units to process at {self.batch_geo_level} level")
 
+        # Progress tracking
+        total_people = len(people)
+        people_processed = 0
+        progress_interval = max(1, total_people // 10)  # Update every 10%
+
         # Process each geo_unit
         allocated_count = 0
         for geo_unit, geo_unit_people in people_by_geo_unit.items():
@@ -1325,23 +1348,27 @@ class VenueDistributor:
                     (lat, lon), venues
                 )
 
-            if not eligible_venues:
-                continue
-
-            # Allocate each person in this batch
+            # Allocate each person in this batch (even if no eligible venues, count for progress)
             for person in geo_unit_people:
-                # Filter venues by person attributes
-                person_venues = self._filter_venues_by_person(person, eligible_venues)
+                if eligible_venues:
+                    # Filter venues by person attributes
+                    person_venues = self._filter_venues_by_person(person, eligible_venues)
 
-                if person_venues:
-                    # Try to allocate to venues with capacity first
-                    venues_with_capacity = self._filter_venues_by_capacity(person_venues)
-                    if venues_with_capacity:
-                        venue = self._select_venue(person, venues_with_capacity, (lat, lon))
-                        if venue:
-                            venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key, activity_type=self.activity_type)
-                            self._increment_venue_count(venue)
-                            allocated_count += 1
+                    if person_venues:
+                        # Try to allocate to venues with capacity first
+                        venues_with_capacity = self._filter_venues_by_capacity(person_venues)
+                        if venues_with_capacity:
+                            venue = self._select_venue(person, venues_with_capacity, (lat, lon))
+                            if venue:
+                                venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key, activity_type=self.activity_type)
+                                self._increment_venue_count(venue)
+                                allocated_count += 1
+
+                # Update progress tracking (count all people, not just allocated)
+                people_processed += 1
+                if people_processed % progress_interval == 0 or people_processed == total_people:
+                    percent_complete = (people_processed / total_people) * 100
+                    logger.info(f"  Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
 
         logger.info(f"Normal allocation: Allocated {allocated_count} people")
         self.allocated_this_run += allocated_count
@@ -1350,7 +1377,11 @@ class VenueDistributor:
         """Allocate people individually (slower, but more precise)."""
         allocated_count = 0
 
-        for person in people:
+        # Progress tracking
+        total_people = len(people)
+        progress_interval = max(1, total_people // 10)  # Update every 10%
+
+        for i, person in enumerate(people, 1):
             # Get person location
             location = self._get_person_location(person)
             if location is None:
@@ -1371,6 +1402,11 @@ class VenueDistributor:
                         venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key, activity_type=self.activity_type)
                         self._increment_venue_count(venue)
                         allocated_count += 1
+
+            # Update progress tracking
+            if i % progress_interval == 0 or i == total_people:
+                percent_complete = (i / total_people) * 100
+                logger.info(f"  Progress: {i}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
 
         logger.info(f"Normal allocation: Allocated {allocated_count} people")
         self.allocated_this_run += allocated_count

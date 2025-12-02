@@ -120,7 +120,13 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
     allocated_people = []
     eligible_people_set = set(eligible_people)
 
+    # Progress tracking setup
+    total_venues = len(venue_list)
+    venues_processed = 0
+    progress_interval = max(1, total_venues // 10)  # Update every 10%
+
     for venue in venue_list:
+        venues_processed += 1
         capacity = int(venue.properties.get(capacity_property, 0))
         if capacity == 0:
             continue
@@ -158,6 +164,11 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
                 venue.add_to_subset(person, subset_key=subset_key)
                 # Set venue reference on each person (optional)
                 setattr(person, f'{venue_type}_venue', venue)
+
+        # Log progress at intervals
+        if venues_processed % progress_interval == 0 or venues_processed == total_venues:
+            percent_complete = (venues_processed / total_venues) * 100
+            logger.info(f"    Progress: {venues_processed}/{total_venues} venues processed ({percent_complete:.1f}%) - {len(allocated_people)} people allocated so far")
 
         if len(allocated_people) >= people_to_allocate:
             break
@@ -491,7 +502,15 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     allocated_people = []
     allocation_stats = {}  # Track allocations per attribute slot
 
+    # Progress tracking setup
+    total_venues = len(venue_list)
+    venues_processed = 0
+    progress_interval = max(1, total_venues // 10)  # Update every 10%
+
+    logger.info(f"  Allocating people to {total_venues} venues...")
+
     for venue in venue_list:
+        venues_processed += 1
         # For each attribute slot in this venue
         for column_name, criteria in column_mappings.items():
             # Get capacity for this slot
@@ -560,6 +579,11 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                     venue.add_to_subset(person, subset_key=subset_key)
                     # Set venue reference on each person
                     # setattr(person, f'{venue_type}_venue', venue)
+
+        # Log progress at intervals
+        if venues_processed % progress_interval == 0 or venues_processed == total_venues:
+            percent_complete = (venues_processed / total_venues) * 100
+            logger.info(f"    Progress: {venues_processed}/{total_venues} venues processed ({percent_complete:.1f}%) - {len(allocated_people)} people allocated so far")
 
     # Mark allocated people
     if allocated_people:

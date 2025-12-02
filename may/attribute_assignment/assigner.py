@@ -400,15 +400,21 @@ class AttributeAssigner:
         logger.info("Processing people in batch mode...")
         total = len(eligible_people)
 
+        # Progress tracking
+        progress_interval = max(1, total // 20)  # Report every 5%
+
         # Prepare batch data
+        logger.info(f"  Preparing batch data for {total:,} people...")
         households = [self._get_person_household(p) for p in eligible_people]
         contexts = [{'attribute_name': self.attribute_name} for _ in eligible_people]
 
         # Call batch assignment
+        logger.info(f"  Running batch assignment...")
         results = strategy.assign_batch(eligible_people, households, contexts)
 
         # Assign results to people
-        for person, value in zip(eligible_people, results):
+        logger.info(f"  Applying results to people...")
+        for i, (person, value) in enumerate(zip(eligible_people, results)):
             if value is not None:
                 # Handle single value or multiple values (dict)
                 if isinstance(value, dict):
@@ -426,6 +432,11 @@ class AttributeAssigner:
                 self.stats['assigned_people'] += 1
             else:
                 self.stats['unassigned_people'] += 1
+
+            # Log progress
+            if (i + 1) % progress_interval == 0 or (i + 1) == total:
+                progress = ((i + 1) / total) * 100
+                logger.info(f"    Progress: {i+1:,}/{total:,} ({progress:.1f}%)")
 
         logger.info(f"✓ Batch processed {total:,} people")
 

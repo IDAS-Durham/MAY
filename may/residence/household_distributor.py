@@ -220,8 +220,12 @@ class HouseholdDistributor:
 
         # Get all SGU units
         sgu_units = self.geography.get_units_by_level("SGU")
+        total_units = len(sgu_units)
 
-        for geo_unit_code, unit in sgu_units.items():
+        # Progress indicator configuration
+        progress_interval = max(1, total_units // 10)  # Update every 10% or at least every unit
+
+        for idx, (geo_unit_code, unit) in enumerate(sgu_units.items(), 1):
             # Get all people in this geo_unit
             people = self.population.get_people_by_geo_unit(geo_unit_code)
 
@@ -246,6 +250,11 @@ class HouseholdDistributor:
             # Log pool sizes
             pool_sizes = [len(pool) for pool in category_pools]
             logger.debug(f"  {geo_unit_code}: {pool_sizes}")
+
+            # Progress indicator - log every 10% or at key milestones
+            if idx % progress_interval == 0 or idx == total_units:
+                percent_complete = (idx / total_units) * 100
+                logger.info(f"  Progress: {idx}/{total_units} geo_units processed ({percent_complete:.1f}%)")
 
         total_people = sum(sum(len(pool) for pool in pools)
                           for pools in self.person_pool_by_geo_unit.values())

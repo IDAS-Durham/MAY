@@ -199,7 +199,7 @@ def main():
                         # Export allocations to CSV
                         venue_type = distributor.venue_type
                         output_file = f"{venue_type}_allocations.csv"
-                        distributor.export_allocations(world, output_file)
+                        #distributor.export_allocations(world, output_file)
                         logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
@@ -216,7 +216,7 @@ def main():
                         # Export allocations to CSV
                         child_type = creator.child_venue_type
                         output_file = f"{child_type}_allocations.csv"
-                        creator.export_allocations(world, output_file)
+                        #creator.export_allocations(world, output_file)
                         logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
@@ -227,11 +227,11 @@ def main():
                     logger.warning(f"Unknown pipeline step type: {step_type}")
 
         # Analyze multiple jobs after venue pipeline completes
-        logger.info("")
+        """ logger.info("")
         logger.info("=" * 60)
         logger.info("MULTIPLE JOBS ANALYSIS")
         logger.info("=" * 60)
-        analyze_multiple_jobs(world)
+        analyze_multiple_jobs(world) """
 
     # ========================================
     # RELATIONSHIP PIPELINE - Build agent networks
@@ -273,10 +273,10 @@ def main():
     logger.info("=" * 60)
 
     # Export venue allocations
-    export_venue_allocations(world)
+    #export_venue_allocations(world)
 
     # Export people data
-    export_people(world)
+    #export_people(world)
 
     # Show examples of what was created
     #print_world_examples(world)

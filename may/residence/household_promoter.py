@@ -262,8 +262,11 @@ class HouseholdPromoter:
         households_promoted_count = 0
         promoted_households = set()
 
+        # Progress tracking
+        total_rules = len(promotion_rules)
+
         # Process each rule
-        for rule_idx, rule in enumerate(promotion_rules):
+        for rule_idx, rule in enumerate(promotion_rules, 1):
             source_pattern = rule.get('source_pattern')
             target_pattern_str = rule.get('target_pattern')
             accept_categories = rule.get('accept_categories', [])
@@ -276,12 +279,21 @@ class HouseholdPromoter:
             # Parse target pattern to understand constraints
             target_pattern = CompositionPattern.from_string(target_pattern_str)
 
-            logger.info(f"Rule {rule_idx + 1}: {source_pattern} → {target_pattern_str} (categories: {accept_categories})")
+            logger.info(f"Rule {rule_idx}: {source_pattern} → {target_pattern_str} (categories: {accept_categories})")
 
             # Find households matching source pattern
             # Get all households from VenueManager
             all_households = self.distributor.venue_manager.get_venues_by_type("household")
+
+            # Track progress for this rule
+            rule_start_promoted = households_promoted_count
+            rule_start_people_added = people_added
+            households_processed = 0
+            total_households = len(all_households)
+            progress_interval = max(1, total_households // 10)  # Update every 10%
+
             for household in all_households:
+                households_processed += 1
                 actual_pattern = household.properties.get('actual_pattern', '')
 
                 if actual_pattern != source_pattern:
@@ -365,6 +377,19 @@ class HouseholdPromoter:
 
                 if added_to_this_household > 0:
                     logger.debug(f"  Added {added_to_this_household} people to household {household.id}")
+
+                # Log progress at intervals
+                if households_processed % progress_interval == 0 or households_processed == total_households:
+                    percent_complete = (households_processed / total_households) * 100
+                    rule_households_promoted = households_promoted_count - rule_start_promoted
+                    rule_people_added = people_added - rule_start_people_added
+                    logger.info(f"  Rule {rule_idx} progress: {households_processed}/{total_households} households checked ({percent_complete:.1f}%) - {rule_households_promoted} promoted, {rule_people_added} people added")
+
+            # Log rule completion summary
+            rule_households_promoted = households_promoted_count - rule_start_promoted
+            rule_people_added = people_added - rule_start_people_added
+            if rule_households_promoted > 0 or rule_people_added > 0:
+                logger.info(f"  Rule {rule_idx} complete: {rule_households_promoted} households promoted, {rule_people_added} people added")
 
         # Statistics
         stats = {
