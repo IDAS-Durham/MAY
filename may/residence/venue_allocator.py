@@ -116,6 +116,14 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
     logger.info(f"  Allocating {people_to_allocate} people...")
 
+    # Pre-group eligible people by geographical unit to avoid O(n) filtering per venue
+    people_by_geo_unit = {}
+    for person in eligible_people:
+        geo_unit = person.geographical_unit
+        if geo_unit not in people_by_geo_unit:
+            people_by_geo_unit[geo_unit] = deque()
+        people_by_geo_unit[geo_unit].append(person)
+
     # Allocate people to venues
     allocated_people = []
     eligible_people_set = set(eligible_people)
@@ -131,19 +139,24 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
         if capacity == 0:
             continue
 
-        # Filter eligible people to only those from this venue's geographical unit
+        # Get pre-grouped people for this venue's geographical unit (O(1) lookup)
         venue_geo_unit = venue.geographical_unit
-        venue_eligible_list = [p for p in eligible_people if p.geographical_unit == venue_geo_unit and p in eligible_people_set]
-
-        venue_eligible = deque(venue_eligible_list)
+        venue_eligible = people_by_geo_unit.get(venue_geo_unit, deque())
 
         # Allocate people to this venue
         venue_residents = []
         for _ in range(capacity):
-            if not venue_eligible:
+            # Find next eligible person who hasn't been allocated yet
+            person = None
+            while venue_eligible:
+                candidate = venue_eligible.popleft()
+                if candidate in eligible_people_set:
+                    person = candidate
+                    break
+
+            if person is None:
                 break
 
-            person = venue_eligible.popleft()
             # Remove from global pool set
             eligible_people_set.discard(person)
 
@@ -498,9 +511,22 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     for attr_slot in people_by_attributes:
         people_by_attributes[attr_slot] = _apply_strategy(people_by_attributes[attr_slot], strategy)
 
+    # Pre-group people by geographical unit AND attribute slot to avoid O(n) filtering per venue
+    # Structure: {(column_name, geo_unit): deque([person, ...])}
+    people_by_attr_and_geo = {}
+    for column_name, people_list in people_by_attributes.items():
+        for person in people_list:
+            key = (column_name, person.geographical_unit)
+            if key not in people_by_attr_and_geo:
+                people_by_attr_and_geo[key] = deque()
+            people_by_attr_and_geo[key].append(person)
+
     # Allocate people to venues by attribute slots
     allocated_people = []
     allocation_stats = {}  # Track allocations per attribute slot
+
+    # Use a set to track allocated person IDs for O(1) lookup instead of O(n) list.remove()
+    allocated_person_ids = set()
 
     # Progress tracking setup
     total_venues = len(venue_list)
@@ -520,35 +546,39 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
             capacity = int(capacity)
 
-            # Get people for this attribute slot FROM THIS VENUE'S GEO UNIT
-            available_people = people_by_attributes.get(column_name, [])
-            if not available_people:
-                continue
-
-            # Filter people to only those from this venue's geographical unit
+            # Get pre-grouped people for this attribute slot and geo unit (O(1) lookup)
             venue_geo_unit = venue.geographical_unit
-            geo_filtered_list = [p for p in available_people if p.geographical_unit == venue_geo_unit]
-
-            geo_filtered_people = deque(geo_filtered_list)
+            key = (column_name, venue_geo_unit)
+            geo_filtered_people = people_by_attr_and_geo.get(key, deque())
 
             # Allocate people to this slot
             venue_residents = []
             allocated_count = 0
 
             for _ in range(capacity):
-                if not geo_filtered_people:
+                # Find next eligible person who hasn't been allocated yet
+                person = None
+                while geo_filtered_people:
+                    candidate = geo_filtered_people.popleft()
+
+                    # Skip if already allocated
+                    if candidate.id in allocated_person_ids:
+                        continue
+
+                    # Check if person meets venue-specific attribute constraints
+                    if not _check_attribute_constraints(candidate, venue, attribute_constraints):
+                        # Person doesn't meet constraints, skip them
+                        continue
+
+                    # Found a valid person
+                    person = candidate
                     break
 
-                person = geo_filtered_people.popleft()  # Take from front (already sorted by strategy)
+                if person is None:
+                    break
 
-                # Check if person meets venue-specific attribute constraints
-                if not _check_attribute_constraints(person, venue, attribute_constraints):
-                    # Person doesn't meet constraints, skip them
-                    # Put them back in available_people for potential allocation to other venues
-                    continue
-
-                # Remove from global pool
-                available_people.remove(person)
+                # Add to allocated set (O(1) instead of O(n) list.remove())
+                allocated_person_ids.add(person.id)
 
                 venue_residents.append(person)
                 allocated_people.append(person)
