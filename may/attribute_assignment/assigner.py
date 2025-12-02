@@ -65,6 +65,14 @@ class AttributeAssigner:
         # Cache strategy objects to avoid repeated creation
         self._strategy_cache = {}  # Maps strategy config hash to strategy instance
 
+        # Pre-compute filter configuration (called 35M times in profiling!)
+        self._has_filters = hasattr(config, 'filters') and config.filters
+        self._filter_list = list(config.filters.items()) if self._has_filters else []
+        self._activity_filters = config.filters.get('activities', {}) if self._has_filters else {}
+        self._include_activities = self._activity_filters.get('include', [])
+        self._exclude_activities = self._activity_filters.get('exclude', [])
+        self._required_attrs = list(config.required_attributes.items()) if config.required_attributes else []
+
         # Statistics
         self.stats = {
             'total_people': 0,
@@ -261,7 +269,7 @@ class AttributeAssigner:
 
     def _passes_filters(self, person):
         """
-        Check if person passes all configured filters.
+        Check if person passes all configured filters (optimized - called 35M times!).
 
         Args:
             person: Person object
@@ -269,10 +277,10 @@ class AttributeAssigner:
         Returns:
             bool: True if person passes all filters
         """
-        # Check filters (if configured)
-        if hasattr(self.config, 'filters') and self.config.filters:
-            # Loop through all filters generically
-            for _, filter_config in self.config.filters.items():
+        # Use pre-computed filter list instead of repeated hasattr/dict lookups
+        if self._has_filters:
+            # Loop through pre-computed filter list
+            for _, filter_config in self._filter_list:
                 # Get the attribute to filter on
                 attr_name = filter_config.get('attribute')
                 filter_type = filter_config.get('type')
@@ -282,9 +290,8 @@ class AttributeAssigner:
 
                 # Get the person's value for this attribute
                 # First check properties, then object attributes
-                if hasattr(person, 'properties') and attr_name in person.properties:
-                    person_value = person.properties[attr_name]
-                else:
+                person_value = person.properties.get(attr_name) if hasattr(person, 'properties') else None
+                if person_value is None:
                     person_value = getattr(person, attr_name, None)
 
                 if person_value is None:
@@ -302,29 +309,22 @@ class AttributeAssigner:
                     if max_value is not None and person_value > max_value:
                         return False
 
-            # Activity filters
-            activity_filters = self.config.filters.get('activities', {})
-            if activity_filters:
-                include_activities = activity_filters.get('include', [])
-                exclude_activities = activity_filters.get('exclude', [])
-
-                # Check if person has required activities
+            # Use pre-computed activity filters
+            if self._include_activities or self._exclude_activities:
                 person_activities = getattr(person, 'activities', [])
 
-                if include_activities:
+                if self._include_activities:
                     # Person must have at least one of the included activities
-                    has_required_activity = any(activity in person_activities for activity in include_activities)
-                    if not has_required_activity:
+                    if not any(activity in person_activities for activity in self._include_activities):
                         return False
 
-                if exclude_activities:
+                if self._exclude_activities:
                     # Person must not have any of the excluded activities
-                    has_excluded_activity = any(activity in person_activities for activity in exclude_activities)
-                    if has_excluded_activity:
+                    if any(activity in person_activities for activity in self._exclude_activities):
                         return False
 
-        # Check dependencies
-        for attr_name, attr_config in self.config.required_attributes.items():
+        # Use pre-computed required attributes list
+        for attr_name, attr_config in self._required_attrs:
             if attr_config.get('required', False):
                 if attr_name not in person.properties:
                     if attr_config.get('error_if_missing', False):
