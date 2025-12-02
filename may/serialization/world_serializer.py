@@ -186,6 +186,8 @@ class WorldSerializer:
 
         num_people = len(people)
 
+        logger.info(f"  Serializing {num_people:,} people...")
+
         # Core attributes (always included)
         ids = np.array([p.id for p in people], dtype=np.int32)
         ages = np.array([p.age for p in people], dtype=np.float32)
@@ -197,18 +199,23 @@ class WorldSerializer:
             dtype=np.int32
         )
 
+        logger.info(f"    ✓ Built core attribute arrays")
+
         # Write core datasets
         self._create_dataset(pop_group, 'ids', ids)
         self._create_dataset(pop_group, 'ages', ages)
         self._create_dataset(pop_group, 'sexes', sexes)
         self._create_dataset(pop_group, 'geo_unit_ids', geo_unit_ids)
 
+        logger.info(f"    ✓ Wrote core datasets to HDF5")
+
         # Properties (configured in YAML)
         properties_to_include = self.config.get_person_properties()
         if properties_to_include:
             props_group = pop_group.create_group('properties')
 
-            for prop_name in properties_to_include:
+            for prop_idx, prop_name in enumerate(properties_to_include, 1):
+                logger.info(f"    Writing property {prop_idx}/{len(properties_to_include)}: {prop_name}...")
                 self._write_property_array(props_group, prop_name, people)
 
         logger.info(f"  Wrote {num_people:,} people")
@@ -425,7 +432,13 @@ class WorldSerializer:
         activity_data = []
         activity_offsets = [0]
 
-        for person in world.population.people:
+        # Progress tracking
+        num_people = len(world.population.people)
+        progress_interval = max(1, num_people // 10)  # Update every 10%
+
+        logger.info(f"  Processing activity maps for {num_people:,} people...")
+
+        for person_idx, person in enumerate(world.population.people, 1):
             for activity_name, subsets_or_dict in person.activity_map.items():
                 if activity_name not in activity_to_idx:
                     continue  # Skip if activity not in registry
@@ -465,6 +478,11 @@ class WorldSerializer:
                     raise TypeError(f"Person {person.id} activity '{activity_name}': expected dict, got {type(subsets_or_dict)}. All activities must use unified structure: activity_map[activity_name][venue_type] = [subsets]")
 
             activity_offsets.append(len(activity_data))
+
+            # Log progress
+            if person_idx % progress_interval == 0 or person_idx == num_people:
+                progress = (person_idx / num_people) * 100
+                logger.info(f"    Progress: {person_idx:,}/{num_people:,} people processed ({progress:.1f}%) - {len(activity_data):,} mappings")
 
         # Convert to arrays
         if activity_data:

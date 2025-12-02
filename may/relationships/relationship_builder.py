@@ -363,12 +363,13 @@ class RelationshipBuilder:
 
         # Process each source with weight_fraction = 1.0
         # Each source tries to fill up to target, stopping when full
-        for source in sources:
+        total_sources = len(sources)
+        for source_idx, source in enumerate(sources, 1):
             source_name = source.get('name', 'unnamed')
             pool_type = source['pool']['type']
             filters = source.get('filters', [])
 
-            logger.info(f"  Processing source: {source_name} (pool={pool_type})")
+            logger.info(f"  Processing source {source_idx}/{total_sources}: {source_name} (pool={pool_type})")
 
             # Parse filters
             age_range = np.int16(-1)  # -1 means no filter
@@ -407,9 +408,17 @@ class RelationshipBuilder:
                     weight_fraction, age_range, False, True
                 )
 
+            # Show progress after each source
+            connections_so_far = int(current_counts.sum())
+            logger.info(f"    ✓ Completed {source_name}: {connections_so_far:,} connections so far")
+
         # Convert to dict and store
         logger.info("  Storing connections...")
         relationships = {}
+
+        # Progress tracking
+        progress_interval = max(1, n_people // 10)  # Update every 10%
+
         for i, person in enumerate(self.world.population.people):
             n_conn = current_counts[i]
             connections = all_connections[i, :n_conn].tolist()
@@ -417,6 +426,11 @@ class RelationshipBuilder:
 
             if store:
                 person.properties[storage_key] = connections
+
+            # Log progress
+            if (i + 1) % progress_interval == 0 or (i + 1) == n_people:
+                progress = ((i + 1) / n_people) * 100
+                logger.info(f"    Progress: {i+1:,}/{n_people:,} people processed ({progress:.1f}%)")
 
         total_connections = int(current_counts.sum())
         avg_connections = total_connections / n_people if n_people > 0 else 0

@@ -583,6 +583,11 @@ class MultiVenueDistributor:
         # Step 3: Assign cached venue results to all people in each geo_unit
         allocated_count = 0
 
+        # Progress tracking
+        total_people = len(people)
+        people_processed = 0
+        progress_interval = max(1, total_people // 10)  # Update every 10%
+
         for geo_unit, geo_unit_people in people_by_geo_unit.items():
             for person in geo_unit_people:
                 venue_dict = {}
@@ -615,6 +620,12 @@ class MultiVenueDistributor:
                         person.add_activity(self.activity_map_key)
 
                     allocated_count += 1
+
+                # Update progress tracking
+                people_processed += 1
+                if people_processed % progress_interval == 0 or people_processed == total_people:
+                    percent_complete = (people_processed / total_people) * 100
+                    logger.info(f"  Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
 
         logger.info(f"Allocated venues to {allocated_count} people")
 

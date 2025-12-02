@@ -174,6 +174,9 @@ class MatchingRule:
             # For now, return empty string
             return ''
 
+        # Build category name → index mapping for O(1) lookups (avoids nested loop)
+        category_indices = {cat.name: i for i, cat in enumerate(age_categories)}
+
         # Count members in each category
         counts = [0] * len(age_categories)
 
@@ -184,11 +187,9 @@ class MatchingRule:
             if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
                 subset_name = person.activity_map["residence"]["household"][0].subset_name
 
-                # Find which category this subset belongs to
-                for i, category in enumerate(age_categories):
-                    if category.name == subset_name:
-                        counts[i] += 1
-                        break
+                # O(1) lookup instead of O(n) iteration through categories
+                if subset_name in category_indices:
+                    counts[category_indices[subset_name]] += 1
 
         # Return as space-separated string
         pattern = ' '.join(str(c) for c in counts)
@@ -341,6 +342,9 @@ class AttributeAssignmentConfig:
         self.assignment_rules = self._parse_assignment_rules()
         self.venue_assignment_rules = self._parse_venue_assignment_rules()
         self.settings = self._parse_settings()
+
+        # Cache valid roles per structure for O(1) lookups (avoids rebuilding set for every person)
+        self._valid_roles_cache = {}
 
         logger.info(f"Loaded config for '{self.attribute_name}' from {self.config_path}")
         logger.info(f"  Assignment level: {self.assignment_level}")
@@ -554,13 +558,17 @@ class AttributeAssignmentConfig:
 
         struct_rules = self.assignment_rules[household_structure]
 
-        # Get roles that have rules defined for this structure
-        valid_roles_for_structure = set()
-        for rule in struct_rules.rules:
-            if isinstance(rule.role, list):
-                valid_roles_for_structure.update(rule.role)
-            else:
-                valid_roles_for_structure.add(rule.role)
+        # Get valid roles for this structure (cached to avoid rebuilding for every person)
+        if household_structure not in self._valid_roles_cache:
+            valid_roles_for_structure = set()
+            for rule in struct_rules.rules:
+                if isinstance(rule.role, list):
+                    valid_roles_for_structure.update(rule.role)
+                else:
+                    valid_roles_for_structure.add(rule.role)
+            self._valid_roles_cache[household_structure] = valid_roles_for_structure
+        else:
+            valid_roles_for_structure = self._valid_roles_cache[household_structure]
 
         # Try each role in order until we find a matching one
         for role_name, role in self.roles.items():

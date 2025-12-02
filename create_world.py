@@ -200,7 +200,7 @@ def main():
                         venue_type = distributor.venue_type
                         output_file = f"{venue_type}_allocations.csv"
                         #distributor.export_allocations(world, output_file)
-                        logger.info(f"Saved allocations to: {output_file}")
+                        #logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
                         logger.error(f"Failed to run distributor {step_config}: {e}")
@@ -217,7 +217,7 @@ def main():
                         child_type = creator.child_venue_type
                         output_file = f"{child_type}_allocations.csv"
                         #creator.export_allocations(world, output_file)
-                        logger.info(f"Saved allocations to: {output_file}")
+                        #logger.info(f"Saved allocations to: {output_file}")
 
                     except Exception as e:
                         logger.error(f"Failed to run child creator {step_config}: {e}")
