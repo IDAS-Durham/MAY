@@ -659,7 +659,7 @@ class AttributeAssignmentConfig:
             categories_by_attr[attr].append(category)
 
         # For numerical categories (like age), sort by min value for binary search
-        for attr, cats in categories_by_attr.items():
+        for attr, cats in list(categories_by_attr.items()):
             numerical_cats = [c for c in cats if c.get('type') == 'numerical']
             if numerical_cats:
                 # Sort by min value
