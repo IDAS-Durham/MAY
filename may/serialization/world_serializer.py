@@ -188,18 +188,35 @@ class WorldSerializer:
 
         logger.info(f"  Serializing {num_people:,} people...")
 
+        # ============================================================
+        # SORT BY GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
+        # ============================================================
+        logger.info(f"    Sorting people by geo_unit_id for partitioning...")
+
+        # Sort people by their geographical unit ID
+        people_sorted = sorted(people, key=lambda p: p.geographical_unit.id if p.geographical_unit else -1)
+
+        logger.info(f"    ✓ Sorted {num_people:,} people by geo_unit_id")
+
         # Core attributes (always included)
-        ids = np.array([p.id for p in people], dtype=np.int32)
-        ages = np.array([p.age for p in people], dtype=np.float32)
-        sexes = np.array([p.sex for p in people], dtype=h5py.string_dtype())
+        ids = np.array([p.id for p in people_sorted], dtype=np.int32)
+        ages = np.array([p.age for p in people_sorted], dtype=np.float32)
+        sexes = np.array([p.sex for p in people_sorted], dtype=h5py.string_dtype())
 
         # Geographical unit IDs (where person lives - SGU level)
         geo_unit_ids = np.array(
-            [p.geographical_unit.id if p.geographical_unit else -1 for p in people],
+            [p.geographical_unit.id if p.geographical_unit else -1 for p in people_sorted],
             dtype=np.int32
         )
 
         logger.info(f"    ✓ Built core attribute arrays")
+
+        # ============================================================
+        # CREATE PARTITION INDEX
+        # ============================================================
+        logger.info(f"    Building partition index...")
+        self._write_partition_index(pop_group, geo_unit_ids)
+        logger.info(f"    ✓ Wrote partition index")
 
         # Write core datasets
         self._create_dataset(pop_group, 'ids', ids)
@@ -216,11 +233,78 @@ class WorldSerializer:
 
             for prop_idx, prop_name in enumerate(properties_to_include, 1):
                 logger.info(f"    Writing property {prop_idx}/{len(properties_to_include)}: {prop_name}...")
-                self._write_property_array(props_group, prop_name, people)
+                self._write_property_array(props_group, prop_name, people_sorted)
 
         logger.info(f"  Wrote {num_people:,} people")
         if properties_to_include:
             logger.info(f"    Including properties: {properties_to_include}")
+
+    def _write_partition_index(self, pop_group, geo_unit_ids):
+        """
+        Write partition index for efficient geo_unit-based loading.
+
+        Creates index structure that maps geo_unit_id -> (start_index, count)
+        allowing efficient range-based reads for partitioned loading.
+
+        Args:
+            pop_group: HDF5 population group
+            geo_unit_ids: Sorted array of geo_unit_ids for all people
+
+        Structure created:
+            /population/partition_index/
+                geo_unit_ids: [1, 2, 3, ...] - unique geo_unit IDs
+                start_indices: [0, 100000, 250000, ...] - start row for each geo_unit
+                counts: [100000, 150000, 50000, ...] - number of people per geo_unit
+        """
+        index_group = pop_group.create_group('partition_index')
+
+        # Find unique geo_unit_ids and their boundaries
+        unique_geo_units = []
+        start_indices = []
+        counts = []
+
+        if len(geo_unit_ids) == 0:
+            # Empty population
+            logger.warning("Empty population - no partition index to create")
+            return
+
+        current_geo_unit = geo_unit_ids[0]
+        current_start = 0
+        current_count = 0
+
+        for i, geo_unit_id in enumerate(geo_unit_ids):
+            if geo_unit_id != current_geo_unit:
+                # Save previous geo_unit
+                unique_geo_units.append(current_geo_unit)
+                start_indices.append(current_start)
+                counts.append(current_count)
+
+                # Start new geo_unit
+                current_geo_unit = geo_unit_id
+                current_start = i
+                current_count = 1
+            else:
+                current_count += 1
+
+        # Save last geo_unit
+        unique_geo_units.append(current_geo_unit)
+        start_indices.append(current_start)
+        counts.append(current_count)
+
+        # Convert to numpy arrays
+        unique_geo_units = np.array(unique_geo_units, dtype=np.int32)
+        start_indices = np.array(start_indices, dtype=np.int32)
+        counts = np.array(counts, dtype=np.int32)
+
+        # Write datasets
+        self._create_dataset(index_group, 'geo_unit_ids', unique_geo_units)
+        self._create_dataset(index_group, 'start_indices', start_indices)
+        self._create_dataset(index_group, 'counts', counts)
+
+        logger.info(f"      Created partition index for {len(unique_geo_units)} geo_units")
+        logger.info(f"      Min people per geo_unit: {counts.min()}")
+        logger.info(f"      Max people per geo_unit: {counts.max()}")
+        logger.info(f"      Avg people per geo_unit: {counts.mean():.1f}")
 
     def _write_venues(self, f, world):
         """Write venues and subsets to HDF5."""
