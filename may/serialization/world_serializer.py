@@ -381,6 +381,146 @@ class WorldSerializer:
             logger.info(f"      Max relationships per geo_unit: {counts.max()}")
             logger.info(f"      Avg relationships per geo_unit: {counts.mean():.1f}")
 
+    def _write_subset_partition_index(self, subsets_group, all_subsets_sorted, members_offsets, total_members):
+        """
+        Write partition index for efficient geo_unit-based subset membership loading.
+
+        Creates index structure that maps geo_unit_id -> (start_row, count)
+        for the members_flat array, allowing efficient range-based reads.
+
+        Args:
+            subsets_group: HDF5 subsets group
+            all_subsets_sorted: Subsets list sorted by venue's geo_unit_id
+            members_offsets: Array of start indices for each subset's members in members_flat
+            total_members: Total number of entries in members_flat
+
+        Structure created:
+            /venues/subsets/partition_index/
+                geo_unit_ids: [1, 2, 3, ...] - unique geo_unit IDs
+                start_indices: [0, 50000, 125000, ...] - start row in members_flat
+                counts: [50000, 75000, 30000, ...] - number of members per geo_unit
+        """
+        index_group = subsets_group.create_group('partition_index')
+
+        if len(all_subsets_sorted) == 0:
+            logger.warning("Empty subsets - no partition index to create")
+            return
+
+        # Group subsets by geo_unit and track membership row ranges
+        unique_geo_units = []
+        start_indices = []
+        counts = []
+
+        current_geo_unit = all_subsets_sorted[0].venue.geographical_unit.id if all_subsets_sorted[0].venue.geographical_unit else -1
+        current_start_row = 0  # Start row in members_flat for this geo_unit
+
+        for subset_idx, subset in enumerate(all_subsets_sorted):
+            geo_unit_id = subset.venue.geographical_unit.id if subset.venue.geographical_unit else -1
+
+            if geo_unit_id != current_geo_unit:
+                # Save previous geo_unit's membership range
+                # End row is the start of current subset's members
+                end_row = members_offsets[subset_idx] if subset_idx < len(members_offsets) else total_members
+                member_count = end_row - current_start_row
+
+                unique_geo_units.append(current_geo_unit)
+                start_indices.append(current_start_row)
+                counts.append(member_count)
+
+                # Start new geo_unit
+                current_geo_unit = geo_unit_id
+                current_start_row = end_row
+
+        # Save last geo_unit (members extend to end of members_flat)
+        member_count = total_members - current_start_row
+        unique_geo_units.append(current_geo_unit)
+        start_indices.append(current_start_row)
+        counts.append(member_count)
+
+        # Convert to numpy arrays
+        unique_geo_units = np.array(unique_geo_units, dtype=np.int32)
+        start_indices = np.array(start_indices, dtype=np.int32)
+        counts = np.array(counts, dtype=np.int32)
+
+        # Write datasets
+        self._create_dataset(index_group, 'geo_unit_ids', unique_geo_units)
+        self._create_dataset(index_group, 'start_indices', start_indices)
+        self._create_dataset(index_group, 'counts', counts)
+
+        logger.info(f"      Created subset partition index for {len(unique_geo_units)} geo_units")
+        if len(counts) > 0:
+            logger.info(f"      Min members per geo_unit: {counts.min()}")
+            logger.info(f"      Max members per geo_unit: {counts.max()}")
+            logger.info(f"      Avg members per geo_unit: {counts.mean():.1f}")
+
+    def _write_venue_partition_index(self, venues_group, all_venues_sorted):
+        """
+        Write partition index for efficient geo_unit-based venue loading.
+
+        Creates index structure that maps geo_unit_id -> (start_index, count)
+        for the venue arrays, allowing efficient range-based reads.
+
+        Args:
+            venues_group: HDF5 venues group
+            all_venues_sorted: Venues list sorted by geo_unit_id
+
+        Structure created:
+            /venues/partition_index/
+                geo_unit_ids: [1, 2, 3, ...] - unique geo_unit IDs
+                start_indices: [0, 100, 350, ...] - start row in venue arrays
+                counts: [100, 250, 75, ...] - number of venues per geo_unit
+        """
+        index_group = venues_group.create_group('partition_index')
+
+        if len(all_venues_sorted) == 0:
+            logger.warning("Empty venues - no partition index to create")
+            return
+
+        # Find unique geo_unit_ids and their boundaries
+        unique_geo_units = []
+        start_indices = []
+        counts = []
+
+        current_geo_unit = all_venues_sorted[0].geographical_unit.id if all_venues_sorted[0].geographical_unit else -1
+        current_start = 0
+        current_count = 0
+
+        for i, venue in enumerate(all_venues_sorted):
+            geo_unit_id = venue.geographical_unit.id if venue.geographical_unit else -1
+
+            if geo_unit_id != current_geo_unit:
+                # Save previous geo_unit
+                unique_geo_units.append(current_geo_unit)
+                start_indices.append(current_start)
+                counts.append(current_count)
+
+                # Start new geo_unit
+                current_geo_unit = geo_unit_id
+                current_start = i
+                current_count = 1
+            else:
+                current_count += 1
+
+        # Save last geo_unit
+        unique_geo_units.append(current_geo_unit)
+        start_indices.append(current_start)
+        counts.append(current_count)
+
+        # Convert to numpy arrays
+        unique_geo_units = np.array(unique_geo_units, dtype=np.int32)
+        start_indices = np.array(start_indices, dtype=np.int32)
+        counts = np.array(counts, dtype=np.int32)
+
+        # Write datasets
+        self._create_dataset(index_group, 'geo_unit_ids', unique_geo_units)
+        self._create_dataset(index_group, 'start_indices', start_indices)
+        self._create_dataset(index_group, 'counts', counts)
+
+        logger.info(f"      Created venue partition index for {len(unique_geo_units)} geo_units")
+        logger.info(f"      Min venues per geo_unit: {counts.min()}")
+        logger.info(f"      Max venues per geo_unit: {counts.max()}")
+        logger.info(f"      Avg venues per geo_unit: {counts.mean():.1f}")
+
     def _write_venues(self, f, world):
         """Write venues and subsets to HDF5."""
         venues_group = f.create_group('venues')
@@ -394,34 +534,47 @@ class WorldSerializer:
 
         num_venues = len(all_venues)
 
+        # ============================================================
+        # SORT BY GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
+        # ============================================================
+        logger.info(f"    Sorting {num_venues:,} venues by geo_unit_id for partitioning...")
+
+        # Sort venues by their geographical unit ID
+        all_venues_sorted = sorted(
+            all_venues,
+            key=lambda v: v.geographical_unit.id if v.geographical_unit else -1
+        )
+
+        logger.info(f"    ✓ Sorted {num_venues:,} venues by geo_unit_id")
+
         # CRITICAL: Venue IDs in Python are TYPE-SCOPED (each type has its own ID counter starting at 0)
         # This causes collisions: hospital_0, school_0, office_0 all have id=0
         # For C++, we need GLOBAL unique IDs. Assign sequential global IDs here.
 
-        # Assign global IDs (0, 1, 2, ..., N-1)
+        # Assign global IDs (0, 1, 2, ..., N-1) to SORTED venues
         global_ids = np.arange(num_venues, dtype=np.int32)
 
         # Create mapping: (venue Python object id) -> global_id for subset/activity_map serialization
-        self._venue_to_global_id = {id(v): global_id for v, global_id in zip(all_venues, global_ids)}
+        self._venue_to_global_id = {id(v): global_id for v, global_id in zip(all_venues_sorted, global_ids)}
 
         # Also store type-scoped IDs for debugging/reference
-        type_scoped_ids = np.array([v.id for v in all_venues], dtype=np.int32)
+        type_scoped_ids = np.array([v.id for v in all_venues_sorted], dtype=np.int32)
 
         # Core attributes (always included)
         ids = global_ids  # Use GLOBAL IDs for C++
-        names = np.array([v.name for v in all_venues], dtype=h5py.string_dtype())
-        types = np.array([v.type for v in all_venues], dtype=h5py.string_dtype())
+        names = np.array([v.name for v in all_venues_sorted], dtype=h5py.string_dtype())
+        types = np.array([v.type for v in all_venues_sorted], dtype=h5py.string_dtype())
 
         # Geographical unit IDs (where venue is located)
         geo_unit_ids = np.array(
-            [v.geographical_unit.id if v.geographical_unit else -1 for v in all_venues],
+            [v.geographical_unit.id if v.geographical_unit else -1 for v in all_venues_sorted],
             dtype=np.int32
         )
 
         # Parent venue IDs (-1 for root venues)
         # IMPORTANT: Use global IDs for parents too!
         parent_ids = np.array(
-            [self._venue_to_global_id.get(id(v.parent), -1) if v.parent else -1 for v in all_venues],
+            [self._venue_to_global_id.get(id(v.parent), -1) if v.parent else -1 for v in all_venues_sorted],
             dtype=np.int32
         )
 
@@ -435,11 +588,11 @@ class WorldSerializer:
         # Coordinates (optional)
         if venue_global_settings.get('include_coordinates', True):
             latitudes = np.array(
-                [v.coordinates[0] if v.coordinates else np.nan for v in all_venues],
+                [v.coordinates[0] if v.coordinates else np.nan for v in all_venues_sorted],
                 dtype=np.float32
             )
             longitudes = np.array(
-                [v.coordinates[1] if v.coordinates else np.nan for v in all_venues],
+                [v.coordinates[1] if v.coordinates else np.nan for v in all_venues_sorted],
                 dtype=np.float32
             )
 
@@ -449,16 +602,23 @@ class WorldSerializer:
         # is_residence flag (optional)
         if venue_global_settings.get('include_is_residence', True):
             is_residence = np.array(
-                [v.properties.get('is_residence', False) for v in all_venues],
+                [v.properties.get('is_residence', False) for v in all_venues_sorted],
                 dtype=np.bool_
             )
             self._create_dataset(venues_group, 'is_residence', is_residence)
 
+        # ============================================================
+        # CREATE PARTITION INDEX FOR VENUES
+        # ============================================================
+        logger.info(f"    Building venue partition index...")
+        self._write_venue_partition_index(venues_group, all_venues_sorted)
+        logger.info(f"    ✓ Wrote venue partition index")
+
         # Properties (per-type configuration)
-        self._write_venue_properties(venues_group, all_venues)
+        self._write_venue_properties(venues_group, all_venues_sorted)
 
         # Write subsets
-        num_subsets = self._write_subsets(venues_group, all_venues)
+        num_subsets = self._write_subsets(venues_group, all_venues_sorted)
 
         logger.info(f"  Wrote {num_venues:,} venues")
         logger.info(f"  Wrote {num_subsets:,} subsets")
@@ -506,14 +666,27 @@ class WorldSerializer:
 
         num_subsets = len(all_subsets)
 
+        # ============================================================
+        # SORT BY VENUE'S GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
+        # ============================================================
+        logger.info(f"    Sorting {num_subsets:,} subsets by venue's geo_unit_id for partitioning...")
+
+        # Sort subsets by their venue's geographical unit ID
+        all_subsets_sorted = sorted(
+            all_subsets,
+            key=lambda s: s.venue.geographical_unit.id if s.venue.geographical_unit else -1
+        )
+
+        logger.info(f"    ✓ Sorted {num_subsets:,} subsets by venue's geo_unit_id")
+
         # Core attributes
         # IMPORTANT: Use global venue IDs (not type-scoped IDs)
-        venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets], dtype=np.int32)
-        subset_indices = np.array([s.subset_index for s in all_subsets], dtype=np.int32)
-        subset_names = np.array([s.subset_name for s in all_subsets], dtype=h5py.string_dtype())
+        venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets_sorted], dtype=np.int32)
+        subset_indices = np.array([s.subset_index for s in all_subsets_sorted], dtype=np.int32)
+        subset_names = np.array([s.subset_name for s in all_subsets_sorted], dtype=h5py.string_dtype())
 
         # Member counts (useful for C++)
-        member_counts = np.array([len(s.members) for s in all_subsets], dtype=np.int32)
+        member_counts = np.array([len(s.members) for s in all_subsets_sorted], dtype=np.int32)
 
         # Write datasets
         self._create_dataset(subsets_group, 'venue_ids', venue_ids)
@@ -522,17 +695,18 @@ class WorldSerializer:
         self._create_dataset(subsets_group, 'member_counts', member_counts)
 
         # Write member lists (ragged array - need special handling)
-        self._write_subset_members(subsets_group, all_subsets)
+        self._write_subset_members(subsets_group, all_subsets_sorted)
 
         return num_subsets
 
     def _write_subset_members(self, subsets_group, all_subsets):
         """
-        Write subset member lists as ragged arrays.
+        Write subset member lists as ragged arrays with partition indexing.
 
         Uses offset-based encoding:
-        - members_flat: Flattened array of all person IDs
+        - members_flat: Flattened array of all person IDs (sorted by venue's geo_unit_id)
         - members_offsets: Start index for each subset
+        - partition_index: geo_unit-based index for efficient partitioned loading
         """
         # Flatten all member lists
         members_flat = []
@@ -546,6 +720,14 @@ class WorldSerializer:
         # Convert to arrays
         members_flat = np.array(members_flat, dtype=np.int32)
         members_offsets = np.array(members_offsets[:-1], dtype=np.int32)  # Drop last offset
+
+        # ============================================================
+        # CREATE PARTITION INDEX FOR SUBSET MEMBERSHIPS
+        # ============================================================
+        logger.info(f"    Building subset partition index...")
+        total_members = len(members_flat)
+        self._write_subset_partition_index(subsets_group, all_subsets, members_offsets, total_members)
+        logger.info(f"    ✓ Wrote subset partition index")
 
         # Write datasets
         self._create_dataset(subsets_group, 'members_flat', members_flat)

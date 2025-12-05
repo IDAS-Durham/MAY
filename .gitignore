@@ -87,3 +87,4 @@ social_contacts.csv
 world_state.h5
 debug_*.py
 simulation_events.h5
+*.h5
