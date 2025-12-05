@@ -14,7 +14,7 @@ from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.relationships import RelationshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples
-from check_multiple_jobs import analyze_multiple_jobs
+from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 
 def export_relationships(world, property_key, output_file):
