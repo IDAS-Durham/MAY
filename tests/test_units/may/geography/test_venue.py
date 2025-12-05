@@ -41,7 +41,7 @@ def venues(geo):
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir="data/venues")
+    venues = VenueManager(geography=geo, data_dir="tests/test_units/may/geography/data")
     venues.load_from_csv()
     return venues
 

@@ -8,6 +8,7 @@ import os
 import logging
 import numpy as np
 import pandas as pd
+from collections import defaultdict
 from .person import Person
 
 logger = logging.getLogger("population")
@@ -21,7 +22,7 @@ class PopulationManager:
     across geographical units according to specified distributions.
     """
 
-    def __init__(self, geography, data_dir="data/population"):
+    def __init__(self, geography, data_dir):
         """
         Initialize the PopulationManager.
 
@@ -66,6 +67,19 @@ class PopulationManager:
             logger.info("Cannot generate population without demographics data")
             return
 
+        # Get the smallest geographical level from the loaded geography
+        # to filter demographics to only relevant geo units
+        smallest_level = self.geography.levels[0]
+        smallest_units_dict = self.geography.get_units_by_level(smallest_level)
+
+        if not smallest_units_dict:
+            logger.warning(f"No {smallest_level} units found in geography. Cannot load demographics.")
+            return
+
+        # Create a set of geo unit names that exist in our geography for fast lookup
+        valid_geo_units = set(smallest_units_dict.keys())
+        logger.info(f"Filtering demographics to {len(valid_geo_units)} {smallest_level}s in loaded geography")
+
         logger.info(f"Loading male demographics from {male_path}")
         male_df = pd.read_csv(male_path)
 
@@ -76,53 +90,53 @@ class PopulationManager:
         if 'geo_unit' not in male_df.columns or 'geo_unit' not in female_df.columns:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
+        # Filter to only geo units in our geography BEFORE processing
+        male_df = male_df[male_df['geo_unit'].isin(valid_geo_units)]
+        female_df = female_df[female_df['geo_unit'].isin(valid_geo_units)]
+
+        logger.info(f"Filtered to {len(male_df)} male geo units and {len(female_df)} female geo units")
+
         # Load into nested dict structure: geo_unit -> age -> sex -> count
-        self.precise_demographics = {}
+        self.precise_demographics = defaultdict(lambda: defaultdict(dict))
         total_people = 0
 
-        # Process male data
-        for _, row in male_df.iterrows():
-            geo_unit = str(row['geo_unit'])
+        logger.info("Processing male demographics...")
+        # Convert male dataframe to long format for efficient processing
+        male_melted = male_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
+        male_melted['age'] = male_melted['age'].astype(int)
+        male_melted['count'] = male_melted['count'].fillna(0).astype(int)
+        # Filter out zero counts for efficiency
+        male_melted = male_melted[male_melted['count'] > 0]
 
-            if geo_unit not in self.precise_demographics:
-                self.precise_demographics[geo_unit] = {}
+        logger.info("Processing female demographics...")
+        # Convert female dataframe to long format
+        female_melted = female_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
+        female_melted['age'] = female_melted['age'].astype(int)
+        female_melted['count'] = female_melted['count'].fillna(0).astype(int)
+        # Filter out zero counts for efficiency
+        female_melted = female_melted[female_melted['count'] > 0]
 
-            # Iterate through age columns (skip 'geo_unit' column)
-            for col in male_df.columns:
-                if col == 'geo_unit':
-                    continue
+        logger.info("Building demographic dictionary...")
+        # Convert to numpy arrays for much faster iteration
+        male_values = male_melted.values  # [[geo_unit, age, count], ...]
+        female_values = female_melted.values
 
-                age = int(col)
-                count = int(row[col]) if pd.notna(row[col]) else 0
+        # Build nested dictionary
+        for row in male_values:
+            geo_unit = str(row[0])
+            age = int(row[1])
+            count = int(row[2])
 
-                if count > 0:
-                    if age not in self.precise_demographics[geo_unit]:
-                        self.precise_demographics[geo_unit][age] = {}
+            self.precise_demographics[geo_unit][age]['male'] = count
+            total_people += count
 
-                    self.precise_demographics[geo_unit][age]['male'] = count
-                    total_people += count
+        for row in female_values:
+            geo_unit = str(row[0])
+            age = int(row[1])
+            count = int(row[2])
 
-        # Process female data
-        for _, row in female_df.iterrows():
-            geo_unit = str(row['geo_unit'])
-
-            if geo_unit not in self.precise_demographics:
-                self.precise_demographics[geo_unit] = {}
-
-            # Iterate through age columns
-            for col in female_df.columns:
-                if col == 'geo_unit':
-                    continue
-
-                age = int(col)
-                count = int(row[col]) if pd.notna(row[col]) else 0
-
-                if count > 0:
-                    if age not in self.precise_demographics[geo_unit]:
-                        self.precise_demographics[geo_unit][age] = {}
-
-                    self.precise_demographics[geo_unit][age]['female'] = count
-                    total_people += count
+            self.precise_demographics[geo_unit][age]['female'] = count
+            total_people += count
 
         logger.info(f"Loaded precise demographics for {len(self.precise_demographics)} geographical units")
         logger.info(f"Total people in demographics: {total_people:,}")
@@ -198,36 +212,6 @@ class PopulationManager:
         if geo_units_with_data > 0:
             logger.info(f"Average: {total_people / geo_units_with_data:.1f} people per {smallest_level}")
 
-    def _assign_activities(self, person):
-        """
-        Assign activities to a person based on their age.
-
-        This is a generic activity assignment based on life stages.
-        Users can customize this logic.
-
-        Args:
-            person (Person): The person to assign activities to
-        """
-        age = person.age
-
-        # Generic life stage activities
-        if 0 <= age <= 4:
-            # Young children
-            person.add_activity("home")
-        elif 5 <= age <= 18:
-            # School age
-            person.add_activity("education")
-            person.add_activity("home")
-        elif 19 <= age <= 64:
-            # Working age
-            person.add_activity("work")
-            person.add_activity("home")
-            person.add_activity("leisure")
-        else:
-            # Retirement age
-            person.add_activity("home")
-            person.add_activity("leisure")
-
     def get_person(self, person_id):
         """
         Get a person by their ID.
@@ -285,6 +269,21 @@ class PopulationManager:
             list: List of Person objects with this activity
         """
         return [p for p in self.people if p.has_activity(activity)]
+
+    def get_people_by_geo_unit(self, geo_unit_code):
+        """
+        Get all people in a specific geographical unit.
+
+        Args:
+            geo_unit_code (str): Name/code of the geographical unit
+
+        Returns:
+            list: List of Person objects in this geo_unit
+        """
+        unit = self.geography.get_unit(geo_unit_code)
+        if unit is None:
+            return []
+        return unit.people if hasattr(unit, 'people') else []
 
     def get_statistics(self):
         """

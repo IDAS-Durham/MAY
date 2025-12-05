@@ -216,12 +216,13 @@ def setup_geography(args=None, config=None):
     else:
         logger.info("Loading all geographical units (no filters)")
 
-    # Get data directory from config
+    # Get data directory and levels from config
     geo_config = config.get('geography', {})
     data_dir = geo_config.get('data_dir', 'data/geography')
+    levels = geo_config.get('levels', None)  # None = use Geography default
 
     # Create Geography object
-    geo = Geography(data_dir=data_dir, filters=filters)
+    geo = Geography(data_dir=data_dir, filters=filters, levels=levels)
 
     return geo, filters
 
@@ -254,11 +255,12 @@ def setup_default_geography(args=None, config=None):
     else:
         logger.info("Loading all geographical units (no filters)")
 
-    # Get data directory from config
+    # Get data directory and levels from config
     geo_config = config.get('geography', {})
     data_dir = geo_config.get('data_dir', 'data/geography')
+    levels = geo_config.get('levels', None)  # None = use Geography default
 
     # Create Geography object
-    geo = Geography(data_dir=data_dir, filters=filters)
+    geo = Geography(data_dir=data_dir, filters=filters, levels=levels)
 
     return geo, filters

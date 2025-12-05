@@ -1,0 +1,166 @@
+# ============================================================================
+# Specific Workplace Distributor - Hospitals (Q Sector)
+# ============================================================================
+# This distributor allocates health sector (Q) workers to hospitals.
+# Access via: person.activity_map['primary_activity'] -> hospital venue
+#
+# Principles:
+# - Sector-specific allocation (only Q workers)
+# - Location-based (uses workplace_sgu for geographical matching)
+# - Runs BEFORE company_distributor to capture health sector workers
+# ============================================================================
+
+# ============================================================================
+# BASIC INFO
+# ============================================================================
+distributor_name: "specific_workplace_hospitals_distributor"
+venue_type: "hospital"
+description: "Distribute health sector (Q) workers to hospitals"
+
+# Activity mapping: This allocation sets the person's activity_map
+# Access: person.activity_map['primary_activity'] will return the hospital venue object
+activity_map_key: "primary_activity"
+
+# Subset to add workers to
+subset_key: "worker"
+
+# ============================================================================
+# ELIGIBILITY: Who can be allocated?
+# ============================================================================
+
+eligibility:
+
+  require_unassigned: true
+
+  global_filters:
+    - attribute: "age"
+      type: "numerical"
+      description: "Only consider working-age people"
+      min: 18
+      max: 64
+
+    - attribute: "properties.workplace_sgu"
+      type: "categorical"
+      description: "Geographical unit name for where they are supposed to work"
+
+    - attribute: "properties.work_sector"
+      type: "categorical"
+      description: "Only Q (Health) sector workers"
+      values: ["Q"]
+
+    - attribute: "residence.type"
+      type: "categorical"
+      description: "Exclude people in care homes, prisons, and student dorms"
+      values: ["household"]
+
+  attributes:
+    - name: "work_sector"
+      type: "categorical"
+      description: "Person's work_sector (from properties) should be Q (Health)"
+
+      # Only Q sector workers
+      matching_rules:
+        "Q": ["Q"]
+
+      # Case sensitivity
+      case_sensitive: false
+
+# ============================================================================
+# VENUE SELECTION: How to pick eligible venues?
+# ============================================================================
+
+venue_selection:
+  # Use geographical hierarchy matching
+  # Person's workplace_location (SGU) → Hospital's geo_unit (typically MGU or LGU)
+  consider_by: "geo_unit"
+
+  # Hospitals are typically at MGU or LGU level
+  venue_geo_level: "SGU"
+
+  # Use workplace_sgu instead of geographical_unit (residence)
+  # This matches people to hospitals near their WORK location, not home
+  person_location_attribute: "properties.workplace_sgu"
+
+  # Batch at SGU level (workplace) for better performance
+  batch_geo_level: "SGU"
+
+  # Only consider hospitals in loaded geography with capacity
+  filter_by_geography: true
+  respect_capacity: true
+
+# ============================================================================
+# ALLOCATION STRATEGY: How to assign person to venue?
+# ============================================================================
+
+allocation:
+  # Allocation strategy
+  strategy: "random"  # Randomly pick from eligible hospitals
+
+  # Capacity management
+  capacity_column: "estimated_staff"
+
+  capacity_handling:
+    if_missing: "skip"  # Skip hospitals without bed count
+    if_zero: "skip"     # Skip hospitals with 0 beds
+
+  track_capacity: true
+  when_full: "exclude"  # Remove full hospitals from options
+
+  # Batch processing for performance
+  batch_by: "geo_unit"
+
+# ============================================================================
+# EXECUTION SETTINGS
+# ============================================================================
+
+settings:
+  # Execution order (higher = earlier)
+  # Run after university (1) but before company (5)
+  priority: 4
+
+  # Limit number of allocations (null = no limit)
+  max_allocations: null
+
+  # Random seed for reproducibility
+  random_seed: null
+
+  # Logging
+  verbose: true
+  log_summary: true
+  debug: false
+
+# ============================================================================
+# FALLBACK BEHAVIOR
+# ============================================================================
+
+fallback:
+  strategy: "skip"  # Skip if no matching hospitals found
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# ALLOCATION LOGIC:
+#
+# 1. Filter people by:
+#    - Working age (18-64)
+#    - Has workplace_sgu assigned
+#    - Work sector = Q (Health)
+#    - Lives in household (not communal residence)
+#
+# 2. For each Q worker:
+#    - Find all hospitals in their workplace area (workplace_sgu)
+#    - Filter by capacity (n_beds)
+#    - Randomly select one hospital from eligible options
+#
+# 3. Track capacity:
+#    - Use n_beds as capacity measure
+#    - Exclude hospitals when full
+#    - Skip hospitals with missing or zero capacity
+#
+# 4. Fallback:
+#    - If no suitable hospitals found, skip (person remains unassigned)
+#    - They may be allocated to care_homes by the next distributor
+#    - Or go to company_distributor as fallback
+#
+# ============================================================================

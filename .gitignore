@@ -61,3 +61,30 @@ Thumbs.db
 
 # Temporary files
 cw.txt
+
+# Debug scripts
+debug_scripts/
+
+/data
+# Generated allocation files
+data/households/household_allocations.csv
+data/venues/venue_allocations.csv
+data/venues/care_homes_ew.csv
+data/households/household_composition_ew.csv
+data/population/sampled_single_year_female_ew.csv
+data/population/sampled_single_year_male_ew.csv
+stuff_for_carehomes
+profile_analyzer.py
+profile_bottlenecks.txt
+simulation_profile.stats
+ATTRIBUTE_ASSIGNMENT_PLAN.md
+hardcoded_ethnicity_distributor.py
+
+# pytest_cache
+.pytest_cache
+people.csv
+social_contacts.csv
+world_state.h5
+debug_*.py
+simulation_events.h5
+*.h5
