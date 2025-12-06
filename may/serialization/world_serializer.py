@@ -381,7 +381,77 @@ class WorldSerializer:
             logger.info(f"      Max relationships per geo_unit: {counts.max()}")
             logger.info(f"      Avg relationships per geo_unit: {counts.mean():.1f}")
 
-    def _write_subset_partition_index(self, subsets_group, all_subsets_sorted, members_offsets, total_members):
+    def _write_subset_metadata_partition_index(self, subsets_group, all_subsets_sorted):
+        """
+        Write partition index for efficient geo_unit-based subset metadata loading.
+
+        Creates index structure that maps geo_unit_id -> (start_index, count)
+        for the subset metadata arrays (venue_ids, subset_indices, etc.),
+        allowing efficient range-based reads without scanning all 35M venue_ids.
+
+        Args:
+            subsets_group: HDF5 subsets group
+            all_subsets_sorted: Subsets list sorted by venue's geo_unit_id
+
+        Structure created:
+            /venues/subsets/partition_index/
+                geo_unit_ids: [1, 2, 3, ...] - unique geo_unit IDs
+                start_indices: [0, 1000, 3500, ...] - start row in subset arrays
+                counts: [1000, 2500, 750, ...] - number of subsets per geo_unit
+        """
+        index_group = subsets_group.create_group('partition_index')
+
+        if len(all_subsets_sorted) == 0:
+            logger.warning("Empty subsets - no metadata partition index to create")
+            return
+
+        # Find unique geo_unit_ids and their boundaries
+        unique_geo_units = []
+        start_indices = []
+        counts = []
+
+        current_geo_unit = all_subsets_sorted[0].venue.geographical_unit.id if all_subsets_sorted[0].venue.geographical_unit else -1
+        current_start = 0
+        current_count = 0
+
+        for i, subset in enumerate(all_subsets_sorted):
+            geo_unit_id = subset.venue.geographical_unit.id if subset.venue.geographical_unit else -1
+
+            if geo_unit_id != current_geo_unit:
+                # Save previous geo_unit
+                unique_geo_units.append(current_geo_unit)
+                start_indices.append(current_start)
+                counts.append(current_count)
+
+                # Start new geo_unit
+                current_geo_unit = geo_unit_id
+                current_start = i
+                current_count = 1
+            else:
+                current_count += 1
+
+        # Save last geo_unit
+        unique_geo_units.append(current_geo_unit)
+        start_indices.append(current_start)
+        counts.append(current_count)
+
+        # Convert to numpy arrays
+        unique_geo_units = np.array(unique_geo_units, dtype=np.int32)
+        start_indices = np.array(start_indices, dtype=np.int32)
+        counts = np.array(counts, dtype=np.int32)
+
+        # Write datasets
+        self._create_dataset(index_group, 'geo_unit_ids', unique_geo_units)
+        self._create_dataset(index_group, 'start_indices', start_indices)
+        self._create_dataset(index_group, 'counts', counts)
+
+        logger.info(f"      Created subset metadata partition index for {len(unique_geo_units)} geo_units")
+        if len(counts) > 0:
+            logger.info(f"      Min subsets per geo_unit: {counts.min()}")
+            logger.info(f"      Max subsets per geo_unit: {counts.max()}")
+            logger.info(f"      Avg subsets per geo_unit: {counts.mean():.1f}")
+
+    def _write_subset_members_partition_index(self, subsets_group, all_subsets_sorted, members_offsets, total_members):
         """
         Write partition index for efficient geo_unit-based subset membership loading.
 
@@ -395,12 +465,12 @@ class WorldSerializer:
             total_members: Total number of entries in members_flat
 
         Structure created:
-            /venues/subsets/partition_index/
+            /venues/subsets/members_partition_index/
                 geo_unit_ids: [1, 2, 3, ...] - unique geo_unit IDs
                 start_indices: [0, 50000, 125000, ...] - start row in members_flat
                 counts: [50000, 75000, 30000, ...] - number of members per geo_unit
         """
-        index_group = subsets_group.create_group('partition_index')
+        index_group = subsets_group.create_group('members_partition_index')
 
         if len(all_subsets_sorted) == 0:
             logger.warning("Empty subsets - no partition index to create")
@@ -688,6 +758,13 @@ class WorldSerializer:
         # Member counts (useful for C++)
         member_counts = np.array([len(s.members) for s in all_subsets_sorted], dtype=np.int32)
 
+        # ============================================================
+        # CREATE PARTITION INDEX FOR SUBSET METADATA
+        # ============================================================
+        logger.info(f"    Building subset metadata partition index...")
+        self._write_subset_metadata_partition_index(subsets_group, all_subsets_sorted)
+        logger.info(f"    ✓ Wrote subset metadata partition index")
+
         # Write datasets
         self._create_dataset(subsets_group, 'venue_ids', venue_ids)
         self._create_dataset(subsets_group, 'subset_indices', subset_indices)
@@ -724,10 +801,10 @@ class WorldSerializer:
         # ============================================================
         # CREATE PARTITION INDEX FOR SUBSET MEMBERSHIPS
         # ============================================================
-        logger.info(f"    Building subset partition index...")
+        logger.info(f"    Building subset members partition index...")
         total_members = len(members_flat)
-        self._write_subset_partition_index(subsets_group, all_subsets, members_offsets, total_members)
-        logger.info(f"    ✓ Wrote subset partition index")
+        self._write_subset_members_partition_index(subsets_group, all_subsets, members_offsets, total_members)
+        logger.info(f"    ✓ Wrote subset members partition index")
 
         # Write datasets
         self._create_dataset(subsets_group, 'members_flat', members_flat)
