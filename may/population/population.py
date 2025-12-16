@@ -68,6 +68,7 @@ class PopulationManager:
         Args:
             male_file (str): Filename for male demographics
             female_file (str): Filename for female demographics
+        
         """
         male_path = os.path.join(self.data_dir, male_file)
         female_path = os.path.join(self.data_dir, female_file)

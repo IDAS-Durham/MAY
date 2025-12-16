@@ -4,6 +4,60 @@ Activity assignment framework for Person objects.
 This module provides a simple, modular system for assigning activities where:
 1. Activities can be added independently based on conditions
 2. Activities can be chosen probabilistically from mutually exclusive options
+
+Example:
+  create simple assigner:
+    assigner = ActivityAssigner()
+
+    # Everyone gets home
+    assigner.add_independent_rule('home', lambda p: True, 1.0, "Universal home")
+
+    # Children in education
+    assigner.add_independent_rule('education', lambda p: 5 <= p.age <= 18, 1.0,
+                                 "School age children")
+
+    # Working age - employment choice
+    assigner.add_choice_rule(
+        choice_name='employment_status',
+        condition=lambda p: 19 <= p.age <= 64,
+        options=[
+            ('employed', 0.80),
+            ('not employed', 0.20)
+        ],
+        description="Employment status for working age"
+    )
+
+Example:
+  create modern day assigner:
+    assigner = ActivityAssigner()
+
+    # HOME - everyone
+    assigner.add_independent_rule('home', lambda p: True, 1.0)
+
+    # CHILDCARE - young children
+    assigner.add_independent_rule('childcare', lambda p: 2 <= p.age <= 4, 0.64, description="Childcare centre for a young child, e.g. nursery")
+
+    # EDUCATION - school age
+    assigner.add_independent_rule('school', lambda p: 5 <= p.age <= 18, 0.95)
+
+    # HIGHER EDUCATION - young adults
+    assigner.add_independent_rule('higher_education', lambda p: 18 <= p.age <= 24, 0.49)
+
+    # EMPLOYMENT - working age (mutually exclusive choice)
+    assigner.add_choice_rule(
+        choice_name='main activity',
+        condition=lambda p: 19 <= p.age <= 64,
+        options=[
+            ('employed', 0.75), # employed
+            ('unemployed', 0.05), # actively seeking employment
+            ('inactivity', 0.20) # includes students            
+        ]
+    )
+
+    # LEISURE - adults
+    assigner.add_independent_rule('leisure', lambda p: p.age >= 18, 1.0)
+
+
 """
 
 from dataclasses import dataclass, field
@@ -357,7 +411,7 @@ class ActivityAssigner:
 
 
 # =============================================================================
-# Convenience Factory Functions
+# Example Factory Functions
 # =============================================================================
 
 def create_simple_assigner() -> ActivityAssigner:

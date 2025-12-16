@@ -101,8 +101,8 @@ def main():
     laptime = time.perf_counter()
     
     # Load demographic data
-    male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
-    female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
+    male_file = pop_config.get("demographics_male_file", "demography_male.csv")
+    female_file = pop_config.get("demographics_female_file", "demography_female.csv")
     population.load_demographics_from_csv(male_file, female_file)
 
     logger.info("Loading demographic data took {:.2g}s".format(time.perf_counter()-laptime))
@@ -132,40 +132,6 @@ def main():
     for geo_unit in smallest_geo_unit_dict.values():
         still_unallocated_people = geo_unit.people
 
-        # # Distribute people to Student Dorms
-        # potential_venues = geo_unit.get_venues_by_type('student_dorm')
-        # if potential_venues:
-        #     logger.debug(f"Doing student dorm {potential_venues[0].name} in {potential_venues[0].geographical_unit.name}")
-        #     student_dorm_distributor = StudentDormDistributor(
-        #         'student_dorm',
-        #         venues,
-        #         still_unallocated_people,
-        #         potential_venues=potential_venues
-        #     )
-        #     student_dorm_distributor.assign_people_venues(
-        #         'home',
-        #         'student_dorm',
-        #         people=still_unallocated_people
-        #     )
-        #     still_unallocated_people = student_dorm_distributor.unallocated_people
-
-        # # Distribute people to Care Homes
-        # potential_venues = geo_unit.get_venues_by_type('care_home')
-        # if potential_venues:
-        #     logger.debug(f"Doing care home {potential_venues[0].name} in {potential_venues[0].geographical_unit.name}")            
-        #     care_home_distributor = CareHomeDistributor(
-        #         'care_home',
-        #         venues,
-        #         still_unallocated_people,
-        #         potential_venues=potential_venues
-        #     )
-        #     care_home_distributor.assign_people_venues(
-        #         'home',
-        #         'care_home',
-        #         people=still_unallocated_people
-        #     )
-        #     still_unallocated_people = care_home_distributor.unallocated_people
-        
         # Distribute people to Households with expansion
         potential_venues = geo_unit.get_venues_by_type('household')
         if potential_venues:
@@ -181,18 +147,6 @@ def main():
             household_distributor.assign_people_venues_multi_pass('home', 'household')
             still_unallocated_people = household_distributor.unallocated_people
         
-        # # Fill prisons
-        # potential_venues = geo_unit.parent.get_venues_by_type('prison')
-        # if potential_venues:
-        #     prison_distributor = PrisonDistributor(
-        #         'prison',
-        #         venues,
-        #         still_unallocated_people,
-        #         potential_venues=potential_venues,
-        #     )
-        #     prison_distributor.assign_people_venues('home','prison')
-        #     still_unallocated_people = prison_distributor.unallocated_people
-
         # Restart household distributor
         potential_venues = geo_unit.get_venues_by_type('household')
         if potential_venues and still_unallocated_people:
