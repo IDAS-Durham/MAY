@@ -962,13 +962,11 @@ class VenueDistributor:
                     if self.verbose:
                         logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}): All {len(geo_unit_nearby_venues)} nearby venues at capacity, skipping {len(geo_unit_people)} people")
                     # Still need to count these people for progress tracking
-                    people_processed += len(geo_unit_people)
-                    if people_processed >= progress_interval:
-                        # Update progress but don't spam logs
-                        next_milestone = (people_processed // progress_interval) * progress_interval
-                        if next_milestone > 0 and next_milestone != people_processed:
-                            percent_complete = (next_milestone / total_people) * 100
-                            logger.info(f"    Progress: {next_milestone}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
+                    for _ in range(len(geo_unit_people)):
+                        people_processed += 1
+                        if people_processed % progress_interval == 0 or people_processed == total_people:
+                            percent_complete = (people_processed / total_people) * 100
+                            logger.info(f"    Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
                     continue
 
             # Group people by their attribute values 
@@ -1009,11 +1007,12 @@ class VenueDistributor:
                         if self.verbose:
                             attr_display = ", ".join(f"{name}={val}" for name, val in zip(attribute_names, attr_values))
                             logger.debug(f"Geo unit {geo_unit.name}: Attribute group [{attr_display}] has {len(eligible_venues)} eligible venues but all at capacity, skipping {len(people_group)} people")
-                        # Update progress tracking for skipped people
-                        people_processed += len(people_group)
-                        if people_processed % progress_interval == 0 or people_processed == total_people:
-                            percent_complete = (people_processed / total_people) * 100
-                            logger.info(f"    Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
+                        # Update progress tracking for skipped people (same pattern as regular allocation)
+                        for _ in range(len(people_group)):
+                            people_processed += 1
+                            if people_processed % progress_interval == 0 or people_processed == total_people:
+                                percent_complete = (people_processed / total_people) * 100
+                                logger.info(f"    Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
                         continue  # Skip this entire attribute group
 
                 # Assign all people in this group to eligible venues

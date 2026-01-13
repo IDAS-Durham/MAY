@@ -389,7 +389,15 @@ class RomanticRelationshipDistributor:
             logger.info("  No household couples to process")
             return
 
-        for person1, person2 in household_couples:
+        # Progress tracking
+        total_couples = len(household_couples)
+        progress_interval = max(1, total_couples // 10)  # Log every 10%
+
+        for idx, (person1, person2) in enumerate(household_couples):
+            # Progress logging every 10%
+            if idx > 0 and idx % progress_interval == 0:
+                progress_pct = (idx / total_couples) * 100
+                logger.info(f"    Progress: {idx:,} / {total_couples:,} couples processed ({progress_pct:.1f}%)")
             # Assign compatible orientations
             self._assign_compatible_orientations(person1, person2)
 
@@ -738,6 +746,8 @@ class RomanticRelationshipDistributor:
         - Ethnicity (weighted by empirical probabilities)
         - Age (preferred age differences)
 
+        Performance optimization: samples max_candidates_per_search instead of checking all.
+
         Args:
             person: Person seeking a partner
             candidates: List of potential partners
@@ -745,8 +755,19 @@ class RomanticRelationshipDistributor:
         Returns:
             Selected partner or None if no compatible candidates
         """
+        # Performance optimization: sample candidates instead of checking all
+        perf_config = self.config.get('performance', {})
+        max_candidates = perf_config.get('max_candidates_per_search', len(candidates))
+        max_attempts = perf_config.get('max_failed_attempts', 1000)
+
+        if len(candidates) > max_candidates:
+            # Randomly sample candidates instead of checking all
+            candidates = list(np.random.choice(candidates, size=max_candidates, replace=False))
+
         # Filter by sexual orientation compatibility AND household exclusion
         orientation_compatible = []
+        failed_attempts = 0
+
         for candidate in candidates:
             # Skip if same household (unless they're an existing household couple)
             if self._are_same_household(person, candidate):
@@ -766,6 +787,10 @@ class RomanticRelationshipDistributor:
         if not age_appropriate:
             # Fallback to orientation-compatible if no age-appropriate
             age_appropriate = orientation_compatible
+
+        # Early termination: if we've checked enough candidates and found none, give up
+        if not age_appropriate and failed_attempts >= max_attempts:
+            return None
 
         # Calculate compatibility scores for all candidates
         # Geography and ethnicity are primary weights
@@ -1055,7 +1080,17 @@ class RomanticRelationshipDistributor:
         matched = set()
         relationships_created = 0
 
-        for person in exclusive_seekers:
+        # Progress tracking
+        total_seekers = len(exclusive_seekers)
+        progress_interval = max(1, total_seekers // 10)  # Log every 10%
+
+        for idx, person in enumerate(exclusive_seekers):
+            # Progress logging every 10%
+            if idx > 0 and idx % progress_interval == 0:
+                progress_pct = (idx / total_seekers) * 100
+                logger.info(f"    Progress: {idx:,} / {total_seekers:,} seekers processed "
+                           f"({progress_pct:.1f}%), {relationships_created:,} relationships created")
+
             if person.id in matched:
                 continue  # Already matched
 
@@ -1155,7 +1190,16 @@ class RomanticRelationshipDistributor:
         # Match non-exclusive seekers with each other
         relationships_created = 0
 
-        for person in non_exclusive_seekers:
+        # Progress tracking
+        total_seekers = len(non_exclusive_seekers)
+        progress_interval = max(1, total_seekers // 10)  # Log every 10%
+
+        for idx, person in enumerate(non_exclusive_seekers):
+            # Progress logging every 10%
+            if idx > 0 and idx % progress_interval == 0:
+                progress_pct = (idx / total_seekers) * 100
+                logger.info(f"    Progress: {idx:,} / {total_seekers:,} seekers processed "
+                           f"({progress_pct:.1f}%), {relationships_created:,} relationships created")
             # Check if person has reached their limit
             max_partners = self._get_max_partners(person, 'non_exclusive')
             current_partners = partner_counts[person.id]
@@ -1289,7 +1333,17 @@ class RomanticRelationshipDistributor:
         removed_partners = set()
         affairs_created = 0
 
-        for cheater_id in self.potential_cheaters:
+        # Progress tracking
+        total_cheaters = len(self.potential_cheaters)
+        progress_interval = max(1, total_cheaters // 10)  # Log every 10%
+
+        for idx, cheater_id in enumerate(self.potential_cheaters):
+            # Progress logging every 10%
+            if idx > 0 and idx % progress_interval == 0:
+                progress_pct = (idx / total_cheaters) * 100
+                logger.info(f"    Progress: {idx:,} / {total_cheaters:,} cheaters processed "
+                           f"({progress_pct:.1f}%), {affairs_created:,} affairs created")
+
             # Find the cheater using O(1) index lookup
             cheater = self.person_by_id.get(cheater_id)
             if not cheater:
