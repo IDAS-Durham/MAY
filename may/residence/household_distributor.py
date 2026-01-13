@@ -722,6 +722,13 @@ class HouseholdDistributor:
                         logger.debug(f"  ✓ Selected: {pair[0]} and {pair[1]}")
                         logger.debug("")
 
+                    # Check if this pair should be flagged as a romantic couple
+                    if pair_constraint.get('creates_romantic_couple', False):
+                        pair[0].properties['household_couple'] = pair[1].id
+                        pair[1].properties['household_couple'] = pair[0].id
+                        if show_detailed_logs:
+                            logger.debug(f"  ✓ Flagged as household couple for romantic relationship distribution")
+
                 elif role_count == "any":
                     # Determine count from pattern
                     # For "any", use minimum required from pattern

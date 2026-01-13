@@ -26,7 +26,7 @@ geography:
     level: LGU
 
     # Codes to filter (for small lists, comma-separated)
-    codes: ["County Durham", "Darlington"]
+    codes: ["County Durham"]
 
     # Or specify a file path with codes (for large lists)
     # File should have one code per line
@@ -192,6 +192,26 @@ relationship_pipeline:
   # - Relationships are built AFTER venue assignments (so activity_map is populated)
   # - Connections are stored in person.properties (key defined in YAML config)
   # - Add property names to serialization_config.yaml to include in HDF5 export
+
+# ========================================
+# ROMANTIC RELATIONSHIPS - Sexual orientation and partnerships
+# ========================================
+# Build romantic/sexual relationship networks including:
+# - Sexual orientation assignment
+# - Exclusive relationships (monogamous couples)
+# - Non-exclusive relationships (polyamorous/consensual non-monogamy)
+# - Cheating/infidelity
+# All parameters are configurable via YAML (probabilities, age differences, partner limits, etc.)
+
+romantic_relationships:
+  enabled: true  # Set to false to skip romantic relationship distribution
+  config: "yaml/relationships/romantic_relationships.yaml"
+
+  # Notes:
+  # - Runs AFTER household distribution and social relationships
+  # - Recognizes household couples (flagged with creates_romantic_couple in relationship_rules.yaml)
+  # - Uses ethnicity partnership probabilities from data/population/ethnicity/
+  # - Exports detailed CSVs: romantic_relationships_detailed.csv and cheating_network_detailed.csv
 
 # ========================================
 # EXAMPLES

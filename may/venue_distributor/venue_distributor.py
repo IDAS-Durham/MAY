@@ -954,6 +954,23 @@ class VenueDistributor:
                     logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}) has no nearby venues")
                 continue
 
+            # OPTIMIZATION 2: Skip geo-unit if no venues have capacity (for non-overflow groups)
+            # This avoids expensive filtering for 85% of people in early childhood group
+            if not allow_overflow:
+                venues_with_capacity = self._filter_venues_by_capacity(geo_unit_nearby_venues)
+                if not venues_with_capacity:
+                    if self.verbose:
+                        logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}): All {len(geo_unit_nearby_venues)} nearby venues at capacity, skipping {len(geo_unit_people)} people")
+                    # Still need to count these people for progress tracking
+                    people_processed += len(geo_unit_people)
+                    if people_processed >= progress_interval:
+                        # Update progress but don't spam logs
+                        next_milestone = (people_processed // progress_interval) * progress_interval
+                        if next_milestone > 0 and next_milestone != people_processed:
+                            percent_complete = (next_milestone / total_people) * 100
+                            logger.info(f"    Progress: {next_milestone}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
+                    continue
+
             # Group people by their attribute values 
             # This works with ANY attributes defined in YAML (age/sex/income/disability/etc)
             people_by_attributes = {}
@@ -983,6 +1000,21 @@ class VenueDistributor:
                             if self.verbose:
                                 logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}) with attributes {attr_values} required expanded search ({search_count} venues)")
                             break
+
+                # OPTIMIZATION 3: Skip attribute-group if no venues have capacity (for non-overflow groups)
+                # This saves per-person checks when we know the whole group can't be allocated
+                if not allow_overflow and eligible_venues:
+                    eligible_with_capacity = self._filter_venues_by_capacity(eligible_venues)
+                    if not eligible_with_capacity:
+                        if self.verbose:
+                            attr_display = ", ".join(f"{name}={val}" for name, val in zip(attribute_names, attr_values))
+                            logger.debug(f"Geo unit {geo_unit.name}: Attribute group [{attr_display}] has {len(eligible_venues)} eligible venues but all at capacity, skipping {len(people_group)} people")
+                        # Update progress tracking for skipped people
+                        people_processed += len(people_group)
+                        if people_processed % progress_interval == 0 or people_processed == total_people:
+                            percent_complete = (people_processed / total_people) * 100
+                            logger.info(f"    Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
+                        continue  # Skip this entire attribute group
 
                 # Assign all people in this group to eligible venues
                 if eligible_venues:
@@ -1078,6 +1110,17 @@ class VenueDistributor:
         if not special_cases:
             return people
 
+        # OPTIMIZATION: Build venue index for fast lookup by (name, geo_unit)
+        # This avoids O(N_people * N_venues) search, reducing 58 min -> seconds for special cases
+        venue_index = {}
+        for venue in venues:
+            if hasattr(venue, 'name') and hasattr(venue, 'geographical_unit') and venue.geographical_unit:
+                key = (venue.name, venue.geographical_unit.name)
+                venue_index[key] = venue
+
+        if venue_index and self.verbose:
+            logger.debug(f"Built special case venue index with {len(venue_index)} entries")
+
         remaining_people = []
         allocated_count = 0
 
@@ -1087,7 +1130,7 @@ class VenueDistributor:
             for case in special_cases:
                 if self._matches_special_case(person, case):
                     # Try to allocate according to special case rule
-                    if self._allocate_special_case(person, case, venues):
+                    if self._allocate_special_case(person, case, venues, venue_index):
                         allocated = True
                         allocated_count += 1
                         break
@@ -1129,9 +1172,15 @@ class VenueDistributor:
 
         return True
 
-    def _allocate_special_case(self, person, case: Dict, venues: List) -> bool:
+    def _allocate_special_case(self, person, case: Dict, venues: List, venue_index: Dict = None) -> bool:
         """
         Allocate person according to special case rule.
+
+        Args:
+            person: Person to allocate
+            case: Special case configuration
+            venues: List of all venues (fallback if index not available)
+            venue_index: Optional dict mapping (name, geo_unit) -> venue for O(1) lookup
 
         Returns:
             True if successfully allocated, False otherwise
@@ -1162,24 +1211,24 @@ class VenueDistributor:
                     if venues:
                         selected_venue = np.random.choice(venues)
 
-        # Fallback: match_by criteria (existing logic)
+        # OPTIMIZED: Use index for match_by criteria
+        elif match_by and venue_index:
+            # Extract lookup key from match_by criteria
+            # For boarding schools: match by (name, geo_unit)
+            lookup_key = self._extract_special_case_lookup_key(person, match_by)
+
+            if lookup_key:
+                selected_venue = venue_index.get(lookup_key)
+                if selected_venue and self.verbose:
+                    logger.debug(f"Person {person.id}: Fast lookup found venue '{selected_venue.name}'")
+
+            # Fallback to full search if key extraction failed
+            if not selected_venue:
+                selected_venue = self._special_case_fallback_search(person, venues, match_by)
+
+        # Fallback: match_by without index (original slow logic)
         elif match_by:
-            # Debug: log what we're looking for
-            residence_name = self._get_nested_value_person(person, 'residence.name')
-            residence_geo = self._get_nested_value_person(person, 'residence.geographical_unit.name')
-            logger.debug(f"Person {person.id}: Looking for venue matching name='{residence_name}', geo_unit='{residence_geo}'")
-            logger.debug(f"Checking against {len(venues)} venues")
-
-            # Sample first 3 venues to see what we're checking against
-            for i, venue in enumerate(venues[:3]):
-                venue_geo = self._get_nested_value(venue, 'geographical_unit.name')
-                logger.debug(f"  Sample venue {i}: name='{venue.name}', geo_unit='{venue_geo}'")
-
-            for venue in venues:
-                if self._venue_matches_criteria(person, venue, match_by):
-                    selected_venue = venue
-                    logger.debug(f"Person {person.id}: MATCHED to venue '{venue.name}'")
-                    break
+            selected_venue = self._special_case_fallback_search(person, venues, match_by)
 
         # Allocate if venue found
         if selected_venue:
@@ -1198,6 +1247,47 @@ class VenueDistributor:
             logger.warning(f"Special case: No matching venue found for person {person.id} with residence '{residence_name}'")
 
         return False
+
+    def _extract_special_case_lookup_key(self, person, match_by: List[Dict]) -> Optional[Tuple]:
+        """
+        Extract lookup key from match_by criteria for fast index lookup.
+
+        For boarding schools, this extracts (name, geo_unit) from person's residence.
+
+        Returns:
+            Tuple key for venue_index lookup, or None if extraction fails
+        """
+        try:
+            key_parts = []
+            for criterion in match_by:
+                source = criterion.get('source', '')
+                if source.startswith('person.'):
+                    source_value = self._get_nested_value_person(person, source.replace('person.', ''))
+                    if source_value is None:
+                        return None
+                    key_parts.append(source_value)
+
+            return tuple(key_parts) if key_parts else None
+        except Exception:
+            return None
+
+    def _special_case_fallback_search(self, person, venues: List, match_by: List[Dict]):
+        """
+        Fallback: Original O(N) search through all venues.
+        Used when index lookup fails or is not available.
+        """
+        if self.verbose:
+            residence_name = self._get_nested_value_person(person, 'residence.name')
+            residence_geo = self._get_nested_value_person(person, 'residence.geographical_unit.name')
+            logger.debug(f"Person {person.id}: Fallback search for name='{residence_name}', geo_unit='{residence_geo}'")
+
+        for venue in venues:
+            if self._venue_matches_criteria(person, venue, match_by):
+                if self.verbose:
+                    logger.debug(f"Person {person.id}: MATCHED to venue '{venue.name}'")
+                return venue
+
+        return None
 
     def _venue_matches_criteria(self, person, venue, match_by: List[Dict]) -> bool:
         """Check if venue matches all criteria in match_by list."""

@@ -83,6 +83,7 @@ rules:
           mean_difference: 3.0
           std_difference: 5.0
           max_absolute_difference: 19
+        creates_romantic_couple: true  # Flag this pair as a romantic couple
 
   # Rule 2: Single-adult families with kids
   - name: "Single-adult family with kids"
@@ -171,6 +172,7 @@ rules:
           mean_difference: 3.0
           std_difference: 5.0
           max_absolute_difference: 19
+        creates_romantic_couple: true  # Flag this pair as a romantic couple
 
   # Rule 4: Single-adult families with young adults
   - name: "Single-adult family with young adults"
@@ -233,6 +235,7 @@ rules:
           mean_difference: 3.0
           std_difference: 5.0
           max_absolute_difference: 19
+        creates_romantic_couple: true  # Flag this pair as a romantic couple
 
   # Rule 6: Elderly pairs
   - name: "Elderly pair"
@@ -258,6 +261,7 @@ rules:
           mean_difference: 3.0
           std_difference: 5.0
           max_absolute_difference: 19
+        creates_romantic_couple: true  # Flag this pair as a romantic couple
 
   # Rule 7: Adding young adults to existing families (for household_excess steps)
   - name: "Add young adults to existing family"

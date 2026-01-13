@@ -264,6 +264,29 @@ def main():
                 logger.error(f"Failed to build relationships from {config_path}: {e}")
                 logger.exception(e)
 
+    # ========================================
+    # ROMANTIC RELATIONSHIPS - Sexual orientation and partnerships
+    # ========================================
+    romantic_config = config.get("romantic_relationships", {})
+
+    if romantic_config.get("enabled", False):
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("ROMANTIC RELATIONSHIPS")
+        logger.info("=" * 60)
+
+        config_path = romantic_config.get("config", "yaml/relationships/romantic_relationships.yaml")
+
+        try:
+            from may.relationships.romantic_relationship_distributor import RomanticRelationshipDistributor
+
+            distributor = RomanticRelationshipDistributor(world, config_path)
+            distributor.distribute_all()
+
+        except Exception as e:
+            logger.error(f"Failed to distribute romantic relationships: {e}")
+            logger.exception(e)
+
     logger.info("")
     logger.info("=" * 60)
     logger.info("World creation complete!")

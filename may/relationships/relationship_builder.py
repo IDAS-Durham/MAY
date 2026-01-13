@@ -1,8 +1,6 @@
 """
 Generic relationship builder for creating networks between agents.
 
-Fully configurable via YAML - no hardcoded relationship types.
-Optimized for 60M+ agents using Numba JIT compilation.
 """
 
 import logging
