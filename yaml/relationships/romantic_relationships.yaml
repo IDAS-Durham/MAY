@@ -17,8 +17,8 @@ enabled: true
 # Performance settings for large-scale simulations
 performance:
   # Maximum candidates to check per person (samples randomly from geographical group)
-  # Lower = faster but less optimal matching. Recommended: 50-100 for 60M scale
-  max_candidates_per_search: 100
+  # Lower = faster but less optimal matching. Recommended: 20-30 for 60M scale
+  max_candidates_per_search: 25
 
   # Maximum failed matching attempts before giving up
   # Lower = faster. Recommended: 10-20 for 60M scale

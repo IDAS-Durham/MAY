@@ -739,18 +739,15 @@ class RomanticRelationshipDistributor:
         """
         Find a compatible romantic partner for a person.
 
-        Uses compatibility scoring based on:
+        OPTIMIZED: Assumes candidates are already orientation-compatible!
+        Only checks:
         - Same household exclusion (siblings, parents, etc. cannot date)
-        - Sexual orientation (must be compatible)
-        - Geography (PRIORITY - same M.G.U > same L.G.U > other)
-        - Ethnicity (weighted by empirical probabilities)
-        - Age (preferred age differences)
-
-        Performance optimization: samples max_candidates_per_search instead of checking all.
+        - Age appropriateness
+        - Scoring by activity, geography, and ethnicity
 
         Args:
             person: Person seeking a partner
-            candidates: List of potential partners
+            candidates: List of potential partners (PRE-FILTERED by orientation!)
 
         Returns:
             Selected partner or None if no compatible candidates
@@ -758,56 +755,75 @@ class RomanticRelationshipDistributor:
         # Performance optimization: sample candidates instead of checking all
         perf_config = self.config.get('performance', {})
         max_candidates = perf_config.get('max_candidates_per_search', len(candidates))
-        max_attempts = perf_config.get('max_failed_attempts', 1000)
 
         if len(candidates) > max_candidates:
             # Randomly sample candidates instead of checking all
             candidates = list(np.random.choice(candidates, size=max_candidates, replace=False))
 
-        # Filter by sexual orientation compatibility AND household exclusion
-        orientation_compatible = []
-        failed_attempts = 0
+        # Filter by household exclusion ONLY (orientation already filtered!)
+        non_household = []
 
         for candidate in candidates:
             # Skip if same household (unless they're an existing household couple)
             if self._are_same_household(person, candidate):
                 if not self._is_household_couple(person, candidate):
                     continue  # Same household but not a couple - exclude (siblings, etc.)
+            non_household.append(candidate)
 
-            # Check sexual orientation compatibility
-            if self._is_orientation_compatible(person, candidate):
-                orientation_compatible.append(candidate)
-
-        if not orientation_compatible:
+        if not non_household:
             return None
 
         # Filter by age appropriateness
-        age_appropriate = self._filter_by_age_difference(person, orientation_compatible)
+        age_appropriate = self._filter_by_age_difference(person, non_household)
 
         if not age_appropriate:
-            # Fallback to orientation-compatible if no age-appropriate
-            age_appropriate = orientation_compatible
-
-        # Early termination: if we've checked enough candidates and found none, give up
-        if not age_appropriate and failed_attempts >= max_attempts:
-            return None
+            # Fallback to non-household if no age-appropriate
+            age_appropriate = non_household
 
         # Calculate compatibility scores for all candidates
-        # Geography and ethnicity are primary weights
+        # Activity, geography, and ethnicity are primary weights
         scores = []
+
+        # Get person's primary activity venues for fast lookup
+        person_activity_venues = set()
+        if 'primary_activity' in person.activity_map:
+            for venue_type, subsets in person.activity_map['primary_activity'].items():
+                for subset in subsets:
+                    if subset.venue:
+                        person_activity_venues.add(subset.venue.id)
+
+        # Get activity bonus from config
+        scoring_config = self.config.get('compatibility_scoring', {})
+        activity_bonus = scoring_config.get('same_activity', 2.5)
+
         for candidate in age_appropriate:
-            # Get ethnicity compatibility probability
+            # Get geographical compatibility multiplier (cheap, do first)
+            geo_multiplier = self._get_geographical_multiplier(person, candidate)
+
+            # Check if they share primary activity venue (optimized - no nested loops!)
+            share_activity = False
+            if person_activity_venues and 'primary_activity' in candidate.activity_map:
+                # Build candidate venue set once
+                candidate_venues = set()
+                for venue_type, subsets in candidate.activity_map['primary_activity'].items():
+                    for subset in subsets:
+                        if subset.venue:
+                            candidate_venues.add(subset.venue.id)
+                # Fast set intersection
+                share_activity = bool(person_activity_venues & candidate_venues)
+
+            # Apply activity bonus if they work/study together
+            activity_multiplier = activity_bonus if share_activity else 1.0
+
+            # Get ethnicity compatibility probability (expensive, do last)
             ethnicity_prob = self._get_ethnicity_probability(person, candidate)
 
             # If ethnicity probability is 0, skip this candidate
             if ethnicity_prob == 0:
                 continue
 
-            # Get geographical compatibility multiplier
-            geo_multiplier = self._get_geographical_multiplier(person, candidate)
-
-            # Combined score: ethnicity × geography
-            combined_score = ethnicity_prob * geo_multiplier
+            # Combined score: ethnicity × geography × activity
+            combined_score = ethnicity_prob * geo_multiplier * activity_multiplier
 
             scores.append((candidate, combined_score))
 
@@ -957,6 +973,8 @@ class RomanticRelationshipDistributor:
         """
         Check if two people are already romantic partners.
 
+        OPTIMIZED: Uses set lookup instead of list iteration.
+
         Args:
             person1: First person
             person2: Second person
@@ -969,12 +987,10 @@ class RomanticRelationshipDistributor:
 
         partners_dict = person1.properties[self.partners_key]
 
+        # O(1) set lookup instead of O(n) list iteration
         # Check both exclusive and non_exclusive lists
-        for partner_list in partners_dict.values():
-            if person2.id in partner_list:
-                return True
-
-        return False
+        return (person2.id in partners_dict.get('exclusive', [])) or \
+               (person2.id in partners_dict.get('non_exclusive', []))
 
     def _are_same_household(self, person1, person2) -> bool:
         """
@@ -1059,6 +1075,25 @@ class RomanticRelationshipDistributor:
 
         logger.info(f"  {len(exclusive_seekers)} singles want exclusive relationships")
 
+        # PRE-BUILD orientation-based indices to avoid millions of checks
+        # Group by (orientation, sex) for O(1) lookup of compatible candidates
+        seekers_by_orientation_sex = defaultdict(list)
+        compat_rules = self.config['compatibility_rules']
+
+        for person in exclusive_seekers:
+            orientation = person.properties.get(self.orientation_key)
+            if not orientation:
+                continue
+            # Index by what this person is attracted to
+            # E.g., heterosexual male goes into group that heterosexual females can match with
+            for partner_orientation, sex_rules in compat_rules.items():
+                for partner_sex, compatible_sexes in sex_rules.items():
+                    if person.sex in compatible_sexes:
+                        key = (partner_orientation, partner_sex)
+                        seekers_by_orientation_sex[key].append(person)
+
+        logger.info(f"  Built orientation index with {len(seekers_by_orientation_sex)} groups")
+
         # Group seekers by M.G.U for efficient geographical matching
         seekers_by_mgu = defaultdict(list)
         seekers_by_lgu = defaultdict(list)
@@ -1094,9 +1129,20 @@ class RomanticRelationshipDistributor:
             if person.id in matched:
                 continue  # Already matched
 
-            # Get geographical tier (returns group reference, not filtered copy)
+            # Get orientation-compatible candidates FIRST (eliminates millions of checks!)
+            person_orientation = person.properties.get(self.orientation_key)
+            if not person_orientation:
+                continue
+
+            orientation_key = (person_orientation, person.sex)
+            orientation_compatible = seekers_by_orientation_sex.get(orientation_key, [])
+
+            if not orientation_compatible:
+                continue
+
+            # Get geographical tier from orientation-compatible candidates only
             geo_group = self._get_candidates_by_geography_tiers(
-                person, exclusive_seekers, matched, seekers_by_mgu, seekers_by_lgu
+                person, orientation_compatible, matched, seekers_by_mgu, seekers_by_lgu
             )
 
             # Filter once: unmatched and not self (fast set lookup)
@@ -1105,7 +1151,7 @@ class RomanticRelationshipDistributor:
             if not candidates:
                 continue  # No available candidates
 
-            # Find compatible partner
+            # Find compatible partner (already orientation-filtered!)
             partner = self._find_compatible_partner(person, candidates)
 
             if partner:
