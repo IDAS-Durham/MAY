@@ -111,6 +111,9 @@ eligibility:
         priority: 1  # Highest priority
         allow_overflow: true  # This makes it a 'mandatory group'. Can exceed venue capacity, but still respects age/gender constraints
 
+        # REALISTIC SEARCH: Primary/secondary schools are plentiful, search 20-50 max
+        search_limits: [20, 70]  # Try 20 closest schools, then 50, then stop
+
         filters:
           - attribute: "age"
             type: "numerical"
@@ -128,6 +131,9 @@ eligibility:
         priority: 2  # Second priority
         allow_overflow: false  # Respect capacity limits
 
+        # REALISTIC SEARCH: Sixth forms are less common, search slightly wider
+        search_limits: [15, 30]  # Try 15 closest, then 30, then stop
+
         filters:
           - attribute: "age"
             type: "numerical"
@@ -144,6 +150,10 @@ eligibility:
         description: "Children under 5 (optional, third priority, only if living in household or boarding school)"
         priority: 3  # Lowest priority
         allow_overflow: false  # Respect capacity limits
+
+        # REALISTIC SEARCH: Nurseries are VERY local - parents won't travel far with toddlers
+        # Only search 8 nearest, then 10, then STOP (no searching 200+ schools!)
+        search_limits: [8, 10]  # Try 8 closest nurseries, then 10, then give up
 
         filters:
           - attribute: "age"
@@ -217,6 +227,15 @@ venue_selection:
   # Count-based parameters (when consider_by = "count")
   count: 10
   criteria: "closest"  # "closest", "random", "largest_capacity"
+
+  # REALISTIC SEARCH LIMITS (GLOBAL FALLBACK)
+  # These apply when a group doesn't specify its own search_limits
+  # Each priority group above can override this with group-specific limits
+  # Format: [first_try, second_try, max_try]
+  #   - [20, 50] = try 20 closest schools, then 50, then stop
+  #   - [8, 10] = try 8, then 10, then stop (for nurseries)
+  # PERFORMANCE: This prevents searching all 25,928 schools which is absurd and slow
+  search_limits: [20, 50]  # Global fallback (groups can override)
 
   # Distance-based parameters (when consider_by = "distance")
   # max_distance: 10

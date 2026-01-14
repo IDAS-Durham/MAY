@@ -687,7 +687,9 @@ class VenueDistributor:
                 original_when_full = self.config.get('allocation', {}).get('when_full', 'exclude')
                 self.config.setdefault('allocation', {})['when_full'] = 'overflow'
 
-            allocated_count = self._allocate_group(group_people, venues, allow_overflow=allow_overflow)
+            # Pass group-specific search_limits if defined, otherwise use global
+            group_search_limits = group.get('search_limits', None)
+            allocated_count = self._allocate_group(group_people, venues, allow_overflow=allow_overflow, group_search_limits=group_search_limits)
 
             if allow_overflow:
                 # Restore original setting
@@ -885,7 +887,7 @@ class VenueDistributor:
 
         return False
 
-    def _allocate_group(self, people: List, venues: List, allow_overflow: bool = False) -> int:
+    def _allocate_group(self, people: List, venues: List, allow_overflow: bool = False, group_search_limits=None) -> int:
         """
         Allocate a specific group of people (e.g., priority school-age children).
 
@@ -895,6 +897,12 @@ class VenueDistributor:
         - Filter venues ONCE per unique attribute combo (not per person)
 
         This reduces spatial queries by 99% and attribute filtering by 95%.
+
+        Args:
+            people: List of people to allocate
+            venues: List of venues to allocate to
+            allow_overflow: Whether to allow exceeding venue capacity
+            group_search_limits: Optional group-specific search limits (overrides global config)
 
         Returns:
             Number of people successfully allocated
@@ -913,6 +921,25 @@ class VenueDistributor:
 
         selection_config = self.config.get('venue_selection', {})
         target_count = selection_config.get('count', 5)
+
+        # CONFIGURABLE SEARCH LIMITS: Control how aggressively we expand the search
+        # For young children (nursery), searching 50+ schools is unrealistic
+        # Parents typically consider only 5-10 nearby schools
+        # Priority: Use group-specific limits if provided, otherwise use global config
+        if group_search_limits is not None:
+            search_limits = group_search_limits
+        else:
+            search_limits = selection_config.get('search_limits', [50, 200, None])
+
+        # search_limits examples:
+        #   [50, 200, None] = try 50, then 200, then all venues (default, backwards compatible)
+        #   [10, 20] = try 10, then 20, then stop (realistic for nurseries)
+        #   [8, 10] = try 8, then 10, then stop (very restrictive for early childhood)
+        #   [5] = only try 5 closest, no expansion (ultra restrictive)
+        #   None or [] = use default [50, 200, None]
+
+        if not search_limits:
+            search_limits = [50, 200, None]  # Default fallback
 
         # Group by geo_unit for batching (at the configured batch_geo_level)
         people_by_geo_unit = {}
@@ -935,11 +962,14 @@ class VenueDistributor:
 
             # Find closest venues ONCE per geo_unit (not per person!)
             total_venues = len(venues)
-            search_attempts = [
-                min(50, total_venues),
-                min(200, total_venues),
-                total_venues
-            ]
+
+            # Build search attempts from config, replacing None with total_venues
+            search_attempts = []
+            for limit in search_limits:
+                if limit is None:
+                    search_attempts.append(total_venues)
+                else:
+                    search_attempts.append(min(limit, total_venues))
             search_attempts = sorted(set(search_attempts))
 
             # Try to find nearby venues with fallback
@@ -1095,6 +1125,45 @@ class VenueDistributor:
             if unallocated:
                 logger.warning(f"⚠️  PRIORITY GROUP '{group_name}': {len(unallocated)} people NOT allocated!")
                 logger.warning(f"   This may indicate insufficient venue capacity or constraint mismatches.")
+
+                # DIAGNOSTIC INFO: Show details about unallocated people
+                logger.warning(f"   Unallocated people breakdown:")
+
+                # Group by age
+                ages = {}
+                for person in unallocated[:20]:  # Show first 20 to avoid spam
+                    age = getattr(person, 'age', 'unknown')
+                    ages[age] = ages.get(age, 0) + 1
+                logger.warning(f"     Ages: {dict(sorted(ages.items()))}")
+
+                # Group by sex
+                sexes = {}
+                for person in unallocated[:20]:
+                    sex = getattr(person, 'sex', 'unknown')
+                    sexes[sex] = sexes.get(sex, 0) + 1
+                logger.warning(f"     Genders: {sexes}")
+
+                # Group by geo_unit (show top 5)
+                geo_units = {}
+                for person in unallocated[:20]:
+                    geo_unit = getattr(person, 'geographical_unit', None)
+                    geo_name = geo_unit.name if geo_unit else 'unknown'
+                    geo_units[geo_name] = geo_units.get(geo_name, 0) + 1
+                top_geos = sorted(geo_units.items(), key=lambda x: x[1], reverse=True)[:5]
+                logger.warning(f"     Top geo-units: {dict(top_geos)}")
+
+                # Check for common issues
+                no_coords = sum(1 for p in unallocated if getattr(p, 'geographical_unit', None) and
+                               (not p.geographical_unit.coordinates or len(p.geographical_unit.coordinates) != 2))
+                if no_coords > 0:
+                    logger.warning(f"     ⚠ {no_coords} people have geo-units without valid coordinates!")
+
+                # Sample a few people for detailed inspection
+                if len(unallocated) <= 5:
+                    logger.warning(f"   Sample unallocated people (all {len(unallocated)}):")
+                    for person in unallocated:
+                        geo_name = person.geographical_unit.name if hasattr(person, 'geographical_unit') and person.geographical_unit else 'none'
+                        logger.warning(f"     - Person {person.id}: age={person.age}, sex={person.sex}, geo_unit={geo_name}")
             else:
                 logger.info(f"✓ PRIORITY GROUP '{group_name}': All people allocated")
 
