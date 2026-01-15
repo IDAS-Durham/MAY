@@ -6,9 +6,9 @@ All relationship types and criteria are defined via YAML configuration.
 """
 
 from .friendship_builder import FriendshipBuilder
-from .romantic_relationships import VectorizedRomanticDistributor
+from .romantic_relationships import RomanticDistributor
 
 __all__ = [
     'FriendshipBuilder',
-    'VectorizedRomanticDistributor'
+    'RomanticDistributor'
 ]

@@ -1,15 +1,8 @@
 """
-Vectorized romantic relationship distributor for large-scale simulations.
+Romantic relationship distributor for large-scale simulations.
 
-This module provides a NumPy-based implementation that can handle 60M+ people
-by avoiding Python loops and using batch operations.
-
-Key optimizations:
-1. All attributes extracted into NumPy arrays upfront
-2. Vectorized orientation assignment
-3. Pool-based batch matching instead of per-person search
-4. Geographic partitioning with NumPy fancy indexing
-5. Accept/reject sampling for constraints (age, ethnicity)
+This module provides a high-performance implementation that can handle 60M+ people
+using optimized array operations and specialized matching kernels.
 """
 
 import logging
@@ -20,11 +13,11 @@ from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 import time
 
-from .numba_matcher import (
-    match_two_pools_fast,
-    match_single_pool_fast,
-    match_with_ethnicity_fast,
-    vectorized_age_filter
+from .matcher_kernels import (
+    match_two_pools,
+    match_single_pool,
+    match_with_ethnicity,
+    filter_by_age
 )
 from .relationship_exporter import (
     export_relationships_csv,
@@ -46,11 +39,9 @@ REL_EXCLUSIVE = 1
 REL_NON_EXCLUSIVE = 2
 
 
-class VectorizedRomanticDistributor:
+class RomanticDistributor:
     """
-    High-performance romantic relationship distributor using vectorized operations.
-
-    Designed for 60M+ population scale where every second matters.
+    High-performance romantic relationship distributor for large-scale simulations.
     """
 
     def __init__(self, world, config: str | dict):
@@ -73,7 +64,7 @@ class VectorizedRomanticDistributor:
         if self._is_ethnicity_enabled():
             self._load_ethnicity_matrix()
 
-        logger.info(f"Initialized vectorized {self.name} distributor")
+        logger.info(f"Initialized {self.name} distributor")
 
     def _load_config(self, config) -> dict:
         if isinstance(config, str):
@@ -146,7 +137,7 @@ class VectorizedRomanticDistributor:
         total_start = time.time()
 
         logger.info("=" * 60)
-        logger.info("Starting VECTORIZED romantic relationship distribution")
+        logger.info(f"Starting {self.name} distribution")
         logger.info("=" * 60)
 
         # Get all adults
@@ -160,24 +151,24 @@ class VectorizedRomanticDistributor:
         arrays = self._build_attribute_arrays(all_adults)
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
-        # Step 2: Assign sexual orientations (vectorized)
-        logger.info("\n[Step 2] Assigning sexual orientations (vectorized)...")
+        # Step 2: Assign sexual orientations
+        logger.info("\n[Step 2] Assigning sexual orientations...")
         t0 = time.time()
-        orientations = self._vectorized_orientation_assignment(arrays)
+        orientations = self._assign_orientations(arrays)
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
         # Step 3: Process household couples
-        logger.info("\n[Step 3] Processing household couples...")
+        logger.info("\n[Step 3] Process household couples...")
         t0 = time.time()
-        partners, rel_types, consensual = self._process_household_couples_vectorized(
+        partners, rel_types, consensual = self._process_household_couples(
             arrays, orientations
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
         # Step 4: Create exclusive relationships for singles
-        logger.info("\n[Step 4] Creating exclusive relationships (batch matching)...")
+        logger.info("\n[Step 4] Creating exclusive relationships...")
         t0 = time.time()
-        partners, rel_types = self._batch_exclusive_matching(
+        partners, rel_types = self._create_exclusive_relationships(
             arrays, orientations, partners, rel_types
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
@@ -185,15 +176,15 @@ class VectorizedRomanticDistributor:
         # Step 5: Create non-exclusive relationships
         logger.info("\n[Step 5] Creating non-exclusive relationships...")
         t0 = time.time()
-        partners, rel_types, non_exclusive_partners = self._batch_non_exclusive_matching(
+        partners, rel_types, non_exclusive_partners = self._create_non_exclusive_relationships(
             arrays, orientations, partners, rel_types
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
-        # Step 6: Handle cheating
-        logger.info("\n[Step 6] Processing cheating/affairs...")
+        # Step 6: Handle cheating and affairs
+        logger.info("\n[Step 6] Processing cheating and affairs...")
         t0 = time.time()
-        partners, consensual, affair_partners = self._process_cheating_vectorized(
+        partners, consensual, affair_partners = self._process_cheating_and_affairs(
             arrays, orientations, partners, rel_types, consensual
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
@@ -228,7 +219,7 @@ class VectorizedRomanticDistributor:
 
         total_time = time.time() - total_start
         logger.info("\n" + "=" * 60)
-        logger.info(f"Vectorized distribution complete in {total_time:.2f}s")
+        logger.info(f"Romantic distribution complete in {total_time:.2f}s")
         logger.info(f"Throughput: {n / total_time:,.0f} people/second")
         logger.info("=" * 60)
 
@@ -337,7 +328,7 @@ class VectorizedRomanticDistributor:
             'n': n
         }
 
-    def _vectorized_orientation_assignment(self, arrays: Dict[str, np.ndarray]) -> np.ndarray:
+    def _assign_orientations(self, arrays: Dict[str, np.ndarray]) -> np.ndarray:
         """Assign sexual orientations to all adults using weighted sampling."""
         n = len(arrays['age'])
         sex = arrays['sex']
@@ -374,7 +365,7 @@ class VectorizedRomanticDistributor:
             # per-person probabilities which is slower but still vectorizable)
             probs = probs / probs.sum()
 
-            # Vectorized sampling
+            # Batch sampling
             orientations[indices] = np.random.choice(
                 [ORIENTATION_HET, ORIENTATION_HOM, ORIENTATION_BI],
                 size=len(indices),
@@ -393,12 +384,12 @@ class VectorizedRomanticDistributor:
 
         return orientations
 
-    def _process_household_couples_vectorized(
+    def _process_household_couples(
         self,
         arrays: Dict,
         orientations: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Process household couples using vectorized operations."""
+        """Process household couples using array operations."""
         n = arrays['n']
         ids = arrays['ids']
         sex = arrays['sex']
@@ -482,7 +473,7 @@ class VectorizedRomanticDistributor:
 
         return partners, rel_types, consensual
 
-    def _batch_exclusive_matching(
+    def _create_exclusive_relationships(
         self,
         arrays: Dict,
         orientations: np.ndarray,
@@ -508,7 +499,7 @@ class VectorizedRomanticDistributor:
         # Identify singles who want exclusive relationships
         is_single = partners < 0
 
-        # Sample who wants exclusive (vectorized)
+        # Sample who wants exclusive (batch)
         base_exclusive_prob = self.config['relationship_types']['base_probabilities']['exclusive']
         wants_exclusive = np.random.random(n) < base_exclusive_prob
 
@@ -771,7 +762,7 @@ class VectorizedRomanticDistributor:
 
         # Use Numba kernel
         if self.ethnicity_matrix is not None:
-            matches_a, matches_b = match_with_ethnicity_fast(
+            matches_a, matches_b = match_with_ethnicity(
                 pool_a.astype(np.int64),
                 pool_b.astype(np.int64),
                 age.astype(np.int64),
@@ -781,7 +772,7 @@ class VectorizedRomanticDistributor:
                 seed
             )
         else:
-            matches_a, matches_b = match_two_pools_fast(
+            matches_a, matches_b = match_two_pools(
                 pool_a.astype(np.int64),
                 pool_b.astype(np.int64),
                 age.astype(np.int64),
@@ -807,7 +798,7 @@ class VectorizedRomanticDistributor:
         max_age_diff = self._get_max_age_diff(median_age)
         seed = np.random.randint(0, 2**31)
 
-        matches_a, matches_b = match_single_pool_fast(
+        matches_a, matches_b = match_single_pool(
             pool.astype(np.int64),
             age.astype(np.int64),
             max_age_diff,
@@ -896,7 +887,7 @@ class VectorizedRomanticDistributor:
 
         return all_matches
 
-    def _batch_non_exclusive_matching(
+    def _create_non_exclusive_relationships(
         self,
         arrays: Dict,
         orientations: np.ndarray,
@@ -1063,7 +1054,7 @@ class VectorizedRomanticDistributor:
 
         return matches_created
 
-    def _process_cheating_vectorized(
+    def _process_cheating_and_affairs(
         self,
         arrays: Dict,
         orientations: np.ndarray,

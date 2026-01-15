@@ -1,8 +1,7 @@
 """
-Numba-accelerated matching kernels for romantic relationship distribution.
+Optimized matching kernels for romantic relationship distribution.
 
-These functions are JIT-compiled to machine code for maximum performance.
-Designed for 60M+ scale where Python loops are prohibitively slow.
+These functions provide high-performance matching logic for large-scale populations.
 """
 
 import numpy as np
@@ -12,7 +11,7 @@ from typing import Tuple
 
 
 @njit(cache=True)
-def fast_shuffle(arr: np.ndarray, seed: int) -> np.ndarray:
+def shuffle_indices(arr: np.ndarray, seed: int) -> np.ndarray:
     """Fisher-Yates shuffle with explicit seed for reproducibility."""
     n = len(arr)
     result = arr.copy()
@@ -24,7 +23,7 @@ def fast_shuffle(arr: np.ndarray, seed: int) -> np.ndarray:
 
 
 @njit(cache=True)
-def match_two_pools_fast(
+def match_two_pools(
     pool_a: np.ndarray,
     pool_b: np.ndarray,
     age: np.ndarray,
@@ -44,8 +43,8 @@ def match_two_pools_fast(
         return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
 
     # Shuffle pools
-    shuffled_a = fast_shuffle(pool_a, seed)
-    shuffled_b = fast_shuffle(pool_b, seed + 1)
+    shuffled_a = shuffle_indices(pool_a, seed)
+    shuffled_b = shuffle_indices(pool_b, seed + 1)
 
     # Pre-allocate output arrays (max possible matches)
     max_matches = min(n_a, n_b)
@@ -81,7 +80,7 @@ def match_two_pools_fast(
 
 
 @njit(cache=True)
-def match_single_pool_fast(
+def match_single_pool(
     pool: np.ndarray,
     age: np.ndarray,
     max_age_diff: int,
@@ -97,7 +96,7 @@ def match_single_pool_fast(
     if n < 2:
         return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
 
-    shuffled = fast_shuffle(pool, seed)
+    shuffled = shuffle_indices(pool, seed)
 
     max_matches = n // 2
     matches_a = np.empty(max_matches, dtype=np.int64)
@@ -132,7 +131,7 @@ def match_single_pool_fast(
 
 
 @njit(cache=True)
-def match_with_ethnicity_fast(
+def match_with_ethnicity(
     pool_a: np.ndarray,
     pool_b: np.ndarray,
     age: np.ndarray,
@@ -152,8 +151,8 @@ def match_with_ethnicity_fast(
     if n_a == 0 or n_b == 0:
         return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int64)
 
-    shuffled_a = fast_shuffle(pool_a, seed)
-    shuffled_b = fast_shuffle(pool_b, seed + 1)
+    shuffled_a = shuffle_indices(pool_a, seed)
+    shuffled_b = shuffle_indices(pool_b, seed + 1)
 
     max_matches = min(n_a, n_b)
     matches_a = np.empty(max_matches, dtype=np.int64)
@@ -199,7 +198,7 @@ def match_with_ethnicity_fast(
 
 
 @njit(parallel=True, cache=True)
-def batch_match_by_geography(
+def match_by_geography(
     pool_a_starts: np.ndarray,
     pool_a_ends: np.ndarray,
     pool_b_starts: np.ndarray,
@@ -236,7 +235,7 @@ def batch_match_by_geography(
 
         seed = base_seed + r * 1000
 
-        matches_a, matches_b = match_two_pools_fast(
+        matches_a, matches_b = match_two_pools(
             pool_a, pool_b, age, max_age_diff, seed
         )
 
@@ -253,7 +252,7 @@ def batch_match_by_geography(
 
 
 @njit(cache=True)
-def vectorized_age_filter(
+def filter_by_age(
     candidates: np.ndarray,
     person_age: int,
     ages: np.ndarray,
