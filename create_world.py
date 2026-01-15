@@ -12,7 +12,7 @@ from may.population import PopulationManager
 from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
-from may.relationships import RelationshipBuilder
+from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples
 from check_multiple_jobs import analyze_multiple_jobs
 
@@ -253,7 +253,7 @@ def main():
             logger.info(f"[RELATIONSHIP] {config_path}")
 
             try:
-                builder = RelationshipBuilder(world, config_path)
+                builder = FriendshipBuilder(world, config_path)
                 builder.build_all(store=True)
 
                 # Export relationships to CSV
@@ -278,7 +278,7 @@ def main():
         config_path = romantic_config.get("config", "yaml/relationships/romantic_relationships.yaml")
 
         try:
-            from may.relationships.romantic_relationship_distributor import RomanticRelationshipDistributor
+            from may.relationships.romantic_relationships import RomanticRelationshipDistributor
 
             distributor = RomanticRelationshipDistributor(world, config_path)
             distributor.distribute_all()

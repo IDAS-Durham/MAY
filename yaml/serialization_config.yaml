@@ -14,7 +14,12 @@ population:
     - comorbidities       # For disease severity modeling
     # - work_sector       # Uncomment if needed
     - work_mode           # Uncomment if needed
-    - social_contacts     # Relationship network for disease modeling
+    - friendships         # Relationship network for disease modeling
+
+    # Romantic relationships (serialized as JSON strings for dicts)
+    - sexual_orientation  # "heterosexual", "homosexual", "bisexual"
+    - romantic_partners   # {exclusive: [ids], non_exclusive: [ids]}
+    - relationship_status # {type: "exclusive"|"non_exclusive"|"no_partner", consensual: bool}
 
 # =============================================
 # GEOGRAPHY

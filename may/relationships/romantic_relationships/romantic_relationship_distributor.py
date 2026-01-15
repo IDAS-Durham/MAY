@@ -15,8 +15,20 @@ import yaml
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from typing import Dict, List, Set, Tuple, Optional, Any
-from pathlib import Path
+from typing import List, Set, Tuple
+
+from .compatibility_scorer import CompatibilityScorer
+from .relationship_exporter import (
+    export_relationships_csv,
+    export_cheating_network_csv,
+    print_statistics
+)
+from .relationship_utils import (
+    group_by_geography,
+    get_candidates_by_geography_tier,
+    build_residence_cache,
+    build_person_index
+)
 
 logger = logging.getLogger("romantic_relationships")
 
@@ -47,11 +59,6 @@ class RomanticRelationshipDistributor:
         self.world = world
         self.config = self._load_config(config)
         self.name = self.config['name']
-
-        # Check if disabled - skip heavy initialization if so
-        if not self.config.get('enabled', True):
-            logger.info(f"Romantic relationships DISABLED - skipping initialization")
-            return
 
         # Storage keys (from config)
         storage = self.config.get('storage', {})
@@ -140,14 +147,6 @@ class RomanticRelationshipDistributor:
         3. Create non-exclusive relationships
         4. Handle cheating/affairs
         """
-        # Check if romantic relationships are enabled
-        if not self.config.get('enabled', True):
-            logger.info("=" * 60)
-            logger.info("Romantic relationships are DISABLED in config")
-            logger.info("Skipping all romantic relationship distribution")
-            logger.info("=" * 60)
-            return
-
         logger.info("=" * 60)
         logger.info("Starting romantic relationship distribution")
         logger.info("=" * 60)
@@ -156,18 +155,21 @@ class RomanticRelationshipDistributor:
         all_adults = [p for p in self.world.population.people if p.age >= 18]
         logger.info(f"Processing {len(all_adults):,} adults")
 
-        # Build person ID index for O(1) lookups (critical performance optimization)
-        self.person_by_id = {p.id: p for p in all_adults}
+        # Build indices using utility functions
+        self.person_by_id = build_person_index(all_adults)
         logger.info(f"Built person ID index for {len(self.person_by_id):,} adults")
 
-        # Cache residence lookups to avoid expensive property calls
-        # person.residence iterates through activity_map every time it's called
-        self.residence_cache = {}
-        for person in all_adults:
-            residence = person.residence
-            if residence:
-                self.residence_cache[person.id] = residence.id
+        self.residence_cache = build_residence_cache(all_adults)
         logger.info(f"Cached residence IDs for {len(self.residence_cache):,} adults")
+
+        # Create compatibility scorer with all needed data
+        self.scorer = CompatibilityScorer(
+            config=self.config,
+            ethnicity_probs=self.ethnicity_probs,
+            residence_cache=self.residence_cache,
+            orientation_key=self.orientation_key,
+            partners_key=self.partners_key
+        )
 
         # Pass 0: Assign sexual orientations
         logger.info("\n[Pass 0] Assigning sexual orientations...")
@@ -193,11 +195,25 @@ class RomanticRelationshipDistributor:
         logger.info("\n" + "=" * 60)
         logger.info("Romantic relationship distribution complete")
         logger.info("=" * 60)
-        self._print_statistics(all_adults)
+        print_statistics(all_adults, self.stats, self.status_key)
 
         # Export detailed CSVs
-        self.export_relationships_csv("romantic_relationships_detailed.csv")
-        self.export_cheating_network_csv("cheating_network_detailed.csv")
+        export_relationships_csv(
+            self.world.population,
+            self.person_by_id,
+            self.partners_key,
+            self.status_key,
+            self.orientation_key,
+            "romantic_relationships_detailed.csv"
+        )
+        export_cheating_network_csv(
+            self.world.population,
+            self.person_by_id,
+            self.partners_key,
+            self.status_key,
+            self.orientation_key,
+            "cheating_network_detailed.csv"
+        )
 
     # ========================================================================
     # PASS 0: SEXUAL ORIENTATION ASSIGNMENT
@@ -246,7 +262,7 @@ class RomanticRelationshipDistributor:
 
         # Apply age adjustments if configured
         age_adjustments = orientation_config.get('age_adjustments', {})
-        age_group = self._get_age_group(person)
+        age_group = self.scorer.get_age_group(person)
 
         adjusted_probs = {}
         for orientation, base_prob in base_probs.items():
@@ -275,99 +291,6 @@ class RomanticRelationshipDistributor:
 
         # Track statistics
         self.stats[f'orientation_{orientation}'] += 1
-
-    def _get_age_group(self, person) -> str:
-        """
-        Get age group string for a person.
-
-        Returns strings like "18-25", "26-35", etc. based on age.
-        """
-        age = person.age
-
-        if age < 26:
-            return "18-25"
-        elif age < 36:
-            return "26-35"
-        elif age < 51:
-            return "36-50"
-        elif age < 65:
-            return "51-64"
-        else:
-            return "65+"
-
-    def _get_ethnicity_probability(self, person1, person2) -> float:
-        """
-        Get the ethnicity partnership probability between two people.
-
-        Returns the probability from the loaded ethnicity data, or 1.0 if
-        ethnicity compatibility is disabled or data unavailable.
-
-        Args:
-            person1: First person
-            person2: Second person
-
-        Returns:
-            Probability (0.0 to 1.0) that person1 would partner with person2
-            based on ethnicity
-        """
-        if not self.ethnicity_probs:
-            return 1.0  # No ethnicity data, treat all as equally likely
-
-        ethnicity_config = self.config['compatibility_scoring']['ethnicity']
-        ethnicity_attr = ethnicity_config.get('attribute', 'ethnicity')
-
-        # Get ethnicities
-        eth1 = person1.properties.get(ethnicity_attr)
-        eth2 = person2.properties.get(ethnicity_attr)
-
-        if not eth1 or not eth2:
-            return 1.0  # Missing ethnicity data
-
-        # Lookup probability
-        prob = self.ethnicity_probs.get(eth1, {}).get(eth2, 0.0)
-
-        return prob
-
-    def _get_geographical_multiplier(self, person1, person2) -> float:
-        """
-        Get geographical compatibility multiplier based on proximity.
-
-        Returns higher multipliers for same M.G.U > same L.G.U > different regions.
-
-        Args:
-            person1: First person
-            person2: Second person
-
-        Returns:
-            Multiplier (>= 1.0) based on geographical proximity
-        """
-        geo_config = self.config.get('compatibility_scoring', {})
-
-        # Get geographical units
-        unit1 = person1.geographical_unit
-        unit2 = person2.geographical_unit
-
-        if not unit1 or not unit2:
-            return 1.0  # No geography data
-
-        # Same S.G.U (neighbors)
-        if unit1.name == unit2.name:
-            return geo_config.get('same_sgu', 3.0)
-
-        # Same M.G.U (nearby - same medium geographical unit)
-        mgu1 = unit1.parent if unit1.parent else unit1
-        mgu2 = unit2.parent if unit2.parent else unit2
-        if mgu1 and mgu2 and mgu1.name == mgu2.name:
-            return geo_config.get('same_mgu', 2.0)
-
-        # Same L.G.U (same large geographical unit - e.g., same city/borough)
-        lgu1 = mgu1.parent if mgu1 and mgu1.parent else mgu1
-        lgu2 = mgu2.parent if mgu2 and mgu2.parent else mgu2
-        if lgu1 and lgu2 and lgu1.name == lgu2.name:
-            return geo_config.get('same_lgu', 1.5)
-
-        # Different regions
-        return 1.0
 
     # ========================================================================
     # PASS 1: HOUSEHOLD COUPLES
@@ -484,8 +407,8 @@ class RomanticRelationshipDistributor:
 
         # Apply age adjustments if configured
         age_adjustments = orientation_config.get('age_adjustments', {})
-        age_group1 = self._get_age_group(person1)
-        age_group2 = self._get_age_group(person2)
+        age_group1 = self.scorer.get_age_group(person1)
+        age_group2 = self.scorer.get_age_group(person2)
 
         for orientation in list(filtered_probs1.keys()):
             mult = age_adjustments.get(age_group1, {}).get(orientation, 1.0)
@@ -551,8 +474,8 @@ class RomanticRelationshipDistributor:
         age_mults = rel_type_config.get('age_multipliers', {})
 
         # Get age groups
-        age_group1 = self._get_age_group(person1)
-        age_group2 = self._get_age_group(person2)
+        age_group1 = self.scorer.get_age_group(person1)
+        age_group2 = self.scorer.get_age_group(person2)
 
         # Get age multipliers for each person
         mult1 = age_mults.get(age_group1, {})
@@ -633,53 +556,13 @@ class RomanticRelationshipDistributor:
         base_prob = cheating_config['base_probability']
         age_mults = cheating_config.get('age_multipliers', {})
 
-        age_group = self._get_age_group(person)
+        age_group = self.scorer.get_age_group(person)
         multiplier = age_mults.get(age_group, 1.0)
 
         probability = base_prob * multiplier
 
         # Clamp to [0, 1]
         return max(0.0, min(1.0, probability))
-
-    def _get_candidates_by_geography_tiers(
-        self, person, all_seekers: List, matched: set,
-        seekers_by_mgu: dict, seekers_by_lgu: dict
-    ) -> List:
-        """
-        Build candidate pool using tiered geographical search.
-
-        Optimized to avoid rebuilding lists - returns references to geographical groups
-        and lets caller handle matched filtering.
-
-        Args:
-            person: Person seeking a partner
-            all_seekers: All people seeking partners (fallback)
-            matched: Set of already-matched person IDs (for filtering)
-            seekers_by_mgu: Dict mapping M.G.U name -> list of seekers
-            seekers_by_lgu: Dict mapping L.G.U name -> list of seekers
-
-        Returns:
-            List of candidate partners from geographical tier (caller filters matched/self)
-        """
-        # Get person's geographical units
-        unit = person.geographical_unit
-        if not unit:
-            # No geography data - return all seekers (caller will filter)
-            return all_seekers
-
-        mgu = unit.parent if unit.parent else unit
-        lgu = mgu.parent if mgu and mgu.parent else mgu
-
-        # Tier 1: Same M.G.U (highest priority)
-        if mgu and mgu.name in seekers_by_mgu:
-            return seekers_by_mgu[mgu.name]  # Return group reference, not filtered copy
-
-        # Tier 2: Same L.G.U (fallback to broader region)
-        if lgu and lgu.name in seekers_by_lgu:
-            return seekers_by_lgu[lgu.name]  # Return group reference
-
-        # Tier 3: All available (final fallback)
-        return all_seekers
 
     def _get_singles(self, all_adults: List) -> List:
         """
@@ -721,7 +604,7 @@ class RomanticRelationshipDistributor:
         base_probs = rel_type_config['base_probabilities']
         age_mults = rel_type_config.get('age_multipliers', {})
 
-        age_group = self._get_age_group(person)
+        age_group = self.scorer.get_age_group(person)
         mult = age_mults.get(age_group, {})
 
         # Adjust probabilities
@@ -734,177 +617,6 @@ class RomanticRelationshipDistributor:
 
         # Sample
         return np.random.random() < exclusive_prob
-
-    def _find_compatible_partner(self, person, candidates: List):
-        """
-        Find a compatible romantic partner for a person.
-
-        OPTIMIZED: Assumes candidates are already orientation-compatible!
-        Only checks:
-        - Same household exclusion (siblings, parents, etc. cannot date)
-        - Age appropriateness
-        - Scoring by activity, geography, and ethnicity
-
-        Args:
-            person: Person seeking a partner
-            candidates: List of potential partners (PRE-FILTERED by orientation!)
-
-        Returns:
-            Selected partner or None if no compatible candidates
-        """
-        # Performance optimization: sample candidates instead of checking all
-        perf_config = self.config.get('performance', {})
-        max_candidates = perf_config.get('max_candidates_per_search', len(candidates))
-
-        if len(candidates) > max_candidates:
-            # Randomly sample candidates instead of checking all
-            candidates = list(np.random.choice(candidates, size=max_candidates, replace=False))
-
-        # Filter by household exclusion ONLY (orientation already filtered!)
-        non_household = []
-
-        for candidate in candidates:
-            # Skip if same household (unless they're an existing household couple)
-            if self._are_same_household(person, candidate):
-                if not self._is_household_couple(person, candidate):
-                    continue  # Same household but not a couple - exclude (siblings, etc.)
-            non_household.append(candidate)
-
-        if not non_household:
-            return None
-
-        # Filter by age appropriateness
-        age_appropriate = self._filter_by_age_difference(person, non_household)
-
-        if not age_appropriate:
-            # Fallback to non-household if no age-appropriate
-            age_appropriate = non_household
-
-        # Calculate compatibility scores for all candidates
-        # Activity, geography, and ethnicity are primary weights
-        scores = []
-
-        # Get person's primary activity venues for fast lookup
-        person_activity_venues = set()
-        if 'primary_activity' in person.activity_map:
-            for venue_type, subsets in person.activity_map['primary_activity'].items():
-                for subset in subsets:
-                    if subset.venue:
-                        person_activity_venues.add(subset.venue.id)
-
-        # Get activity bonus from config
-        scoring_config = self.config.get('compatibility_scoring', {})
-        activity_bonus = scoring_config.get('same_activity', 2.5)
-
-        for candidate in age_appropriate:
-            # Get geographical compatibility multiplier (cheap, do first)
-            geo_multiplier = self._get_geographical_multiplier(person, candidate)
-
-            # Check if they share primary activity venue (optimized - no nested loops!)
-            share_activity = False
-            if person_activity_venues and 'primary_activity' in candidate.activity_map:
-                # Build candidate venue set once
-                candidate_venues = set()
-                for venue_type, subsets in candidate.activity_map['primary_activity'].items():
-                    for subset in subsets:
-                        if subset.venue:
-                            candidate_venues.add(subset.venue.id)
-                # Fast set intersection
-                share_activity = bool(person_activity_venues & candidate_venues)
-
-            # Apply activity bonus if they work/study together
-            activity_multiplier = activity_bonus if share_activity else 1.0
-
-            # Get ethnicity compatibility probability (expensive, do last)
-            ethnicity_prob = self._get_ethnicity_probability(person, candidate)
-
-            # If ethnicity probability is 0, skip this candidate
-            if ethnicity_prob == 0:
-                continue
-
-            # Combined score: ethnicity × geography × activity
-            combined_score = ethnicity_prob * geo_multiplier * activity_multiplier
-
-            scores.append((candidate, combined_score))
-
-        if not scores:
-            # No ethnically compatible candidates, fall back to random selection
-            return np.random.choice(age_appropriate) if age_appropriate else None
-
-        # Extract candidates and weights
-        compatible_candidates = [c for c, _ in scores]
-        weights = np.array([w for _, w in scores])
-
-        # Normalize weights
-        weights = weights / weights.sum()
-
-        # Sample using combined probability weights
-        partner = np.random.choice(compatible_candidates, p=weights)
-
-        return partner
-
-    def _is_orientation_compatible(self, person1, person2) -> bool:
-        """
-        Check if two people have compatible sexual orientations.
-
-        Uses compatibility rules from config.
-
-        Args:
-            person1: First person
-            person2: Second person
-
-        Returns:
-            True if compatible, False otherwise
-        """
-        orientation1 = person1.properties.get(self.orientation_key)
-        orientation2 = person2.properties.get(self.orientation_key)
-
-        if not orientation1 or not orientation2:
-            return False
-
-        # Get compatibility rules (at root level of config)
-        compat_rules = self.config['compatibility_rules']
-
-        # Check if person1's orientation is compatible with person2's sex
-        compatible_sexes_1 = compat_rules.get(orientation1, {}).get(person1.sex, [])
-        if person2.sex not in compatible_sexes_1:
-            return False
-
-        # Check if person2's orientation is compatible with person1's sex
-        compatible_sexes_2 = compat_rules.get(orientation2, {}).get(person2.sex, [])
-        if person1.sex not in compatible_sexes_2:
-            return False
-
-        # Both must be attracted to each other
-        return True
-
-    def _filter_by_age_difference(self, person, candidates: List) -> List:
-        """
-        Filter candidates by age difference constraints.
-
-        Uses configured age difference ranges for the person's age group.
-
-        Args:
-            person: Person seeking partner
-            candidates: List of potential partners
-
-        Returns:
-            Filtered list of age-appropriate candidates
-        """
-        age_diff_config = self.config['age_differences']
-        age_group = self._get_age_group(person)
-        age_constraints = age_diff_config.get(age_group, {})
-
-        min_diff = age_constraints.get('min', 0)
-        max_diff = age_constraints.get('max', 100)
-
-        age_appropriate = []
-        for candidate in candidates:
-            age_diff = abs(candidate.age - person.age)
-            if min_diff <= age_diff <= max_diff:
-                age_appropriate.append(candidate)
-
-        return age_appropriate
 
     def _wants_non_exclusive_relationship(self, person) -> bool:
         """
@@ -922,7 +634,7 @@ class RomanticRelationshipDistributor:
         base_probs = rel_type_config['base_probabilities']
         age_mults = rel_type_config.get('age_multipliers', {})
 
-        age_group = self._get_age_group(person)
+        age_group = self.scorer.get_age_group(person)
         mult = age_mults.get(age_group, {})
 
         # Adjust probabilities
@@ -958,7 +670,7 @@ class RomanticRelationshipDistributor:
         context_key = 'non_exclusive' if relationship_context == 'non_exclusive' else 'cheating'
         limits_by_age_sex = partner_limits[context_key].get('by_age_and_sex', {})
 
-        age_group = self._get_age_group(person)
+        age_group = self.scorer.get_age_group(person)
         sex = person.sex
 
         # Look up limit
@@ -968,77 +680,6 @@ class RomanticRelationshipDistributor:
 
         # Fallback to default
         return partner_limits[context_key].get('default', 1)
-
-    def _are_already_partners(self, person1, person2) -> bool:
-        """
-        Check if two people are already romantic partners.
-
-        OPTIMIZED: Uses set lookup instead of list iteration.
-
-        Args:
-            person1: First person
-            person2: Second person
-
-        Returns:
-            True if already partners, False otherwise
-        """
-        if self.partners_key not in person1.properties:
-            return False
-
-        partners_dict = person1.properties[self.partners_key]
-
-        # O(1) set lookup instead of O(n) list iteration
-        # Check both exclusive and non_exclusive lists
-        return (person2.id in partners_dict.get('exclusive', [])) or \
-               (person2.id in partners_dict.get('non_exclusive', []))
-
-    def _are_same_household(self, person1, person2) -> bool:
-        """
-        Check if two people live in the same household.
-
-        Uses cached residence IDs for O(1) lookup instead of expensive property calls.
-
-        Args:
-            person1: First person
-            person2: Second person
-
-        Returns:
-            True if they live together, False otherwise
-        """
-        # Use cached residence IDs (avoids expensive person.residence property calls)
-        residence1_id = self.residence_cache.get(person1.id)
-        residence2_id = self.residence_cache.get(person2.id)
-
-        # If either has no residence, they can't be in same household
-        if not residence1_id or not residence2_id:
-            return False
-
-        # Check if same residence
-        return residence1_id == residence2_id
-
-    def _is_household_couple(self, person1, person2) -> bool:
-        """
-        Check if two people are marked as a household couple.
-
-        Household couples are allowed to have romantic relationships even though
-        they live together (they were designated as couples during household distribution).
-
-        Args:
-            person1: First person
-            person2: Second person
-
-        Returns:
-            True if they're a household couple, False otherwise
-        """
-        # Check if person1 has person2 marked as household couple
-        if 'household_couple' in person1.properties:
-            return person1.properties['household_couple'] == person2.id
-
-        # Check reverse (should be symmetric, but check both to be safe)
-        if 'household_couple' in person2.properties:
-            return person2.properties['household_couple'] == person1.id
-
-        return False
 
     # ========================================================================
     # PASS 2: EXCLUSIVE RELATIONSHIPS FOR SINGLES
@@ -1094,21 +735,8 @@ class RomanticRelationshipDistributor:
 
         logger.info(f"  Built orientation index with {len(seekers_by_orientation_sex)} groups")
 
-        # Group seekers by M.G.U for efficient geographical matching
-        seekers_by_mgu = defaultdict(list)
-        seekers_by_lgu = defaultdict(list)
-
-        for person in exclusive_seekers:
-            if person.geographical_unit:
-                # M.G.U grouping
-                mgu = person.geographical_unit.parent if person.geographical_unit.parent else person.geographical_unit
-                if mgu:
-                    seekers_by_mgu[mgu.name].append(person)
-                    # L.G.U grouping
-                    lgu = mgu.parent if mgu.parent else mgu
-                    if lgu:
-                        seekers_by_lgu[lgu.name].append(person)
-
+        # Group seekers by geography for efficient matching
+        seekers_by_mgu, seekers_by_lgu = group_by_geography(exclusive_seekers)
         logger.info(f"  Grouped into {len(seekers_by_mgu)} M.G.U groups and {len(seekers_by_lgu)} L.G.U groups")
 
         # Track matched people
@@ -1141,8 +769,8 @@ class RomanticRelationshipDistributor:
                 continue
 
             # Get geographical tier from orientation-compatible candidates only
-            geo_group = self._get_candidates_by_geography_tiers(
-                person, orientation_compatible, matched, seekers_by_mgu, seekers_by_lgu
+            geo_group = get_candidates_by_geography_tier(
+                person, orientation_compatible, seekers_by_mgu, seekers_by_lgu
             )
 
             # Filter once: unmatched and not self (fast set lookup)
@@ -1152,7 +780,7 @@ class RomanticRelationshipDistributor:
                 continue  # No available candidates
 
             # Find compatible partner (already orientation-filtered!)
-            partner = self._find_compatible_partner(person, candidates)
+            partner = self.scorer.find_compatible_partner(person, candidates)
 
             if partner:
                 # Create exclusive relationship
@@ -1212,26 +840,12 @@ class RomanticRelationshipDistributor:
         if not non_exclusive_seekers:
             return
 
-        # Group seekers by M.G.U for efficient geographical matching
-        seekers_by_mgu = defaultdict(list)
-        seekers_by_lgu = defaultdict(list)
-
-        for person in non_exclusive_seekers:
-            if person.geographical_unit:
-                mgu = person.geographical_unit.parent if person.geographical_unit.parent else person.geographical_unit
-                if mgu:
-                    seekers_by_mgu[mgu.name].append(person)
-                    lgu = mgu.parent if mgu.parent else mgu
-                    if lgu:
-                        seekers_by_lgu[lgu.name].append(person)
-
+        # Group seekers by geography for efficient matching
+        seekers_by_mgu, seekers_by_lgu = group_by_geography(non_exclusive_seekers)
         logger.info(f"  Grouped into {len(seekers_by_mgu)} M.G.U groups and {len(seekers_by_lgu)} L.G.U groups")
 
         # Track current partner counts
         partner_counts = {p.id: 0 for p in non_exclusive_seekers}
-
-        # Track who's already partnered (for efficient lookup)
-        already_partnered = set()
 
         # Match non-exclusive seekers with each other
         relationships_created = 0
@@ -1262,8 +876,8 @@ class RomanticRelationshipDistributor:
                 n_partners_to_add = np.random.randint(1, n_partners_to_add + 1)
 
             # Get geographical tier (no matched filtering for non-exclusive)
-            geo_group = self._get_candidates_by_geography_tiers(
-                person, non_exclusive_seekers, set(), seekers_by_mgu, seekers_by_lgu
+            geo_group = get_candidates_by_geography_tier(
+                person, non_exclusive_seekers, seekers_by_mgu, seekers_by_lgu
             )
 
             # Filter to available candidates (not self, not at limit, not already partnered)
@@ -1278,7 +892,7 @@ class RomanticRelationshipDistributor:
 
                 if candidate_current < candidate_max:
                     # Check if not already partners
-                    if not self._are_already_partners(person, candidate):
+                    if not self.scorer.are_already_partners(person, candidate):
                         candidates.append(candidate)
 
             if not candidates:
@@ -1290,7 +904,7 @@ class RomanticRelationshipDistributor:
                     break
 
                 # Find compatible partner
-                partner = self._find_compatible_partner(person, candidates)
+                partner = self.scorer.find_compatible_partner(person, candidates)
 
                 if partner:
                     # Create non-exclusive relationship
@@ -1345,12 +959,13 @@ class RomanticRelationshipDistributor:
             if person.id in self.potential_cheaters:
                 continue
 
+            # Get status (empty dict if not set)
+            status = person.properties.get(self.status_key, {})
+
             # Include if in non-exclusive relationship
-            if self.status_key in person.properties:
-                status = person.properties[self.status_key]
-                if status.get('type') == 'non_exclusive':
-                    affair_partner_pool.append(person)
-                    continue
+            if status.get('type') == 'non_exclusive':
+                affair_partner_pool.append(person)
+                continue
 
             # Include singles if they're open to it (sample based on probability)
             if status.get('type') == 'no_partner':
@@ -1360,19 +975,8 @@ class RomanticRelationshipDistributor:
 
         logger.info(f"  Found {len(affair_partner_pool)} potential affair partners")
 
-        # Group affair partners by M.G.U for efficient geographical matching
-        partners_by_mgu = defaultdict(list)
-        partners_by_lgu = defaultdict(list)
-
-        for person in affair_partner_pool:
-            if person.geographical_unit:
-                mgu = person.geographical_unit.parent if person.geographical_unit.parent else person.geographical_unit
-                if mgu:
-                    partners_by_mgu[mgu.name].append(person)
-                    lgu = mgu.parent if mgu.parent else mgu
-                    if lgu:
-                        partners_by_lgu[lgu.name].append(person)
-
+        # Group affair partners by geography for efficient matching
+        partners_by_mgu, partners_by_lgu = group_by_geography(affair_partner_pool)
         logger.info(f"  Grouped affair partners into {len(partners_by_mgu)} M.G.U groups")
 
         # Track removed partners (at capacity) to avoid double-removal errors
@@ -1419,20 +1023,20 @@ class RomanticRelationshipDistributor:
                     break
 
                 # Get geographical tier
-                geo_group = self._get_candidates_by_geography_tiers(
-                    cheater, affair_partner_pool, removed_partners, partners_by_mgu, partners_by_lgu
+                geo_group = get_candidates_by_geography_tier(
+                    cheater, affair_partner_pool, partners_by_mgu, partners_by_lgu
                 )
 
                 # Filter once: not removed, not already partners
                 available = [p for p in geo_group
                            if p.id not in removed_partners
-                           and not self._are_already_partners(cheater, p)]
+                           and not self.scorer.are_already_partners(cheater, p)]
 
                 if not available:
                     break
 
                 # Find compatible partner
-                partner = self._find_compatible_partner(cheater, available)
+                partner = self.scorer.find_compatible_partner(cheater, available)
 
                 if partner:
                     # Create non-exclusive relationship
@@ -1459,217 +1063,3 @@ class RomanticRelationshipDistributor:
         logger.info(f"  Created {affairs_created} affairs")
         logger.info(f"  {len([p for p in all_adults if self.status_key in p.properties and not p.properties[self.status_key].get('consensual', True)])} people now cheating")
 
-    # ========================================================================
-    # STATISTICS AND LOGGING
-    # ========================================================================
-
-    def _print_statistics(self, all_adults: List):
-        """Print statistics about relationship distribution."""
-        logger.info("\n" + "=" * 60)
-        logger.info("RELATIONSHIP DISTRIBUTION SUMMARY")
-        logger.info("=" * 60)
-
-        # Orientation distribution
-        logger.info("\nSexual Orientation Distribution:")
-        for orientation in ['heterosexual', 'homosexual', 'bisexual']:
-            count = self.stats.get(f'orientation_{orientation}', 0)
-            pct = (count / len(all_adults)) * 100 if all_adults else 0
-            logger.info(f"  {orientation:20s}: {count:6,} ({pct:5.2f}%)")
-
-        # Relationship type distribution
-        logger.info("\nRelationship Type Distribution:")
-        exclusive = self.stats.get('relationship_type_exclusive', 0)
-        non_exclusive = self.stats.get('relationship_type_non_exclusive', 0)
-        no_partner = self.stats.get('no_partner', 0)
-
-        total = len(all_adults)
-        logger.info(f"  Exclusive:      {exclusive:6,} ({(exclusive/total)*100:5.2f}%)")
-        logger.info(f"  Non-exclusive:  {non_exclusive:6,} ({(non_exclusive/total)*100:5.2f}%)")
-        logger.info(f"  No partner:     {no_partner:6,} ({(no_partner/total)*100:5.2f}%)")
-
-        # Relationships created
-        logger.info("\nRelationships Created:")
-        logger.info(f"  Total relationships: {self.stats.get('relationships_created', 0):,}")
-        logger.info(f"  From household couples: {self.stats.get('household_couples_processed', 0):,}")
-        logger.info(f"  Exclusive (new): {self.stats.get('exclusive_relationships_created', 0):,}")
-        logger.info(f"  Non-exclusive: {self.stats.get('non_exclusive_relationships_created', 0):,}")
-
-        # Cheating statistics
-        cheaters = len([p for p in all_adults
-                       if self.status_key in p.properties
-                       and not p.properties[self.status_key].get('consensual', True)])
-        logger.info(f"\nCheating Statistics:")
-        logger.info(f"  People cheating: {cheaters:,}")
-        logger.info(f"  Cheating rate: {(cheaters/total)*100:.2f}%")
-
-    def export_relationships_csv(self, output_path: str = "romantic_relationships_detailed.csv"):
-        """
-        Export detailed relationship data to CSV.
-
-        Creates a CSV with one row per relationship, including:
-        - Both partners' details (age, sex, ethnicity, orientation)
-        - Relationship type
-        - Whether household couple
-        - Cheating status
-
-        Args:
-            output_path: Path to save CSV file
-        """
-        logger.info(f"\nExporting detailed relationships to: {output_path}")
-
-        # Collect all relationships
-        relationships = []
-
-        for person in self.world.population.people:
-            if self.partners_key not in person.properties:
-                continue
-
-            partners_dict = person.properties[self.partners_key]
-
-            # Process exclusive partners
-            for partner_id in partners_dict.get('exclusive', []):
-                # Avoid duplicates (only process if person.id < partner.id)
-                if person.id < partner_id:
-                    partner = self._get_person_by_id(partner_id)
-                    if partner:
-                        relationships.append(self._make_relationship_record(
-                            person, partner, 'exclusive'
-                        ))
-
-            # Process non-exclusive partners
-            for partner_id in partners_dict.get('non_exclusive', []):
-                # Avoid duplicates
-                if person.id < partner_id:
-                    partner = self._get_person_by_id(partner_id)
-                    if partner:
-                        relationships.append(self._make_relationship_record(
-                            person, partner, 'non_exclusive'
-                        ))
-
-        # Convert to DataFrame and save
-        import pandas as pd
-        df = pd.DataFrame(relationships)
-        df.to_csv(output_path, index=False)
-
-        logger.info(f"  Exported {len(relationships):,} relationships")
-        logger.info(f"  Columns: {list(df.columns)}")
-
-    def _make_relationship_record(self, person1, person2, rel_type: str) -> dict:
-        """
-        Create a detailed record for a single relationship.
-
-        Args:
-            person1: First person
-            person2: Second person
-            rel_type: Relationship type ('exclusive' or 'non_exclusive')
-
-        Returns:
-            Dictionary with all relationship details
-        """
-        # Check if household couple
-        is_household = (person1.properties.get('household_couple') == person2.id)
-
-        # Check cheating status
-        status1 = person1.properties.get(self.status_key, {})
-        status2 = person2.properties.get(self.status_key, {})
-
-        person1_cheating = not status1.get('consensual', True)
-        person2_cheating = not status2.get('consensual', True)
-
-        return {
-            # Person 1 details
-            'person1_id': person1.id,
-            'person1_age': person1.age,
-            'person1_sex': person1.sex,
-            'person1_ethnicity': person1.properties.get('ethnicity', 'Unknown'),
-            'person1_orientation': person1.properties.get(self.orientation_key, 'Unknown'),
-
-            # Person 2 details
-            'person2_id': person2.id,
-            'person2_age': person2.age,
-            'person2_sex': person2.sex,
-            'person2_ethnicity': person2.properties.get('ethnicity', 'Unknown'),
-            'person2_orientation': person2.properties.get(self.orientation_key, 'Unknown'),
-
-            # Relationship details
-            'relationship_type': rel_type,
-            'is_household_couple': is_household,
-            'person1_cheating': person1_cheating,
-            'person2_cheating': person2_cheating,
-            'is_consensual': status1.get('consensual', True) and status2.get('consensual', True),
-
-            # Computed fields
-            'age_difference': abs(person1.age - person2.age),
-            'same_sex': person1.sex == person2.sex,
-            'same_ethnicity': person1.properties.get('ethnicity') == person2.properties.get('ethnicity'),
-        }
-
-    def export_cheating_network_csv(self, output_path: str = "cheating_network_detailed.csv"):
-        """
-        Export detailed cheating network to CSV.
-
-        Shows each cheater with their main partner and affair partner(s).
-
-        Args:
-            output_path: Path to save CSV file
-        """
-        logger.info(f"\nExporting cheating network to: {output_path}")
-
-        cheating_records = []
-
-        for person in self.world.population.people:
-            # Check if person is cheating
-            status = person.properties.get(self.status_key, {})
-            if status.get('consensual', True):
-                continue  # Not cheating
-
-            # Get partners
-            partners_dict = person.properties.get(self.partners_key, {})
-            exclusive_partners = partners_dict.get('exclusive', [])
-            non_exclusive_partners = partners_dict.get('non_exclusive', [])
-
-            # Main partner (exclusive)
-            main_partner_id = exclusive_partners[0] if exclusive_partners else None
-            main_partner = self._get_person_by_id(main_partner_id) if main_partner_id else None
-
-            # Affair partners (non-exclusive)
-            for affair_partner_id in non_exclusive_partners:
-                affair_partner = self._get_person_by_id(affair_partner_id)
-                if affair_partner:
-                    cheating_records.append({
-                        # Cheater details
-                        'cheater_id': person.id,
-                        'cheater_age': person.age,
-                        'cheater_sex': person.sex,
-                        'cheater_ethnicity': person.properties.get('ethnicity', 'Unknown'),
-                        'cheater_orientation': person.properties.get(self.orientation_key, 'Unknown'),
-
-                        # Main partner details (being cheated on)
-                        'main_partner_id': main_partner.id if main_partner else None,
-                        'main_partner_age': main_partner.age if main_partner else None,
-                        'main_partner_sex': main_partner.sex if main_partner else None,
-                        'main_partner_ethnicity': main_partner.properties.get('ethnicity', 'Unknown') if main_partner else None,
-                        'main_partner_orientation': main_partner.properties.get(self.orientation_key, 'Unknown') if main_partner else None,
-                        'is_household_couple': person.properties.get('household_couple') == main_partner_id if main_partner_id else False,
-
-                        # Affair partner details
-                        'affair_partner_id': affair_partner.id,
-                        'affair_partner_age': affair_partner.age,
-                        'affair_partner_sex': affair_partner.sex,
-                        'affair_partner_ethnicity': affair_partner.properties.get('ethnicity', 'Unknown'),
-                        'affair_partner_orientation': affair_partner.properties.get(self.orientation_key, 'Unknown'),
-                        'affair_partner_relationship_type': affair_partner.properties.get(self.status_key, {}).get('type', 'Unknown'),
-                    })
-
-        # Convert to DataFrame and save
-        import pandas as pd
-        df = pd.DataFrame(cheating_records)
-        df.to_csv(output_path, index=False)
-
-        logger.info(f"  Exported {len(cheating_records):,} affairs")
-        if len(cheating_records) > 0:
-            logger.info(f"  Columns: {list(df.columns)}")
-
-    def _get_person_by_id(self, person_id: int):
-        """Get person object by ID using O(1) index lookup."""
-        return self.person_by_id.get(person_id)

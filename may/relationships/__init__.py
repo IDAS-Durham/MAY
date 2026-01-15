@@ -5,6 +5,11 @@ Provides generic, configurable relationship network building between agents.
 All relationship types and criteria are defined via YAML configuration.
 """
 
-from .relationship_builder import RelationshipBuilder
+from .friendship_builder import FriendshipBuilder
+from .romantic_relationships import RomanticRelationshipDistributor, CompatibilityScorer
 
-__all__ = ['RelationshipBuilder']
+__all__ = [
+    'FriendshipBuilder',
+    'RomanticRelationshipDistributor',
+    'CompatibilityScorer'
+]

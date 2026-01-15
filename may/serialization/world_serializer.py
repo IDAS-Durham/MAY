@@ -75,9 +75,9 @@ class WorldSerializer:
             stats['num_subsets'] = self._write_venues(f, world)
             stats['num_venues'] = len(world.venues.get_all_venues())
 
-            # Write relationships
-            logger.info("Serializing relationships...")
-            self._write_relationships(f, world)
+            # Write activity mappings
+            logger.info("Serializing activity mappings...")
+            self._write_activity_mappings(f, world)
 
         logger.info("")
         logger.info("Export complete!")
@@ -196,7 +196,7 @@ class WorldSerializer:
         # Sort people by their geographical unit ID
         people_sorted = sorted(people, key=lambda p: p.geographical_unit.id if p.geographical_unit else -1)
 
-        # Store sorted people for relationships serialization
+        # Store sorted people for activity mapping serialization
         self._people_sorted = people_sorted
 
         logger.info(f"    ✓ Sorted {num_people:,} people by geo_unit_id")
@@ -309,9 +309,9 @@ class WorldSerializer:
         logger.info(f"      Max people per geo_unit: {counts.max()}")
         logger.info(f"      Avg people per geo_unit: {counts.mean():.1f}")
 
-    def _write_relationship_partition_index(self, activity_map_group, people_sorted, activity_offsets, total_relationships):
+    def _write_activity_mapping_partition_index(self, activity_map_group, people_sorted, activity_offsets, total_activity_mappings):
         """
-        Write partition index for efficient geo_unit-based relationship loading.
+        Write partition index for efficient geo_unit-based activity mapping loading.
 
         Creates index structure that maps geo_unit_id -> (start_row, count)
         for the activity_data array, allowing efficient range-based reads.
@@ -319,22 +319,22 @@ class WorldSerializer:
         Args:
             activity_map_group: HDF5 activity_map group
             people_sorted: People list sorted by geo_unit_id
-            activity_offsets: Array of start indices for each person's relationships
-            total_relationships: Total number of rows in activity_data
+            activity_offsets: Array of start indices for each person's activity mappings
+            total_activity_mappings: Total number of rows in activity_data
 
         Structure created:
-            /relationships/activity_map/partition_index/
+            /activity_mappings/activity_map/partition_index/
                 geo_unit_ids: [1, 2, 3, ...] - unique geo_unit IDs
                 start_indices: [0, 500000, 1250000, ...] - start row in activity_data
-                counts: [500000, 750000, 300000, ...] - number of relationship rows per geo_unit
+                counts: [500000, 750000, 300000, ...] - number of mapping rows per geo_unit
         """
         index_group = activity_map_group.create_group('partition_index')
 
         if len(people_sorted) == 0:
-            logger.warning("Empty population - no relationship partition index to create")
+            logger.warning("Empty population - no activity mapping partition index to create")
             return
 
-        # Group people by geo_unit and track relationship row ranges
+        # Group people by geo_unit and track activity mapping row ranges
         unique_geo_units = []
         start_indices = []
         counts = []
@@ -346,24 +346,24 @@ class WorldSerializer:
             geo_unit_id = person.geographical_unit.id if person.geographical_unit else -1
 
             if geo_unit_id != current_geo_unit:
-                # Save previous geo_unit's relationship range
-                # End row is the start of current person's relationships
-                end_row = activity_offsets[person_idx] if person_idx < len(activity_offsets) else total_relationships
-                relationship_count = end_row - current_start_row
+                # Save previous geo_unit's activity mapping range
+                # End row is the start of current person's activity mappings
+                end_row = activity_offsets[person_idx] if person_idx < len(activity_offsets) else total_activity_mappings
+                activity_mappings_count = end_row - current_start_row
 
                 unique_geo_units.append(current_geo_unit)
                 start_indices.append(current_start_row)
-                counts.append(relationship_count)
+                counts.append(activity_mappings_count)
 
                 # Start new geo_unit
                 current_geo_unit = geo_unit_id
                 current_start_row = end_row
 
-        # Save last geo_unit (relationships extend to end of activity_data)
-        relationship_count = total_relationships - current_start_row
+        # Save last geo_unit (activity mappings extend to end of activity_data)
+        activity_mappings_count = total_activity_mappings - current_start_row
         unique_geo_units.append(current_geo_unit)
         start_indices.append(current_start_row)
-        counts.append(relationship_count)
+        counts.append(activity_mappings_count)
 
         # Convert to numpy arrays
         unique_geo_units = np.array(unique_geo_units, dtype=np.int32)
@@ -375,11 +375,11 @@ class WorldSerializer:
         self._create_dataset(index_group, 'start_indices', start_indices)
         self._create_dataset(index_group, 'counts', counts)
 
-        logger.info(f"      Created relationship partition index for {len(unique_geo_units)} geo_units")
+        logger.info(f"      Created activity mapping partition index for {len(unique_geo_units)} geo_units")
         if len(counts) > 0:
-            logger.info(f"      Min relationships per geo_unit: {counts.min()}")
-            logger.info(f"      Max relationships per geo_unit: {counts.max()}")
-            logger.info(f"      Avg relationships per geo_unit: {counts.mean():.1f}")
+            logger.info(f"      Min mappings per geo_unit: {counts.min()}")
+            logger.info(f"      Max mappings per geo_unit: {counts.max()}")
+            logger.info(f"      Avg mappings per geo_unit: {counts.mean():.1f}")
 
     def _write_subset_metadata_partition_index(self, subsets_group, all_subsets_sorted):
         """
@@ -812,9 +812,9 @@ class WorldSerializer:
 
         logger.info(f"    Total subset memberships: {len(members_flat):,}")
 
-    def _write_relationships(self, f, world):
-        """Write relationship data (activity_map, hierarchies)."""
-        rel_group = f.create_group('relationships')
+    def _write_activity_mappings(self, f, world):
+        """Write activity mapping data (activity_map, hierarchies)."""
+        rel_group = f.create_group('activity_mappings')
 
         # Activity map (person → venues via activities)
         if self.config.should_include_activity_map():
@@ -835,7 +835,7 @@ class WorldSerializer:
         - partition_index: geo_unit-based index for efficient partitioned loading
 
         Args:
-            rel_group: HDF5 relationships group
+            rel_group: HDF5 activity mapping group
             world: World object
             people_sorted: People list sorted by geo_unit_id
         """
@@ -919,12 +919,12 @@ class WorldSerializer:
         activity_offsets = np.array(activity_offsets[:-1], dtype=np.int32)
 
         # ============================================================
-        # CREATE PARTITION INDEX FOR RELATIONSHIPS
+        # CREATE PARTITION INDEX FOR ACTIVITY MAPS
         # ============================================================
-        logger.info(f"  Building relationship partition index...")
-        total_relationships = len(activity_data)
-        self._write_relationship_partition_index(activity_map_group, people_sorted, activity_offsets, total_relationships)
-        logger.info(f"    ✓ Wrote relationship partition index")
+        logger.info(f"  Building activity mapping partition index...")
+        total_activity_mappings = len(activity_data)
+        self._write_activity_mapping_partition_index(activity_map_group, people_sorted, activity_offsets, total_activity_mappings)
+        logger.info(f"    ✓ Wrote activity mapping partition index")
 
         # Write datasets
         self._create_dataset(activity_map_group, 'activity_data', activity_data)

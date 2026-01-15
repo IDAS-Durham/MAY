@@ -83,7 +83,7 @@ hardcoded_ethnicity_distributor.py
 # pytest_cache
 .pytest_cache
 people.csv
-social_contacts.csv
+friendships.csv
 world_state.h5
 debug_*.py
 simulation_events.h5

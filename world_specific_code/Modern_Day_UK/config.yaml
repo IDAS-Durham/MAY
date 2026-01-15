@@ -184,8 +184,8 @@ relationship_pipeline:
   enabled: true
 
   relationships:
-    # Social contacts network (for disease transmission)
-    - config: "yaml/relationships/social_contacts.yaml"
+    # Friendships network (for disease transmission)
+    - config: "yaml/relationships/friendships.yaml"
 
   # Notes:
   # - Each relationship config defines a different type of network

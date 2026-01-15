@@ -10,10 +10,6 @@
 
 name: "romantic_relationships"
 
-# Enable/disable romantic relationships entirely
-# When false, skips all romantic relationship distribution (including household couples)
-enabled: false
-
 # Performance settings for large-scale simulations
 performance:
   # Maximum candidates to check per person (samples randomly from geographical group)
