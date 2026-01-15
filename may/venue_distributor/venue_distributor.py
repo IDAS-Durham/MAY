@@ -176,46 +176,29 @@ class VenueDistributor:
 
     def _get_venue_capacity(self, venue) -> int:
         """
-        Get the capacity of a venue based on the configured capacity_column or fixed_capacity.
-
-        Args:
-            venue: Venue object
-
-        Returns:
-            Capacity as integer, or 0 if not found/configured
+        Get the capacity of a venue based on the configured capacity_column or fixed_capacity. (Optimized)
         """
-        allocation_config = self.config.get('allocation', {})
+        # Use cached fixed_capacity if available
+        if self._fixed_capacity is not None:
+            return int(self._fixed_capacity)
 
-        # Check for fixed_capacity first (takes precedence over capacity_column)
-        fixed_capacity = allocation_config.get('fixed_capacity')
-        if fixed_capacity is not None:
-            return int(fixed_capacity)
-
-        # Fallback to capacity_column
-        capacity_column = allocation_config.get('capacity_column')
-
-        if not capacity_column:
+        if not self._capacity_column:
             return 0
 
-        # Get capacity from venue properties
-        capacity = venue.properties.get(capacity_column, 0)
+        # Get capacity from venue properties (Avoid dict.get(..., 0) if common)
+        capacity = venue.properties.get(self._capacity_column, 0)
 
         # Handle missing/zero capacity based on config
-        capacity_handling = allocation_config.get('capacity_handling', {})
         if capacity is None or (isinstance(capacity, (int, float)) and pd.isna(capacity)):
-            if_missing = capacity_handling.get('if_missing', 'skip')
-            if if_missing == 'skip':
-                return 0
-            else:
-                # Could set a default capacity here if needed
-                return 0
-
+            if_missing = self._capacity_handling.get('if_missing', 'skip')
+            return 0 if if_missing == 'skip' else 0 # Defaulting to 0 for now
+        
         if capacity == 0:
-            if_zero = capacity_handling.get('if_zero', 'skip')
+            if_zero = self._capacity_handling.get('if_zero', 'skip')
             if if_zero == 'skip':
                 return 0
 
-        return int(capacity) if capacity else 0
+        return int(capacity)
 
     def _get_venue_current_count(self, venue) -> int:
         """
@@ -375,6 +358,18 @@ class VenueDistributor:
         # Build attribute index for fast filtering (critical performance optimization)
         self._build_attribute_index(venues)
 
+        # Pre-process eligibility filters for hot path performance
+        self._pre_processed_filters = self._pre_process_filters(
+            self.config.get('eligibility', {}).get('global_filters', [])
+        )
+        self._pre_processed_exclude = self.config.get('eligibility', {}).get('exclude', {})
+
+        # Cache allocation configuration for hot path performance (used in _get_venue_capacity)
+        self._allocation_config = self.config.get('allocation', {})
+        self._fixed_capacity = self._allocation_config.get('fixed_capacity')
+        self._capacity_column = self._allocation_config.get('capacity_column')
+        self._capacity_handling = self._allocation_config.get('capacity_handling', {})
+
         # Phase 1: Handle special cases FIRST (bypasses global filters)
         # Special cases get ALL unassigned people (e.g., student_dorms residents can be any age)
         all_unassigned = self._get_unassigned_people(world)
@@ -472,15 +467,15 @@ class VenueDistributor:
 
         for person in people:
             # Check global filters (e.g., age, residence type)
-            if global_filters and not self._person_matches_filters(person, global_filters):
+            if self._pre_processed_filters and not self._person_matches_filters(person, self._pre_processed_filters):
                 filtered_by_global += 1
                 continue
-
-            # Check exclusion rules
-            if exclude_config and self._person_excluded(person, exclude_config):
+            
+            # Check exclusions
+            if self._pre_processed_exclude and self._person_excluded(person, self._pre_processed_exclude):
                 filtered_by_exclusions += 1
                 continue
-
+            
             eligible.append(person)
 
         if self.verbose:
@@ -712,77 +707,122 @@ class VenueDistributor:
 
         return remaining_people
 
-    def _person_matches_filters(self, person, filters: List[Dict]) -> bool:
-        """Check if person matches all filters in a group."""
-        for filter_rule in filters:
-            attr_name = filter_rule.get('attribute')
-            filter_type = filter_rule.get('type', 'numerical')
-            min_val = filter_rule.get('min')
-            max_val = filter_rule.get('max')
-            value = filter_rule.get('value')
-            values = filter_rule.get('values', [])  # For categorical filters with multiple allowed values
-
-            # Handle nested attributes (e.g., "residence.type")
-            if '.' in attr_name:
-                # Special handling for residence.type - check activity_map
-                if attr_name == 'residence.type':
-                    # Use the new residence property for clean access
-                    person_value = person.residence_type
-
-                    # If still no residence found, treat as 'household' (default)
-                    if person_value is None:
-                        person_value = 'household'
-                else:
-                    # Generic nested attribute handling with support for dictionaries
-                    # Handle residence.* paths specially
-                    if attr_name.startswith('residence.'):
-                        # Get residence using person.residence property
-                        # This works for all residence types (now using 'residence' activity)
-                        residence = person.residence
-
-                        if residence is None:
-                            return False
-
-                        # Now traverse the rest of the path from residence
-                        # e.g., "residence.properties.original_pattern" -> "properties.original_pattern"
-                        remaining_path = attr_name.replace('residence.', '')
-                        person_value = self._get_nested_value_with_dict_support(residence, remaining_path)
-                        if person_value is None:
-                            return False
-                    else:
-                        # Normal nested attribute (with dict support)
-                        person_value = self._get_nested_value_with_dict_support(person, attr_name)
-                        if person_value is None:
-                            return False
+    def _pre_process_filters(self, filters: List[Dict]) -> List[Dict]:
+        """Pre-process filters to avoid repeated path parsing."""
+        processed = []
+        for f in filters:
+            p_filter = f.copy()
+            attr_name = f.get('attribute')
+            if attr_name and '.' in attr_name:
+                p_filter['is_nested'] = True
+                p_filter['path_parts'] = attr_name.split('.')
+                p_filter['is_residence'] = attr_name.startswith('residence.')
+                if p_filter['is_residence']:
+                    p_filter['residence_path'] = attr_name.replace('residence.', '')
             else:
-                person_value = getattr(person, attr_name, None)
-                if person_value is None:
-                    return False
+                p_filter['is_nested'] = False
+            processed.append(p_filter)
+        return processed
 
-            # Numerical filters: Range check
-            if filter_type == 'numerical':
-                if min_val is not None and person_value < min_val:
-                    return False
-                if max_val is not None and person_value > max_val:
-                    return False
+    def _person_matches_filters(self, person, filters: List[Dict]) -> bool:
+        """Check if person matches all filters in a group (Optimized)."""
+        # Distinguish between pre-processed and raw filters for safety
+        # We assume filters passed from _handle_priority_allocation are pre-processed.
+        # For other calls, we use the fallback.
+        is_pre_processed = 'is_nested' in filters[0] if filters else False
 
-            # Categorical filters: Check if value is in allowed list
-            elif filter_type == 'categorical':
-                if values:  # Check against list of allowed values
-                    if person_value not in values:
-                        # Debug logging for residence type filtering
-                        if self.verbose and attr_name == 'residence.type':
-                            logger.debug(f"Person age {person.age} filtered out: residence_type={person_value}, allowed={values}")
+        if is_pre_processed:
+            # Optimized path using pre-processed info
+            for filter_rule in filters:
+                person_value = None
+                if filter_rule.get('is_nested'):
+                    if filter_rule.get('is_residence'):
+                        if filter_rule['attribute'] == 'residence.type':
+                            person_value = person.residence_type or 'household'
+                        else:
+                            residence = person.residence
+                            if residence is None: return False
+                            person_value = self._get_nested_value_with_dict_support(residence, filter_rule['residence_path'])
+                    else:
+                        person_value = self._get_nested_value_with_dict_support(person, filter_rule['attribute'])
+                    
+                    if person_value is None: return False
+                else:
+                    # Non-nested: use getattr directly
+                    person_value = getattr(person, filter_rule['attribute'], None)
+                    if person_value is None: return False
+
+                # Validate value
+                filter_type = filter_rule.get('type', 'numerical')
+                if filter_type == 'numerical':
+                    min_val = filter_rule.get('min')
+                    max_val = filter_rule.get('max')
+                    if min_val is not None and person_value < min_val: return False
+                    if max_val is not None and person_value > max_val: return False
+                elif filter_type == 'categorical':
+                    val = filter_rule.get('value')
+                    vals = filter_rule.get('values')
+                    if val is not None and person_value != val: return False
+                    if vals is not None and person_value not in vals: return False
+            return True
+        else:
+            # Fallback for ad-hoc filter lists (less frequent)
+            for filter_rule in filters:
+                attr_name = filter_rule.get('attribute')
+                filter_type = filter_rule.get('type', 'numerical')
+                min_val = filter_rule.get('min')
+                max_val = filter_rule.get('max')
+                value = filter_rule.get('value')
+                values = filter_rule.get('values', [])  # For categorical filters with multiple allowed values
+
+                # Handle nested attributes (e.g., "residence.type")
+                if '.' in attr_name:
+                    # Special handling for residence.type - check activity_map
+                    if attr_name == 'residence.type':
+                        # Use the new residence property for clean access
+                        person_value = person.residence_type
+
+                        # If still no residence found, treat as 'household' (default)
+                        if person_value is None:
+                            person_value = 'household'
+                    else:
+                        # Generic nested attribute handling with support for dictionaries
+                        # Handle residence.* paths specially
+                        if attr_name.startswith('residence.'):
+                            # Get residence using person.residence property
+                            # This works for all residence types (now using 'residence' activity)
+                            residence = person.residence
+
+                            if residence is None:
+                                return False
+
+                            # Now traverse the rest of the path from residence
+                            # e.g., "residence.properties.original_pattern" -> "properties.original_pattern"
+                            remaining_path = attr_name.replace('residence.', '')
+                            person_value = self._get_nested_value_with_dict_support(residence, remaining_path)
+                            if person_value is None:
+                                return False
+                        else:
+                            # Normal nested attribute (with dict support)
+                            person_value = self._get_nested_value_with_dict_support(person, attr_name)
+                            if person_value is None:
+                                return False
+                else:
+                    person_value = getattr(person, attr_name, None)
+                    if person_value is None:
                         return False
-                elif value is not None:  # Check against single value
-                    if person_value != value:
+
+                if filter_type == 'numerical':
+                    if min_val is not None and person_value < min_val:
                         return False
-
-            # Fallback: Exact value check for legacy filters
-            if value is not None and person_value != value:
-                return False
-
-        return True
+                    if max_val is not None and person_value > max_val:
+                        return False
+                elif filter_type == 'categorical':
+                    if values and person_value not in values:
+                        return False
+                    if value is not None and person_value != value:
+                        return False
+            return True
 
     def _apply_probability_filter(self, people: List, prob_config, group_name: str) -> List:
         """
@@ -1467,6 +1507,17 @@ class VenueDistributor:
 
         logger.info(f"Batching: {len(people_by_geo_unit)} geo_units to process at {self.batch_geo_level} level")
 
+        # PRE-GROUP VENUES BY GEO_UNIT FOR MASSIVE SPEEDUP
+        # This replaces O(G * V) filtering with O(V) grouping
+        venues_by_geo_name = {}
+        for v in venues:
+            geo_name = v.geographical_unit.name if v.geographical_unit else None
+            if geo_name not in venues_by_geo_name:
+                venues_by_geo_name[geo_name] = []
+            venues_by_geo_name[geo_name].append(v)
+        
+        logger.info(f"Pre-grouped {len(venues)} venues into {len(venues_by_geo_name)} geo_units")
+
         # Progress tracking
         total_people = len(people)
         people_processed = 0
@@ -1498,19 +1549,37 @@ class VenueDistributor:
             # Filter venues to those in the appropriate geographical unit
             # For companies: find all companies in the parent MGU
             if self.config.get('venue_selection', {}).get('consider_by') == 'geo_unit':
-                # Filter venues by geographical unit
-                eligible_venues = [v for v in venues if v.geographical_unit.name == venue_search_unit.name]
+                # Filter venues by geographical unit (using pre-grouped cache)
+                eligible_venues = venues_by_geo_name.get(venue_search_unit.name, [])
             else:
                 # Use distance-based selection
                 eligible_venues = self._find_eligible_venues_for_location(
                     (lat, lon), venues
                 )
 
-            # Allocate each person in this batch (even if no eligible venues, count for progress)
+            # Pre-extract person attributes for this batch (MASSIVE speedup for attribute matching)
+            # This avoids repeated getattr calls in the inner loop
+            eligibility = self.config.get('eligibility', {})
+            attributes_to_extract = [rule.get('name') for rule in eligibility.get('attributes', [])]
+            # Also include attributes used in categorical index pre-filtering
+            for rule in eligibility.get('attributes', []):
+                if rule.get('type') == 'categorical' and rule.get('venue_column'):
+                    attributes_to_extract.append(rule.get('name'))
+            attributes_to_extract = list(set(attributes_to_extract))
+
+            # Allocate each person in this batch
             for person in geo_unit_people:
                 if eligible_venues:
+                    # Pre-extract attributes for this specific person
+                    person_attrs = {}
+                    for attr_name in attributes_to_extract:
+                        val = getattr(person, attr_name, None)
+                        if val is None and hasattr(person, 'properties'):
+                            val = person.properties.get(attr_name)
+                        person_attrs[attr_name] = val
+
                     # Filter venues by person attributes
-                    person_venues = self._filter_venues_by_person(person, eligible_venues)
+                    person_venues = self._filter_venues_by_person(person, eligible_venues, person_attrs=person_attrs)
 
                     if person_venues:
                         # Try to allocate to venues with capacity first
@@ -1705,7 +1774,7 @@ class VenueDistributor:
 
         return c * r
 
-    def _prefilter_venues_by_categorical(self, person, venues: List) -> List:
+    def _prefilter_venues_by_categorical(self, person, venues: List, person_attrs: Optional[Dict] = None) -> List:
         """
         Pre-filter venues using categorical index for massive speedup.
 
@@ -1730,9 +1799,12 @@ class VenueDistributor:
                 case_sensitive = rule.get('case_sensitive', False)
 
                 # Get person's value for this attribute
-                person_value = getattr(person, attr_name, None)
-                if person_value is None and hasattr(person, 'properties') and attr_name in person.properties:
-                    person_value = person.properties[attr_name]
+                if person_attrs and attr_name in person_attrs:
+                    person_value = person_attrs[attr_name]
+                else:
+                    person_value = getattr(person, attr_name, None)
+                    if person_value is None and hasattr(person, 'properties') and attr_name in person.properties:
+                        person_value = person.properties[attr_name]
 
                 if person_value is not None:
                     # Apply case sensitivity
@@ -1765,10 +1837,10 @@ class VenueDistributor:
         else:
             return venues  # No categorical filters, return all venues
 
-    def _filter_venues_by_person(self, person, venues: List) -> List:
+    def _filter_venues_by_person(self, person, venues: List, person_attrs: Optional[Dict] = None) -> List:
         """Filter venues based on person's attributes (age, gender, etc.)."""
         # Step 1: Pre-filter using categorical index (instant filtering for large venue sets)
-        venues = self._prefilter_venues_by_categorical(person, venues)
+        venues = self._prefilter_venues_by_categorical(person, venues, person_attrs=person_attrs)
 
         # Step 2: Filter remaining venues by other attributes (age, gender, etc.)
         eligibility = self.config.get('eligibility', {})
@@ -1777,12 +1849,12 @@ class VenueDistributor:
         eligible_venues = []
 
         for venue in venues:
-            if self._venue_accepts_person(person, venue, attributes):
+            if self._venue_accepts_person(person, venue, attributes, person_attrs=person_attrs):
                 eligible_venues.append(venue)
 
         return eligible_venues
 
-    def _venue_accepts_person(self, person, venue, attribute_rules: List[Dict]) -> bool:
+    def _venue_accepts_person(self, person, venue, attribute_rules: List[Dict], person_attrs: Optional[Dict] = None) -> bool:
         """
         Check if venue accepts person based on attribute rules.
 
@@ -1797,10 +1869,14 @@ class VenueDistributor:
                 attr_name = rule.get('name')
                 attr_type = rule.get('type')
 
-                # Get person's attribute value (check direct attribute first, then properties dict)
-                person_value = getattr(person, attr_name, None)
-                if person_value is None and hasattr(person, 'properties') and attr_name in person.properties:
-                    person_value = person.properties[attr_name]
+                # Get person's attribute value
+                if person_attrs and attr_name in person_attrs:
+                    person_value = person_attrs[attr_name]
+                else:
+                    person_value = getattr(person, attr_name, None)
+                    if person_value is None and hasattr(person, 'properties') and attr_name in person.properties:
+                        person_value = person.properties[attr_name]
+                
                 if person_value is None:
                     return False
 
@@ -1941,44 +2017,41 @@ class VenueDistributor:
         return venues[0]
 
     def _log_allocation_summary(self, world):
-        """Log summary statistics of allocation."""
-        # Calculate total people
+        """Log summary statistics of allocation (Optimized)."""
         total_people = len(world.people)
-
-        # Calculate eligible people - ignore assignment status for this count
-        # We want to know who WOULD HAVE BEEN eligible (before allocation)
-        eligible_people = []
+        
+        # Cache config values for the loop
+        required_attrs = self.config.get('validation', {}).get('required_person_attributes', [])
+        global_filters = self._pre_processed_filters
+        exclude_config = self._pre_processed_exclude
+        
+        total_eligible = 0
+        total_with_venue_type = 0
+        
+        # Perform a single pass over the population
         for person in world.people:
-            # Check required attributes
-            required_attrs = self.config.get('validation', {}).get('required_person_attributes', [])
+            # 1. Count people with this venue type
+            if self.activity_map_key in person.activity_map:
+                activity_venues = person.activity_map[self.activity_map_key]
+                if isinstance(activity_venues, dict) and self.venue_type in activity_venues:
+                    if activity_venues[self.venue_type]:
+                        total_with_venue_type += 1
+            
+            # 2. Check eligibility (for the "eligible people" count)
+            # This logic must match the allocation entry logic exactly
             if not self._has_required_attributes(person, required_attrs):
                 continue
-
-            # Apply global filters and exclusions (same as during allocation)
-            global_filters = self.config.get('eligibility', {}).get('global_filters', [])
+                
             if global_filters and not self._person_matches_filters(person, global_filters):
                 continue
-
-            exclude_config = self.config.get('eligibility', {}).get('exclude', {})
+                
             if exclude_config and self._person_excluded(person, exclude_config):
                 continue
+                
+            total_eligible += 1
 
-            eligible_people.append(person)
-
-        total_eligible = len(eligible_people)
-
-        # Use allocations made during THIS run (not all existing allocations)
+        # Use allocations made during THIS run
         allocated = self.allocated_this_run
-
-        # Also count total people currently with this venue type (for reference)
-        total_with_venue_type = 0
-        for p in world.people:
-            if self.activity_map_key in p.activity_map:
-                activity_venues = p.activity_map[self.activity_map_key]
-                if isinstance(activity_venues, dict) and self.venue_type in activity_venues:
-                    subsets = activity_venues[self.venue_type]
-                    if subsets:
-                        total_with_venue_type += 1
 
         logger.info(f"Allocation Summary:")
         logger.info(f"  - Total people: {total_people}")

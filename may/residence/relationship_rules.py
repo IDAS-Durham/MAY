@@ -201,10 +201,18 @@ class RelationshipRulesValidator:
             max_value = cached_values[attribute]['max']
             min_value = cached_values[attribute]['min']
         else:
-            # Vectorized computation using numpy for better performance
-            people2_values = np.array([getattr(p, attribute) for p in people2])
-            max_value = people2_values.max()
-            min_value = people2_values.min()
+            # For small lists (common in households), min/max are faster than numpy
+            if len(people2) < 20: 
+                min_value = float('inf')
+                max_value = float('-inf')
+                for p in people2:
+                    val = getattr(p, attribute)
+                    if val < min_value: min_value = val
+                    if val > max_value: max_value = val
+            else:
+                people2_values = np.array([getattr(p, attribute) for p in people2])
+                max_value = people2_values.max()
+                min_value = people2_values.min()
 
         # Check against MAX attribute value in people2 for min constraint
         diff_max = person1_value - max_value
@@ -364,11 +372,14 @@ class RelationshipRulesValidator:
                     target_value = reference_value + target_diff
 
                     tolerance = pref_dist.get('tolerance', std * 1.5 if dist_type == 'normal' else 10)
-                    candidate_values = {p.id: getattr(p, attribute) for p in prioritized_candidates}
-                    prioritized_candidates = [
-                        p for p in prioritized_candidates
-                        if abs(candidate_values[p.id] - target_value) <= tolerance
-                    ]
+                    
+                    # Optimized prioritized_candidates filter
+                    new_prioritized = []
+                    for p in prioritized_candidates:
+                        p_val = getattr(p, attribute)
+                        if target_value - tolerance <= p_val <= target_value + tolerance:
+                            new_prioritized.append(p)
+                    prioritized_candidates = new_prioritized
 
                     # If filtering too aggressive, fall back to all candidates
                     if not prioritized_candidates:

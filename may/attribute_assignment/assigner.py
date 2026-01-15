@@ -277,53 +277,62 @@ class AttributeAssigner:
         Returns:
             bool: True if person passes all filters
         """
+        if not self._has_filters:
+            # Check required attributes even if no filters
+            for attr_name, attr_config in self._required_attrs:
+                if attr_config.get('required', False):
+                    if attr_name not in person.properties:
+                        if attr_config.get('error_if_missing', False):
+                            return False
+            return True
+
+        # 1. Attribute filters
         # Use pre-computed filter list instead of repeated hasattr/dict lookups
-        if self._has_filters:
-            # Loop through pre-computed filter list
-            for _, filter_config in self._filter_list:
-                # Get the attribute to filter on
-                attr_name = filter_config.get('attribute')
-                filter_type = filter_config.get('type')
+        for _, filter_config in self._filter_list:
+            attr_name = filter_config.get('attribute')
+            if not attr_name:
+                continue
 
-                if not attr_name:
-                    continue
+            # Optimized lookup: check properties first as it's common
+            # Avoid hasattr(person, 'properties') if we can assume it exists or use getattr
+            person_value = person.properties.get(attr_name)
+            if person_value is None:
+                person_value = getattr(person, attr_name, None)
 
-                # Get the person's value for this attribute
-                # First check properties, then object attributes
-                person_value = person.properties.get(attr_name) if hasattr(person, 'properties') else None
-                if person_value is None:
-                    person_value = getattr(person, attr_name, None)
+            if person_value is None:
+                continue
 
-                if person_value is None:
-                    continue
+            filter_type = filter_config.get('type')
+            if filter_type == 'numerical':
+                numerical_config = filter_config.get('numerical', {})
+                min_value = numerical_config.get('min')
+                if min_value is not None and person_value < min_value:
+                    return False
+                max_value = numerical_config.get('max')
+                if max_value is not None and person_value > max_value:
+                    return False
+            elif filter_type == 'categorical':
+                # Add categorical filter support if needed in the future
+                pass
 
-                # Apply filter based on type
-                if filter_type == 'numerical':
-                    numerical_config = filter_config.get('numerical', {})
-                    min_value = numerical_config.get('min')
-                    max_value = numerical_config.get('max')
+        # 2. Activity filters (Fast set intersection check)
+        if self._include_activities or self._exclude_activities:
+            # person.activities is usually a list. Convert to set or use generator if large.
+            # But for 8M people, even creating a set is expensive if done 35M times.
+            # Usually activities list is small (2-5 items).
+            person_activities = getattr(person, 'activities', [])
+            
+            if self._include_activities:
+                # person_activities must have overlap with include_activities
+                # any() with generator is usually fast for small lists
+                if not any(a in person_activities for a in self._include_activities):
+                    return False
 
-                    if min_value is not None and person_value < min_value:
-                        return False
+            if self._exclude_activities:
+                if any(a in person_activities for a in self._exclude_activities):
+                    return False
 
-                    if max_value is not None and person_value > max_value:
-                        return False
-
-            # Use pre-computed activity filters
-            if self._include_activities or self._exclude_activities:
-                person_activities = getattr(person, 'activities', [])
-
-                if self._include_activities:
-                    # Person must have at least one of the included activities
-                    if not any(activity in person_activities for activity in self._include_activities):
-                        return False
-
-                if self._exclude_activities:
-                    # Person must not have any of the excluded activities
-                    if any(activity in person_activities for activity in self._exclude_activities):
-                        return False
-
-        # Use pre-computed required attributes list
+        # 3. Required attributes
         for attr_name, attr_config in self._required_attrs:
             if attr_config.get('required', False):
                 if attr_name not in person.properties:

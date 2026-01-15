@@ -193,12 +193,30 @@ class HouseholdDistributor:
         logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
 
     def _categorize_person(self, person: Person) -> int:
-        """Get the category index for a person based on their attributes."""
+        """Get the category index for a person based on their attributes. (Optimized)"""
+        p_props = person.properties
         for idx, cat in enumerate(self.categories):
-            if cat.matches(person):
-                return idx
-        # Shouldn't happen, but default to last category
-        return len(self.categories) - 1
+            # Inline expansion of matches() logic for speed in hot path
+            # Category.attribute is the key we check
+            attr = cat.attribute
+            val = getattr(person, attr, None)
+            if val is None:
+                val = p_props.get(attr)
+            
+            if val is None:
+                continue
+
+            if cat.type == 'numerical':
+                if (cat.min_value is None or val >= cat.min_value) and \
+                   (cat.max_value is None or val <= cat.max_value):
+                    return idx
+            elif cat.type == 'categorical':
+                if cat.allowed_values is None or val in cat.allowed_values:
+                    return idx
+        
+    def _get_person_category_idx(self, person: Person) -> int:
+        """Helper to get category index for a person."""
+        return self._categorize_person(person)
 
     def _prepare_person_pools(self, refresh: bool = False):
         """
@@ -354,10 +372,18 @@ class HouseholdDistributor:
         if not all_selected:
             return (None, None)
 
-        # Remove selected people from pools
+        # Remove selected people from pools (Optimized for reuse)
         selected_ids = {p.id for p in all_selected}
-        for cat_idx in range(len(self.categories)):
-            pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
+        self.allocated_people.update(selected_ids)
+        
+        for p in all_selected:
+            cat_idx = self._get_person_category_idx(p)
+            # Efficiently remove from pool (assuming people list is relatively small per SGU)
+            # Using list.remove is O(N) but only done for the few selected people
+            try:
+                pools[cat_idx].remove(p)
+            except ValueError:
+                pass # Already removed or not in pool (shouldn't happen)
 
         # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)

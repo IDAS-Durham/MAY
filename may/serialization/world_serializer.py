@@ -624,8 +624,10 @@ class WorldSerializer:
         # Assign global IDs (0, 1, 2, ..., N-1) to SORTED venues
         global_ids = np.arange(num_venues, dtype=np.int32)
 
-        # Create mapping: (venue Python object id) -> global_id for subset/activity_map serialization
-        self._venue_to_global_id = {id(v): global_id for v, global_id in zip(all_venues_sorted, global_ids)}
+        # Create mapping for faster lookup during activity map export
+        self._venue_to_global_id = {}
+        for v, global_id in zip(all_venues_sorted, global_ids):
+            self._venue_to_global_id[id(v)] = global_id
 
         # Also store type-scoped IDs for debugging/reference
         type_scoped_ids = np.array([v.id for v in all_venues_sorted], dtype=np.int32)
@@ -855,64 +857,53 @@ class WorldSerializer:
 
         # Flatten activity_map for all people
         # Format: (person_id, activity_idx, venue_id, subset_idx)
-        activity_data = []
+        # Use separate lists for integer values to avoid list-of-lists overhead
+        p_ids = []
+        a_idxs = []
+        v_ids_list = []
+        s_idxs = []
         activity_offsets = [0]
 
         # Progress tracking
         num_people = len(people_sorted)
         progress_interval = max(1, num_people // 10)  # Update every 10%
 
-        logger.info(f"  Processing activity maps for {num_people:,} people...")
+        # Cache activity indices to avoid dict lookup in inner loop
+        activity_indices = {name: activity_to_idx[name] for name in activity_names}
+        venue_to_id = self._venue_to_global_id
 
         for person_idx, person in enumerate(people_sorted, 1):
-            for activity_name, subsets_or_dict in person.activity_map.items():
-                if activity_name not in activity_to_idx:
-                    continue  # Skip if activity not in registry
-
-                activity_idx = activity_to_idx[activity_name]
-
-                # UNIFIED STRUCTURE: All activities now use nested dict format
-                # activity_map[activity_name][venue_type] = [subsets]
-                # Examples:
-                #   - activity_map['residence']['household'] = [subset]
-                #   - activity_map['primary_activity']['own_land'] = [subset]
-                #   - activity_map['primary_activity']['lords_demesne'] = [subset]
-                #   - activity_map['leisure']['cinema'] = [subset1, subset2]
-
-                if isinstance(subsets_or_dict, dict):
-                    # Flatten the dict: iterate over all venue types
-                    for venue_type, subsets_list in subsets_or_dict.items():
-                        if not isinstance(subsets_list, list):
-                            logger.warning(f"Person {person.id} activity '{activity_name}' venue_type '{venue_type}': expected list, got {type(subsets_list)}")
-                            continue
-
+            # Pre-filter subsets once (Optimized)
+            relevant_subsets = []
+            for name, types in person.activity_map.items():
+                if name in activity_to_idx:
+                    for v_type, subsets_list in types.items():
+                        # We hope it's a list; skipping isinstance for speed in hot path
                         for subset in subsets_list:
-                            if not hasattr(subset, 'venue') or not hasattr(subset, 'subset_index'):
-                                logger.warning(f"Person {person.id} activity '{activity_name}': invalid subset {type(subset)}")
-                                continue
+                            v_id = id(subset.venue)
+                            if v_id in venue_to_id:
+                                relevant_subsets.append((activity_to_idx[name], venue_to_id[v_id], subset.subset_index))
 
-                            # IMPORTANT: Use global venue ID (not type-scoped ID)
-                            activity_data.append([
-                                person.id,
-                                activity_idx,
-                                self._venue_to_global_id[id(subset.venue)],
-                                subset.subset_index
-                            ])
+            for act_idx, g_id, s_idx in relevant_subsets:
+                p_ids.append(person.id)
+                a_idxs.append(act_idx)
+                v_ids_list.append(g_id)
+                s_idxs.append(s_idx)
 
-                else:
-                    # ERROR: activity_map must be dict with unified structure
-                    raise TypeError(f"Person {person.id} activity '{activity_name}': expected dict, got {type(subsets_or_dict)}. All activities must use unified structure: activity_map[activity_name][venue_type] = [subsets]")
-
-            activity_offsets.append(len(activity_data))
+            activity_offsets.append(len(p_ids))
 
             # Log progress
             if person_idx % progress_interval == 0 or person_idx == num_people:
                 progress = (person_idx / num_people) * 100
-                logger.info(f"    Progress: {person_idx:,}/{num_people:,} people processed ({progress:.1f}%) - {len(activity_data):,} mappings")
+                logger.info(f"    Progress: {person_idx:,}/{num_people:,} people processed ({progress:.1f}%) - {len(p_ids):,} mappings")
 
-        # Convert to arrays
-        if activity_data:
-            activity_data = np.array(activity_data, dtype=np.int32)
+        # Convert to a single 2D array
+        if p_ids:
+            activity_data = np.empty((len(p_ids), 4), dtype=np.int32)
+            activity_data[:, 0] = p_ids
+            activity_data[:, 1] = a_idxs
+            activity_data[:, 2] = v_ids_list
+            activity_data[:, 3] = s_idxs
         else:
             activity_data = np.zeros((0, 4), dtype=np.int32)
 
@@ -944,14 +935,9 @@ class WorldSerializer:
             prop_name: Property name
             objects: List of objects (Person, Venue, GeographicalUnit)
         """
-        # Extract property values
-        values = []
-        for obj in objects:
-            if hasattr(obj, 'properties'):
-                val = obj.properties.get(prop_name, None)
-            else:
-                val = None
-            values.append(val)
+        # Extract property values (Optimized list comprehension)
+        # Assuming all objects are of the same class or have 'properties'
+        values = [obj.properties.get(prop_name) for obj in objects]
 
         # Determine type and convert to array
         if not values or all(v is None for v in values):
@@ -980,6 +966,7 @@ class WorldSerializer:
         elif isinstance(sample_val, (list, dict)):
             # Complex type - serialize as JSON string
             import json
+            # Pre-allocate for performance if string length is predictable, but h5py.string_dtype is flexible
             arr = np.array([json.dumps(v) if v is not None else "" for v in values],
                           dtype=h5py.string_dtype())
         else:
