@@ -278,9 +278,8 @@ def main():
         config_path = romantic_config.get("config", "yaml/relationships/romantic_relationships.yaml")
 
         try:
-            from may.relationships.romantic_relationships import RomanticRelationshipDistributor
-
-            distributor = RomanticRelationshipDistributor(world, config_path)
+            from may.relationships.romantic_relationships import VectorizedRomanticDistributor
+            distributor = VectorizedRomanticDistributor(world, config_path)
             distributor.distribute_all()
 
         except Exception as e:

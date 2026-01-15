@@ -3,12 +3,14 @@ Romantic relationships submodule.
 
 Handles sexual orientation assignment, romantic partnership creation,
 and relationship dynamics including exclusive, non-exclusive, and affair relationships.
+
+Two implementations available:
+- RomanticRelationshipDistributor: Original implementation (flexible but slower)
+- VectorizedRomanticDistributor: NumPy/Numba optimized (60M+ scale)
 """
 
-from .romantic_relationship_distributor import RomanticRelationshipDistributor
-from .compatibility_scorer import CompatibilityScorer
+from .vectorized_distributor import VectorizedRomanticDistributor
 
 __all__ = [
-    'RomanticRelationshipDistributor',
-    'CompatibilityScorer'
+    'VectorizedRomanticDistributor'
 ]
