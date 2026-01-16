@@ -33,28 +33,51 @@ class VenueDistributor:
     - Batch processing by geo_unit for performance
     """
 
-    def __init__(self, config_path: str):
+    def __init__(self, config_file: str = None, config_dict: Dict = None):
         """
-        Initialize VenueDistributor from YAML configuration.
+        Initialize VenueDistributor.
 
         Args:
-            config_path: Path to distributor YAML file
+            config_file: Path to YAML config file
+            config_dict: Dictionary config (alternative to file)
         """
-        self.config_path = Path(config_path)
-        self.config = self._load_config()
-        self.spatial_index = None
-        self.venue_list = None
+        # Load config
+        if config_file:
+            self.config = self._load_config(config_file)
+            self.config_path = Path(config_file) # Keep for relative path resolution
+        elif config_dict:
+            self.config = config_dict
+            self.config_path = None # No config file path if dict is used
+        else:
+            raise ValueError("Must provide either config_file or config_dict")
 
-        # Cache pre-processed venue attribute data
-        # This avoids repeated dict lookups and string operations in hot path
-        self.venue_attribute_cache = {}  # venue_id -> pre-processed attribute data
+        # Initialize core attributes
+        self.venue_type = self.config.get('venue_type', 'unknown')
+        self.activity_map_key = self.config.get('activity_map_key', 'unknown')
+        self.verbose = self.config.get('settings', {}).get('verbose', False)
+
+        # Attribute lookup cache
+        self.person_loc_attr = self.config.get('venue_selection', {}).get('person_location_source', 'geographical_unit.coordinates')
+        self.person_location_attribute = self._parse_location_attribute(self.person_loc_attr)
+
+        # Pre-process filters
+        self._pre_processed_filters = []
+        self._pre_processed_exclude = {}
+
+        # Spatial index
+        self.spatial_index = None
+        self.venue_list = []
+
+        # Attribute index
+        self.venue_attribute_cache = {}
+        self.categorical_index = {}
         self.attribute_index_built = False
 
-        # Categorical attribute index: Pre-group venues by categorical values
-        # For example: {('work_sector', 'A'): [venue1, venue5, ...], ('work_sector', 'B'): [...]}
-        # This allows filtering 1.27M companies down to ~67K per sector instantly
-        self.categorical_index = {}  # (attr_name, value) -> list of venues
+        # Vectorized population arrays
+        self.population_arrays = {}
 
+        # Statistics
+        self.stats = {}
         # Probability allocation cache
         # Maps (file_path, probability_column) -> {geo_unit_name: probability}
         self.probability_cache = {}
@@ -63,11 +86,8 @@ class VenueDistributor:
         self.venue_capacity_tracker = {}
 
         # Extract key config values
-        self.venue_type = self.config.get('venue_type')
-        self.activity_map_key = self.config.get('activity_map_key')
         self.subset_key = self.config.get('subset_key', None)
         self.activity_type = self.config.get('activity_type', None)  # Override for activity_map nesting
-        self.verbose = self.config.get('settings', {}).get('verbose', False)
 
         # Geographical level configuration (default to SGU for backward compatibility)
         self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level', 'SGU')
@@ -75,10 +95,6 @@ class VenueDistributor:
         # Batch geographical level (for grouping people during allocation)
         # Defaults to venue_geo_level if not specified
         self.batch_geo_level = self.config.get('venue_selection', {}).get('batch_geo_level', self.venue_geo_level)
-
-        # Person location attribute (default to 'geographical_unit' for backward compatibility)
-        # Can be set to custom attributes like 'workplace_location'
-        self.person_location_attribute = self.config.get('venue_selection', {}).get('person_location_attribute', 'geographical_unit')
 
         # Load probability files for priority allocation groups
         self._load_probability_files()
@@ -92,11 +108,28 @@ class VenueDistributor:
         else:
             logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at geo_level='{self.venue_geo_level}' using location='{self.person_location_attribute}'")
 
-    def _load_config(self) -> Dict:
+    def _load_config(self, config_path: str) -> Dict:
         """Load and parse YAML configuration file."""
-        with open(self.config_path, 'r') as f:
+        with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         return config
+
+    def _parse_location_attribute(self, attr_string: str) -> Dict:
+        """
+        Parses the person_location_source string into a dictionary for easier lookup.
+        Examples:
+        - 'geographical_unit' -> {'type': 'direct', 'attribute': 'geographical_unit'}
+        - 'geographical_unit.coordinates' -> {'type': 'nested', 'attribute': 'geographical_unit', 'sub_attribute': 'coordinates'}
+        - 'properties.workplace_sgu' -> {'type': 'properties', 'attribute': 'workplace_sgu'}
+        """
+        if '.' in attr_string:
+            parts = attr_string.split('.')
+            if parts[0] == 'properties':
+                return {'type': 'properties', 'attribute': parts[1]}
+            else:
+                return {'type': 'nested', 'attribute': parts[0], 'sub_attribute': parts[1]}
+        else:
+            return {'type': 'direct', 'attribute': attr_string}
 
     def _load_probability_files(self):
         """
@@ -140,12 +173,15 @@ class VenueDistributor:
 
             # Load CSV file
             full_path = Path(file_path)
-            if not full_path.is_absolute():
+            if not full_path.is_absolute() and self.config_path:
                 # Make relative to project root
                 # config_path is yaml/distributors/xxx.yaml
                 # We need to go up to yaml/, then up to project root
                 project_root = self.config_path.parent.parent.parent
                 full_path = project_root / file_path
+            elif not self.config_path:
+                logger.warning(f"Cannot resolve relative path '{file_path}' for probability file without a config_file path. Assuming absolute path.")
+
 
             try:
                 logger.info(f"Loading probability file: {full_path}")
@@ -282,39 +318,45 @@ class VenueDistributor:
         """
         if target_level is None:
             target_level = self.venue_geo_level
-        # Get the base geographical unit (either residence or custom location)
-        if self.person_location_attribute == 'geographical_unit':
-            # Default: use residence location
-            if not hasattr(person, 'geographical_unit') or person.geographical_unit is None:
-                return None
-            person_geo_unit = person.geographical_unit
-        else:
-            # Custom attribute (e.g., workplace_location or properties.workplace_sgu)
-            # This may be a direct attribute or in person.properties dict
-            if self.person_location_attribute.startswith('properties.'):
-                # Extract from properties dict
-                prop_name = self.person_location_attribute.replace('properties.', '')
-                location_value = person.properties.get(prop_name) if hasattr(person, 'properties') else None
-            else:
-                # Direct attribute
-                location_value = getattr(person, self.person_location_attribute, None)
 
+        loc_attr_config = self.person_location_attribute
+        person_geo_unit = None
+
+        if loc_attr_config['type'] == 'direct':
+            # Default: use residence location
+            if not hasattr(person, loc_attr_config['attribute']) or getattr(person, loc_attr_config['attribute']) is None:
+                return None
+            person_geo_unit = getattr(person, loc_attr_config['attribute'])
+        elif loc_attr_config['type'] == 'properties':
+            # Custom attribute from person.properties dict
+            location_value = person.properties.get(loc_attr_config['attribute']) if hasattr(person, 'properties') else None
             if location_value is None:
                 return None
+            if world is None or not hasattr(world, 'geography'):
+                logger.warning(f"Cannot resolve {self.person_loc_attr}='{location_value}' without world.geography")
+                return None
+            person_geo_unit = world.geography.get_unit(location_value)
+        elif loc_attr_config['type'] == 'nested':
+            # Nested attribute (e.g., geographical_unit.coordinates)
+            base_attr = getattr(person, loc_attr_config['attribute'], None)
+            if base_attr and hasattr(base_attr, loc_attr_config['sub_attribute']):
+                # If it's a GeographicalUnit object, use it directly
+                if hasattr(base_attr, 'level') and hasattr(base_attr, 'name'):
+                    person_geo_unit = base_attr
+                else:
+                    # It's a string/code, need to look it up via world.geography
+                    location_value = getattr(base_attr, loc_attr_config['sub_attribute'], None)
+                    if location_value is None:
+                        return None
+                    if world is None or not hasattr(world, 'geography'):
+                        logger.warning(f"Cannot resolve {self.person_loc_attr}='{location_value}' without world.geography")
+                        return None
+                    person_geo_unit = world.geography.get_unit(location_value)
 
-            # If it's already a GeographicalUnit object, use it
-            if hasattr(location_value, 'level') and hasattr(location_value, 'name'):
-                person_geo_unit = location_value
-            else:
-                # It's a string/code, need to look it up via world.geography
-                if world is None or not hasattr(world, 'geography'):
-                    logger.warning(f"Cannot resolve {self.person_location_attribute}='{location_value}' without world.geography")
-                    return None
-                person_geo_unit = world.geography.get_unit(location_value)
-                if person_geo_unit is None:
-                    if self.verbose:
-                        logger.debug(f"Could not find geo_unit '{location_value}' from {self.person_location_attribute}")
-                    return None
+        if person_geo_unit is None:
+            if self.verbose:
+                logger.debug(f"Could not find geo_unit for person from {self.person_loc_attr}")
+            return None
 
         # If person is already at the target level, return it
         if person_geo_unit.level == target_level:
@@ -378,11 +420,14 @@ class VenueDistributor:
         if not all_unassigned:
             logger.info("No unassigned people to allocate")
             return
+            
+        # Build vectorized arrays for the full population of unassigned people
+        self._build_population_arrays(all_unassigned)
 
         remaining_people = self._handle_special_cases(all_unassigned, venues, world)
         logger.info(f"{len(remaining_people)} people remaining after special cases")
 
-        # Now apply global filters for priority/normal allocation
+        # Now apply global filters for priority/normal allocation - VECTORIZED
         eligible_people = self._apply_global_filters(remaining_people)
         logger.info(f"{len(eligible_people)} people eligible after global filters (special cases excluded)")
 
@@ -408,6 +453,87 @@ class VenueDistributor:
 
             # Check for unallocated priority people
             self._check_priority_coverage(world)
+
+    def _build_population_arrays(self, people: List):
+        """Extract key attributes into NumPy arrays for vectorized filtering."""
+        n = len(people)
+        if n == 0:
+            return
+
+        # Initialize arrays
+        self.population_arrays = {
+            'indices': np.arange(n, dtype=np.int32),
+            'people': np.array(people, dtype=object),
+            'age': np.zeros(n, dtype=np.int16),
+            'sex': np.zeros(n, dtype=np.int8),  # 0=F, 1=M
+            'residence_type': np.zeros(n, dtype=np.int8)  # 0=Household, 1=Other
+        }
+
+        # Bulk extraction
+        for i, person in enumerate(people):
+            self.population_arrays['age'][i] = person.age
+            self.population_arrays['sex'][i] = 1 if person.sex == 'male' else 0
+            
+            res_type = 0 # Default to household
+            if hasattr(person, 'residence_type'):
+                rt = person.residence_type
+                if rt == 'care_home': res_type = 1
+                elif rt == 'student_dorms': res_type = 2
+                elif rt == 'prison': res_type = 3
+                elif rt == 'boarding_school': res_type = 4
+                elif rt == 'university': res_type = 5
+            self.population_arrays['residence_type'][i] = res_type
+
+    def _apply_filters_vectorized(self, indices: np.ndarray, filters: List[Dict]) -> np.ndarray:
+        """Apply filters using vectorized boolean masks."""
+        if len(indices) == 0:
+            return indices
+
+        mask = np.ones(len(indices), dtype=bool)
+        
+        # Access arrays directly using the indices
+        # Optimization: Don't slice the big arrays, just index them
+        current_ages = self.population_arrays['age'][indices]
+        current_sexs = self.population_arrays['sex'][indices]
+        current_res_types = self.population_arrays['residence_type'][indices]
+
+        for rule in filters:
+            attr = rule.get('attribute')
+            
+            if attr == 'age':
+                min_val = rule.get('min')
+                max_val = rule.get('max')
+                if min_val is not None:
+                    mask &= (current_ages >= min_val)
+                if max_val is not None:
+                    mask &= (current_ages <= max_val)
+                    
+            elif attr == 'sex':
+                val = rule.get('value')
+                target = 1 if val == 'male' else 0
+                mask &= (current_sexs == target)
+                
+            elif attr == 'residence.type':
+                vals = rule.get('values', [])
+                # Map string values to our int codes
+                allowed_codes = []
+                for v in vals:
+                    if v == 'household': allowed_codes.append(0)
+                    elif v == 'care_home': allowed_codes.append(1)
+                    elif v == 'student_dorms': allowed_codes.append(2)
+                    elif v == 'prison': allowed_codes.append(3)
+                    elif v == 'boarding_school': allowed_codes.append(4)
+                    elif v == 'university': allowed_codes.append(5)
+                
+                if allowed_codes:
+                    # vectorized "isin"
+                    res_mask = np.zeros(len(indices), dtype=bool)
+                    for code in allowed_codes:
+                        res_mask |= (current_res_types == code)
+                    mask &= res_mask
+
+        return indices[mask]
+
 
     def _get_unassigned_people(self, world) -> List:
         """
@@ -452,9 +578,24 @@ class VenueDistributor:
     def _apply_global_filters(self, people: List) -> List:
         """
         Apply global filters and exclusions to a list of people.
-
-        Used after special cases to filter people for priority/normal allocation.
+        Updated to use vectorized filtering where possible.
         """
+        # If we have population arrays, use vectorized path
+        if self.population_arrays and len(people) > 1000:
+            # Re-map people objects to their indices in the arrays
+            # This works because 'people' is a subset of 'all_unassigned' which we built arrays from
+            # However, mapping back is slow O(N). 
+            # Better strategy: keep indices flowing through the system.
+            # For now, let's just create a quick lookup map if it's not too expensive,
+            # OR just re-extract indices if `people` is exactly `all_unassigned` (common case).
+            
+            # FAST PATH: If people is exactly the array we built
+            if len(people) == len(self.population_arrays['people']) and people[0] is self.population_arrays['people'][0]:
+                 indices = self.population_arrays['indices']
+                 filtered_indices = self._apply_filters_vectorized(indices, self._pre_processed_filters)
+                 return self.population_arrays['people'][filtered_indices].tolist()
+        
+        # Fallback to original loop for complex cases or small lists
         eligible = []
         filtered_by_global = 0
         filtered_by_exclusions = 0
