@@ -230,10 +230,10 @@ class RomanticDistributor:
         # Pre-allocate arrays
         ids = np.empty(n, dtype=np.int64)
         sex = np.empty(n, dtype=np.int8)
-        age = np.empty(n, dtype=np.int16)
+        age = np.empty(n, dtype=np.int64) # Use int64 for Numba compatibility
         mgu_codes = np.empty(n, dtype=np.int32)
         lgu_codes = np.empty(n, dtype=np.int32)
-        eth_codes = np.empty(n, dtype=np.int16)
+        eth_codes = np.empty(n, dtype=np.int64) # Use int64 for Numba compatibility
         household_couple = np.full(n, -1, dtype=np.int64)
         residence_ids = np.full(n, -1, dtype=np.int64)
 
@@ -516,8 +516,8 @@ class RomanticDistributor:
         venue_matches = 0
 
         for venue_id, people_at_venue in venue_to_people.items():
-            # Get seekers at this venue
-            venue_seekers = np.array([p for p in people_at_venue if seeking_exclusive[p]])
+            # Get seekers at this venue - enforce int64
+            venue_seekers = np.array([p for p in people_at_venue if seeking_exclusive[p]], dtype=np.int64)
 
             if len(venue_seekers) < 2:
                 continue
@@ -760,22 +760,22 @@ class RomanticDistributor:
         matches_a, matches_b = np.empty(0), np.empty(0)
         seed = int(time.time() * 1000) % 1000000
 
-        # Use Numba kernel
+        # Use Numba kernel - age and eth are already int64 from _build_attribute_arrays
         if self.ethnicity_matrix is not None:
             matches_a, matches_b = match_with_ethnicity(
-                pool_a.astype(np.int64),
-                pool_b.astype(np.int64),
-                age.astype(np.int64),
-                eth.astype(np.int64),
+                pool_a,
+                pool_b,
+                age,
+                eth,
                 self.ethnicity_matrix,
                 max_age_diff,
                 seed
             )
         else:
             matches_a, matches_b = match_two_pools(
-                pool_a.astype(np.int64),
-                pool_b.astype(np.int64),
-                age.astype(np.int64),
+                pool_a,
+                pool_b,
+                age,
                 max_age_diff,
                 seed
             )
@@ -799,8 +799,8 @@ class RomanticDistributor:
         seed = np.random.randint(0, 2**31)
 
         matches_a, matches_b = match_single_pool(
-            pool.astype(np.int64),
-            age.astype(np.int64),
+            pool,
+            age,
             max_age_diff,
             seed
         )
@@ -936,7 +936,7 @@ class RomanticDistributor:
         # ================================================================
         venue_matches = 0
         for venue_id, people_at_venue in venue_to_people.items():
-            venue_seekers = np.array([p for p in people_at_venue if seeking[p]])
+            venue_seekers = np.array([p for p in people_at_venue if seeking[p]], dtype=np.int64)
             if len(venue_seekers) < 2:
                 continue
 
@@ -1118,8 +1118,8 @@ class RomanticDistributor:
         venue_affairs = 0
         for venue_id, people_at_venue in venue_to_people.items():
             # Get cheaters and available affair partners at this venue
-            venue_cheaters = np.array([p for p in people_at_venue if cheater_seeking[p]])
-            venue_pool = np.array([p for p in people_at_venue if affair_available[p]])
+            venue_cheaters = np.array([p for p in people_at_venue if cheater_seeking[p]], dtype=np.int64)
+            venue_pool = np.array([p for p in people_at_venue if affair_available[p]], dtype=np.int64)
 
             if len(venue_cheaters) == 0 or len(venue_pool) == 0:
                 continue
