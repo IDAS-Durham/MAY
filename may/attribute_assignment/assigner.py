@@ -297,7 +297,11 @@ class AttributeAssigner:
             # Avoid hasattr(person, 'properties') if we can assume it exists or use getattr
             person_value = person.properties.get(attr_name)
             if person_value is None:
-                person_value = getattr(person, attr_name, None)
+                # Direct attribute access optimization
+                try:
+                    person_value = getattr(person, attr_name)
+                except AttributeError:
+                    person_value = None
 
             if person_value is None:
                 continue
@@ -317,20 +321,23 @@ class AttributeAssigner:
 
         # 2. Activity filters (Fast set intersection check)
         if self._include_activities or self._exclude_activities:
-            # person.activities is usually a list. Convert to set or use generator if large.
-            # But for 8M people, even creating a set is expensive if done 35M times.
-            # Usually activities list is small (2-5 items).
-            person_activities = getattr(person, 'activities', [])
+            # Optimize: use direct attribute access for activities (it's a slot)
+            person_activities = person.activities
             
             if self._include_activities:
-                # person_activities must have overlap with include_activities
-                # any() with generator is usually fast for small lists
-                if not any(a in person_activities for a in self._include_activities):
+                # Optimize: simple loop is faster than generator for small lists
+                has_activity = False
+                for a in self._include_activities:
+                    if a in person_activities:
+                        has_activity = True
+                        break
+                if not has_activity:
                     return False
 
             if self._exclude_activities:
-                if any(a in person_activities for a in self._exclude_activities):
-                    return False
+                for a in self._exclude_activities:
+                    if a in person_activities:
+                        return False
 
         # 3. Required attributes
         for attr_name, attr_config in self._required_attrs:
@@ -544,7 +551,20 @@ class AttributeAssigner:
             logger.debug(f"  Original pattern: {household.properties.get('original_pattern', 'N/A')}")
             logger.debug(f"  Actual pattern: {household.properties.get('actual_pattern', 'N/A')}")
 
+        # OPTIMIZATION: Pre-calculate person categories (subsets) to avoid repeated lookups
+        # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
+        person_categories = {}
+        for person in members:
+            category = "unknown"
+            if "residence" in person.activity_map and "household" in person.activity_map["residence"]:
+                res_subsets = person.activity_map["residence"]["household"]
+                if res_subsets:
+                    category = res_subsets[0].subset_name
+            person_categories[person.id] = category
+
         # 1. Classify household structure
+        # Pass pre-calculated categories if possible, but get_household_structure currently uses internal logic
+        # For now, just optimize the call itself
         structure = self.config.get_household_structure(household, verbose=self.verbose)
         if not structure:
             if self.verbose:
@@ -572,18 +592,21 @@ class AttributeAssigner:
 
         # 2. Sort people based on configured assignment order
         sorted_members = self._sort_members_by_assignment_order(
-            members, structure
+            members, structure, person_categories
         )
 
         # 3. Assign each person in order
         for person in sorted_members:
+            category = person_categories.get(person.id, "unknown")
+            
             if self.verbose:
-                category = self._get_person_category(person)
                 logger.debug(f"\n  Assigning {person} (category={category}):")
 
             # 3a. Determine role
+            # OPTIMIZATION: Pass pre-calculated category
             role = self.config.get_person_role(
-                person, structure, assigned_roles, verbose=self.verbose
+                person, structure, assigned_roles, verbose=self.verbose,
+                person_category=category
             )
 
             if not role:
@@ -602,6 +625,7 @@ class AttributeAssigner:
             context[person_key] = person
 
             # 3b. Get assignment rule
+            # OPTIMIZATION: get_assignment_rule is already fairly fast, but could be memoized in config
             rule = self.config.get_assignment_rule(structure, role, verbose=self.verbose)
 
             if not rule:
@@ -646,25 +670,30 @@ class AttributeAssigner:
         self.stats['people_in_households'] += len(members)
         self.stats['total_people'] += len(members)
 
-    def _sort_members_by_assignment_order(self, members, structure: str):
+    def _sort_members_by_assignment_order(self, members, structure: str, person_categories: Dict[int, str] = None):
         """
         Sort household members by configured assignment order.
 
         Args:
             members: List of Person objects
-            household: Household venue
             structure: Household structure name
-
-        Returns:
-            Sorted list of Person objects
+            person_categories: Optional dict of pre-calculated categories
         """
         def get_sort_key(person):
             """Get sort key for person based on configured assignment order."""
-            # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
-            if "residence" not in person.activity_map or "household" not in person.activity_map["residence"] or not person.activity_map["residence"]["household"]:
-                return (999, person.id)  # Fallback
+            # Use pre-calculated category if available
+            if person_categories:
+                category = person_categories.get(person.id, "unknown")
+            else:
+                # Fallback to recalculating
+                # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
+                if "residence" not in person.activity_map or "household" not in person.activity_map["residence"] or not person.activity_map["residence"]["household"]:
+                     category = "unknown"
+                else:
+                     category = person.activity_map["residence"]["household"][0].subset_name
 
-            category = person.activity_map["residence"]["household"][0].subset_name
+            if category == "unknown":
+                 return (999, person.id)
 
             # Get assignment order configuration
             assignment_order = self.config.settings.get('assignment_order', {})

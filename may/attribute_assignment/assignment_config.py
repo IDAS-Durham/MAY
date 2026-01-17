@@ -538,7 +538,8 @@ class AttributeAssignmentConfig:
         return None
 
     def get_person_role(self, person, household_structure: str,
-                       assigned_roles: List[str], verbose: bool = False) -> Optional[str]:
+                       assigned_roles: List[str], verbose: bool = False,
+                       person_category: str = None) -> Optional[str]:
         """
         Determine person's role based on their subset and household structure.
 
@@ -547,6 +548,7 @@ class AttributeAssignmentConfig:
             household_structure: Name of household structure
             assigned_roles: List of roles already assigned in this household
             verbose: If True, log matching details
+            person_category: Optional pre-calculated person category (subset name)
 
         Returns:
             Role name or None
@@ -584,9 +586,19 @@ class AttributeAssignmentConfig:
                 logger.debug(f"      Testing role '{role_name}':")
 
             # Check if person's subset matches this role
-            if not role.matches(person, verbose=verbose):
-                if verbose:
-                    logger.debug(f"        ✗ Subset doesn't match")
+            # OPTIMIZATION: Use pre-calculated category if valid
+            matched = False
+            if person_category and person_category != "unknown":
+                if person_category in role.subsets:
+                    matched = True
+                elif verbose:
+                    logger.debug(f"        ✗ Category '{person_category}' not in role subsets {role.subsets}")
+            else:
+                # Fallback to internal lookup only if needed
+                if role.matches(person, verbose=verbose):
+                    matched = True
+
+            if not matched:
                 continue
 
             # Check if this role has been assigned already (for primary/secondary distinction)
