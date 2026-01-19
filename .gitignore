@@ -83,3 +83,4 @@ simulation_profile.stats
 
 # World files
 *.joblib
+*.h5
