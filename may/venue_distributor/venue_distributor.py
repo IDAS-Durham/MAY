@@ -222,19 +222,39 @@ class VenueDistributor:
             return 0
 
         # Get capacity from venue properties (Avoid dict.get(..., 0) if common)
-        capacity = venue.properties.get(self._capacity_column, 0)
+        capacity = venue.properties.get(self._capacity_column)
 
-        # Handle missing/zero capacity based on config
+        # Handle missing capacity based on config
         if capacity is None or (isinstance(capacity, (int, float)) and pd.isna(capacity)):
             if_missing = self._capacity_handling.get('if_missing', 'skip')
-            return 0 if if_missing == 'skip' else 0 # Defaulting to 0 for now
+            if if_missing == 'ignore':
+                return 1_000_000  # Effective unlimited
+            elif if_missing == 'default':
+                return int(self._capacity_handling.get('default_capacity', 1000))
+            else:
+                return 0
         
+        try:
+            capacity = int(float(capacity)) if capacity != '' else None
+        except (ValueError, TypeError):
+            capacity = None
+
+        if capacity is None:
+            if_missing = self._capacity_handling.get('if_missing', 'skip')
+            if if_missing == 'ignore':
+                return 1_000_000
+            elif if_missing == 'default':
+                return int(self._capacity_handling.get('default_capacity', 1000))
+            return 0
+        
+        # Handle zero capacity based on config
         if capacity == 0:
             if_zero = self._capacity_handling.get('if_zero', 'skip')
-            if if_zero == 'skip':
-                return 0
+            if if_zero == 'ignore':
+                return 1_000_000  # Effective unlimited
+            return 0
 
-        return int(capacity)
+        return capacity
 
     def _get_venue_current_count(self, venue) -> int:
         """
