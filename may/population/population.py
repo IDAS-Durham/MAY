@@ -88,6 +88,11 @@ class PopulationManager:
         if 'geo_unit' not in male_df.columns or 'geo_unit' not in female_df.columns:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
+        # Ignore index column if it exists
+        for _df in [male_df, female_df]:
+            if 'index' in _df.columns:
+                _df.drop(columns=['index'], inplace=True)
+        
         # Load into nested dict structure: geo_unit -> age -> sex -> count
         # Note: Using a regular function instead of lambda for pickle compatibility
         self.precise_demographics = defaultdict(self._create_nested_defaultdict)

@@ -196,10 +196,6 @@ def main():
     logger.info("Creating world took {:.2g}s".format(time.perf_counter()-laptime))
     laptime = time.perf_counter()
 
-    joblib.dump(world, 'my_medieval_world.joblib', compress=3)
-    logger.info("Saving world to took {:.2g}s".format(time.perf_counter()-laptime))
-    laptime = time.perf_counter()
-
     logger.info("")
     logger.info("=" * 60)
     logger.info("World creation complete!")
@@ -207,6 +203,12 @@ def main():
     logger.info(f"Venues: {len(world.venues.get_all_venues())} venues across {len(venues.get_venue_types())} types")
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
     logger.info("=" * 60)
+
+    # Exporting world object
+    logger.info("Exporting world...")
+    joblib.dump(world, 'my_medieval_world.joblib', compress=3)
+    logger.info("Saving world to took {:.2g}s".format(time.perf_counter()-laptime))
+    laptime = time.perf_counter()
 
     # Show examples of what was created
     print_world_examples(world)
