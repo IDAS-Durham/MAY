@@ -1,0 +1,89 @@
+# ============================================================================
+# Medieval Own Land Distributor
+# ============================================================================
+# Assigns peasants to their own land (subsistence farming)
+# Works Mon-Wed in medieval schedule
+# ============================================================================
+
+distributor_name: "medieval_own_land_distributor"
+venue_type: "field"  # Venue type in venues_config.yaml
+description: "Assign peasants to their own land for subsistence farming"
+
+# Activity mapping
+activity_map_key: "primary_activity"
+activity_type: "own_land"  # ← Override: Nest under this key instead of "field"
+subset_key: "worker"
+
+# ============================================================================
+# ELIGIBILITY: Who gets assigned to own land?
+# ============================================================================
+eligibility:
+  require_unassigned: true  # Only people without primary_activity yet
+
+  global_filters:
+    # Social class filter
+    - attribute: "properties.social_class"
+      type: "categorical"
+      description: "Only peasants work their own land"
+      values: ["serf", "villain", "freeman"]
+
+    # Age filter
+    - attribute: "age"
+      type: "numerical"
+      description: "Medieval working age"
+      min: 12
+      max: 70
+
+# ============================================================================
+# VENUE SELECTION: How to find fields?
+# ============================================================================
+venue_selection:
+  # Assign field in person's village
+  consider_by: "geo_unit"
+  venue_geo_level: "SGU"  # Fields are at village (SGU) level
+
+  # Only consider fields in loaded geography
+  filter_by_geography: true
+  respect_capacity: true
+
+# ============================================================================
+# ALLOCATION STRATEGY
+# ============================================================================
+allocation:
+  strategy: "random"  # Randomly assign to available fields
+
+  # Capacity management
+  capacity_column: "max_workers"  # Column in field CSV
+
+  capacity_handling:
+    if_missing: "ignore"  # If no capacity specified, allow unlimited
+    if_zero: "skip"       # Skip fields with 0 capacity
+
+  track_capacity: true
+  when_full: "exclude"  # Remove full fields from options
+
+# ============================================================================
+# EXECUTION SETTINGS
+# ============================================================================
+settings:
+  priority: 20  # Run FIRST (before lords_demesne)
+  max_allocations: null
+  random_seed: null
+  verbose: true
+  log_summary: true
+  debug: false
+
+fallback:
+  strategy: "skip"  # Skip if no fields found
+
+# ============================================================================
+# RESULT
+# ============================================================================
+# After running this distributor:
+#   person.activity_map['primary_activity']['own_land'] = [field_subset]
+#
+# In june2 scheduler:
+#   monday:
+#     activity_key: "primary_activity"
+#     activity_type: "own_land"  # Points to this field
+# ============================================================================

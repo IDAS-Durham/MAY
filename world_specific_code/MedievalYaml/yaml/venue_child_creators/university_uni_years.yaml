@@ -1,0 +1,63 @@
+# VenueChildCreator Configuration - University Year Groups
+#
+# This config creates uni_year venues within universities based on student age.
+#
+# Workflow:
+# 1. Students are first distributed to universities (via venue_distributor)
+# 2. This config runs and:
+#    - Groups students by age (18-22 get individual year groups, 23+ grouped together)
+#    - Creates uni_year venues for each age group
+#    - Redistributes students from university to specific uni_year venues
+#
+# Age Grouping Strategy:
+# - Ages 18-22: Each age gets its own uni_year venues (typical undergraduate years)
+# - Ages 23+: All grouped together (mature students, postgraduate, etc.)
+
+parent_venue_type: university    # Parent venues to process
+child_venue_type: uni_groups_by_year       # Type of child venues to create
+
+# Group students by age
+group_by_attribute: age
+
+# Custom age mapping: separate groups for 18-22, combined for 23+
+attribute_mapping:
+  18: "18"    # Year 1 (typical)
+  19: "19"    # Year 2 (typical)
+  20: "20"    # Year 3 (typical)
+  21: "21"    # Year 4 (typical)
+  22: "22"    # Year 5 / Masters
+  default: "23_and_over"  # Mature students, postgraduate, etc. (all ages 23 and above)
+
+# Maximum students per uni_year venue
+# If a year has more students than this, multiple uni_year venues will be created
+max_capacity: 25
+
+# Minimum students needed to create a uni_year venue
+# If a university has only 3 students aged 21, don't create a separate venue
+min_capacity: 1
+
+# Properties to add to each created uni_year venue
+child_properties:
+  capacity: 25
+
+# Distribution strategy:
+#   'even' - Distribute students evenly across all uni_year venues for this age group
+#   'fill'  - Fill first uni_year venue to max before moving to next
+distribution_strategy: even
+
+# ========================================
+# ACTIVITY MANAGEMENT
+# ========================================
+# Control how students' activity_map is updated when moving to uni_year venues
+
+# Activity map key: Which activity to set when adding to uni_year
+activity_map_key: "primary_activity"
+
+# Subset key: Which subset to add students to in the uni_year
+subset_key: "student"
+
+# Replace parent activity: Replace university's primary_activity with uni_year
+replace_parent_activity: true
+
+# Remove from parent: Keep student in university's subset for reference
+remove_from_parent: false

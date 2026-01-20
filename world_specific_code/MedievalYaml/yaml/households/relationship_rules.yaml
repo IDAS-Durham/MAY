@@ -1,0 +1,161 @@
+# Relationship Rules Configuration
+#
+# Pattern-based relationship rules.
+# Rules expressed as constraints between category indices and roles.
+
+enabled: true
+
+# =============================================
+# SELECTION STRATEGY
+# =============================================
+selection_strategy:
+  max_attempts: 10
+  use_best_candidate: true
+  penalty_mode: "squared"
+  log_violations: true
+  log_best_candidates: true
+
+  # Backtracking: Retry with different first-role selection before demotion
+  backtracking:
+    enabled: true               # Enable backtracking before demotion
+    max_backtracks: 3           # Max backtrack attempts before falling back to demotion
+    strategy: "first_role"      # Always backtrack to first role when a later role fails
+    log_backtracks: true        # Log backtracking attempts
+    avoid_duplicates: true      # Don't retry same first-role person/people
+
+# =============================================
+# STATISTICS
+# =============================================
+track_statistics: true
+
+# =============================================
+# PATTERN-BASED RELATIONSHIP RULES
+# =============================================
+
+rules:
+  # Rule 1: Age difference in families with adults and kids
+  - name: "Adults with children"
+    patterns:
+      - "Adults with children"
+
+    roles:
+      role_A:
+        categories: ["Kids"]
+        count: "any"
+
+      role_B:
+        categories: ["Adults"]
+        count: "any"
+
+    selection_order:
+      - role_A
+      - role_B
+
+    constraints:
+      # role_B must be appropriately older than role_A
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_B"
+        role_2: "role_A"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 55
+        # Preferred distribution for realistic parent-child age differences
+        preferred_distribution:
+          type: "normal"
+          mean: 25          # Average parent age when child is born
+          std: 5            # Standard deviation (most parents within 32±12 years)
+          tolerance: 10      # Search window: ±9 years around sampled target (±2 std)
+
+    #   # role_B (2 people) should be a compatible pair
+    #   - type: "pair_matching"
+    #     role: "role_B"
+    #     categorical_attribute:
+    #       attribute: "sex"
+    #       same_category_probability: 0.05
+    #     numerical_attribute:
+    #       attribute: "age"
+    #       mean_difference: 3.0
+    #       std_difference: 5.0
+    #       max_absolute_difference: 19
+
+  # Rule 2: Adult household with no kids
+  - name: "Adults only"
+    patterns:
+      - "Adults only"
+
+    roles:
+      role_A:
+        categories: ["Kids"]
+        count: 0
+
+      role_B:
+        categories: ["Adults"]
+        count: "any"
+
+    selection_order:
+      - role_A
+      - role_B
+
+    # constraints:
+    #   - type: "numerical_attribute_difference"
+    #     attribute: "age"
+    #     role_1: "role_B"
+    #     role_2: "role_A"
+    #     min_difference: 16
+    #     max_difference: 50
+    #     max_difference_by_categorical_attribute:
+    #       attribute: "sex"
+    #       values:
+    #         female: 50
+    #         male: 55
+    #     # Preferred distribution for realistic parent-child age differences
+    #     preferred_distribution:
+    #       type: "normal"
+    #       mean: 32          # Average parent age when child is born
+    #       std: 6            # Standard deviation (most parents within 32±12 years)
+    #       tolerance: 9      # Search window: ±9 years around sampled target (±1.5 std)
+
+
+# =============================================
+# CONSTRAINT TYPES
+# =============================================
+#
+# 1. numerical_attribute_difference
+#    Validates: (role_1[attribute] - role_2[attribute]) is within [min_difference, max_difference]
+#
+#    When selecting a person for role_1 with existing people in role_2:
+#      - Check against the MINIMUM value in role_2 for min_difference
+#      - Check against the MAXIMUM value in role_2 for max_difference
+#
+#    Parameters:
+#      - attribute: Name of the numerical attribute to compare (e.g., "age", "income")
+#      - role_1: First role name
+#      - role_2: Second role name
+#      - min_difference: Minimum value for (attribute_1 - attribute_2)
+#      - max_difference: Maximum value for (attribute_1 - attribute_2), default
+#      - max_difference_by_categorical_attribute: (optional) Override max based on a categorical attribute
+#          - attribute: Name of categorical attribute (e.g., "sex", "occupation")
+#          - values: Dict mapping category values to max_difference overrides
+#
+# 2. pair_matching
+#    Selects 2 people from a role to form a compatible pair based on attributes
+#    Can be used for: romantic partners, roommates, business partners, siblings, etc.
+#
+#    Parameters:
+#      - role: Role name
+#      - require_exact_count: Only apply if role has exactly N people (optional)
+#      - categorical_attribute: (optional) Constraints on a categorical attribute
+#          - attribute: Name of categorical attribute (e.g., "sex", "religion", "occupation")
+#          - same_category_probability: Probability of matching categories (0.0-1.0)
+#      - numerical_attribute: (optional) Constraints on a numerical attribute
+#          - attribute: Name of numerical attribute (e.g., "age", "income", "education_years")
+#          - mean_difference: Target mean difference
+#          - std_difference: Standard deviation of difference
+#          - max_absolute_difference: Hard limit on |value_1 - value_2|
+
+
