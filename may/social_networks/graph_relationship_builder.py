@@ -38,7 +38,7 @@ class GraphRelationshipBuilder:
 
         Args:
             people: List of Person objects to create relationships for
-            avg_connections: Average number of connections per person (must be even)
+            avg_connections: Average number of connections per person (must be even for the Watts-Strogatz method)
             clustering_level: 0.0 (random-like) to 1.0 (high clustering)
             storage_key: Key to use when storing relationships in person.properties
         """
@@ -62,8 +62,8 @@ class GraphRelationshipBuilder:
         Returns:
             Dict mapping person_id -> list of connected person_ids
         """
-        logger.info(f"Building graph-based relationships for {self.n_people:,} people")
-        logger.info(f"  avg_connections={self.avg_connections}, clustering_level={self.clustering_level}")
+        logger.debug(f"Building graph-based relationships for {self.n_people:,} people")
+        logger.debug(f"  avg_connections={self.avg_connections}, clustering_level={self.clustering_level}")
 
         if self.n_people < 2:
             logger.warning("Need at least 2 people to create relationships")
@@ -106,10 +106,10 @@ class GraphRelationshipBuilder:
         try:
             import networkx as nx
             actual_clustering = nx.average_clustering(G)
-            logger.info(f"Built {total_connections:,} total connections "
+            logger.debug(f"Built {total_connections:,} total connections "
                        f"(avg {avg_actual:.1f} per person, clustering={actual_clustering:.3f})")
         except Exception:
-            logger.info(f"Built {total_connections:,} total connections "
+            logger.debug(f"Built {total_connections:,} total connections "
                        f"(avg {avg_actual:.1f} per person)")
 
         return relationships

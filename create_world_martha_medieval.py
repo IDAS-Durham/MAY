@@ -27,17 +27,22 @@ def build_social_network(world):
     """
     geography = world.geography
     # Go through all geo units
-    for geo_unit in geography.units_by_level[geography.levels[0]]:
+    geo_units = geography.get_units_by_level(geography.levels[0])
+    for geo_unit in geo_units.values():
         people = geo_unit.people
-    
+        logger.debug(f"Geo unit name - {geo_unit.name}, with {len(people)} people")
+        
         relationships = build_graph_relationships(
             people,
             avg_connections=6,
-            clustering_level=0.5,
-            storage_key=f"contacts_0.5",
+            clustering_level=0.8,
+            storage_key=f"social_contacts",
             store=True
         )
-
+    
+    # Export relationships to CSV
+    #storage_key = builder.config.get('storage', {}).get('key', builder.name)
+    export_relationships(world, 'social_contacts', f"social_contacts.csv")
 
     
 def build_relationships(world, relationship_config):
@@ -290,7 +295,8 @@ def main():
 
     if relationship_config.get("enabled", True):
         logger.info("Building Relationships")
-        build_relationships(world, relationship_config)
+        #build_relationships(world, relationship_config)
+        build_social_network(world) # Gavin's version
 
     logger.info("")
     logger.info("=" * 60)

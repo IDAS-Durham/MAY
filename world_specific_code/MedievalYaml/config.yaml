@@ -25,7 +25,7 @@ geography:
     level: County
 
     # Codes to filter (for small lists, comma-separated)
-    codes: ["DURHAM"]
+    codes: ["DURHAM", "NORTHUMBERLAND"]
     #codes: ["County Durham"]
 
     # Or specify a file path with codes (for large lists)
