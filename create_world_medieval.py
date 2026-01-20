@@ -63,6 +63,64 @@ logging.getLogger('numexpr').setLevel(logging.WARNING)
 
 #set_random_seed(0)
 
+@timer_dec
+def allocating_households(smallest_geo_unit_dict):
+    i, printed, num_geo_units = 0, set(), len(smallest_geo_unit_dict)
+    for geo_unit in smallest_geo_unit_dict.values():
+        still_unallocated_people = geo_unit.people
+
+        # Distribute people to Households with expansion
+        potential_venues = geo_unit.get_venues_by_type('household')
+        if potential_venues:
+            household_distributor = HouseholdDistributor(
+                'household',
+                venues,
+                still_unallocated_people,
+                potential_venues=geo_unit.get_venues_by_type('household')
+            )
+            # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
+            # Don't do too many passes, as will go through them again after allocating to prisons. 
+            household_distributor.num_passes = 5
+            household_distributor.assign_people_venues_multi_pass('home', 'household')
+            still_unallocated_people = household_distributor.unallocated_people
+        
+        # Restart household distributor
+        potential_venues = geo_unit.get_venues_by_type('household')
+        if potential_venues and still_unallocated_people:
+            household_distributor = HouseholdDistributor(
+                'household',
+                venues,
+                still_unallocated_people,
+                potential_venues=geo_unit.get_venues_by_type('household')
+            )
+            # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
+            # Don't do too many passes, as will go through them again after allocating to prisons. 
+            household_distributor.num_passes = 10
+            household_distributor.assign_people_venues_multi_pass('home',
+                                                                  'household')
+            still_unallocated_people = household_distributor.unallocated_people
+
+            if household_distributor.allocation_rate < 99.999999:
+                logger.info(f"--Low allocation rate of {household_distributor.allocation_rate:.1f}% in geo_unit {geo_unit.name}")
+                logger.info(f"--Printing stats of unallocated people: ")
+                my_statmaker = StatMakerPop(household_distributor.unallocated_people)
+                my_statmaker.get_sex_breakdown()
+                my_statmaker.get_age_group_breakdown()
+                for p in household_distributor.unallocated_people:
+                    logger.info(f"Person = {p}")
+                # morestats = my_statmaker.get_age_stats()
+                # for key, val in morestats.items():
+                #     logger.info(f"    {key} : {val}")
+                    
+        i+=1
+        percent=int(i/num_geo_units*100)
+        milestone = (percent // 10) * 10
+        if milestone not in printed and milestone % 10 == 0:
+            logger.info(f"             ...{milestone}% complete")
+            printed.add(milestone)
+    return None
+    
+
 def main():
     starttime = time.perf_counter()
     """
@@ -140,63 +198,7 @@ def main():
     smallest_geo_unit_dict = geo.units_by_level[geo.levels[0]]
     
     logger.info("Allocating people to venues geo-unit by geo-unit...")
-    i, printed, num_geo_units = 0, set(), len(smallest_geo_unit_dict)
-    for geo_unit in smallest_geo_unit_dict.values():
-        still_unallocated_people = geo_unit.people
-
-        # Distribute people to Households with expansion
-        potential_venues = geo_unit.get_venues_by_type('household')
-        if potential_venues:
-            household_distributor = HouseholdDistributor(
-                'household',
-                venues,
-                still_unallocated_people,
-                potential_venues=geo_unit.get_venues_by_type('household')
-            )
-            # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
-            # Don't do too many passes, as will go through them again after allocating to prisons. 
-            household_distributor.num_passes = 5
-            household_distributor.assign_people_venues_multi_pass('home', 'household')
-            still_unallocated_people = household_distributor.unallocated_people
-        
-        # Restart household distributor
-        potential_venues = geo_unit.get_venues_by_type('household')
-        if potential_venues and still_unallocated_people:
-            household_distributor = HouseholdDistributor(
-                'household',
-                venues,
-                still_unallocated_people,
-                potential_venues=geo_unit.get_venues_by_type('household')
-            )
-            # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
-            # Don't do too many passes, as will go through them again after allocating to prisons. 
-            household_distributor.num_passes = 10
-            household_distributor.assign_people_venues_multi_pass('home',
-                                                                  'household')
-            still_unallocated_people = household_distributor.unallocated_people
-
-            if household_distributor.allocation_rate < 99.999999:
-                logger.info(f"--Low allocation rate of {household_distributor.allocation_rate:.1f}% in geo_unit {geo_unit.name}")
-                logger.info(f"--Printing stats of unallocated people: ")
-                my_statmaker = StatMakerPop(household_distributor.unallocated_people)
-                my_statmaker.get_sex_breakdown()
-                my_statmaker.get_age_group_breakdown()
-                for p in household_distributor.unallocated_people:
-                    logger.info(f"Person = {p}")
-                # morestats = my_statmaker.get_age_stats()
-                # for key, val in morestats.items():
-                #     logger.info(f"    {key} : {val}")
-                    
-        i+=1
-        percent=int(i/num_geo_units*100)
-        milestone = (percent // 10) * 10
-        if milestone not in printed and milestone % 10 == 0:
-            logger.info(f"             ...{milestone}% complete")
-            printed.add(milestone)              
-            
-    
-            
-    logger.info("Distributing pop to venues took {:.2g}s".format(time.perf_counter()-laptime))
+    allocating_households(smallest_geo_unit_dict)
     laptime = time.perf_counter()
     
     # Create World object

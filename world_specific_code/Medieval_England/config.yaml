@@ -43,8 +43,8 @@ households:
   # Path to household data files
   data_dir: "data/venues"
 
-  # Household composition data file (CSV with patterns like ">=2 >=0 2 0")
-  data_file: "household_composition_1348.csv"
+  # Household composition data file (CSV with patterns denoting household types)
+  data_file: "household_comp_simple.csv"
 
   # Configuration file for age categories and demotion rules
-  config_file: "yaml/households/households_config.yaml"
+  #config_file: "yaml/households/households_config.yaml"
