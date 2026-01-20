@@ -9,6 +9,7 @@ import logging
 from typing import Optional, Set
 from may.residence.household_distributor import HouseholdDistributor
 from may.residence.allocation_strategy import execute_allocation_strategy
+from random import sample
 
 logger = logging.getLogger("world")
 
@@ -318,8 +319,8 @@ def setup_households(geo, population, venues, config):
 
     # Show a few example households
     if all_households:
-        logger.info("Example Households (first 3):")
-        for household in all_households[:3]:
+        logger.info("Example Households (5 random):")
+        for household in sample(all_households, 5):
             age_categories = household.properties.get('_age_categories', [])
             composition = household.get_composition(age_categories)
             members = household.get_all_members()
@@ -341,7 +342,7 @@ def setup_households(geo, population, venues, config):
 
     # Show how to access people's households
     if household_distributor.allocated_people:
-        example_person_ids = list(household_distributor.allocated_people)[:3]
+        example_person_ids = sample(list(household_distributor.allocated_people), 5)
 
         for person_id in example_person_ids:
             person = population.get_person(person_id)

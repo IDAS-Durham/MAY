@@ -74,25 +74,9 @@ roles:
     description: "Additional adults beyond primary pair"
     subsets: ["Adults"]
 
-  primary_elder:
-    description: "First elderly person"
-    subsets: ["Old Adults"]
-
-  secondary_elder:
-    description: "Second elderly person"
-    subsets: ["Old Adults"]
-
-  extra_elder:
-    description: "Additional elderly beyond primary pair"
-    subsets: ["Old Adults"]
-
-  independent_young:
-    description: "Independent young adult"
-    subsets: ["Young Adults"]
-
   children:
     description: "Children and dependent young adults in families"
-    subsets: ["Kids", "Young Adults"]
+    subsets: ["Kids", "Youth"]
 
 # ============================================================================
 # Household Structure Definitions
