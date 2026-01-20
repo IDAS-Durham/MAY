@@ -244,3 +244,7 @@ class Person:
         return (f"Person(id={self.id}, age={self.age}, sex={self.sex}, "
                 f"geographical_unit={geo_unit_name}, activities={self.activities})")
 
+    def __hash__(self) -> int:
+        """ Hash based on unique person ID """
+        return hash(self.id)
+
