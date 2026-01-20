@@ -17,6 +17,33 @@ from debug_output import export_venue_allocations, export_people, print_world_ex
 from check_multiple_jobs import analyze_multiple_jobs
 
 
+def build_relationships(relationship_config):
+    logger.info("")
+    logger.info("=" * 60)
+    logger.info("RELATIONSHIP PIPELINE")
+    logger.info("=" * 60)
+    
+    relationship_configs = relationship_config.get("relationships", [])
+    
+    for rel_config in relationship_configs:
+        config_path = rel_config.get("config")
+        
+        logger.info("")
+        logger.info(f"[RELATIONSHIP] {config_path}")
+        
+        try:
+            builder = RelationshipBuilder(world, config_path)
+            builder.build_all(store=True)
+            
+            # Export relationships to CSV
+            storage_key = builder.config.get('storage', {}).get('key', builder.name)
+            export_relationships(world, storage_key, f"{storage_key}.csv")
+            
+        except Exception as e:
+            logger.error(f"Failed to build relationships from {config_path}: {e}")
+            logger.exception(e)
+
+
 def export_relationships(world, property_key, output_file):
     """Export relationships to CSV for inspection."""
     import csv
@@ -239,30 +266,7 @@ def main():
     relationship_config = config.get("relationship_pipeline", {})
 
     if relationship_config.get("enabled", False):
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("RELATIONSHIP PIPELINE")
-        logger.info("=" * 60)
-
-        relationship_configs = relationship_config.get("relationships", [])
-
-        for rel_config in relationship_configs:
-            config_path = rel_config.get("config")
-
-            logger.info("")
-            logger.info(f"[RELATIONSHIP] {config_path}")
-
-            try:
-                builder = RelationshipBuilder(world, config_path)
-                builder.build_all(store=True)
-
-                # Export relationships to CSV
-                storage_key = builder.config.get('storage', {}).get('key', builder.name)
-                #export_relationships(world, storage_key, f"{storage_key}.csv")
-
-            except Exception as e:
-                logger.error(f"Failed to build relationships from {config_path}: {e}")
-                logger.exception(e)
+        build_relationships(relationship_config)
 
     logger.info("")
     logger.info("=" * 60)
@@ -273,10 +277,10 @@ def main():
     logger.info("=" * 60)
 
     # Export venue allocations
-    #export_venue_allocations(world)
+    export_venue_allocations(world)
 
     # Export people data
-    #export_people(world)
+    export_people(world)
 
     # Show examples of what was created
     #print_world_examples(world)
