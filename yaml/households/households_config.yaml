@@ -1,33 +1,59 @@
 # Household Configuration
-# This file defines age categories and rules for household composition
+# This file defines generic categories and rules for household composition
 
-# Age categories used in household composition
+# Generic categories for population classification
+# Each category can classify ANY attribute (age, income, education, etc.)
 # Each category defines:
 #   - name: Human-readable name
-#   - min_age: Minimum age (inclusive)
-#   - max_age: Maximum age (inclusive, null means no upper limit)
 #   - symbol: Symbol used in composition strings (e.g., "K", "YA", "A", "OA")
+#   - attribute: The entity attribute to categorize (e.g., "age", "income")
+#   - type: Type of categorization ("numerical" or "categorical")
+#   - numerical: (only if type is "numerical")
+#       - min: Minimum value (inclusive)
+#       - max: Maximum value (inclusive, null means no upper limit)
+#   - categorical: (only if type is "categorical")
+#       - allowed_values: List of allowed categorical values
+#
+# Example of future categorical type:
+#   - name: "Male"
+#     symbol: "M"
+#     attribute: "sex"
+#     type: "categorical"
+#     categorical:
+#       allowed_values: ["male", "m", "M"]
 
-age_categories:
+categories:
   - name: "Kids"
     symbol: "K"
-    min_age: 0
-    max_age: 17
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 0
+      max: 17
 
   - name: "Young Adults"
     symbol: "YA"
-    min_age: 18
-    max_age: 24
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 18
+      max: 24
 
   - name: "Adults"
     symbol: "A"
-    min_age: 25
-    max_age: 64
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 25
+      max: 64
 
   - name: "Old Adults"
     symbol: "OA"
-    min_age: 65
-    max_age: null  # No upper limit
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 65
+      max: null  # No upper limit
 
 # Composition pattern format
 # Patterns follow the format: "<kids> <young_adults> <adults> <old_adults>"

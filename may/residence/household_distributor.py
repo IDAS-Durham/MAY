@@ -17,21 +17,18 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Set
 
 from may.geography.geography import Geography
+from may.geography.venue import Venue
+from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
 from may.residence.relationship_rules import RelationshipRulesValidator
-from may.residence.models import AgeCategory, Household
+from may.residence.models import Category
 from may.residence.composition_pattern import CompositionPattern
 from may.residence.household_excess_handler import HouseholdExcessHandler
 from may.residence.household_promoter import HouseholdPromoter
 from may.residence.household_round_distributor import HouseholdRoundDistributor
 
 logger = logging.getLogger("household")
-
-
-# Removed: AgeCategory class - now in residence.models
-# Removed: CompositionPattern class - now in residence.composition_pattern
-# Removed: Household class - now in residence.models
 
 
 class HouseholdDistributor:
@@ -46,7 +43,8 @@ class HouseholdDistributor:
     """
 
     def __init__(self, geography: Geography, population: PopulationManager,
-                 data_dir: str = "data/households", config_file: str = "households_config.yaml"):
+                 venue_manager: VenueManager,
+                 data_dir, config_file):
         """
         Initialize the household distributor.
 
@@ -58,6 +56,7 @@ class HouseholdDistributor:
         """
         self.geography = geography
         self.population = population
+        self.venue_manager = venue_manager
         self.data_dir = data_dir
 
         # Load configuration
@@ -70,14 +69,13 @@ class HouseholdDistributor:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
 
-        # Parse age categories from config
-        self.age_categories = self._parse_age_categories()
+        # Parse categories from config
+        self.categories = self._parse_categories()
 
         # Create mapping from category name to index for validation rules
-        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.age_categories)}
+        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.categories)}
 
-        # Household data
-        self.households: List[Household] = []
+        # Household data - now stored in VenueManager
         self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
         self.allocated_people: Set[int] = set()  # Person IDs that have been allocated
 
@@ -96,7 +94,7 @@ class HouseholdDistributor:
             rules_config_path = os.path.join(data_dir, "relationship_rules.yaml")
 
         self.relationship_rules = RelationshipRulesValidator(
-            age_categories=self.age_categories,
+            categories=self.categories,
             config_file=rules_config_path
         )
 
@@ -109,19 +107,38 @@ class HouseholdDistributor:
         # Initialize round distributor
         self.round_distributor = HouseholdRoundDistributor(self)
 
-        logger.info(f"Initialized HouseholdDistributor with {len(self.age_categories)} age categories")
-        for cat in self.age_categories:
+        logger.info(f"Initialized HouseholdDistributor with {len(self.categories)} categories")
+        for cat in self.categories:
             logger.info(f"  - {cat}")
 
-    def _parse_age_categories(self) -> List[AgeCategory]:
-        """Parse age categories from config."""
+    def _parse_categories(self) -> List[Category]:
+        """Parse categories from config."""
         categories = []
-        for cat_config in self.config['age_categories']:
-            cat = AgeCategory(
+        for cat_config in self.config['categories']:
+            cat_type = cat_config['type']
+
+            # Extract type-specific parameters from nested structure
+            if cat_type == 'numerical':
+                numerical_config = cat_config.get('numerical', {})
+                min_value = numerical_config.get('min')
+                max_value = numerical_config.get('max')
+                allowed_values = None
+            elif cat_type == 'categorical':
+                categorical_config = cat_config.get('categorical', {})
+                min_value = None
+                max_value = None
+                allowed_values = categorical_config.get('allowed_values')
+            else:
+                raise ValueError(f"Unknown category type: {cat_type}")
+
+            cat = Category(
                 name=cat_config['name'],
                 symbol=cat_config['symbol'],
-                min_age=cat_config['min_age'],
-                max_age=cat_config['max_age']
+                attribute=cat_config['attribute'],
+                type=cat_type,
+                min_value=min_value,
+                max_value=max_value,
+                allowed_values=allowed_values
             )
             categories.append(cat)
         return categories
@@ -136,21 +153,33 @@ class HouseholdDistributor:
         filepath = os.path.join(self.data_dir, filename)
         logger.info(f"Loading household data from {filepath}")
 
+        # Get the smallest geographical level from the loaded geography
+        # to filter household data to only relevant geo units
+        smallest_level = self.geography.levels[0]
+        smallest_units_dict = self.geography.get_units_by_level(smallest_level)
+
+        if not smallest_units_dict:
+            logger.warning(f"No {smallest_level} units found in geography. Cannot load household data.")
+            return
+
+        # Create a set of geo unit names that exist in our geography for fast lookup
+        valid_geo_units = set(smallest_units_dict.keys())
+        logger.info(f"Filtering household data to {len(valid_geo_units)} {smallest_level}s in loaded geography")
+
         df = pd.read_csv(filepath)
 
         # First column is the geo_unit code, rest are household compositions
         geo_unit_col = df.columns[0]
         composition_cols = df.columns[1:]
 
-        logger.info(f"Found {len(df)} geo_units with {len(composition_cols)} household types")
+        # Filter to only geo units in our geography BEFORE processing
+        df = df[df[geo_unit_col].isin(valid_geo_units)]
+
+        logger.info(f"Filtered to {len(df)} geo_units with {len(composition_cols)} household types")
 
         # Store household counts by geo_unit
         for _, row in df.iterrows():
             geo_unit_code = row[geo_unit_col]
-
-            # Only include geo_units that are in our loaded geography
-            if geo_unit_code not in self.geography.units:
-                continue
 
             counts = {}
             for col in composition_cols:
@@ -164,12 +193,12 @@ class HouseholdDistributor:
         logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
 
     def _categorize_person(self, person: Person) -> int:
-        """Get the category index for a person based on their age."""
-        for idx, cat in enumerate(self.age_categories):
-            if cat.matches(person.age):
+        """Get the category index for a person based on their attributes."""
+        for idx, cat in enumerate(self.categories):
+            if cat.matches(person):
                 return idx
         # Shouldn't happen, but default to last category
-        return len(self.age_categories) - 1
+        return len(self.categories) - 1
 
     def _prepare_person_pools(self, refresh: bool = False):
         """
@@ -191,8 +220,12 @@ class HouseholdDistributor:
 
         # Get all SGU units
         sgu_units = self.geography.get_units_by_level("SGU")
+        total_units = len(sgu_units)
 
-        for geo_unit_code, unit in sgu_units.items():
+        # Progress indicator configuration
+        progress_interval = max(1, total_units // 10)  # Update every 10% or at least every unit
+
+        for idx, (geo_unit_code, unit) in enumerate(sgu_units.items(), 1):
             # Get all people in this geo_unit
             people = self.population.get_people_by_geo_unit(geo_unit_code)
 
@@ -200,7 +233,7 @@ class HouseholdDistributor:
                 continue
 
             # Initialize category pools
-            category_pools = [[] for _ in self.age_categories]
+            category_pools = [[] for _ in self.categories]
 
             # Categorize each person (only if not already allocated)
             for person in people:
@@ -218,6 +251,11 @@ class HouseholdDistributor:
             pool_sizes = [len(pool) for pool in category_pools]
             logger.debug(f"  {geo_unit_code}: {pool_sizes}")
 
+            # Progress indicator - log every 10% or at key milestones
+            if idx % progress_interval == 0 or idx == total_units:
+                percent_complete = (idx / total_units) * 100
+                logger.info(f"  Progress: {idx}/{total_units} geo_units processed ({percent_complete:.1f}%)")
+
         total_people = sum(sum(len(pool) for pool in pools)
                           for pools in self.person_pool_by_geo_unit.values())
         logger.info(f"Prepared person pools for {len(self.person_pool_by_geo_unit)} geo_units ({total_people} total people)")
@@ -227,7 +265,7 @@ class HouseholdDistributor:
                                        max_size: Optional[int] = None,
                                        allocate_flexible: bool = False,
                                        target_size: Optional[int] = None,
-                                       rule_name: Optional[str] = None) -> Tuple[Optional[Household], Optional[int]]:
+                                       rule_name: Optional[str] = None) -> Tuple[Optional[Venue], Optional[int]]:
         """
         Allocate a household using relationship rules.
 
@@ -245,7 +283,7 @@ class HouseholdDistributor:
             rule_name: Optional rule name to use (overrides auto-matching)
 
         Returns:
-            Tuple of (Household object if successful or None, failed_category_idx or None)
+            Tuple of (Venue object if successful or None, failed_category_idx or None)
         """
         # If no rule is specified, use simple allocation (no rules)
         if not rule_name:
@@ -318,24 +356,25 @@ class HouseholdDistributor:
 
         # Remove selected people from pools
         selected_ids = {p.id for p in all_selected}
-        for cat_idx in range(len(self.age_categories)):
+        for cat_idx in range(len(self.categories)):
             pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
 
-        # Create household
+        # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)
-        household = Household(
-            id=len(self.households),
-            geographical_unit=unit,
+        household = self.venue_manager.create_venue(
+            venue_type="household",
+            geo_unit=unit,
             properties={
                 'original_pattern': pattern.original_pattern,
-                'actual_pattern': pattern.to_string()
+                'actual_pattern': pattern.to_string(),
+                '_age_categories': self.categories
             }
         )
-        household._age_categories = self.age_categories
 
-        # Add residents
+        # Add residents to venue subset (with category name as subset_key)
         for person in all_selected:
-            household.add_resident(person)
+            category_name = self._get_person_category_name(person)
+            household.add_to_subset(person, subset_key=category_name)
             self.allocated_people.add(person.id)
 
         if self._show_detailed_logs:
@@ -799,12 +838,12 @@ class HouseholdDistributor:
         total_selected = 0
         logger.debug(f"\n--- SEQUENTIAL ALLOCATION PHASE ---")
 
-        for cat_idx in range(len(self.age_categories)):
+        for cat_idx in range(len(self.categories)):
             min_count = pattern.get_min_count(cat_idx)
             max_count = pattern.get_max_count(cat_idx)
             available = len(pools[cat_idx])
 
-            cat_name = self.age_categories[cat_idx].name
+            cat_name = self.categories[cat_idx].name
             logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
             logger.debug(f"  min: {min_count}, max: {max_count}, available: {available}")
             logger.debug(f"  total_selected so far: {total_selected}")
@@ -875,7 +914,7 @@ class HouseholdDistributor:
     def _allocate_household(self, geo_unit_code: str, pattern: CompositionPattern,
                             max_size: Optional[int] = None,
                             allocate_flexible: bool = False,
-                            target_size: Optional[int] = None) -> Tuple[Optional[Household], Optional[int]]:
+                            target_size: Optional[int] = None) -> Tuple[Optional[Venue], Optional[int]]:
         """
         Attempt to allocate a household in an geo_unit with the given pattern.
 
@@ -886,7 +925,7 @@ class HouseholdDistributor:
             allocate_flexible: If True, allocate people to flexible (>=) categories randomly
 
         Returns:
-            Tuple of (Household object if successful or None, failed_category_idx or None)
+            Tuple of (Venue object if successful or None, failed_category_idx or None)
             - If successful: (household, None)
             - If failed: (None, category_idx that caused failure)
         """
@@ -925,8 +964,8 @@ class HouseholdDistributor:
         selected_people = []
         logger.debug("ALLOCATION DECISIONS:")
         for cat_idx, count in selections:
-            cat = self.age_categories[cat_idx]
-            logger.debug(f"  {cat.name} (age {cat.min_age}-{cat.max_age if cat.max_age else '∞'}): {count} people")
+            cat = self.categories[cat_idx]
+            logger.debug(f"  {cat.name} ({cat.attribute} {cat.min_value}-{cat.max_value if cat.max_value else '∞'}): {count} people")
             if count > 0:
                 selected = pools[cat_idx][:count]
                 selected_people.extend(selected)
@@ -944,21 +983,22 @@ class HouseholdDistributor:
         logger.debug(f"  Total members: {len(selected_people)}")
         logger.debug(f"  Pattern: {pattern.original_pattern}")
 
-        # Create household
+        # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)
-        household = Household(
-            id=len(self.households),
-            geographical_unit=unit,
+        household = self.venue_manager.create_venue(
+            venue_type="household",
+            geo_unit=unit,
             properties={
                 'original_pattern': pattern.original_pattern,  # The original requested pattern
-                'actual_pattern': pattern.to_string()  # The actual pattern used (may be demoted)
+                'actual_pattern': pattern.to_string(),  # The actual pattern used (may be demoted)
+                '_age_categories': self.categories
             }
         )
-        household._age_categories = self.age_categories
 
-        # Add residents
+        # Add residents to venue subset (with category name as subset_key)
         for person in selected_people:
-            household.add_resident(person)
+            category_name = self._get_person_category_name(person)
+            household.add_to_subset(person, subset_key=category_name)
             self.allocated_people.add(person.id)
 
         logger.debug(f"  ✓ Household {household.id} created successfully")
@@ -972,7 +1012,7 @@ class HouseholdDistributor:
                                allocate_flexible: bool = False,
                                target_size: Optional[int] = None,
                                rule_name: Optional[str] = None,
-                               demotion_rules: Optional[Dict[str, str]] = None) -> Optional[Household]:
+                               demotion_rules: Optional[Dict[str, str]] = None) -> Optional[Venue]:
         """
         Attempt to allocate a household, using intelligent demotion if necessary.
 
@@ -991,12 +1031,12 @@ class HouseholdDistributor:
             demotion_rules: Optional dict mapping pattern strings to rule names for demoted patterns
 
         Returns:
-            Household object if successful, None otherwise
+            Venue object if successful, None otherwise
         """
         # Get demotion priority from config (used as fallback)
         priority_config = self.config['demotion']['priority']
         priority_order = []
-        for cat_idx, cat in enumerate(self.age_categories):
+        for cat_idx, cat in enumerate(self.categories):
             priority = priority_config.get(cat.name, 999)
             priority_order.append((priority, cat_idx))
         priority_order.sort()  # Sort by priority (lower = demote first)
@@ -1023,7 +1063,7 @@ class HouseholdDistributor:
                 return household
 
             if failed_category_idx is not None:
-                cat = self.age_categories[failed_category_idx]
+                cat = self.categories[failed_category_idx]
                 logger.debug(f"  ✗ ALLOCATION FAILED: Category '{cat.name}' (idx {failed_category_idx}) has insufficient people")
             else:
                 logger.debug(f"  ✗ ALLOCATION FAILED: No specific category identified")
@@ -1049,7 +1089,7 @@ class HouseholdDistributor:
                             available_count = len(pools[failed_category_idx])
 
                     # Try demoting the failed category directly to available count
-                    cat_name = self.age_categories[failed_category_idx].name
+                    cat_name = self.categories[failed_category_idx].name
                     logger.debug(f"  → Attempting intelligent demotion: Reducing '{cat_name}' (category {failed_category_idx})")
                     logger.debug(f"  → Available {cat_name}: {available_count} people")
 
@@ -1118,13 +1158,13 @@ class HouseholdDistributor:
         return len(self.population.get_all_people()) - len(self.allocated_people)
 
     def get_available_people_by_category(self) -> Dict[str, int]:
-        """Get counts of available people by age category."""
-        counts = {cat.name: 0 for cat in self.age_categories}
+        """Get counts of available people by category."""
+        counts = {cat.name: 0 for cat in self.categories}
 
         for person in self.population.get_all_people():
             if person.id not in self.allocated_people:
-                for cat in self.age_categories:
-                    if cat.matches(person.age):
+                for cat in self.categories:
+                    if cat.matches(person):
                         counts[cat.name] += 1
                         break
 
@@ -1162,14 +1202,21 @@ class HouseholdDistributor:
         """
         logger.warning("Resetting all household allocations...")
 
-        # Clear residence from all allocated people
+        # Clear all residence activities from all allocated people
+        residence_types = self.venue_manager.get_residence_types()
+
         for person_id in self.allocated_people:
             person = self.population.get_person(person_id)
-            if person and hasattr(person, 'residence'):
-                person.residence = None
+            if person:
+                # Remove all residence activities and activity_map entries
+                for res_type in residence_types:
+                    if res_type in person.activities:
+                        person.remove_activity(res_type)
+                    if res_type in person.activity_map:
+                        del person.activity_map[res_type]
 
         # Clear all data
-        self.households = []
+        # Note: Households are stored in VenueManager, cleared separately if needed
         self.allocated_people = set()
         self.person_pool_by_geo_unit = {}
         self.current_round = 0
@@ -1182,12 +1229,9 @@ class HouseholdDistributor:
         return self.excess_handler._select_person_for_excess_with_rule(*args, **kwargs)
 
     def _get_person_category_name(self, person: 'Person') -> str:
-        """Get the category name for a person based on their age."""
-        for cat in self.age_categories:
-            if cat.max_age is None:
-                if person.age >= cat.min_age:
-                    return cat.name
-            elif cat.min_age <= person.age < cat.max_age:
+        """Get the category name for a person based on their attributes."""
+        for cat in self.categories:
+            if cat.matches(person):
                 return cat.name
         return "Unknown"
 
@@ -1211,7 +1255,7 @@ class HouseholdDistributor:
         return cat_idx
 
     def _filter_households_by_patterns(self, target_patterns: List[str],
-                                       pattern_property: str = 'original_pattern') -> List[Household]:
+                                       pattern_property: str = 'original_pattern') -> List[Venue]:
         """
         Filter households by matching patterns.
 
@@ -1222,8 +1266,11 @@ class HouseholdDistributor:
         Returns:
             List of households matching the target patterns
         """
+        # Get all household venues from VenueManager
+        all_households = self.venue_manager.get_venues_by_type("household")
+
         filtered = []
-        for household in self.households:
+        for household in all_households:
             pattern = household.properties.get(pattern_property, '')
             if pattern in target_patterns:
                 filtered.append(household)
@@ -1318,23 +1365,24 @@ class HouseholdDistributor:
             remaining_by_category = self.get_available_people_by_category()
             logger.info("")
             logger.info("  Remaining by category:")
-            for cat_name in [cat.name for cat in self.age_categories]:
+            for cat_name in [cat.name for cat in self.categories]:
                 count = remaining_by_category.get(cat_name, 0)
                 logger.info(f"    {cat_name}: {count:,}")
 
         logger.info("=" * 60)
 
-    def _allocate_person_to_household(self, household: Household, person: Person,
+    def _allocate_person_to_household(self, household: Venue, person: Person,
                                       pool: Optional[List[Person]] = None):
         """
         Add person to household, mark as allocated, and optionally remove from pool.
 
         Args:
-            household: Household to add person to
+            household: Household venue to add person to
             person: Person to add
             pool: Optional pool to remove person from (modifies list in-place)
         """
-        household.add_resident(person)
+        category_name = self._get_person_category_name(person)
+        household.add_to_subset(person, subset_key=category_name)
         self.allocated_people.add(person.id)
 
         # Remove from pool if provided
@@ -1435,13 +1483,13 @@ class HouseholdDistributor:
             logger.warning(f"Unknown distribution type '{dist_type}', defaulting to 0")
             return 0
 
-    def _check_constraints_if_added(self, household: Household, add_category: str,
+    def _check_constraints_if_added(self, household: Venue, add_category: str,
                                      constraints: List[Dict]) -> bool:
         """
         Check if adding one more person of add_category would violate constraints.
 
         Args:
-            household: Household to check
+            household: Household venue to check
             add_category: Category of person being added
             constraints: List of constraint dicts
 
@@ -1508,10 +1556,16 @@ class HouseholdDistributor:
         """
         logger.info(f"Exporting household data to {output_file}...")
 
+        # Get all household venues from VenueManager
+        all_households = self.venue_manager.get_venues_by_type("household")
+
         rows = []
-        for household in self.households:
+        for household in all_households:
+            # Get age categories
+            age_categories = household.properties.get('_age_categories', self.categories)
+
             # Get composition
-            composition = household.get_composition()
+            composition = household.get_composition(age_categories)
             composition_str = ", ".join([f"{cat}: {count}" for cat, count in composition.items()])
 
             # Get original pattern
@@ -1519,7 +1573,7 @@ class HouseholdDistributor:
 
             # Get resident details
             resident_details = []
-            for person in household.residents:
+            for person in household.get_all_members():
                 resident_details.append(f"Person_{person.id}(age={person.age},sex={person.sex})")
             residents_str = "; ".join(resident_details)
 

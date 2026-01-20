@@ -68,7 +68,7 @@ class HouseholdPromoter:
         # Get priority order
         priority_config = promotion_config.get('priority', {})
         promotion_priority = []
-        for cat_idx, cat in enumerate(self.distributor.age_categories):
+        for cat_idx, cat in enumerate(self.distributor.categories):
             priority = priority_config.get(cat.name, 999)
             promotion_priority.append((priority, cat_idx))
         promotion_priority.sort()  # Sort by priority
@@ -102,7 +102,9 @@ class HouseholdPromoter:
                 logger.debug(f"  geo_unit {geo_unit_code}: {len(available_people)} {category_name} available")
 
                 # Find households in this geo_unit
-                geo_unit_households = [hh for hh in self.distributor.households if hh.geographical_unit.name == geo_unit_code]
+                # Get all households from VenueManager
+                all_households = self.distributor.venue_manager.get_venues_by_type("household")
+                geo_unit_households = [hh for hh in all_households if hh.geographical_unit.name == geo_unit_code]
 
                 if not geo_unit_households:
                     logger.debug(f"    No households in geo_unit {geo_unit_code}")
@@ -126,7 +128,8 @@ class HouseholdPromoter:
                     for attempt in range(max_attempts + 1):
                         # Can we add someone from this category?
                         min_count = current_pattern.get_min_count(cat_idx)
-                        current_count = household.get_composition().get(category_name, 0)
+                        age_categories = household.properties.get('_age_categories', self.distributor.categories)
+                        current_count = household.get_composition(age_categories).get(category_name, 0)
 
                         if current_count >= min_count:
                             # Already meets minimum, check if flexible
@@ -166,7 +169,8 @@ class HouseholdPromoter:
 
                     # Now try to add people
                     max_count = current_pattern.get_max_count(cat_idx)
-                    current_count = household.get_composition().get(category_name, 0)
+                    age_categories = household.properties.get('_age_categories', self.distributor.categories)
+                    current_count = household.get_composition(age_categories).get(category_name, 0)
 
                     # Determine how many we can add
                     if max_count is None:  # Flexible
@@ -185,12 +189,14 @@ class HouseholdPromoter:
                             break
 
                         person = available_people.popleft()
-                        household.add_resident(person)
+                        household.add_to_subset(person)
                         self.distributor.allocated_people.add(person.id)
                         added_to_this += 1
                         people_added += 1
 
+                    # Update the original pool to remove people we took
                     if added_to_this > 0:
+                        pools[cat_idx] = pools[cat_idx][added_to_this:]
                         logger.debug(f"    Added {added_to_this} {category_name} to household {household.id}")
 
         # Statistics
@@ -215,7 +221,7 @@ class HouseholdPromoter:
         logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
         logger.info("")
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)
@@ -256,8 +262,11 @@ class HouseholdPromoter:
         households_promoted_count = 0
         promoted_households = set()
 
+        # Progress tracking
+        total_rules = len(promotion_rules)
+
         # Process each rule
-        for rule_idx, rule in enumerate(promotion_rules):
+        for rule_idx, rule in enumerate(promotion_rules, 1):
             source_pattern = rule.get('source_pattern')
             target_pattern_str = rule.get('target_pattern')
             accept_categories = rule.get('accept_categories', [])
@@ -270,10 +279,21 @@ class HouseholdPromoter:
             # Parse target pattern to understand constraints
             target_pattern = CompositionPattern.from_string(target_pattern_str)
 
-            logger.info(f"Rule {rule_idx + 1}: {source_pattern} → {target_pattern_str} (categories: {accept_categories})")
+            logger.info(f"Rule {rule_idx}: {source_pattern} → {target_pattern_str} (categories: {accept_categories})")
 
             # Find households matching source pattern
-            for household in self.distributor.households:
+            # Get all households from VenueManager
+            all_households = self.distributor.venue_manager.get_venues_by_type("household")
+
+            # Track progress for this rule
+            rule_start_promoted = households_promoted_count
+            rule_start_people_added = people_added
+            households_processed = 0
+            total_households = len(all_households)
+            progress_interval = max(1, total_households // 10)  # Update every 10%
+
+            for household in all_households:
+                households_processed += 1
                 actual_pattern = household.properties.get('actual_pattern', '')
 
                 if actual_pattern != source_pattern:
@@ -299,7 +319,8 @@ class HouseholdPromoter:
                         continue
 
                     # Get current count in this category
-                    current_composition = household.get_composition()
+                    age_categories = household.properties.get('_age_categories', self.distributor.categories)
+                    current_composition = household.get_composition(age_categories)
                     current_count = current_composition.get(category_name, 0)
 
                     # Get max allowed from target pattern
@@ -333,6 +354,9 @@ class HouseholdPromoter:
                     if not isinstance(available_people, deque):
                         available_people = deque(available_people)
 
+                    # Track how many we actually add for pool update
+                    people_added_this_category = 0
+
                     # Add people
                     for _ in range(category_can_add):
                         if not available_people:
@@ -341,13 +365,31 @@ class HouseholdPromoter:
                             break
 
                         person = available_people.popleft()
-                        household.add_resident(person)
+                        household.add_to_subset(person)
                         self.distributor.allocated_people.add(person.id)
                         added_to_this_household += 1
                         people_added += 1
+                        people_added_this_category += 1
+
+                    # Update the original pool to remove people we took
+                    if people_added_this_category > 0:
+                        pools[cat_idx] = pools[cat_idx][people_added_this_category:]
 
                 if added_to_this_household > 0:
                     logger.debug(f"  Added {added_to_this_household} people to household {household.id}")
+
+                # Log progress at intervals
+                if households_processed % progress_interval == 0 or households_processed == total_households:
+                    percent_complete = (households_processed / total_households) * 100
+                    rule_households_promoted = households_promoted_count - rule_start_promoted
+                    rule_people_added = people_added - rule_start_people_added
+                    logger.info(f"  Rule {rule_idx} progress: {households_processed}/{total_households} households checked ({percent_complete:.1f}%) - {rule_households_promoted} promoted, {rule_people_added} people added")
+
+            # Log rule completion summary
+            rule_households_promoted = households_promoted_count - rule_start_promoted
+            rule_people_added = people_added - rule_start_people_added
+            if rule_households_promoted > 0 or rule_people_added > 0:
+                logger.info(f"  Rule {rule_idx} complete: {rule_households_promoted} households promoted, {rule_people_added} people added")
 
         # Statistics
         stats = {
@@ -371,7 +413,7 @@ class HouseholdPromoter:
         logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
         logger.info("")
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)

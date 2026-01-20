@@ -7,28 +7,52 @@
 # Each venue type can specify:
 #   - enabled: Whether to load this venue type (default: true)
 #   - filename: CSV file to load from (default: {venue_type}s.csv)
+#   - is_residence: Whether people live at this venue type (default: false)
 #   - properties: Optional metadata about this venue type
 
 venue_types:
+  # =============================================
+  # SPECIAL: Household (created dynamically)
+  # =============================================
+  # This venue type is NOT loaded from CSV - it's created by the household
+  # distributor during world creation. We list it here only to mark it as
+  # a residence type.
+  household:
+    enabled: false  # Not loaded from CSV (created dynamically)
+    is_residence: true  # People live here
+    description: "Residential households (created by household distributor)"
+    
   hospital:
     enabled: true
-    filename: hospitals.csv
+    filename: medical/hospitals.csv
     description: "Healthcare facilities providing medical treatment"
+    is_residence: false  # Not a place where people live
 
   school:
     enabled: true
-    filename: schools.csv
+    filename: primary_activities/Schools_EW.csv
     description: "Educational institutions for primary and secondary education"
+    is_residence: false  # Not a place where people live
+
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "SchoolCapacity"
 
   university:
     enabled: true
-    filename: universities.csv
+    filename: primary_activities/uk_universities.csv
     description: "Higher education institutions"
+    is_residence: false  # Not a place where people live
+
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "n_students"
 
   care_home:
     enabled: true
-    filename: care_homes.csv
+    filename: residences/care_homes.csv
     description: "Residential care facilities for elderly or disabled persons"
+    is_residence: true  # People live here
 
     # Capacity configuration for attribute-aware allocation
     capacity_config:
@@ -79,7 +103,7 @@ venue_types:
             sex: "female"
 
       # Fallback behavior when specific slots are full
-      fallback_strategy: "flexible"  # or "strict", "total_capacity"
+      fallback_strategy: "total_capacity"  # or "strict", "total_capacity"
       # - "flexible": Allow overflow into other age/sex slots
       # - "strict": Only allocate to exact matches
       # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
@@ -88,16 +112,23 @@ venue_types:
     enabled: false
     filename: prisons.csv
     description: "Correctional institutions"
+    is_residence: true  # People live here
 
   company:
     enabled: true
-    filename: companies.csv
+    filename: primary_activities/companies.csv
     description: "Commercial workplaces and businesses"
-  
+    is_residence: false  # Not a place where people live
+
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "employee_count"
+
   boarding_school:
     enabled: true
-    filename: boarding_schools.csv
+    filename: residences/boarding_schools.csv
     description: "Communal residence for school kids"
+    is_residence: true  # People live here
 
     # Capacity configuration for attribute-aware allocation
     capacity_config:
@@ -144,12 +175,11 @@ venue_types:
       # - "strict": Only allocate to exact matches
       # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
 
-    
-
   student_dorms:
     enabled: true
-    filename: student_dorms.csv
+    filename: residences/student_dorms.csv
     description: "Communal residence for university students"
+    is_residence: true  # People live here
 
     # Capacity configuration for attribute-aware allocation
     capacity_config:
@@ -167,7 +197,7 @@ venue_types:
         # Format: {column_name: {age_band: [min, max], sex: "male/female"}}
         column_mappings:
           n_16_24:
-            age_band: [16, 24]
+            age_band: [18, 24]
           n_25_34:
             age_band: [25, 34]
           n_35_49:
@@ -182,6 +212,31 @@ venue_types:
       # - "flexible": Allow overflow into other age/sex slots
       # - "strict": Only allocate to exact matches
       # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
+  
+  cinema:
+    enabled: true
+    filename: leisure/cinemas.csv
+    description: "Leisure location"
+    is_residence: false
+
+  grocery:
+    enabled: true
+    filename: leisure/groceries.csv
+    description: "Leisure location"
+    is_residence: false
+  
+  gym:
+    enabled: true
+    filename: leisure/gyms.csv
+    description: "Leisure location"
+    is_residence: false
+  
+  pub:
+    enabled: true
+    filename: leisure/pubs.csv
+    description: "Leisure location"
+    is_residence: false
+
 
 # Global venue settings
 settings:

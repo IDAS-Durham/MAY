@@ -22,7 +22,7 @@ class PopulationManager:
     across geographical units according to specified distributions.
     """
 
-    def __init__(self, geography, data_dir="data/population"):
+    def __init__(self, geography, data_dir):
         """
         Initialize the PopulationManager.
 
@@ -78,6 +78,19 @@ class PopulationManager:
             logger.info("Cannot generate population without demographics data")
             return
 
+        # Get the smallest geographical level from the loaded geography
+        # to filter demographics to only relevant geo units
+        smallest_level = self.geography.levels[0]
+        smallest_units_dict = self.geography.get_units_by_level(smallest_level)
+
+        if not smallest_units_dict:
+            logger.warning(f"No {smallest_level} units found in geography. Cannot load demographics.")
+            return
+
+        # Create a set of geo unit names that exist in our geography for fast lookup
+        valid_geo_units = set(smallest_units_dict.keys())
+        logger.info(f"Filtering demographics to {len(valid_geo_units)} {smallest_level}s in loaded geography")
+
         logger.info(f"Loading male demographics from {male_path}")
         male_df = pd.read_csv(male_path)
 
@@ -88,11 +101,20 @@ class PopulationManager:
         if 'geo_unit' not in male_df.columns or 'geo_unit' not in female_df.columns:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
+
         # Ignore index column if it exists
         for _df in [male_df, female_df]:
             if 'index' in _df.columns:
                 _df.drop(columns=['index'], inplace=True)
         
+
+        # Filter to only geo units in our geography BEFORE processing
+        male_df = male_df[male_df['geo_unit'].isin(valid_geo_units)]
+        female_df = female_df[female_df['geo_unit'].isin(valid_geo_units)]
+
+        logger.info(f"Filtered to {len(male_df)} male geo units and {len(female_df)} female geo units")
+
+
         # Load into nested dict structure: geo_unit -> age -> sex -> count
         # Note: Using a regular function instead of lambda for pickle compatibility
         self.precise_demographics = defaultdict(self._create_nested_defaultdict)
@@ -209,36 +231,6 @@ class PopulationManager:
         logger.info(f"Generated {total_people:,} people across {geo_units_with_data} {smallest_level}s")
         if geo_units_with_data > 0:
             logger.info(f"Average: {total_people / geo_units_with_data:.1f} people per {smallest_level}")
-
-    def _assign_activities(self, person):
-        """
-        Assign activities to a person based on their age.
-
-        This is a generic activity assignment based on life stages.
-        Users can customize this logic.
-
-        Args:
-            person (Person): The person to assign activities to
-        """
-        age = person.age
-
-        # Generic life stage activities
-        if 0 <= age <= 4:
-            # Young children
-            person.add_activity("home")
-        elif 5 <= age <= 18:
-            # School age
-            person.add_activity("education")
-            person.add_activity("home")
-        elif 19 <= age <= 64:
-            # Working age
-            person.add_activity("work")
-            person.add_activity("home")
-            person.add_activity("leisure")
-        else:
-            # Retirement age
-            person.add_activity("home")
-            person.add_activity("leisure")
 
     def get_person(self, person_id):
         """

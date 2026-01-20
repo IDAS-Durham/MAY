@@ -10,7 +10,7 @@ import logging
 import numpy as np
 from typing import List, Optional, Dict
 from may.population.person import Person
-from may.residence.models import Household
+from may.geography.venue import Venue
 
 logger = logging.getLogger("household")
 
@@ -115,8 +115,16 @@ class HouseholdExcessHandler:
         people_added = 0
         households_modified = 0
 
+        # Progress tracking
+        total_households = len(target_households)
+        households_processed = 0
+        progress_interval = max(1, total_households // 10)  # Update every 10%
+
+        logger.info(f"Processing {total_households:,} target households...")
+
         # Iterate through target households and try to add people
         for household in target_households:
+            households_processed += 1
             geo_unit_code = household.geographical_unit.name
 
             # Get person pool for this geo_unit
@@ -209,6 +217,11 @@ class HouseholdExcessHandler:
                 households_modified += 1
                 logger.debug(f"Added {added_to_this_household} {add_category} to household {household.id}")
 
+            # Log progress at intervals
+            if households_processed % progress_interval == 0 or households_processed == total_households:
+                percent_complete = (households_processed / total_households) * 100
+                logger.info(f"  Progress: {households_processed}/{total_households} households processed ({percent_complete:.1f}%) - {households_modified} modified, {people_added} people added")
+
         # Statistics
         stats = {
             'round_name': round_label,
@@ -233,7 +246,7 @@ class HouseholdExcessHandler:
         # Show remaining by category
         remaining_by_category = self.distributor.get_available_people_by_category()
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)
@@ -299,14 +312,24 @@ class HouseholdExcessHandler:
                 households_by_geo_unit_pattern[key] = []
             households_by_geo_unit_pattern[key].append(household)
 
-        logger.info(f"Found {sum(len(hhs) for hhs in households_by_geo_unit_pattern.values())} eligible households across {len(households_by_geo_unit_pattern)} geo_unit-pattern combinations")
+        total_eligible_households = sum(len(hhs) for hhs in households_by_geo_unit_pattern.values())
+        logger.info(f"Found {total_eligible_households} eligible households across {len(households_by_geo_unit_pattern)} geo_unit-pattern combinations")
 
         # Track statistics
         people_added = 0
         households_modified = 0
 
+        # Progress tracking
+        geo_units_list = list(set(k[0] for k in households_by_geo_unit_pattern.keys()))
+        total_geo_units = len(geo_units_list)
+        geo_units_processed = 0
+        progress_interval = max(1, total_geo_units // 10)  # Update every 10%
+
+        logger.info(f"Processing {total_geo_units} geo_units...")
+
         # Process each geo_unit
-        for geo_unit_code in set(k[0] for k in households_by_geo_unit_pattern.keys()):
+        for geo_unit_code in geo_units_list:
+            geo_units_processed += 1
             if geo_unit_code not in self.distributor.person_pool_by_geo_unit:
                 continue
 
@@ -390,7 +413,7 @@ class HouseholdExcessHandler:
                             break
 
                         person = available_people[global_people_index]
-                        household.add_resident(person)
+                        household.add_to_subset(person)
                         self.distributor.allocated_people.add(person.id)
                         global_people_index += 1
                         added_to_hh += 1
@@ -398,10 +421,15 @@ class HouseholdExcessHandler:
 
                     if added_to_hh > 0:
                         households_modified += 1
-                        logger.debug(f"Added {added_to_hh} {add_category} to household {household.id} (pattern: {pattern}, now size: {len(household.residents)})")
+                        logger.debug(f"Added {added_to_hh} {add_category} to household {household.id} (pattern: {pattern}, now size: {household.size()})")
 
             # Remove allocated people from pool
             pools[add_cat_idx] = pools[add_cat_idx][global_people_index:]
+
+            # Log progress at intervals
+            if geo_units_processed % progress_interval == 0 or geo_units_processed == total_geo_units:
+                percent_complete = (geo_units_processed / total_geo_units) * 100
+                logger.info(f"  Progress: {geo_units_processed}/{total_geo_units} geo_units processed ({percent_complete:.1f}%) - {households_modified} households modified, {people_added} people added")
 
         # Statistics
         stats = {
@@ -425,14 +453,14 @@ class HouseholdExcessHandler:
         logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
         logger.info("")
         logger.info("  Remaining by category:")
-        for cat_name in [cat.name for cat in self.distributor.age_categories]:
+        for cat_name in [cat.name for cat in self.distributor.categories]:
             count = remaining_by_category.get(cat_name, 0)
             logger.info(f"    {cat_name}: {count:,}")
         logger.info("=" * 60)
 
         return stats
 
-    def _select_person_for_excess_with_rule(self, household: 'Household',
+    def _select_person_for_excess_with_rule(self, household: Venue,
                                            candidates: List['Person'],
                                            add_category: str,
                                            rule) -> Optional['Person']:
@@ -460,7 +488,7 @@ class HouseholdExcessHandler:
             existing_people_by_role[role_name] = []
 
             # Find all household members that belong to this role's categories
-            for resident in household.residents:
+            for resident in household.get_all_members():
                 resident_cat_name = self.distributor._get_person_category_name(resident)
                 if resident_cat_name in category_names:
                     existing_people_by_role[role_name].append(resident)

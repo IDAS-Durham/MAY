@@ -164,6 +164,19 @@ class Geography:
         """Get a unit by its name"""
         return self.units.get(name)
 
+    def get_geo_unit(self, code):
+        """
+        Get a geographical unit by its code/name.
+        Alias for get_unit() for clarity in distributor context.
+
+        Args:
+            code: Geographical unit code (e.g., "E00001551")
+
+        Returns:
+            GeographicalUnit or None if not found
+        """
+        return self.get_unit(code)
+
     def get_unit_by_id(self, id):
         """Get a unit by its numeric ID"""
         return self.units_by_id.get(id)

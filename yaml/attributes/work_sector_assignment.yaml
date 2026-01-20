@@ -1,0 +1,168 @@
+# ============================================================================
+# Work Sector Attribute Assignment Configuration
+# ============================================================================
+# Assigns work sector (industry) based on:
+# 1. Workplace LGU location (not residence)
+# 2. Person's sex (for demographic realism)
+#
+# Uses LGU + Sex stratification for statistically reliable probabilities
+# while workplace_sgu provides spatial precision.
+#
+# Assignment Level: person
+# Dependencies: workplace_location (LGU), workplace_sgu (SGU)
+# ============================================================================
+
+attribute:
+  name: "work_sector"
+  description: "Assigns industry sector based on workplace LGU and sex"
+  data_type: "categorical"
+  assignment_level: "person"
+
+# ============================================================================
+# Filters - Only assign to working-age people (18-65)
+# ============================================================================
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    description: "Working age population"
+    numerical:
+      min: 18
+      max: 64
+
+# ============================================================================
+# Required Attributes (Dependencies)
+# ============================================================================
+required_attributes:
+  - name: "workplace_location"
+    description: "Workplace LGU must be assigned first"
+    required: true
+    error_if_missing: true
+  - name: "workplace_sgu"
+    description: "Workplace SGU must be assigned first"
+    required: true
+    error_if_missing: true
+
+# ============================================================================
+# Data Sources
+# ============================================================================
+data_sources:
+  # Workplace LGU + Sex stratified industry distribution
+  workplace_industry_by_sex:
+    type: "csv_lookup"
+    description: "Industry distribution by workplace LGU and sex for demographic accuracy"
+
+    files:
+      - path: "data/activities/work/EW_industry_sex_lad.csv"
+
+        # Multi-key lookup: LGU name + Sex
+        key_columns:
+          LGU_name:
+            attribute: "workplace_location"
+            type: "direct"  # From person.properties["workplace_location"]
+
+          Sex:
+            attribute: "sex"
+            type: "direct"  # From person.sex
+
+        # Value columns: 18 industry sectors (exact CSV column names)
+        value_columns:
+          A: "Agriculture; Forestry; Fishing"
+          B: "Mining and Quarrying"
+          C: "Manufacturing"
+          D: "Electricity, Gas, Steam and Air Conditioning Supply"
+          E: "Water Supply; Sewage; Waste Management and Remediation activities"
+          F: "Construction"
+          G: "Wholesale and Retail trade; Repair of Motor Vehicles and Motorcycles"
+          H: "Transport and Storage"
+          I: "Accommodation and Food Service Activities"
+          J: "Information and Communication"
+          K: "Financial and Insurance Activities"
+          L: "Real Estate Activities"
+          M: "Professional Scientific and Technical Activities"
+          N: "Administrative and Support Service Activities"
+          O: "Public Administration and Defence; Compulsory Social Security"
+          P: "Education"
+          Q: "Human Health and Social Work Activities"
+          Other: "Other"
+
+    fallback:
+      # National fallback (approximate UK 2021 employment distribution)
+      A: 0.01
+      B: 0.002
+      C: 0.08
+      D: 0.005
+      E: 0.007
+      F: 0.07
+      G: 0.15
+      H: 0.05
+      I: 0.07
+      J: 0.045
+      K: 0.035
+      L: 0.02
+      M: 0.09
+      N: 0.08
+      O: 0.045
+      P: 0.09
+      Q: 0.13
+      Other: 0.04
+
+# ============================================================================
+# Assignment Rules (Person-Level)
+# ============================================================================
+assignment_rules:
+  person:
+    description: "Assign work sector based on workplace LGU + sex"
+
+    rules:
+      - description: "Probabilistic sector assignment stratified by LGU and sex"
+        priority: 1
+
+        assignment:
+          strategy: "categorical_sampler"  # Sample ONE category from probabilities
+          data_source: "workplace_industry_by_sex"
+
+# ============================================================================
+# Settings
+# ============================================================================
+settings:
+  random_seed: null
+  normalize_probabilities: true
+  cache_lookups: true
+
+  error_handling:
+    missing_geo_unit: "use_fallback"
+    missing_lookup_data: "use_fallback"
+    person_without_work_activity: "skip_person"
+    missing_filter_activity: "skip_person"
+
+  logging:
+    level: "INFO"
+    detailed_assignment_logging: false
+    show_samples: true
+    sample_size: 10
+    show_attribute_distribution: true 
+
+
+# ============================================================================
+# Industry Sector Labels (for reference)
+# ============================================================================
+sector_labels:
+  A: "Agriculture, Forestry, and Fishing"
+  B: "Mining and Quarrying"
+  C: "Manufacturing"
+  D: "Electricity, Gas, Steam and Air Conditioning Supply"
+  E: "Water Supply, Sewage, Waste Management and Remediation"
+  F: "Construction"
+  G: "Wholesale and Retail Trade, Motor Vehicle Repair"
+  H: "Transport and Storage"
+  I: "Accommodation and Food Service Activities"
+  J: "Information and Communication"
+  K: "Financial and Insurance Activities"
+  L: "Real Estate Activities"
+  M: "Professional, Scientific and Technical Activities"
+  N: "Administrative and Support Service Activities"
+  O: "Public Administration and Defence, Compulsory Social Security"
+  P: "Education"
+  Q: "Human Health and Social Work Activities"
+  Other: "Other Services"

@@ -155,7 +155,9 @@ def execute_allocation_strategy(population,
         logger.info("")
 
     logger.info("Overall Totals:")
-    logger.info(f"  Total households: {len(household_distributor.households):,}")
+    # Get household count from VenueManager
+    all_households = household_distributor.venue_manager.get_venues_by_type("household")
+    logger.info(f"  Total households: {len(all_households):,}")
     logger.info(f"  People in households (initial): {total_household_alloc:,}")
     logger.info(f"  People added to households (excess): {total_excess_alloc:,}")
     logger.info(f"  People added to households (overflow): {total_overflow_alloc:,}")
@@ -408,7 +410,9 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         'max_allocations': step_config.get('max_allocations'),
         # Attribute-aware allocation settings
         'allocation_mode': step_config.get('allocation_mode', 'simple'),
-        'use_attribute_capacities': step_config.get('use_attribute_capacities', False)
+        'use_attribute_capacities': step_config.get('use_attribute_capacities', False),
+        # Subset configuration
+        'subset_key': step_config.get('subset_key')
     }
 
     # Use the existing venue allocator function

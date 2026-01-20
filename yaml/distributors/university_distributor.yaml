@@ -1,0 +1,240 @@
+distributor_name: "university_distributor"
+venue_type: "university"
+description: "Distribute people to university based on age and proximity"
+
+activity_map_key: "primary_activity"
+
+# Subset to add students to
+subset_key: "student"
+
+special_cases:
+  - name: "student_dorms_students"
+    description: "Students in student dorms MUST attend university"
+    priority: 1  # Highest priority
+
+    # Condition: Check if person lives in student dorms
+    condition:
+      person_residence_type: "student_dorms"
+
+      filters:
+        - attribute: "age"
+          type: "numerical"
+          min: 18
+          max: null
+
+    # Allocation rule: Assign to closest university
+    allocation_rule:
+      strategy: "closest"
+      if_no_match: "warn"  # "error", "warn", "skip"
+
+eligibility:
+
+  require_unassigned: true
+
+  global_filters:
+    - attribute: "age"
+      type: "numerical"
+      description: "Only consider people of university age (0-19 years)"
+      min: 18
+      max: 24
+
+    - attribute: "residence.type"
+      type: "categorical"
+      description: "Only allocate people living in households or student dorms"
+      values: ["household", "student_dorms"]
+
+  priority_allocation:
+    enabled: true
+
+    groups:
+      - name: "highest_priority_young_adults_from_specific_households"
+        description: "Students aged 18-22 from households with pattern '0 >=0 0 0' (highest priority, can overflow, SGU-specific probabilities)"
+        priority: 1  # Highest priority
+        allow_overflow: false  # Can exceed venue capacity, but still respects age/gender constraints
+
+        # Probability of allocation (reflects that not all 18-22 year olds attend university)
+        probability_config:
+          type: "file"
+          file_path: "data/activities/university/university_probabilities.csv"
+
+          # Which column in CSV to match against
+          lookup_column: "geo_unit"
+
+          # Which person attribute to use for matching (geographical_unit.name)
+          lookup_attribute: "geographical_unit.name"
+
+          # Which column contains the probability values
+          probability_column: "prob_uni_18_22"
+
+          # Fallback if geo_unit not found in CSV
+          default: 0.35
+
+        filters:
+          - attribute: "age"
+            type: "numerical"
+            min: 18
+            max: 22
+
+          - attribute: "residence.properties.original_pattern"
+            type: "categorical"
+            description: "Only students from households with pattern '0 >=0 0 0'"
+            values: ["0 >=0 0 0"]
+
+      - name: "high_priority_uni_age"
+        description: "Students aged 18-22 (second priority, can overflow, SGU-specific probabilities)"
+        priority: 2  # Second priority
+        allow_overflow: false  # Can exceed venue capacity, but still respects age/gender constraints
+
+        # Probability of allocation (reflects that not all 18-22 year olds attend university)
+        probability_config:
+          type: "file"
+          file_path: "data/activities/university/university_probabilities.csv"
+
+          # Which column in CSV to match against
+          lookup_column: "geo_unit"
+
+          # Which person attribute to use for matching (geographical_unit.name)
+          lookup_attribute: "geographical_unit.name"
+
+          # Which column contains the probability values
+          probability_column: "prob_uni_18_22"
+
+          # Fallback if geo_unit not found in CSV
+          default: 0.35
+
+        filters:
+          - attribute: "age"
+            type: "numerical"
+            min: 18
+            max: 22
+
+      - name: "second_priority_postgrads"
+        description: "Students aged 23-24 (third priority, respects capacity, SGU-specific probabilities)"
+        priority: 3  # Third priority
+        allow_overflow: false  # Respect capacity limits
+
+        # Probability of allocation for postgrad students
+        probability_config:
+          type: "file"
+          file_path: "data/activities/university/university_probabilities.csv"
+          lookup_column: "geo_unit"
+          lookup_attribute: "geographical_unit.name"
+          probability_column: "prob_uni_23_24"
+          default: 0.15
+
+        filters:
+          - attribute: "age"
+            type: "numerical"
+            min: 23
+            max: 24
+
+venue_selection:
+
+  consider_by: "count"
+
+  # Count-based parameters (when consider_by = "count")
+  count: 5
+  criteria: "distance"  # "closest", "random", "largest_capacity"
+
+  max_distance: 10
+  max_distance_unit: "km"  # "km", "miles", "meters"
+
+  venue_geo_level: "SGU"
+
+  person_location_source: "geographical_unit.coordinates"
+
+  venue_location_source: "coordinates"
+
+  distance_metric: "haversine"  # "haversine" (great-circle), "euclidean"
+
+  filter_by_geography: true  # Already enforced by venues_config.yaml
+
+  # Only consider venues with available capacity
+  respect_capacity: true
+
+allocation:
+
+  strategy: "proportional"
+  # Options:
+  #   - "random": Randomly pick from eligible venues
+  #   - "closest": Always pick closest
+  #   - "proportional": Weight by inverse distance (closer = higher probability)
+  #   - "capacity_weighted": Weight by available capacity
+  #   - "greedy_fill": Fill schools sequentially by distance
+
+  capacity_column: "n_students"
+
+  # What to do if capacity is missing or 0
+  capacity_handling:
+    if_missing: "ignore"  # "ignore" (no limit), "skip" (don't use venue), "default"
+    default_capacity: 1000  # Used when if_missing = "default"
+    if_zero: "ignore"  # "ignore", "skip"
+
+  track_capacity: true
+
+  when_full: "exclude"  # "exclude" (remove from options), "overflow" (allow over-capacity)
+
+  overflow_behavior:
+    distribute_evenly: true  # Spread overflow across all venues proportionally
+    max_overflow_per_venue: null  # null = unlimited, or set a max (e.g., 1.5x capacity)
+
+  batch_by: "geo_unit"  # "geo_unit", "none"
+
+  batch_location_source: "centroid"
+
+settings:
+  # Execution order (higher = earlier)
+  priority: 1
+
+  # Limit number of allocations (null = no limit)
+  max_allocations: null
+
+  # Random seed for reproducibility
+  random_seed: null
+
+  # Logging
+  verbose: true
+  log_summary: true  # Print allocation statistics
+  debug: false  # Enable debug-level logging for troubleshooting
+
+  # Performance
+  use_spatial_index: true  # Use KDTree for distance queries
+  cache_venue_pools: false  # Cache eligible venues per geo_unit
+
+# ============================================================================
+# FALLBACK BEHAVIOR
+# ============================================================================
+# What to do when no eligible venues are found for a person?
+
+fallback:
+  strategy: "skip"
+  # Options:
+  #   - "skip": Leave person.activity_map['primary_activity'] unassigned
+  #   - "relax_distance": Increase search radius and retry
+  #   - "relax_capacity": Allow over-capacity allocation
+  #   - "assign_closest": Assign to closest venue regardless of constraints
+
+  # Relaxation parameters (if strategy = "relax_distance")
+  relax_params:
+    max_iterations: 3
+    distance_multiplier: 2.0  # Double search radius each iteration
+
+# ============================================================================
+# VALIDATION & CONSTRAINTS
+# ============================================================================
+
+validation:
+  # Ensure person has required attributes before attempting allocation
+  required_person_attributes:
+    - "age"
+    - "geographical_unit"  # Person's location (at smallest level, will traverse up if needed)
+
+  # Ensure venues have required columns
+  required_venue_columns:
+    - "geo_unit"
+    - "latitude"
+    - "longitude"
+
+  # Warn if these are missing (but continue)
+  optional_venue_columns:
+    - "n_students"

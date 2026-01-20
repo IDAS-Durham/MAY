@@ -195,6 +195,8 @@ steps:
     allocation_mode: "attribute_aware"
     use_attribute_capacities: true
 
+    subset_key: "resident"
+
     # General eligibility (pre-filter before attribute matching)
     # People will be sorted into age-band slots based on capacity_config
     eligibility: {}
@@ -214,6 +216,8 @@ steps:
     # Enable attribute-aware allocation
     allocation_mode: "attribute_aware"
     use_attribute_capacities: true
+
+    subset_key: "resident"
 
     # General eligibility (pre-filter before attribute matching)
     # This gets people who are eligible, then they get sorted into
@@ -237,6 +241,9 @@ steps:
     # Enable attribute-aware allocation
     allocation_mode: "attribute_aware"
     use_attribute_capacities: true
+
+    # Subset to add residents to
+    subset_key: "resident"
 
     # General eligibility (pre-filter before attribute matching)
     # People will be sorted into age-band slots based on capacity_config

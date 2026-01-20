@@ -1,0 +1,47 @@
+# VenueChildCreator Configuration - Company Offices
+#
+# This config creates offices within companies based on employee allocation.
+#
+# Workflow:
+# 1. Employees are first distributed to companies (via venue_distributor)
+# 2. This config runs and creates offices based on employee count
+#
+# Example: If a company has 150 employees, and max_capacity is 50,
+#          this will create 3 offices (50 + 50 + 50).
+
+parent_venue_type: company    # Parent venues to process
+child_venue_type: office      # Type of child venues to create
+
+# No grouping by attribute - all employees go into general offices
+# (could also group by 'sector' or other attributes if you have them)
+group_by_attribute: null
+
+# Maximum employees per office
+max_capacity: 50
+
+# Minimum employees needed to create an office
+min_capacity: 10
+
+# Properties to add to each created office
+child_properties:
+  capacity: 50
+
+# Distribution strategy
+distribution_strategy: even
+
+# ========================================
+# ACTIVITY MANAGEMENT
+# ========================================
+# Control how employees' activity_map is updated when moving to offices
+
+# Activity map key: Which activity to set when adding to office
+activity_map_key: "primary_activity"
+
+# Subset key: Which subset to add employees to in the office
+subset_key: "worker"
+
+# Replace parent activity: Replace company's primary_activity with office
+replace_parent_activity: true
+
+# Remove from parent: Keep employee in company's subset for reference
+remove_from_parent: false

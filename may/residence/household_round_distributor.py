@@ -49,17 +49,17 @@ class HouseholdRoundDistributor:
         # Count total available people in ELIGIBLE categories only
         # (categories where the pattern allows at least 1 person)
         total_available = 0
-        for cat_idx in range(len(self.distributor.age_categories)):
+        for cat_idx in range(len(self.distributor.categories)):
             max_count = pattern.get_max_count(cat_idx)
             pool_size = len(pools[cat_idx])
             # Only count if category allows people (max_count is None or > 0)
             if max_count is None or max_count > 0:
                 total_available += pool_size
                 if pool_size > 0:
-                    logger.debug(f"  Category {self.distributor.age_categories[cat_idx].name}: {pool_size} available (max_count={max_count})")
+                    logger.debug(f"  Category {self.distributor.categories[cat_idx].name}: {pool_size} available (max_count={max_count})")
             else:
                 if pool_size > 0:
-                    logger.debug(f"  Category {self.distributor.age_categories[cat_idx].name}: {pool_size} available but EXCLUDED by pattern (max_count={max_count})")
+                    logger.debug(f"  Category {self.distributor.categories[cat_idx].name}: {pool_size} available but EXCLUDED by pattern (max_count={max_count})")
 
         # Strategy: Fill households to capacity to allocate as many people as possible
         if max_household_size:
@@ -160,6 +160,20 @@ class HouseholdRoundDistributor:
         if demotion_rules is None:
             demotion_rules = {}
 
+        # Calculate total households to allocate for progress tracking
+        total_households_to_allocate = 0
+        for geo_unit_code, compositions in self.distributor.household_counts_by_geo_unit.items():
+            for pattern_str, count in compositions.items():
+                # Only count if pattern matches filter
+                if pattern_set is None or pattern_str in pattern_set:
+                    total_households_to_allocate += count
+
+        # Progress tracking
+        households_processed = 0
+        progress_interval = max(1, total_households_to_allocate // 10)  # Update every 10%
+
+        logger.info(f"Allocating {total_households_to_allocate:,} households...")
+
         # Iterate through each geo_unit
         for geo_unit_code, compositions in self.distributor.household_counts_by_geo_unit.items():
             # Iterate through each composition type in this geo_unit
@@ -231,11 +245,17 @@ class HouseholdRoundDistributor:
                         if actual_pattern_str != pattern_str:
                             household.properties['original_pattern'] = pattern_str
 
-                        self.distributor.households.append(household)
+                        # Household is already added to VenueManager via create_venue()
                         total_created += 1
                         households_created += 1
                     else:
                         logger.debug(f"  Failed to allocate household {i+1}/{count} of type '{pattern_str}' in {geo_unit_code}")
+
+                    # Update progress counter and log at intervals
+                    households_processed += 1
+                    if households_processed % progress_interval == 0 or households_processed == total_households_to_allocate:
+                        percent_complete = (households_processed / total_households_to_allocate) * 100
+                        logger.info(f"  Progress: {households_processed}/{total_households_to_allocate} households processed ({percent_complete:.1f}%) - {households_created} created")
 
                 # Break outer loop if limit reached
                 if max_households is not None and households_created >= max_households:
@@ -246,6 +266,9 @@ class HouseholdRoundDistributor:
                 break
 
         # Calculate round statistics
+        # Get household count from VenueManager
+        all_households = self.distributor.venue_manager.get_venues_by_type("household")
+
         round_stats = {
             'round_name': round_label,
             'round_number': self.distributor.current_round,
@@ -253,7 +276,7 @@ class HouseholdRoundDistributor:
             'households_requested': total_requested,
             'households_with_demotion': total_demoted,
             'people_allocated_this_round': len(self.distributor.allocated_people) - round_start_allocated,
-            'total_households': len(self.distributor.households),
+            'total_households': len(all_households),
             'total_people_allocated': len(self.distributor.allocated_people),
             'total_people_remaining': len(self.distributor.population.get_all_people()) - len(self.distributor.allocated_people)
         }
@@ -266,7 +289,7 @@ class HouseholdRoundDistributor:
         if total_demoted > 0:
             logger.info(f"  Households using demotion: {total_demoted:,}")
         logger.info(f"  People allocated this round: {round_stats['people_allocated_this_round']:,}")
-        logger.info(f"  Total households so far: {len(self.distributor.households):,}")
+        logger.info(f"  Total households so far: {round_stats['total_households']:,}")
         logger.info(f"  Total people allocated: {len(self.distributor.allocated_people):,}")
         logger.info(f"  People remaining: {round_stats['total_people_remaining']:,}")
         logger.info("=" * 60)
@@ -301,12 +324,12 @@ class HouseholdRoundDistributor:
         flexible_categories = []
 
         logger.debug(f"\n--- FIRST PASS: Categorizing fixed vs flexible ---")
-        for cat_idx in range(len(self.distributor.age_categories)):
+        for cat_idx in range(len(self.distributor.categories)):
             min_count = pattern.get_min_count(cat_idx)
             max_count = pattern.get_max_count(cat_idx)
             available = len(pools[cat_idx])
 
-            cat_name = self.distributor.age_categories[cat_idx].name
+            cat_name = self.distributor.categories[cat_idx].name
             logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
             logger.debug(f"  min_count: {min_count}, max_count: {max_count}, available: {available}")
 
@@ -347,7 +370,7 @@ class HouseholdRoundDistributor:
         flexible_allocations = []
 
         for cat_idx, min_count, available in flexible_categories:
-            cat_name = self.distributor.age_categories[cat_idx].name
+            cat_name = self.distributor.categories[cat_idx].name
             logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
             logger.debug(f"  min: {min_count}, available: {available}")
 
@@ -386,7 +409,7 @@ class HouseholdRoundDistributor:
                 can_take = available - allocated
                 if can_take > 0:
                     give = min(can_take, shortfall)
-                    cat_name = self.distributor.age_categories[cat_idx].name
+                    cat_name = self.distributor.categories[cat_idx].name
                     logger.debug(f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})")
                     flexible_allocations[i] = (cat_idx, allocated + give, available, proportion)
                     shortfall -= give

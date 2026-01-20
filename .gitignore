@@ -77,10 +77,20 @@ stuff_for_carehomes
 profile_analyzer.py
 profile_bottlenecks.txt
 simulation_profile.stats
+ATTRIBUTE_ASSIGNMENT_PLAN.md
+hardcoded_ethnicity_distributor.py
 
 # pytest_cache
 .pytest_cache
+<<<<<<< HEAD
 
 # World files
 *.joblib
+=======
+people.csv
+social_contacts.csv
+world_state.h5
+debug_*.py
+simulation_events.h5
+>>>>>>> Development_Branch
 *.h5
