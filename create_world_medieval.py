@@ -28,6 +28,17 @@ logging.basicConfig(
     ]
 )
 
+# Used for timing parts of the code. 
+def timer_dec(base_fn):
+    def enhanced_fn(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = base_fn(*args, **kwargs)
+        end_time = time.perf_counter()
+        logger.info(f'                       ... {end_time - start_time:.2g} s')
+        return result
+    return enhanced_fn
+
+
 # Suppress numexpr logging
 logging.getLogger('numexpr').setLevel(logging.WARNING)
 
@@ -65,6 +76,7 @@ def main():
     with open("world_specific_code/Medieval_England/config.yaml", "r") as f:
         config = yaml.safe_load(f)
 
+    logger.info("Setting up geography... ")
     # Setup geography from config and command-line arguments
     geo, filters = setup_geography(config=config)
     # Load the geography data
@@ -86,7 +98,7 @@ def main():
     #                           ('student_dorm', 'msoa_student_dorms.csv')]:
     #     venues.load_venue_type_from_csv(venue_type, filename=phile)
 
-    logger.info("Loading venues took {:.2g}s".format(time.perf_counter()-laptime))
+    logger.info("                      ... {:.2g}s".format(time.perf_counter()-laptime))
     laptime = time.perf_counter()
     
     # Load population
@@ -143,7 +155,7 @@ def main():
             )
             # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
             # Don't do too many passes, as will go through them again after allocating to prisons. 
-            household_distributor.num_passes = 2
+            household_distributor.num_passes = 5
             household_distributor.assign_people_venues_multi_pass('home', 'household')
             still_unallocated_people = household_distributor.unallocated_people
         
@@ -158,7 +170,7 @@ def main():
             )
             # Use multi-pass assignment (configured in HouseholdDistributor._multi_pass_config)
             # Don't do too many passes, as will go through them again after allocating to prisons. 
-            household_distributor.num_passes = 5
+            household_distributor.num_passes = 10
             household_distributor.assign_people_venues_multi_pass('home',
                                                                   'household')
             still_unallocated_people = household_distributor.unallocated_people
@@ -206,8 +218,9 @@ def main():
 
     # Exporting world object
     logger.info("Exporting world...")
-    joblib.dump(world, 'my_medieval_world.joblib', compress=3)
-    logger.info("Saving world to took {:.2g}s".format(time.perf_counter()-laptime))
+#    joblib.dump(world, 'my_medieval_world.joblib', compress=3)
+#    logger.info("Saving world to took {:.2g}s".format(time.perf_counter()-laptime))
+
     laptime = time.perf_counter()
 
     # Show examples of what was created
