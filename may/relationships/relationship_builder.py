@@ -215,33 +215,32 @@ class RelationshipBuilder:
         self._ages = np.array([p.age for p in self.world.population.people], dtype=np.int16)
         self._n_people = n_people
 
-        # SGU indices
-        sgu_to_idx = {}
-        self._person_sgu = np.zeros(n_people, dtype=np.int32)
-        people_by_sgu = defaultdict(list)
+        # Get geographic levels from world.geography
+        geo_levels = self.world.geography.levels if self.world.geography else []
+        logger.info(f"Geographic levels: {geo_levels}")
 
-        for i, person in enumerate(self.world.population.people):
-            sgu_name = person.geographical_unit.name if person.geographical_unit else ""
-            if sgu_name not in sgu_to_idx:
-                sgu_to_idx[sgu_name] = len(sgu_to_idx)
-            sgu_idx = sgu_to_idx[sgu_name]
-            self._person_sgu[i] = sgu_idx
-            people_by_sgu[sgu_idx].append(i)
+        # Build arrays for ALL geographic levels dynamically
+        self._geo_level_data = {}  # {level_name: (starts, ends, people_flat)}
+        level_counts = {}
 
-        # MGU indices
-        mgu_to_idx = {}
-        self._person_mgu = np.zeros(n_people, dtype=np.int32)
-        people_by_mgu = defaultdict(list)
+        for level_idx, level_name in enumerate(geo_levels):
+            level_to_idx = {}
+            people_by_level = defaultdict(list)
 
-        for i, person in enumerate(self.world.population.people):
-            unit = person.geographical_unit
-            mgu = unit.parent if unit and unit.parent else unit
-            mgu_name = mgu.name if mgu else ""
-            if mgu_name not in mgu_to_idx:
-                mgu_to_idx[mgu_name] = len(mgu_to_idx)
-            mgu_idx = mgu_to_idx[mgu_name]
-            self._person_mgu[i] = mgu_idx
-            people_by_mgu[mgu_idx].append(i)
+            for i, person in enumerate(self.world.population.people):
+                # Navigate up the hierarchy to find the unit at this level
+                unit = person.geographical_unit
+                target_unit = self._get_unit_at_level(unit, level_idx)
+                unit_name = target_unit.name if target_unit else ""
+
+                if unit_name not in level_to_idx:
+                    level_to_idx[unit_name] = len(level_to_idx)
+                idx = level_to_idx[unit_name]
+                people_by_level[idx].append(i)
+
+            # Convert to flattened arrays for Numba
+            self._geo_level_data[level_name] = self._flatten_groups(people_by_level)
+            level_counts[level_name] = len(level_to_idx)
 
         # Venue indices
         venue_to_idx = {}
@@ -266,13 +265,36 @@ class RelationshipBuilder:
         # Dummy subset array (subset filtering not supported with multiple venues)
         self._person_subset = np.zeros(n_people, dtype=np.int16)
 
-        # Convert to flattened arrays for Numba (CSR-like format)
-        self._sgu_data = self._flatten_groups(people_by_sgu)
-        self._mgu_data = self._flatten_groups(people_by_mgu)
+        # Convert venue data to flattened arrays for Numba
         self._venue_data = self._flatten_groups(people_by_venue)
 
-        logger.info(f"Arrays built: {n_people:,} people, {len(sgu_to_idx)} SGUs, "
-                   f"{len(mgu_to_idx)} MGUs, {len(venue_to_idx)} venues")
+        # Log summary
+        level_summary = ", ".join([f"{len(self._geo_level_data[l][0])} {l}s" for l in geo_levels])
+        logger.info(f"Arrays built: {n_people:,} people, {level_summary}, {len(venue_to_idx)} venues")
+
+    def _get_unit_at_level(self, unit, target_level_idx: int):
+        """
+        Navigate up the hierarchy to find the unit at a specific level.
+
+        Args:
+            unit: Starting geographical unit (most granular level)
+            target_level_idx: Index into geography.levels (0 = most granular)
+
+        Returns:
+            GeographicalUnit at the target level, or None
+        """
+        if unit is None:
+            return None
+
+        # Level 0 is the most granular (person's direct unit)
+        current = unit
+        current_level = 0
+
+        while current_level < target_level_idx and current is not None:
+            current = current.parent
+            current_level += 1
+
+        return current
 
     def _flatten_groups(self, groups_dict):
         """Convert dict of lists to CSR-like format for Numba."""
@@ -392,21 +414,25 @@ class RelationshipBuilder:
                     all_connections, current_counts, connection_counts,
                     weight_fraction, age_range, require_same_subset, False
                 )
-            elif pool_type == 'geographic':
-                level = source['pool']['level']
-                if level == 'sgu':
-                    starts, ends, people_flat = self._sgu_data
-                elif level == 'mgu':
-                    starts, ends, people_flat = self._mgu_data
-                else:
-                    continue
+            elif pool_type.startswith('geographic'):
+                # Handle all geographic pool types:
+                # - "geographic" with level specified
+                # - "geographic_county", "geographic_country", etc. with level specified
+                level = source['pool'].get('level')
 
-                _process_all_groups_numba(
-                    starts, ends, people_flat,
-                    self._ages, self._person_subset,
-                    all_connections, current_counts, connection_counts,
-                    weight_fraction, age_range, False, True
-                )
+                if level and level in self._geo_level_data:
+                    starts, ends, people_flat = self._geo_level_data[level]
+                    _process_all_groups_numba(
+                        starts, ends, people_flat,
+                        self._ages, self._person_subset,
+                        all_connections, current_counts, connection_counts,
+                        weight_fraction, age_range, False, True
+                    )
+                else:
+                    available_levels = list(self._geo_level_data.keys())
+                    logger.warning(f"    Unknown geographic level '{level}'. "
+                                   f"Available levels: {available_levels}. Skipping source.")
+                    continue
 
             # Show progress after each source
             connections_so_far = int(current_counts.sum())

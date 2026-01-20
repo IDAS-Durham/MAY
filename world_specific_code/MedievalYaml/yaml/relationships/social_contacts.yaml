@@ -62,7 +62,7 @@ sources:
   # ----------------------------------------
   # People living in the same Small Geographical Unit
   - name: "geographic_area"
-    weight: 0.9  # 30% of connections from here
+    weight: 0.8  # 80% of connections from here
 
     pool:
       type: "geographic"

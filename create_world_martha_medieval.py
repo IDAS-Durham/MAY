@@ -17,7 +17,30 @@ from debug_output import export_venue_allocations, export_people, print_world_ex
 from check_multiple_jobs import analyze_multiple_jobs
 
 
-def build_relationships(relationship_config):
+from may.social_networks import *
+
+def build_social_network(world):
+    """
+    Build a social network using a clustered graph.
+
+    Do this for the smallest geographic area first. 
+    """
+    geography = world.geography
+    # Go through all geo units
+    for geo_unit in geography.units_by_level[geography.levels[0]]:
+        people = geo_unit.people
+    
+        relationships = build_graph_relationships(
+            people,
+            avg_connections=6,
+            clustering_level=0.5,
+            storage_key=f"contacts_0.5",
+            store=True
+        )
+
+
+    
+def build_relationships(world, relationship_config):
     logger.info("")
     logger.info("=" * 60)
     logger.info("RELATIONSHIP PIPELINE")
@@ -265,8 +288,9 @@ def main():
     # ========================================
     relationship_config = config.get("relationship_pipeline", {})
 
-    if relationship_config.get("enabled", False):
-        build_relationships(relationship_config)
+    if relationship_config.get("enabled", True):
+        logger.info("Building Relationships")
+        build_relationships(world, relationship_config)
 
     logger.info("")
     logger.info("=" * 60)
