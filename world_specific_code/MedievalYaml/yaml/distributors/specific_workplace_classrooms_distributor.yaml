@@ -1,0 +1,168 @@
+# ============================================================================
+# Specific Workplace Distributor - Classrooms (P Sector)
+# ============================================================================
+# This distributor allocates education sector (P) workers to classrooms.
+# Access via: person.activity_map['primary_activity'] -> classroom venue
+#
+# Principles:
+# - Sector-specific allocation (only P workers)
+# - Location-based (uses workplace_sgu for geographical matching)
+# - Fixed capacity: 1 teacher per classroom
+# - Runs AFTER other education allocations
+# ============================================================================
+
+# ============================================================================
+# BASIC INFO
+# ============================================================================
+distributor_name: "specific_workplace_classrooms_distributor"
+venue_type: "classroom"
+description: "Distribute education sector (P) workers to classrooms (1 per classroom)"
+
+# Activity mapping: This allocation sets the person's activity_map
+# Access: person.activity_map['primary_activity'] will return the classroom venue object
+activity_map_key: "primary_activity"
+
+# Subset to add workers to
+subset_key: "worker"
+
+# ============================================================================
+# ELIGIBILITY: Who can be allocated?
+# ============================================================================
+
+eligibility:
+
+  require_unassigned: true
+
+  global_filters:
+    - attribute: "age"
+      type: "numerical"
+      description: "Only consider working-age people"
+      min: 18
+      max: 64
+
+    - attribute: "properties.workplace_sgu"
+      type: "categorical"
+      description: "Geographical unit name for where they are supposed to work"
+
+    - attribute: "properties.work_sector"
+      type: "categorical"
+      description: "Only P (Education) sector workers"
+      values: ["P"]
+
+    - attribute: "residence.type"
+      type: "categorical"
+      description: "Exclude people in care homes, prisons, and student dorms"
+      values: ["household"]
+
+  attributes:
+    - name: "work_sector"
+      type: "categorical"
+      description: "Person's work_sector (from properties) should be P (Education)"
+
+      # Only P sector workers
+      matching_rules:
+        "P": ["P"]
+
+      # Case sensitivity
+      case_sensitive: false
+
+# ============================================================================
+# VENUE SELECTION: How to pick eligible venues?
+# ============================================================================
+
+venue_selection:
+  # Use geographical hierarchy matching
+  # Person's workplace_location (SGU) → Classroom's geo_unit (typically SGU or MGU)
+  consider_by: "geo_unit"
+
+  # Classrooms inherit geo_unit from parent school (typically SGU or MGU)
+  venue_geo_level: "SGU"
+
+  # Use workplace_sgu instead of geographical_unit (residence)
+  # This matches people to classrooms near their WORK location, not home
+  person_location_attribute: "properties.workplace_sgu"
+
+  # Batch at SGU level (workplace) for better performance
+  batch_geo_level: "SGU"
+
+  # Only consider classrooms in loaded geography with capacity
+  filter_by_geography: true
+  respect_capacity: true
+
+# ============================================================================
+# ALLOCATION STRATEGY: How to assign person to venue?
+# ============================================================================
+
+allocation:
+  # Allocation strategy
+  strategy: "random"  # Randomly pick from eligible classrooms
+
+  # Fixed capacity: 1 teacher per classroom
+  fixed_capacity: 1
+
+  track_capacity: true
+  when_full: "exclude"  # Remove full classrooms from options
+
+  # Batch processing for performance
+  batch_by: "geo_unit"
+
+# ============================================================================
+# EXECUTION SETTINGS
+# ============================================================================
+
+settings:
+  # Execution order (higher = earlier)
+  # Run after other education-specific allocations but before company
+  priority: 3
+
+  # Limit number of allocations (null = no limit)
+  max_allocations: null
+
+  # Random seed for reproducibility
+  random_seed: null
+
+  # Logging
+  verbose: true
+  log_summary: true
+  debug: false
+
+# ============================================================================
+# FALLBACK BEHAVIOR
+# ============================================================================
+
+fallback:
+  strategy: "skip"  # Skip if no matching classrooms found
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# ALLOCATION LOGIC:
+#
+# 1. Filter people by:
+#    - Working age (18-64)
+#    - Has workplace_sgu assigned
+#    - Work sector = P (Education)
+#    - Lives in household (not communal residence)
+#    - NOT already assigned (catches P workers who weren't assigned elsewhere)
+#
+# 2. For each P worker:
+#    - Find all classrooms in their workplace area (workplace_sgu)
+#    - Each classroom has fixed capacity of 1 teacher
+#    - Randomly select one classroom from eligible options
+#
+# 3. Track capacity:
+#    - Fixed capacity of 1 teacher per classroom
+#    - Exclude classrooms when full (already has 1 teacher)
+#
+# 4. Fallback:
+#    - If no suitable classrooms found, skip (person remains unassigned)
+#    - They will go to company_distributor as fallback
+#
+# CLASSROOM STRUCTURE:
+# - Classrooms are child venues of schools
+# - Each classroom has fixed capacity for 1 teacher
+# - Classrooms inherit geo_unit from parent school
+# - Access via person.activity_map['primary_activity']
+#
+# ============================================================================
