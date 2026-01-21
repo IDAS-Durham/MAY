@@ -8,6 +8,7 @@
 #
 # Example: If a company has 150 employees, and max_capacity is 50,
 #          this will create 3 offices (50 + 50 + 50).
+#          If a company has 5 employees, it will create 1 office with 5 employees.
 
 parent_venue_type: company    # Parent venues to process
 child_venue_type: office      # Type of child venues to create
@@ -20,7 +21,7 @@ group_by_attribute: null
 max_capacity: 50
 
 # Minimum employees needed to create an office
-min_capacity: 10
+min_capacity: 1
 
 # Properties to add to each created office
 child_properties:

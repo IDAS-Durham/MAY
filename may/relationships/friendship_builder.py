@@ -1,8 +1,6 @@
 """
-Generic relationship builder for creating networks between agents.
+Friendship builder for creating friendship networks between agents.
 
-Fully configurable via YAML - no hardcoded relationship types.
-Optimized for 60M+ agents using Numba JIT compilation.
 """
 
 import logging
@@ -12,7 +10,7 @@ import yaml
 from collections import defaultdict
 from typing import Any, Optional
 
-logger = logging.getLogger("relationships")
+logger = logging.getLogger("friendships")
 
 
 # ============================================================================
@@ -177,7 +175,7 @@ def _process_all_groups_numba(group_starts, group_ends, group_people_flat,
 # RELATIONSHIP BUILDER CLASS
 # ============================================================================
 
-class RelationshipBuilder:
+class FriendshipBuilder:
     """
     Builds configurable relationship networks between people.
 

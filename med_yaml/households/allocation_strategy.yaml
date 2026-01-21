@@ -1,0 +1,91 @@
+# Unified Allocation Strategy Configuration
+#
+# This file defines the complete allocation order for both households and venues.
+# Steps are executed sequentially in the order defined here.
+
+enabled: true
+
+# =============================================
+# ALLOCATION STEPS
+# =============================================
+# Steps are executed in order. Each step can be either:
+#   - type: "household" - Allocate people to households
+#   - type: "venue" - Allocate people to venues
+#
+# The system automatically handles:
+#   - Marking people as allocated
+#   - Refreshing pools between steps
+#   - Tracking statistics
+
+steps:
+
+  # ---------------------------------------------
+  # WAVE 1: NUCLEAR FAMILIES
+  # ---------------------------------------------
+  - name: "Adults with children"
+    type: "household"
+    description: "Primary medieval family structure: Couple + Kid"
+    rule: "Nuclear Family"
+    
+    patterns:
+      - pattern: ">=1 >=0 >=0"     # The broad pattern from CSV
+        assumption: "1 0 2"        # Force 1 Kid, 2 Adults
+    
+    max_households: null
+    refresh_pools: true
+    enable_demotion: false         # Force the assumption to be met
+
+  # ---------------------------------------------
+  # WAVE 2: ADULT COUPLES
+  # ---------------------------------------------
+  - name: "Adults without children"
+    type: "household"
+    description: "Adult couples without children"
+    rule: "Medieval Couple"
+
+    patterns:
+      - pattern: "0 >=0 >=0"
+        assumption: "0 0 2"
+    
+    max_households: null
+    refresh_pools: false
+    enable_demotion: true
+
+  # ---------------------------------------------
+  - name: "Excess Kids"
+    type: "household_excess"
+    refresh_pools: false
+    target_patterns:
+      - ">=1 >=0 >=0"
+    add_category: "Kids"
+    add_distribution:
+      type: "poisson"
+      mean: 4
+      min: 0     
+      max: 10 
+
+  - name: "Excess Young Adults"
+    type: "household_excess"
+    refresh_pools: false
+    target_patterns:
+      - ">=1 >=0 >=0"
+      - "0 >=0 >=0"
+    add_category: "Young Adults"
+    add_distribution:
+      type: "poisson"
+      mean: 2
+      min: 0     
+      max: 10 
+
+  - name: "Excess Adults"
+    type: "household_excess"
+    refresh_pools: false
+    target_patterns:
+      - ">=1 >=0 >=0"
+      - "0 >=0 >=0"
+    add_category: "Adults"
+    add_distribution:
+      type: "poisson"
+      mean: 2
+      min: 0     
+      max: 4 

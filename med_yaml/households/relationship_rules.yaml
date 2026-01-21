@@ -1,0 +1,125 @@
+# Relationship Rules Configuration
+#
+# Pattern-based relationship rules for medieval households.
+
+enabled: true
+
+# =============================================
+# SELECTION STRATEGY
+# =============================================
+selection_strategy:
+  max_attempts: 10
+  use_best_candidate: true
+  penalty_mode: "squared"
+  log_violations: true
+  log_best_candidates: true
+
+  # Backtracking: Retry with different first-role selection before demotion
+  backtracking:
+    enabled: true               # Enable backtracking before demotion
+    max_backtracks: 3           # Max backtrack attempts before falling back to demotion
+    strategy: "first_role"      # Always backtrack to first role when a later role fails
+    log_backtracks: true        # Log backtracking attempts
+    avoid_duplicates: true      # Don't retry same first-role person/people
+
+# =============================================
+# STATISTICS
+# =============================================
+track_statistics: true
+
+# =============================================
+# PATTERN-BASED RELATIONSHIP RULES
+# =============================================
+
+rules:
+  # =============================================
+  # MEDIEVAL NUCLEAR FAMILY
+  # =============================================
+  # Target: 1 Kid, 2 Adults
+  # Enforces:
+  # - 14-50 yr age gap between Parent and Child
+  # - Romantic couple matching for the two Adults
+  # =============================================
+  - name: "Nuclear Family"
+    patterns:
+      - ">=1 >=0 >=0"  # Assumption: 1 Kid, 0 YA, 2 Adults
+
+    roles:
+      child:
+        categories: ["Kids"]
+        count: 1
+      parents:
+        categories: ["Adults"]
+        count: 2
+
+    selection_order:
+      - child
+      - parents
+
+    constraints:
+      # Parents must be 14-50 years older than the child
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "parents"
+        role_2: "child"
+        min_difference: 14
+        max_difference: 50
+        preferred_distribution:
+          type: "normal"
+          mean: 28
+          std: 6
+          tolerance: 10
+
+      # The two parents must be a compatible couple
+      - type: "pair_matching"
+        role: "parents"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.00  # Mostly heterosexual for medieval context
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 2.0
+          std_difference: 4.0
+          max_absolute_difference: 15
+        creates_romantic_couple: true
+
+  # =============================================
+  # MEDIEVAL COUPLE (No kids)
+  # =============================================
+  - name: "Medieval Couple"
+    patterns:
+      - "0 >=0 >=0"
+
+    roles:
+      partners:
+        categories: ["Adults"]
+        count: 2
+
+    selection_order:
+      - partners
+
+    constraints:
+      - type: "pair_matching"
+        role: "partners"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.00
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 2.0
+          std_difference: 4.0
+          max_absolute_difference: 15
+        creates_romantic_couple: true
+
+  # =============================================
+  # SINGLE ADULT
+  # =============================================
+  - name: "Single Adult"
+    patterns:
+      - "0 >=0 >=0"
+    roles:
+      solo:
+        categories: ["Adults"]
+        count: 1
+    selection_order:
+      - solo

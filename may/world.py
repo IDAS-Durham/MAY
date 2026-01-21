@@ -293,12 +293,12 @@ def setup_households(geo, population, venues, config):
         execute_allocation_strategy(population, venues, household_distributor, strategy_file)
 
     # Export household allocations
-    #export_file = household_config.get("export_file", "household_allocations.csv")
-    #household_distributor.export_households_to_csv(export_file)
+    export_file = household_config.get("export_file", "household_allocations.csv")
+    household_distributor.export_households_to_csv(export_file)
 
     # Export venue allocations
     venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
-    #venues.export_venues_to_csv(venue_export_file)
+    venues.export_venues_to_csv(venue_export_file)
 
     # Show where households are located and examples
     logger.info("")

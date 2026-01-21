@@ -9,17 +9,7 @@ population:
   # id, age, sex, geographical_unit are ALWAYS serialized
 
   # Additional properties to include from person.properties dict
-  properties:
-    - ethnicity           # For differential susceptibility modeling
-    - comorbidities       # For disease severity modeling
-    # - work_sector       # Uncomment if needed
-    - work_mode           # Uncomment if needed
-    - friendships         # Relationship network for disease modeling
-
-    # Romantic relationships (serialized as JSON strings for dicts)
-    - sexual_orientation  # "heterosexual", "homosexual", "bisexual"
-    - romantic_partners   # {exclusive: [ids], non_exclusive: [ids]}
-    - relationship_status # {type: "exclusive"|"non_exclusive"|"no_partner", consensual: bool}
+  properties: []
 
 # =============================================
 # GEOGRAPHY
@@ -56,57 +46,6 @@ venues:
       properties:
         - capacity           # Number of residents (from actual allocation)
         - original_pattern   # Household composition pattern
-        # - ethnicity        # Uncomment if households have ethnicity
-
-    school:
-      properties:
-        - Gender             # "Mixed", "Boys", "Girls" - affects contact patterns
-        # - SchoolCapacity   # Don't need - use actual student count
-        # - StatutoryLowAge  # Don't need - was for allocation only
-        # - StatutoryHighAge # Don't need - was for allocation only
-
-    university:
-      properties: []         # Keep minimal - just core attributes
-
-    care_home:
-      properties:
-        # Don't include capacity numbers - use actual resident counts
-        # Don't include slot capacities - can derive from residents
-        []
-
-    company:
-      properties:
-        - work_sector        # "A", "Q", etc. - might affect workplace dynamics
-        # - employee_count   # Don't need - use actual worker count
-
-    boarding_school:
-      properties:
-        - Gender             # If relevant for contact modeling
-
-    student_dorms:
-      properties: []
-
-    cinema:
-      properties: []
-
-    grocery:
-      properties: []
-
-    gym:
-      properties: []
-
-    pub:
-      properties: []
-
-    # Child venues (classrooms, offices, etc.)
-    classroom:
-      properties:
-        - capacity           # Max capacity for the room
-
-    office:
-      properties:
-        - capacity
-
 # =============================================
 # SUBSETS
 # =============================================

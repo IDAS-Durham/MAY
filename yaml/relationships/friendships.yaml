@@ -1,5 +1,5 @@
 # ============================================================================
-# Relationship Configuration - Social Contacts
+# Relationship Configuration - Friendships
 # ============================================================================
 # This configuration defines a generic relationship network for disease modeling.
 #
@@ -7,11 +7,11 @@
 #   1. Shared activity venues (same role: student-student, worker-worker)
 #   2. Geographic proximity (same SGU or MGU)
 #
-# All terms are generic - you can rename "social_contacts" to anything.
+# All terms are generic - you can rename "friendships" to anything.
 # ============================================================================
 
 # Relationship type name (user-defined, used as storage key)
-name: "social_contacts"
+name: "friendships"
 
 # ============================================================================
 # Connection Count Configuration
@@ -99,4 +99,4 @@ sources:
 
 storage:
   # Key name for storing connections in person.properties
-  key: "social_contacts"
+  key: "friendships"

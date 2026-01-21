@@ -194,12 +194,30 @@ class HouseholdDistributor:
         logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
 
     def _categorize_person(self, person: Person) -> int:
-        """Get the category index for a person based on their attributes."""
+        """Get the category index for a person based on their attributes. (Optimized)"""
+        p_props = person.properties
         for idx, cat in enumerate(self.categories):
-            if cat.matches(person):
-                return idx
-        # Shouldn't happen, but default to last category
-        return len(self.categories) - 1
+            # Inline expansion of matches() logic for speed in hot path
+            # Category.attribute is the key we check
+            attr = cat.attribute
+            val = getattr(person, attr, None)
+            if val is None:
+                val = p_props.get(attr)
+            
+            if val is None:
+                continue
+
+            if cat.type == 'numerical':
+                if (cat.min_value is None or val >= cat.min_value) and \
+                   (cat.max_value is None or val <= cat.max_value):
+                    return idx
+            elif cat.type == 'categorical':
+                if cat.allowed_values is None or val in cat.allowed_values:
+                    return idx
+        
+    def _get_person_category_idx(self, person: Person) -> int:
+        """Helper to get category index for a person."""
+        return self._categorize_person(person)
 
     def _prepare_person_pools(self, refresh: bool = False):
         """
@@ -356,10 +374,18 @@ class HouseholdDistributor:
         if not all_selected:
             return (None, None)
 
-        # Remove selected people from pools
+        # Remove selected people from pools (Optimized for reuse)
         selected_ids = {p.id for p in all_selected}
-        for cat_idx in range(len(self.categories)):
-            pools[cat_idx] = [p for p in pools[cat_idx] if p.id not in selected_ids]
+        self.allocated_people.update(selected_ids)
+        
+        for p in all_selected:
+            cat_idx = self._get_person_category_idx(p)
+            # Efficiently remove from pool (assuming people list is relatively small per SGU)
+            # Using list.remove is O(N) but only done for the few selected people
+            try:
+                pools[cat_idx].remove(p)
+            except ValueError:
+                pass # Already removed or not in pool (shouldn't happen)
 
         # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)
@@ -723,6 +749,13 @@ class HouseholdDistributor:
                     if show_detailed_logs:
                         logger.debug(f"  ✓ Selected: {pair[0]} and {pair[1]}")
                         logger.debug("")
+
+                    # Check if this pair should be flagged as a romantic couple
+                    if pair_constraint.get('creates_romantic_couple', False):
+                        pair[0].properties['household_couple'] = pair[1].id
+                        pair[1].properties['household_couple'] = pair[0].id
+                        if show_detailed_logs:
+                            logger.debug(f"  ✓ Flagged as household couple for romantic relationship distribution")
 
                 elif role_count == "any":
                     # Determine count from pattern
@@ -1600,4 +1633,36 @@ class HouseholdDistributor:
         df.to_csv(output_path, index=False)
 
         logger.info(f"Exported {len(rows)} households to {output_path}")
+        return output_path
+
+    def export_unallocated_people_to_csv(self, output_file: str = "unallocated_people.csv"):
+        """
+        Export list of people who were not allocated to a CSV file.
+
+        Args:
+            output_file: Path to output CSV file
+        """
+        logger.info(f"Exporting unallocated people to {output_file}...")
+
+        rows = []
+        for person in self.population.get_all_people():
+            if person.id not in self.allocated_people:
+                row = {
+                    'person_id': person.id,
+                    'age': person.age,
+                    'sex': person.sex,
+                    'geo_unit': person.geographical_unit.name if person.geographical_unit else 'None'
+                }
+                rows.append(row)
+
+        if not rows:
+            logger.info("No unallocated people to export.")
+            return None
+
+        # Create DataFrame and export
+        df = pd.DataFrame(rows)
+        output_path = os.path.join(self.data_dir, output_file)
+        df.to_csv(output_path, index=False)
+
+        logger.info(f"Exported {len(rows)} unallocated people to {output_path}")
         return output_path
