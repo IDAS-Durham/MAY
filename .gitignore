@@ -82,9 +82,15 @@ hardcoded_ethnicity_distributor.py
 
 # pytest_cache
 .pytest_cache
-people.csv
-social_contacts.csv
-world_state.h5
+
+# Data files
+*.csv
+
 debug_*.py
-simulation_events.h5
+
+# Dummy log files
+log.txt
+
+# World files
+*.joblib
 *.h5

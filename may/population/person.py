@@ -71,7 +71,7 @@ class Person:
         self.age = age
         self.sex = sex
         self.geographical_unit = geographical_unit
-        self.activities = activities if activities is not None else []
+        self.activities = activities if activities is not None else set()
         self.properties = properties if properties is not None else {}
         # UNIFIED STRUCTURE: activity_map[activity_name][venue_type] = [subsets]
         if activity_map is None:
@@ -89,8 +89,8 @@ class Person:
         Args:
             activity (str): Name of the activity to add
         """
-        if activity not in self.activities:
-            self.activities.append(activity)
+        #if activity not in self.activities:
+        self.activities.add(activity)
 
         # Initialize activity_map with empty dict for unified structure
         # Structure: activity_map[activity_name][venue_type] = [subsets]
@@ -104,8 +104,11 @@ class Person:
         Args:
             activity (str): Name of the activity to remove
         """
-        if activity in self.activities:
-            self.activities.remove(activity)
+        #if activity in self.activities:
+        self.activities.remove(activity)
+
+    def add_activities(self, activities):
+        self.activities.update(activities)
 
     def has_activity(self, activity: str) -> bool:
         """

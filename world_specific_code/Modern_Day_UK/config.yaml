@@ -2,7 +2,7 @@
 
 geography:
   # Path to geography data files
-  data_dir: "data/geography"
+  data_dir: "world_specific_code/Modern_Day_UK/data/geography"
 
   # Define hierarchy levels (smallest to largest)
   # If not specified, defaults to ["SGU", "MGU", "LGU"]
@@ -14,7 +14,7 @@ geography:
   levels: ["SGU", "MGU", "LGU", "XLGU"]
 
   # Load all geographical units (ignores all filters below if true)
-  load_all: false
+  load_all: true
 
   # ========================================
   # FILTER - Specify which geographical units to load
@@ -38,7 +38,7 @@ geography:
 
 population:
   # Path to population data files
-  data_dir: "data/population"
+  data_dir: "world_specific_code/Modern_Day_UK/data/population"
 
   # Demographics files (matrix format: rows=geo_units, columns=ages)
   demographics_male_file: "demographics_male.csv"
@@ -51,7 +51,7 @@ population:
 
 venues:
   # Path to venue files
-  data_dir: "data/venues"
+  data_dir: "world_specific_code/Modern_Day_UK/data/venues"
 
   # Path to YAML configuration file (relative to project root or absolute path)
   config_file: "yaml/venues/venues_config.yaml"
@@ -65,7 +65,7 @@ venues:
 
 households:
   # Path to household data files
-  data_dir: "data/households"
+  data_dir: "world_specific_code/Modern_Day_UK/data/households"
 
   # Household composition data file (CSV with patterns like ">=2 >=0 2 0")
   data_file: "households.csv"
