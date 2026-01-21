@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from may.geography.geography import GeographicalUnit
     from may.world import Subset
 
+
 class Person:
     """
     Represents an individual person in the simulation.
@@ -25,7 +26,7 @@ class Person:
     """
 
     _id_counter = 0
-
+ 
     __slots__ = [
         'id',
         'age',
@@ -35,6 +36,7 @@ class Person:
         'properties',
         'activity_map',
     ]
+
 
     def __init__(
         self,
@@ -67,7 +69,6 @@ class Person:
         """
         self.id = Person._id_counter
         Person._id_counter += 1
-
         self.age = age
         self.sex = sex
         self.geographical_unit = geographical_unit
@@ -76,7 +77,7 @@ class Person:
         # UNIFIED STRUCTURE: activity_map[activity_name][venue_type] = [subsets]
         if activity_map is None:
             self.activity_map = {}
-
+       
     @classmethod
     def reset_counter(cls) -> None:
         """Reset the ID counter (useful for testing)."""
@@ -242,13 +243,27 @@ class Person:
         return (f"Person(id={self.id}, age={self.age}, sex={self.sex}, "
                 f"geographical_unit={geo_unit_name}, activities={self.activities})")
 
-    def __hash__(self) -> int:
-        """ Hash based on unique person ID """
-        return hash(self.id)
-
     def __eq__(self, other) -> bool:
-        """ Equality method """
-        for attribute in self.__slots__:
-            if getattr(self, attribute) != getattr(other, attribute):
+        """ Method to determine if two Person objects are basically equal.
+
+        Doesn't check they have the same IDs as if ID assignment is different with all
+        other attributes being equal, I'd still like this to return True / Gavin 21/Jan/26.
+        """
+        if float(self.age) != float(other.age):
+            return False
+        if self.geographical_unit != other.geographical_unit:
+            return False
+        for attr in ['sex',
+                     'activities',
+                     'properties',
+                     'activity_map',
+                     ]:
+            if getattr(self, attr) != getattr(other, attr):
                 return False
         return True
+
+    def __hash__(self) -> int:
+        """Hash based on unique ID for use in sets/dicts."""
+        return hash(self.id)
+
+
