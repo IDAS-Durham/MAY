@@ -8,7 +8,7 @@ then maps edges to relationships between Person objects.
 import logging
 from typing import Optional
 
-from .clustered_graph import create_clustered_graph
+from clustered_graph import create_clustered_graph
 from may.population.person import Person
 
 from random import sample
@@ -156,16 +156,22 @@ def build_graph_relationships(
 
 if __name__ == "__main__":
     import networkx as nx
+    import time
     
     logging.basicConfig(level=logging.INFO)
 
+    start_time = time.perf_counter()
     # Create sample population
     logger.info("Creating sample population...")
     people = [Person(age=25 + i % 50, sex='male' if i % 2 == 0 else 'female')
-              for i in range(100)]
+              for i in range(10000000)]
+
+    laptime=time.perf_counter()
+    logger.info(f"Created sample population of {len(people):,} people in {laptime-start_time:.2g} s")
 
     # Build relationships with different clustering levels
-    for clustering in [0.2, 0.5, 0.8]:
+    for clustering in [0.001, 0.1, 0.5]:
+        laptime=time.perf_counter()
         logger.info(f"\n--- Clustering level: {clustering} ---")
         relationships = build_graph_relationships(
             people,
@@ -174,10 +180,11 @@ if __name__ == "__main__":
             storage_key=f"contacts_{clustering}",
             store=True
         )
-
+        
         # Show sample relationships
         if len(people) >= 5:
             sample_people = sample(people, 5)
             for sample_person in sample_people:
                 contacts = sample_person.properties.get(f"contacts_{clustering}", [])
                 logger.info(f"Person {sample_person.id} has {len(contacts)} contacts: {contacts[:10]}...")
+        logger.info(f"Building relationships took {time.perf_counter() - laptime:.2g} s")
