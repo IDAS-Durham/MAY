@@ -102,8 +102,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="world_specific_code/Modern_Day_UK/config.yaml",
-        help="Path to configuration YAML file (default: world_specific_code/Modern_Day_UK/config.yaml)"
+        default="yaml/config.yaml",
+        help="Path to configuration YAML file (default: yaml/config.yaml)"
     )
     args = parser.parse_args()
 

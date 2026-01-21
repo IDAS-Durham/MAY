@@ -1,0 +1,230 @@
+# June Zero Configuration File
+
+geography:
+  # Path to geography data files
+  data_dir: "data/geography"
+
+  # Define hierarchy levels (smallest to largest)
+  # If not specified, defaults to ["SGU", "MGU", "LGU"]
+  # Examples:
+  #   - ["SGU", "MGU", "LGU"]           # 3 levels (default)
+  #   - ["SGU", "MGU", "LGU", "XLGU"]   # 4 levels
+  #   - ["Block", "Tract", "County"]    # Custom names
+  # Current: Output Areas -> MSOAs -> Local Authorities -> Regions
+  levels: ["SGU", "MGU", "LGU", "XLGU"]
+
+  # Load all geographical units (ignores all filters below if true)
+  load_all: false
+
+  # ========================================
+  # FILTER - Specify which geographical units to load
+  # ========================================
+
+  filter:
+    # Level to filter on: LGU, MGU, or SGU
+    # Leave as null to load all units
+    level: LGU
+
+    # Codes to filter (for small lists, comma-separated)
+    codes: ["County Durham", "Darlington"]
+
+    # Or specify a file path with codes (for large lists)
+    # File should have one code per line
+    #file: may/filters/example_mgu.txt
+
+# ========================================
+# POPULATION
+# ========================================
+
+population:
+  # Path to population data files
+  data_dir: "data/population"
+
+  # Demographics files (matrix format: rows=geo_units, columns=ages)
+  demographics_male_file: "demographics_male.csv"
+  demographics_female_file: "demographics_female.csv"
+
+
+# ========================================
+# VENUES
+# ========================================
+
+venues:
+  # Path to venue files
+  data_dir: "data/venues"
+
+  # Path to YAML configuration file (relative to project root or absolute path)
+  config_file: "yaml/venues/venues_config.yaml"
+
+  # Export file for venue allocations (automatically created after allocation)
+  export_file: "venue_allocations.csv"
+
+# ========================================
+# HOUSEHOLDS
+# ========================================
+
+households:
+  # Path to household data files
+  data_dir: "data/households"
+
+  # Household composition data file (CSV with patterns like ">=2 >=0 2 0")
+  data_file: "households.csv"
+
+  # Configuration file for age categories and demotion rules
+  config_file: "yaml/households/households_config.yaml"
+
+  # =============================================
+  # ALLOCATION MODE (choose one)
+  # =============================================
+
+  # Option 1: Unified strategy (RECOMMENDED - controls everything in one place)
+  #   - Defines both household AND venue allocations in order
+  #   - File: data/households/allocation_strategy.yaml
+  strategy_file: "yaml/households/allocation_strategy.yaml"
+
+  # Option 2: Multi-round households only (household rounds, no venue integration)
+  #   - Only household allocation rounds
+  #   - File: data/households/allocation_rounds.yaml
+  #   - Set strategy_file to null to use this
+  # rounds_file: "allocation_rounds.yaml"
+
+  # Option 3: Single-pass allocation (original simple mode)
+  #   - Set both strategy_file and rounds_file to null
+
+  # Export file for household allocations (automatically created after distribution)
+  export_file: "household_allocations.csv"
+
+# ========================================
+# ATTRIBUTES
+# ========================================
+
+attributes:
+  # Enable attribute assignment (set to false to skip)
+  enabled: true
+
+  # Sequential attribute assignment configurations
+  # Each config is applied in order (dependencies must be satisfied)
+  configs:
+    - "yaml/attributes/attribute_assignment.yaml"           # Ethnicity (household-level)
+    - "yaml/attributes/comorbidity_assignment.yaml"         # Comorbidities (person-level, depends on ethnicity)
+    - "yaml/attributes/workplace_assignment.yaml"           # Stage 1: Workplace LGU + work mode (person-level, 18-65)
+    - "yaml/attributes/workplace_sgu_assignment.yaml"       # Stage 2: Workplace SGU within LGU (depends on workplace_location)
+    - "yaml/attributes/work_sector_assignment.yaml"         # Stage 3: Work sector by LGU+Sex (depends on workplace_location, workplace_sgu)
+
+# ========================================
+# VENUE PIPELINE - Unified distributors and child creators
+# ========================================
+# NEW STYLE: Interleave distributors and child creators in any order
+# This gives you full control over the sequence of operations
+
+venue_pipeline:
+  enabled: true
+
+  steps:
+    # Step 1: Distribute students to schools
+    - type: distributor
+      config: "yaml/distributors/school_distributor.yaml"
+
+    # Step 2: Create classrooms within schools (based on student age)
+    - type: child_creator
+      config: "yaml/venue_child_creators/school_classrooms.yaml"
+
+    # Step 3: Distribute students to universities
+    - type: distributor
+      config: "yaml/distributors/university_distributor.yaml"
+
+    # Step 4: Create uni_year venues within universities (ages 18-22 individual, 23+ grouped)
+    - type: child_creator
+      config: "yaml/venue_child_creators/university_uni_years.yaml"
+
+    # Step 5: Distribute Q sector workers to hospitals
+    - type: distributor
+      config: "yaml/distributors/specific_workplace_hospitals_distributor.yaml"
+
+    # Step 6: Distribute Q sector workers to care homes
+    - type: distributor
+      config: "yaml/distributors/specific_workplace_care_homes_distributor.yaml"
+
+    # Step 7: Distribute P sector workers to schools
+    - type: distributor
+      config: "yaml/distributors/specific_workplace_classrooms_distributor.yaml"
+
+    # Step 8: Distribute workers to companies
+    - type: distributor
+      config: "yaml/distributors/company_distributor.yaml"
+
+    #- type: distributor
+    #  config: "yaml/distributors/company_distributor_2.yaml"
+
+    # Step 9: Create offices within companies
+    - type: child_creator
+      config: "yaml/venue_child_creators/company_offices.yaml"
+
+    - type: distributor
+      config: "yaml/distributors/hospital_distributor.yaml"
+
+    # Step 10: Assign leisure venue options (cinema, grocery, gym, pub)
+    - type: distributor
+      config: "yaml/distributors/multi_venue_distributor.yaml"
+
+  # Notes:
+  # - Each step runs in sequence
+  # - Distributors assign people to parent venues
+  # - Child creators create sub-venues and redistribute people
+  # - Order matters: child creators should run AFTER their parent distributor
+  # - Multi-venue distributors (like leisure) assign multiple venue options per person
+
+# ========================================
+# RELATIONSHIP PIPELINE - Build agent networks
+# ========================================
+# Build relationship networks between agents for disease modeling.
+# All relationship types are fully configurable via YAML.
+
+relationship_pipeline:
+  enabled: true
+
+  relationships:
+    # Social contacts network (for disease transmission)
+    - config: "yaml/relationships/social_contacts.yaml"
+
+  # Notes:
+  # - Each relationship config defines a different type of network
+  # - Relationships are built AFTER venue assignments (so activity_map is populated)
+  # - Connections are stored in person.properties (key defined in YAML config)
+  # - Add property names to serialization_config.yaml to include in HDF5 export
+
+# ========================================
+# EXAMPLES
+# ========================================
+
+# Example 1: Load only London LGU and all its children
+# filter:
+#   level: LGU
+#   codes: [London]
+#   file: null
+
+# Example 2: Load specific MGUs from a file (for large lists)
+# filter:
+#   level: MGU
+#   codes: []
+#   file: filters/my_mgus.txt
+
+# Example 3: Load specific MGUs inline (for small lists)
+# filter:
+#   level: MGU
+#   codes: [E02000173, E02000187, E02000414]
+#   file: null
+
+# Example 4: Load specific SGUs and their parent hierarchy
+# filter:
+#   level: SGU
+#   codes: [E00004320, E00004321, E00004326]
+#   file: null
+
+# Example 5: Load all units (set load_all to true OR set level to null)
+# load_all: true
+# OR
+# filter:
+#   level: null
+#   codes: []
+#   file: null
