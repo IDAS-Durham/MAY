@@ -25,7 +25,7 @@ class HouseholdDistributor(DistributorMultiPass):
         example_venue = self.venue_manager.venues_by_type[self.venue_type][0]
         self.subset_distributor = HouseholdSubsetDistributor(
             self.venue_type,
-            ['kids','independent children','adults','elderly']
+            ['kids','youth','adults']
         )
         self._venue_has_membership_capacity_by_subset = defaultdict(
             lambda: [True]*self.subset_distributor.n_subsets
@@ -128,12 +128,12 @@ class HouseholdDistributor(DistributorMultiPass):
         # PART 1: Set capacity based on composition
         # ========================================
         match composition:
-            case 'Solo Adult':
-                if venue.subsets['adults'].num_members >= 1 or venue.subsets['elderly'].num_members >= 1:
+            case 'Adults with kids':
+                if venue.subsets['adults'].num_members >= 1:
                     self._venue_has_membership_capacity_by_subset[venue.id] = [False, False, False]
                     composition_full = True
                 else:
-                    self._venue_has_membership_capacity_by_subset[venue.id] = [False, True, True]
+                    self._venue_has_membership_capacity_by_subset[venue.id] = [False, False, True]
 
             case 'Adult Couple':
                 if venue.subsets['adults'].num_members + venue.subsets['elderly'].num_members >= 2:

@@ -82,6 +82,7 @@ hardcoded_ethnicity_distributor.py
 
 # pytest_cache
 .pytest_cache
+<<<<<<< HEAD
 
 # Data files
 *.csv
@@ -93,4 +94,6 @@ log.txt
 
 # World files
 *.joblib
+
+# h5 files
 *.h5

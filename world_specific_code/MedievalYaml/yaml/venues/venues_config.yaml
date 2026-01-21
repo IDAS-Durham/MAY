@@ -1,0 +1,28 @@
+# Venue Configuration for June Zero 
+#
+# This file defines what venue types to load and how to load them.
+# Users can easily add, remove, or configure venue types by editing this file.
+
+# Venue types to load
+# Each venue type can specify:
+#   - enabled: Whether to load this venue type (default: true)
+#   - filename: CSV file to load from (default: {venue_type}s.csv)
+#   - is_residence: Whether people live at this venue type (default: false)
+#   - properties: Optional metadata about this venue type
+
+venue_types:
+  # =============================================
+  # SPECIAL: Household (created dynamically)
+  # =============================================
+  # This venue type is NOT loaded from CSV - it's created by the household
+  # distributor during world creation. We list it here only to mark it as
+  # a residence type.
+  household:
+    enabled: false  # Not loaded from CSV (created dynamically)
+    is_residence: true  # People live here
+    description: "Residential households (created by household distributor)"
+    
+# Global venue settings
+settings:
+  # Filter venues to only include those in loaded geographical units
+  filter_by_geography: true

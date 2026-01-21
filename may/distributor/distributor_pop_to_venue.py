@@ -188,8 +188,14 @@ class Distributor:
                 else:
                     # Assign venue and subset as the person's location and subset for the specified activity.
                     subset = trial_venue.subsets[trial_subset_name]
-                    person.activity_map[activity].append(subset)
-                    person.properties['housed']=True
+                    venue_type = trial_venue.type
+                    # Initialize nested dict structure: activity_map[activity][venue_type] = [subsets]
+                    if activity not in person.activity_map:
+                        person.activity_map[activity] = {}
+                    if venue_type not in person.activity_map[activity]:
+                        person.activity_map[activity][venue_type] = []
+                    person.activity_map[activity][venue_type].append(subset)
+                    person.properties['housed'] = True
                     subset.add_member(person)
                     self._update_venue_membership_capacity(trial_venue_index,
                                                            trial_venue,

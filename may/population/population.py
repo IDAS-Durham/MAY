@@ -68,6 +68,7 @@ class PopulationManager:
         Args:
             male_file (str): Filename for male demographics
             female_file (str): Filename for female demographics
+        
         """
         male_path = os.path.join(self.data_dir, male_file)
         female_path = os.path.join(self.data_dir, female_file)
@@ -100,11 +101,19 @@ class PopulationManager:
         if 'geo_unit' not in male_df.columns or 'geo_unit' not in female_df.columns:
             raise ValueError("Demographics files must have 'geo_unit' column")
 
+
+        # Ignore index column if it exists
+        for _df in [male_df, female_df]:
+            if 'index' in _df.columns:
+                _df.drop(columns=['index'], inplace=True)
+        
+
         # Filter to only geo units in our geography BEFORE processing
         male_df = male_df[male_df['geo_unit'].isin(valid_geo_units)]
         female_df = female_df[female_df['geo_unit'].isin(valid_geo_units)]
 
         logger.info(f"Filtered to {len(male_df)} male geo units and {len(female_df)} female geo units")
+
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
         # Note: Using a regular function instead of lambda for pickle compatibility

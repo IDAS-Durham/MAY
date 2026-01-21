@@ -87,10 +87,11 @@ class HouseholdDistributor:
         self.pools_prepared: bool = False
 
         # Initialize relationship rules validator
-        # Try yaml/households/ first, then data_dir
-        if os.path.exists("yaml/households/relationship_rules.yaml"):
-            rules_config_path = "yaml/households/relationship_rules.yaml"
-        else:
+        # Look for relationship_rules.yaml in the same directory as config_file
+        config_dir = os.path.dirname(config_path)
+        rules_config_path = os.path.join(config_dir, "relationship_rules.yaml")
+        if not os.path.exists(rules_config_path):
+            # Fallback to data_dir if not found next to config
             rules_config_path = os.path.join(data_dir, "relationship_rules.yaml")
 
         self.relationship_rules = RelationshipRulesValidator(
@@ -218,8 +219,9 @@ class HouseholdDistributor:
             # Clear existing pools for refresh
             self.person_pool_by_geo_unit = {}
 
-        # Get all SGU units
-        sgu_units = self.geography.get_units_by_level("SGU")
+        # Get all units at the smallest geographical level
+        smallest_level = self.geography.levels[0]
+        sgu_units = self.geography.get_units_by_level(smallest_level)
         total_units = len(sgu_units)
 
         # Progress indicator configuration

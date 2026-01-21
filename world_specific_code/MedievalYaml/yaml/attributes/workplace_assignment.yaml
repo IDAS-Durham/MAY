@@ -1,0 +1,174 @@
+# ============================================================================
+# Workplace Location Assignment Configuration
+# ============================================================================
+# Assigns geographical workplace location and work mode to workers based on
+# commuting flow patterns.
+#
+# Assignment Level: person
+# - Assigns both workplace_location (LGU code) and work_mode (From_Home/Hybrid/Normal)
+# - Based on origin-destination commuting likelihood matrices (LGU to LGU)
+#
+# Dependencies: None (this runs FIRST for workers, before sector assignment)
+# ============================================================================
+
+attribute:
+  name: "workplace_location"
+  description: "Assigns geographical location (LGU) where person works and work mode"
+  data_type: "categorical"
+  assignment_level: "person"
+
+# ============================================================================
+# Additional Attributes Assigned
+# ============================================================================
+# This configuration assigns TWO attributes:
+# 1. workplace_location (LGU code where person works)
+# 2. work_mode (From_Home, Hybrid, or Normal commute)
+
+additional_attributes:
+  - name: "work_mode"
+    description: "Work mode: From_Home, Hybrid, or Normal commute"
+    data_type: "categorical"
+
+# ============================================================================
+# Filters - Only assign to working-age people (18-65)
+# NOTE: We assign workplace to all working-age adults (potential workforce)
+#       The actual 'work' activity should be assigned separately based on employment rates
+# ============================================================================
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    description: "Working age population"
+    numerical:
+      min: 18
+      max: 64
+
+# ============================================================================
+# Data Sources
+# ============================================================================
+data_sources:
+  commuting_flows:
+    type: "csv_lookup"
+    description: "Commuting likelihood from residence to workplace (LGU to LGU)"
+
+    files:
+      - path: "data/activities/work/EW-work-destination-likelihood.csv"
+
+        # Special output format: origin-destination matrix
+        output_format: "origin_destination_matrix"
+
+        # Geographic unit levels for matching (configurable!)
+        origin_level: "LGU"       # Match person's residence at LGU level
+        destination_level: "LGU"  # Destination codes are LGU codes
+
+        # Key column: origin LGU (person's residence LGU NAME)
+        key_columns:
+          LGU_origin_name:
+            attribute: "geographical_unit"
+            type: "ancestor_lookup"  # Traverse hierarchy to get LGU
+            level: "LGU"
+            property: "name"  # Use LGU name for matching
+
+        # Column definitions for O-D matrix
+        destination_column: "LGU_destination_name"  # Use NAME for easy matching with work data
+        likelihood_column: "Likelihood"
+        metadata_columns:
+          work_mode: "Place of work indicator"
+          destination_code: "LGU_destination_code"  # Keep code as metadata if needed
+          count: "Count"
+
+        # Filter out special destination codes
+        exclude_destinations:
+          - "888888888"  # Offshore Installation
+          - "999999999"  # Outside UK
+
+    fallback: "local_work"
+
+  # Fallback: Work locally in same area
+  local_work:
+    type: "constant"
+    description: "Fallback: work in same LGU as residence"
+    values:
+      workplace_location: "person.geographical_unit.lgu"  # Get person's LGU
+      work_mode: "Normal"
+
+# ============================================================================
+# Assignment Rules (Person-Level)
+# ============================================================================
+assignment_rules:
+  person:
+    description: "Assign workplace location and work mode based on commuting flows"
+
+    rules:
+      - description: "Sample destination from commuting flow matrix"
+        priority: 1
+
+        assignment:
+          # New strategy: samples from O-D matrix with work mode
+          strategy: "commuting_likelihood"
+          data_source: "commuting_flows"
+
+          # Assigns both workplace_location and work_mode
+          outputs:
+            workplace_location: "destination"
+            work_mode: "work_mode"
+
+          # Context: person's residence SGU
+          context:
+            origin: "person.geographical_unit"
+
+          fallback:
+            strategy: "constant"
+            data_source: "local_work"
+
+# ============================================================================
+# Settings
+# ============================================================================
+settings:
+  random_seed: null
+  normalize_probabilities: true
+  cache_lookups: true
+
+  error_handling:
+    missing_geo_unit: "use_fallback"
+    missing_lookup_data: "use_fallback"
+    person_without_work_sector: "skip_person"
+    person_without_work_activity: "skip_person"
+    missing_filter_activity: "skip_person"
+
+  logging:
+    level: "INFO"
+    detailed_assignment_logging: false
+    show_samples: true
+    sample_size: 10
+    show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
+
+
+# ============================================================================
+# Work Mode Labels (for reference)
+# ============================================================================
+work_mode_labels:
+  From_Home: "Works from home (no commute)"
+  Hybrid: "Hybrid work (some days at workplace, some at home)"
+  Normal: "Normal commute to workplace"
+
+# ============================================================================
+# Notes
+# ============================================================================
+# The commuting flow data includes:
+# - Origin SGU (person's residence)
+# - Destination SGU (workplace location)
+# - Work mode (From_Home, Hybrid, Normal)
+# - Likelihood (probability of this origin-destination-mode combination)
+#
+# The assignment process:
+# 1. Look up all destination options for person's origin SGU
+# 2. Sample a (destination, work_mode) pair weighted by likelihood
+# 3. Assign workplace_location = destination SGU
+# 4. Assign work_mode = sampled work mode
+#
+# Special cases:
+# - From_Home: workplace_location will be set to destination SGU from data
+#              (which should be same as origin, but we use the data value)
+# - Hybrid: workplace_location is physical workplace (commute some days)
+# - Normal: workplace_location is daily workplace

@@ -70,8 +70,8 @@ class HouseholdManager(VenueManager):
                             properties = {'composition':composition},
                         )
                         venue.subsets = {'kids' : Subset(venue, 0, 'kids'),
-                                         'adults' : Subset(venue, 1, 'adults'),
-                                         'elderly' : Subset(venue, 2, 'elderly')}
+                                         'youth' : Subset(venue, 1, 'youth'),
+                                         'adults' : Subset(venue, 2, 'adults')}
                         self.add_venue(venue, geo_unit)
                         venues_created += 1
 

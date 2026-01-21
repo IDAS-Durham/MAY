@@ -14,7 +14,7 @@ class Geography:
         self.units_by_id = {}     # All units by ID: {id: GeographicalUnit}
 
         # Define hierarchy levels (most granular to least granular)
-        self.levels = levels or ["SGU", "MGU", "LGU"]
+        self.levels = levels if levels is not None else ["SGU", "MGU", "LGU"]
 
         # Separate lookups by level for efficiency
         self.units_by_level = {level: {} for level in self.levels}
