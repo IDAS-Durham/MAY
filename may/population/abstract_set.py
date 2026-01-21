@@ -32,7 +32,7 @@ class AbstractSet(ABC):
     @property
     def size(self) -> int:
         """ """
-        return len(self.people)
+        return len(self.members)
 
     @property
     def contains_people(self) -> bool:

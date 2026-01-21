@@ -94,12 +94,12 @@ class Subset(AbstractSet):
         return len(self.people_present)
 
     def __str__(self):
-        return "Class : {} , subset_name : {}, id : {}, venue.id : {}, venue_name : {}, subset_membership : {}, members_present : {}".format(type(self), self.subset_name, self.id, self.venue.id, self.venue.name, len(self.members), len(self))
+        return "Class : {} , subset_name : {}, venue.id : {}, venue_name : {}, subset_membership : {}, members_present : {}".format(type(self), self.subset_name, self.venue.id, self.venue.name, len(self.members), len(self))
     
     def __eq__(self, other):
-        if not self.size() == other.size():
+        if not self.size == other.size:            
             return False
-        if not all(self.spec() == other.spec()):
+        if not self.spec == other.spec:
             return False
         if not self.venue == other.venue:
             return False
