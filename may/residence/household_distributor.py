@@ -1632,3 +1632,35 @@ class HouseholdDistributor:
 
         logger.info(f"Exported {len(rows)} households to {output_path}")
         return output_path
+
+    def export_unallocated_people_to_csv(self, output_file: str = "unallocated_people.csv"):
+        """
+        Export list of people who were not allocated to a CSV file.
+
+        Args:
+            output_file: Path to output CSV file
+        """
+        logger.info(f"Exporting unallocated people to {output_file}...")
+
+        rows = []
+        for person in self.population.get_all_people():
+            if person.id not in self.allocated_people:
+                row = {
+                    'person_id': person.id,
+                    'age': person.age,
+                    'sex': person.sex,
+                    'geo_unit': person.geographical_unit.name if person.geographical_unit else 'None'
+                }
+                rows.append(row)
+
+        if not rows:
+            logger.info("No unallocated people to export.")
+            return None
+
+        # Create DataFrame and export
+        df = pd.DataFrame(rows)
+        output_path = os.path.join(self.data_dir, output_file)
+        df.to_csv(output_path, index=False)
+
+        logger.info(f"Exported {len(rows)} unallocated people to {output_path}")
+        return output_path

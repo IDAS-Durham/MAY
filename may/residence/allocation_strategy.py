@@ -167,9 +167,8 @@ def execute_allocation_strategy(population, venues, household_distributor,
     logger.info(f"  Allocation rate: {alloc_pct:.1f}%")
     logger.info("=" * 60)
 
-    # Print relationship rules statistics
-    logger.info("")
-    household_distributor.relationship_rules.print_statistics()
+    # Export unallocated people if any
+    household_distributor.export_unallocated_people_to_csv()
 
     return all_stats
 
