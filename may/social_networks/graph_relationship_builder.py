@@ -8,7 +8,7 @@ then maps edges to relationships between Person objects.
 import logging
 from typing import Optional
 
-from clustered_graph import create_clustered_graph
+from .clustered_graph import create_clustered_graph
 from may.population.person import Person
 
 from random import sample
