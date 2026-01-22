@@ -2,23 +2,11 @@
 # Romantic/Sexual Relationship Configuration
 # ============================================================================
 # This configuration defines how romantic and sexual relationships are
-# distributed in the population. All parameters are configurable and generic.
-#
-# IMPORTANT: This config is culturally and geographically neutral. Adjust
-# probabilities and constraints to match your specific context.
+# distributed in the population.
 # ============================================================================
 
 name: "romantic_relationships"
 
-# Performance settings for large-scale simulations
-performance:
-  # Maximum candidates to check per person (samples randomly from geographical group)
-  # Lower = faster but less optimal matching. Recommended: 20-30 for 60M scale
-  max_candidates_per_search: 25
-
-  # Maximum failed matching attempts before giving up
-  # Lower = faster. Recommended: 10-20 for 60M scale
-  max_failed_attempts: 20
 
 # ============================================================================
 # Sexual Orientation Configuration
@@ -35,20 +23,23 @@ sexual_orientations:
   # Base probabilities by sex (must sum to 1.0 for each sex)
   probabilities:
     male:
-      heterosexual: 0.95
-      homosexual: 0.03
-      bisexual: 0.02
-    female:
-      heterosexual: 0.93
-      homosexual: 0.02
+      heterosexual: 0.90
+      homosexual: 0.05
       bisexual: 0.05
+    female:
+      heterosexual: 0.85
+      homosexual: 0.05
+      bisexual: 0.10
 
   # Optional: Age-based adjustments (multipliers applied to base probabilities)
   age_adjustments:
     "18-25":
       bisexual: 1.3       # Younger cohorts more likely to identify as bisexual
-    "65+":
-      homosexual: 0.7     # Older cohorts less likely (due to historical stigma, not biology)
+    "65-74":
+      homosexual: 0.7
+      bisexual: 0.5
+    "75+":
+      homosexual: 0.7
       bisexual: 0.5
 
 # ============================================================================
@@ -82,66 +73,7 @@ relationship_types:
     exclusive: 0.60
     non_exclusive: 0.10
 
-  # Age-based multipliers (applied to base probabilities)
-  age_multipliers:
-    "18-25":
-      non_exclusive: 2.0      # Young adults more open to non-monogamy
-      no_partner: 0.8         # Less likely to be single
-      exclusive: 1.1
-    "26-35":
-      exclusive: 1.3          # Peak partnering years
-      no_partner: 0.7
-    "36-50":
-      exclusive: 1.2
-      non_exclusive: 0.8
-    "51-64":
-      no_partner: 1.1
-      non_exclusive: 0.6
-    "65+":
-      no_partner: 1.4         # More likely to be single (widowed, etc.)
-      non_exclusive: 0.3
-      exclusive: 0.8
 
-# ============================================================================
-# Partner Limits
-# ============================================================================
-# Maximum number of partners by relationship type, age, and sex.
-
-partner_limits:
-  # Exclusive relationships: always exactly 1 partner
-  exclusive:
-    default: 1
-
-  # Non-exclusive (consensual non-monogamy) relationships
-  non_exclusive:
-    # Define limits by age group and sex
-    by_age_and_sex:
-      "18-25":
-        male: 3
-        female: 3
-      "26-35":
-        male: 3
-        female: 2
-      "36-50":
-        male: 2
-        female: 2
-      "51-64":
-        male: 1
-        female: 1
-      "65+":
-        male: 1
-        female: 1
-
-  # Cheating (non-consensual additional partners)
-  cheating:
-    default: 1  # Most cheaters have 1 affair
-    by_age_and_sex:
-      "18-25":
-        male: 2
-        female: 2
-      "26-35":
-        male: 1
-        female: 1
 
 # ============================================================================
 # Cheating/Infidelity Configuration
@@ -152,13 +84,6 @@ cheating:
   # Base probability (applied to people in exclusive relationships)
   base_probability: 0.30
 
-  # Age-based multipliers
-  age_multipliers:
-    "18-25": 1.5    # Young adults more impulsive
-    "26-35": 1.2
-    "36-50": 1.0
-    "51-64": 0.7
-    "65+": 0.3      # Elderly less likely
 
 # ============================================================================
 # Age Difference Constraints
@@ -193,44 +118,30 @@ age_differences:
     preferred_mean: 7.0
     preferred_std: 5.0
 
-  "65+":
+  "65-74":
     min: 0
-    max: 20
+    max: 15
     preferred_mean: 8.0
     preferred_std: 6.0
+  "75-99":
+    min: 0
+    max: 5
+    preferred_mean: 2.0
+    preferred_std: 2.0
 
 # ============================================================================
-# Compatibility Scoring
+# Attribute-Based Matching
 # ============================================================================
-# Bonuses for different compatibility factors.
-# Higher scores = more likely to be matched.
+# Uses empirical partnership probabilities to weight matching based on a specific attribute.
 
-compatibility_scoring:
-  base_score: 1.0
-
-  # Geographic proximity bonuses
-  same_sgu: 3.0       # Same small geographical unit (neighbors)
-  same_mgu: 2.0       # Same medium geographical unit (nearby)
-  same_lgu: 1.5       # Same large geographical unit (same city/region)
-
-  # Social connection bonuses
-  same_activity: 2.5      # Share primary activity (work, school, etc.)
-  common_friends: 1.8     # Have mutual friends
-
-  # Age similarity bonus
-  age_similarity:
-    threshold: 5          # If age diff < 5 years
-    bonus: 1.5            # Apply this multiplier
-
-  # Ethnicity compatibility (uses empirical partnership probabilities)
-  ethnicity:
-    enabled: true
-    data_file: "data/population/ethnicity/ethnicity_partnership_probabilities.csv"
-    attribute: "ethnicity"         # Person attribute to check
-    # Mapping from CSV codes to system codes
-    # CSV has M/O combined, system has M and O separate
-    code_mapping:
-      "M/O": ["M", "O"]  # Both M and O use M/O probabilities from CSV
+attribute_matching:
+  enabled: true
+  attribute: "ethnicity"         # Person attribute to check (e.g., ethnicity, social_class)
+  data_file: "data/population/ethnicity/ethnicity_partnership_probabilities.csv"
+  # Mapping from CSV codes to system codes
+  # CSV has M/O combined, system has M and O separate
+  code_mapping:
+    "M/O": ["M", "O"]  # Both M and O use M/O probabilities from CSV
 
 # ============================================================================
 # Storage Configuration

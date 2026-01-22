@@ -16,7 +16,7 @@ import time
 from .matcher_kernels import (
     match_two_pools,
     match_single_pool,
-    match_with_ethnicity,
+    match_with_attribute_weighting,
     filter_by_age
 )
 from .relationship_exporter import (
@@ -27,10 +27,6 @@ from .relationship_exporter import (
 logger = logging.getLogger("romantic_relationships")
 
 # Encoding constants
-ORIENTATION_HET = 0
-ORIENTATION_HOM = 1
-ORIENTATION_BI = 2
-
 SEX_FEMALE = 0
 SEX_MALE = 1
 
@@ -42,12 +38,33 @@ REL_NON_EXCLUSIVE = 2
 class RomanticDistributor:
     """
     High-performance romantic relationship distributor for large-scale simulations.
+    Fully data-driven based on YAML configuration.
     """
 
     def __init__(self, world, config: str | dict):
         self.world = world
         self.config = self._load_config(config)
         self.name = self.config['name']
+
+        # 1. Dynamic Orientations
+        orient_config = self.config.get('sexual_orientations', {})
+        self.orientation_names = orient_config.get('types', ['heterosexual', 'homosexual', 'bisexual'])
+        self.orient_to_id = {name: i for i, name in enumerate(self.orientation_names)}
+        self.id_to_orient = {i: name for i, name in enumerate(self.orientation_names)}
+
+        # 2. Dynamic Age Groups
+        age_diff_config = self.config.get('age_differences', {})
+        self.age_groups = []
+        for group_str in age_diff_config.keys():
+            if '-' in group_str:
+                start, end = map(int, group_str.split('-'))
+                self.age_groups.append({'name': group_str, 'start': start, 'end': end})
+            elif '+' in group_str:
+                start = int(group_str.replace('+', ''))
+                self.age_groups.append({'name': group_str, 'start': start, 'end': 200})
+        
+        # Sort age groups by start age for consistent lookup
+        self.age_groups.sort(key=lambda x: x['start'])
 
         # Storage keys
         storage = self.config.get('storage', {})
@@ -58,13 +75,16 @@ class RomanticDistributor:
         # Statistics
         self.stats = defaultdict(int)
 
-        # Load ethnicity matrix if enabled
-        self.ethnicity_matrix = None
-        self.ethnicity_codes = {}
-        if self._is_ethnicity_enabled():
-            self._load_ethnicity_matrix()
+        # Load attribute matching matrix if enabled
+        self.attribute_matrix = None
+        self.attribute_codes = {}
+        attr_config = self.config.get('attribute_matching', {})
+        self.matching_attr = attr_config.get('attribute', 'ethnicity')
+        
+        if self._is_attribute_matching_enabled():
+            self._load_attribute_matrix()
 
-        logger.info(f"Initialized {self.name} distributor")
+        logger.info(f"Initialized {self.name} distributor with {len(self.orientation_names)} orientations and {len(self.age_groups)} age groups")
 
     def _load_config(self, config) -> dict:
         if isinstance(config, str):
@@ -72,48 +92,48 @@ class RomanticDistributor:
                 return yaml.safe_load(f)
         return config
 
-    def _is_ethnicity_enabled(self) -> bool:
-        return self.config.get('compatibility_scoring', {}).get('ethnicity', {}).get('enabled', False)
+    def _is_attribute_matching_enabled(self) -> bool:
+        return self.config.get('attribute_matching', {}).get('enabled', False)
 
-    def _load_ethnicity_matrix(self):
-        """Load ethnicity probabilities as a NumPy matrix for fast lookup."""
-        ethnicity_config = self.config['compatibility_scoring']['ethnicity']
-        data_file = ethnicity_config['data_file']
-        code_mapping = ethnicity_config.get('code_mapping', {})
+    def _load_attribute_matrix(self):
+        """Load attribute partnership probabilities as a NumPy matrix for fast lookup."""
+        attr_config = self.config['attribute_matching']
+        data_file = attr_config['data_file']
+        code_mapping = attr_config.get('code_mapping', {})
 
         try:
             df = pd.read_csv(data_file)
 
-            # Get unique ethnicities
-            all_eths = set(df['person_ethnicity'].unique()) | set(df['partner_ethnicity'].unique())
+            # Get unique attribute values
+            all_vals = set(df['person_ethnicity'].unique()) | set(df['partner_ethnicity'].unique())
 
             # Expand code mappings
-            expanded_eths = set()
-            for eth in all_eths:
-                if eth in code_mapping:
-                    codes = code_mapping[eth]
+            expanded_vals = set()
+            for val in all_vals:
+                if val in code_mapping:
+                    codes = code_mapping[val]
                     if isinstance(codes, list):
-                        expanded_eths.update(codes)
+                        expanded_vals.update(codes)
                     else:
-                        expanded_eths.add(codes)
+                        expanded_vals.add(codes)
                 else:
-                    expanded_eths.add(eth)
+                    expanded_vals.add(val)
 
             # Create encoding
-            self.ethnicity_codes = {eth: i for i, eth in enumerate(sorted(expanded_eths))}
-            n_eth = len(self.ethnicity_codes)
+            self.attribute_codes = {val: i for i, val in enumerate(sorted(expanded_vals))}
+            n_attr = len(self.attribute_codes)
 
             # Build probability matrix
-            self.ethnicity_matrix = np.ones((n_eth, n_eth), dtype=np.float32)
+            self.attribute_matrix = np.ones((n_attr, n_attr), dtype=np.float32)
 
             for _, row in df.iterrows():
-                p_eth = row['person_ethnicity']
-                partner_eth = row['partner_ethnicity']
+                p_val = row['person_ethnicity']
+                partner_val = row['partner_ethnicity']
                 prob = row['probability']
 
                 # Get all codes this maps to
-                p_codes = code_mapping.get(p_eth, [p_eth])
-                partner_codes = code_mapping.get(partner_eth, [partner_eth])
+                p_codes = code_mapping.get(p_val, [p_val])
+                partner_codes = code_mapping.get(partner_val, [partner_val])
 
                 if not isinstance(p_codes, list):
                     p_codes = [p_codes]
@@ -122,15 +142,48 @@ class RomanticDistributor:
 
                 for pc in p_codes:
                     for ptc in partner_codes:
-                        if pc in self.ethnicity_codes and ptc in self.ethnicity_codes:
-                            i, j = self.ethnicity_codes[pc], self.ethnicity_codes[ptc]
-                            self.ethnicity_matrix[i, j] = prob
+                        if pc in self.attribute_codes and ptc in self.attribute_codes:
+                            i, j = self.attribute_codes[pc], self.attribute_codes[ptc]
+                            self.attribute_matrix[i, j] = prob
 
-            logger.info(f"Loaded ethnicity matrix: {n_eth}x{n_eth}")
+            logger.info(f"Loaded attribute matching matrix: {n_attr}x{n_attr}")
 
         except Exception as e:
-            logger.error(f"Failed to load ethnicity probabilities: {e}")
-            self.ethnicity_matrix = None
+            logger.error(f"Failed to load attribute partnership probabilities: {e}")
+            self.attribute_matrix = None
+
+    def _sample_intended_rel_types(self, arrays: Dict) -> np.ndarray:
+        """Sample intended relationship types using dynamic categorical distribution."""
+        n = arrays['n']
+        rel_config = self.config.get('relationship_types', {}).get('base_probabilities', {})
+        
+        # Get probabilities in correct order: 0=No, 1=Exclusive, 2=Non-Exclusive
+        probs = np.array([
+            rel_config.get('no_partner', 0.0),
+            rel_config.get('exclusive', 0.0),
+            rel_config.get('non_exclusive', 0.0)
+        ], dtype=np.float32)
+        
+        # Normalize
+        prob_sum = probs.sum()
+        if prob_sum > 0:
+            probs = probs / prob_sum
+        else:
+            probs = np.array([1.0, 0.0, 0.0]) # Default to no partner
+
+        # Sample for everyone initially
+        samples = np.random.choice(
+            np.array([REL_NO_PARTNER, REL_EXCLUSIVE, REL_NON_EXCLUSIVE], dtype=np.int8),
+            size=n,
+            p=probs
+        )
+        
+        # Track stats
+        self.stats['intended_no_partner'] = (samples == REL_NO_PARTNER).sum()
+        self.stats['intended_exclusive'] = (samples == REL_EXCLUSIVE).sum()
+        self.stats['intended_non_exclusive'] = (samples == REL_NON_EXCLUSIVE).sum()
+        
+        return samples
 
     def distribute_all(self):
         """Main entry point for relationship distribution."""
@@ -157,40 +210,46 @@ class RomanticDistributor:
         orientations = self._assign_orientations(arrays)
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
-        # Step 3: Process household couples
-        logger.info("\n[Step 3] Process household couples...")
+        # Step 3: Sample intended relationship types
+        logger.info("\n[Step 3] Sampling intended relationship types...")
+        t0 = time.time()
+        intended_rel_types = self._sample_intended_rel_types(arrays)
+        logger.info(f"  Time: {time.time() - t0:.2f}s")
+
+        # Step 4: Process household couples
+        logger.info("\n[Step 4] Process household couples...")
         t0 = time.time()
         partners, rel_types, consensual = self._process_household_couples(
-            arrays, orientations
+            arrays, orientations, intended_rel_types
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
-        # Step 4: Create exclusive relationships for singles
-        logger.info("\n[Step 4] Creating exclusive relationships...")
+        # Step 5: Create exclusive relationships for singles
+        logger.info("\n[Step 5] Creating exclusive relationships...")
         t0 = time.time()
         partners, rel_types = self._create_exclusive_relationships(
-            arrays, orientations, partners, rel_types
+            arrays, orientations, partners, rel_types, intended_rel_types
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
-        # Step 5: Create non-exclusive relationships
-        logger.info("\n[Step 5] Creating non-exclusive relationships...")
+        # Step 6: Create non-exclusive relationships
+        logger.info("\n[Step 6] Creating non-exclusive relationships...")
         t0 = time.time()
         partners, rel_types, non_exclusive_partners = self._create_non_exclusive_relationships(
-            arrays, orientations, partners, rel_types
+            arrays, orientations, partners, rel_types, intended_rel_types
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
-        # Step 6: Handle cheating and affairs
+        # Step 7: Handle cheating and affairs
         logger.info("\n[Step 6] Processing cheating and affairs...")
         t0 = time.time()
         partners, consensual, affair_partners = self._process_cheating_and_affairs(
-            arrays, orientations, partners, rel_types, consensual
+            arrays, orientations, partners, rel_types, consensual, intended_rel_types
         )
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
-        # Step 7: Write results back to person objects
-        logger.info("\n[Step 7] Writing results to person objects...")
+        # Step 8: Write results back to person objects
+        logger.info("\n[Step 8] Writing results to person objects...")
         t0 = time.time()
         self._write_results(all_adults, arrays, orientations, partners, rel_types, consensual, affair_partners, non_exclusive_partners)
         logger.info(f"  Time: {time.time() - t0:.2f}s")
@@ -233,7 +292,7 @@ class RomanticDistributor:
         age = np.empty(n, dtype=np.int64) # Use int64 for Numba compatibility
         mgu_codes = np.empty(n, dtype=np.int32)
         lgu_codes = np.empty(n, dtype=np.int32)
-        eth_codes = np.empty(n, dtype=np.int64) # Use int64 for Numba compatibility
+        eth_codes = np.empty(n, dtype=np.int64) # Use int64 for Numba compatibility (now generic attribute)
         household_couple = np.full(n, -1, dtype=np.int64)
         residence_ids = np.full(n, -1, dtype=np.int64)
 
@@ -278,11 +337,11 @@ class RomanticDistributor:
                 mgu_codes[i] = -1
                 lgu_codes[i] = -1
 
-            # Ethnicity encoding
-            eth = person.properties.get('ethnicity', 'unknown')
-            if eth not in self.ethnicity_codes:
-                self.ethnicity_codes[eth] = len(self.ethnicity_codes)
-            eth_codes[i] = self.ethnicity_codes[eth]
+            # Attribute encoding
+            attr_val = person.properties.get(self.matching_attr, 'unknown')
+            if attr_val not in self.attribute_codes:
+                self.attribute_codes[attr_val] = len(self.attribute_codes)
+            eth_codes[i] = self.attribute_codes[attr_val]
 
             # Household couple
             if 'household_couple' in person.properties:
@@ -329,67 +388,118 @@ class RomanticDistributor:
         }
 
     def _assign_orientations(self, arrays: Dict[str, np.ndarray]) -> np.ndarray:
-        """Assign sexual orientations to all adults using weighted sampling."""
+        """Assign sexual orientations to all adults using dynamic config."""
         n = len(arrays['age'])
         sex = arrays['sex']
         household_couple = arrays['household_couple']
+        age = arrays['age']
 
-        orientations = np.zeros(n, dtype=np.int8)  # Default to HET (0)
-        orientation_config = self.config['sexual_orientations']
+        orientations = np.zeros(n, dtype=np.int8)
+        orientation_config = self.config.get('sexual_orientations', {})
         age_adjustments = orientation_config.get('age_adjustments', {})
 
         # Get base probabilities by sex
         probs_by_sex = {}
-        for s, s_code in [('male', SEX_MALE), ('female', SEX_FEMALE)]:
-            base = orientation_config['probabilities'].get(s, {})
-            probs_by_sex[s_code] = np.array([
-                base.get('heterosexual', 0.95),
-                base.get('homosexual', 0.03),
-                base.get('bisexual', 0.02)
-            ])
+        for s_name in ['male', 'female']:
+            s_code = SEX_MALE if s_name == 'male' else SEX_FEMALE
+            base = orientation_config.get('probabilities', {}).get(s_name, {})
+            
+            # Build prob array based on dynamic orientation order
+            p_arr = np.array([base.get(name, 0.0) for name in self.orientation_names], dtype=np.float32)
+            if p_arr.sum() == 0:
+                p_arr[0] = 1.0  # Default to first orientation if none defined
+            probs_by_sex[s_code] = p_arr / p_arr.sum()
 
         # Assign to non-household-coupled people first
         not_coupled = household_couple < 0
 
-        for s_code in [SEX_MALE, SEX_FEMALE]:
-            mask = (sex == s_code) & not_coupled
-            indices = np.where(mask)[0]
+        for s_code, s_name in [(SEX_MALE, 'male'), (SEX_FEMALE, 'female')]:
+            base_probs = probs_by_sex[s_code]
 
-            if len(indices) == 0:
-                continue
+            for group in self.age_groups:
+                group_name = group['name']
+                mask = (sex == s_code) & (age >= group['start']) & (age <= group['end']) & not_coupled
+                indices = np.where(mask)[0]
 
-            # Get base probabilities
-            probs = probs_by_sex[s_code].copy()
+                if len(indices) == 0:
+                    continue
 
-            # For simplicity, use base probabilities (age adjustment would require
-            # per-person probabilities which is slower but still vectorizable)
-            probs = probs / probs.sum()
+                # Apply adjustments for this age group
+                adj = age_adjustments.get(group_name, {})
+                probs = base_probs.copy()
 
-            # Batch sampling
-            orientations[indices] = np.random.choice(
-                [ORIENTATION_HET, ORIENTATION_HOM, ORIENTATION_BI],
-                size=len(indices),
-                p=probs
-            )
+                # Apply multipliers to base probabilities dynamically
+                for i, name in enumerate(self.orientation_names):
+                    if name in adj:
+                        probs[i] *= adj[name]
+
+                # Normalize (important for random.choice)
+                prob_sum = probs.sum()
+                if prob_sum > 0:
+                    probs = probs / prob_sum
+                else:
+                    probs = np.zeros(len(self.orientation_names))
+                    probs[0] = 1.0  # Fallback
+
+                # Batch sampling for this specific cohort
+                orientations[indices] = np.random.choice(
+                    np.arange(len(self.orientation_names), dtype=np.int8),
+                    size=len(indices),
+                    p=probs
+                )
 
         # Track stats
-        self.stats['orientation_heterosexual'] = (orientations[not_coupled] == ORIENTATION_HET).sum()
-        self.stats['orientation_homosexual'] = (orientations[not_coupled] == ORIENTATION_HOM).sum()
-        self.stats['orientation_bisexual'] = (orientations[not_coupled] == ORIENTATION_BI).sum()
+        for i, name in enumerate(self.orientation_names):
+            self.stats[f'orientation_{name}'] = (orientations[not_coupled] == i).sum()
 
-        logger.info(f"  Assigned orientations to {not_coupled.sum():,} non-household adults")
-        logger.info(f"  Distribution: HET={self.stats['orientation_heterosexual']:,}, "
-                    f"HOM={self.stats['orientation_homosexual']:,}, "
-                    f"BI={self.stats['orientation_bisexual']:,}")
+        logger.info(f"  Assigned {len(self.orientation_names)} orientations to {not_coupled.sum():,} non-household adults using dynamic adjustments")
+        dist_str = ", ".join([f"{name.upper()}={self.stats[f'orientation_{name}']:,}" for name in self.orientation_names])
+        logger.info(f"  Overall Distribution: {dist_str}")
 
         return orientations
+
+    def _is_attracted_to(self, orientation_id: int, own_sex: int, target_sex: int) -> bool:
+        """Check if an orientation/sex combination is attracted to a target sex."""
+        o_name = self.id_to_orient[orientation_id]
+        s_name = 'male' if own_sex == SEX_MALE else 'female'
+        target_s_name = 'male' if target_sex == SEX_MALE else 'female'
+        
+        rules = self.config.get('compatibility_rules', {})
+        allowed_sexes = rules.get(o_name, {}).get(s_name, [])
+        return target_s_name in allowed_sexes
+
+    def _are_orientation_compatible(
+        self,
+        o_id1: int,
+        s1: int,
+        o_id2: int,
+        s2: int
+    ) -> bool:
+        """Check mutual attraction between two people."""
+        return self._is_attracted_to(o_id1, s1, s2) and self._is_attracted_to(o_id2, s2, s1)
+
+    def _get_matching_groups(self) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
+        """Identify all compatible (sex, orientation) group pairs from config."""
+        groups = []
+        categories = []
+        for s_code in [SEX_MALE, SEX_FEMALE]:
+            for o_id in range(len(self.orientation_names)):
+                categories.append((s_code, o_id))
+        
+        for i, c1 in enumerate(categories):
+            for j, c2 in enumerate(categories):
+                if j < i: continue
+                if self._are_orientation_compatible(c1[1], c1[0], c2[1], c2[0]):
+                    groups.append((c1, c2))
+        return groups
 
     def _process_household_couples(
         self,
         arrays: Dict,
-        orientations: np.ndarray
+        orientations: np.ndarray,
+        intended_rel_types: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Process household couples using array operations."""
+        """Process household couples using dynamic orientation logic."""
         n = arrays['n']
         ids = arrays['ids']
         sex = arrays['sex']
@@ -397,8 +507,6 @@ class RomanticDistributor:
         id_to_idx = arrays['id_to_idx']
 
         # Initialize partner arrays
-        # partners[i] stores list of partner indices (as variable-length, we use -1 padding)
-        # For simplicity, store primary exclusive partner only
         partners = np.full(n, -1, dtype=np.int64)
         rel_types = np.full(n, REL_NO_PARTNER, dtype=np.int8)
         consensual = np.ones(n, dtype=bool)
@@ -407,13 +515,30 @@ class RomanticDistributor:
         has_couple = household_couple >= 0
         coupled_indices = np.where(has_couple)[0]
 
-        # Get relationship type probabilities for household couples
-        # (only exclusive or non_exclusive - no "no_partner" since they live together)
         rel_config = self.config['relationship_types']['base_probabilities']
         prob_exclusive = rel_config['exclusive']
         prob_non_exclusive = rel_config['non_exclusive']
         total_prob = prob_exclusive + prob_non_exclusive
         prob_exclusive_normalized = prob_exclusive / total_prob
+
+        # Determine valid orientations for same-sex and mixed-sex couples based on rules
+        valid_orientations = {}
+        for s1 in [SEX_MALE, SEX_FEMALE]:
+            for s2 in [SEX_MALE, SEX_FEMALE]:
+                # Find orientations for person 1 that are attracted to s2, 
+                # AND person 2 (with that same orientation) would be attracted to s1
+                # (Simplified assumption: both partners in a couple have orientations 
+                # that allow this relationship)
+                valid = []
+                for o_id in range(len(self.orientation_names)):
+                    if self._are_orientation_compatible(o_id, s1, o_id, s2):
+                        valid.append(o_id)
+                
+                if not valid:
+                    # Fallback to all if rules are too strict for existing couples
+                    valid = list(range(len(self.orientation_names)))
+                
+                valid_orientations[(s1, s2)] = valid
 
         # Process each coupled person
         processed = set()
@@ -430,30 +555,34 @@ class RomanticDistributor:
                 continue
 
             partner_idx = id_to_idx[partner_id]
-
-            # Assign compatible orientations
             sex1, sex2 = sex[idx], sex[partner_idx]
 
-            if sex1 == sex2:
-                # Same-sex couple: homosexual or bisexual
-                valid = [ORIENTATION_HOM, ORIENTATION_BI]
-                probs = np.array([0.6, 0.4])
-            else:
-                # Different-sex couple: heterosexual or bisexual
-                valid = [ORIENTATION_HET, ORIENTATION_BI]
-                probs = np.array([0.9, 0.1])
+            # Assign compatible orientations dynamically
+            valid = valid_orientations[(sex1, sex2)]
+            
+            # Simple uniform choice among valid orientations for existing couples
+            orientations[idx] = np.random.choice(valid)
+            
+            # Ensure partner also has a compatible orientation
+            # (In most cases it will be the same orientation name, but we check compatibility)
+            valid2 = [o for o in range(len(self.orientation_names)) 
+                     if self._are_orientation_compatible(orientations[idx], sex1, o, sex2)]
+            if not valid2: valid2 = valid
+            orientations[partner_idx] = np.random.choice(valid2)
 
-            probs = probs / probs.sum()
-            orientations[idx] = np.random.choice(valid, p=probs)
-            orientations[partner_idx] = np.random.choice(valid, p=probs)
-
-            # Sample relationship type (exclusive or non-exclusive)
+            # Sample relationship type if not already assigned
+            # Correct categorical logic: forces existing household couples 
+            # to be either REL_EXCLUSIVE or REL_NON_EXCLUSIVE based on weights.
             if np.random.random() < prob_exclusive_normalized:
                 rel_type = REL_EXCLUSIVE
                 exclusive_count += 1
             else:
                 rel_type = REL_NON_EXCLUSIVE
                 non_exclusive_count += 1
+
+            # Update intended types so they don't try to find ANOTHER partner
+            intended_rel_types[idx] = rel_type
+            intended_rel_types[partner_idx] = rel_type
 
             # Create relationship
             partners[idx] = partner_idx
@@ -468,8 +597,7 @@ class RomanticDistributor:
         self.stats['household_couples_processed'] = couples_count
         self.stats['household_exclusive'] = exclusive_count
         self.stats['household_non_exclusive'] = non_exclusive_count
-        logger.info(f"  Processed {couples_count:,} household couples")
-        logger.info(f"    Exclusive: {exclusive_count:,}, Non-exclusive: {non_exclusive_count:,}")
+        logger.info(f"  Processed {couples_count:,} household couples using dynamic orientation logic")
 
         return partners, rel_types, consensual
 
@@ -478,14 +606,12 @@ class RomanticDistributor:
         arrays: Dict,
         orientations: np.ndarray,
         partners: np.ndarray,
-        rel_types: np.ndarray
+        rel_types: np.ndarray,
+        intended_rel_types: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Create exclusive relationships using batch matching.
-
-        Two-phase approach:
-        1. VENUE-BASED: Match coworkers/classmates first (shared activity bonus)
-        2. GEOGRAPHY-BASED: Match remaining seekers within MGU
+        Fully dynamic based on compatibility rules.
         """
         n = arrays['n']
         sex = arrays['sex']
@@ -495,15 +621,11 @@ class RomanticDistributor:
         venue_to_people = arrays['venue_to_people']
 
         age_config = self.config['age_differences']
+        matching_groups = self._get_matching_groups()
 
-        # Identify singles who want exclusive relationships
+        # Identify singles who want exclusive relationships (explicit choice)
         is_single = partners < 0
-
-        # Sample who wants exclusive (batch)
-        base_exclusive_prob = self.config['relationship_types']['base_probabilities']['exclusive']
-        wants_exclusive = np.random.random(n) < base_exclusive_prob
-
-        seeking_exclusive = is_single & wants_exclusive
+        seeking_exclusive = is_single & (intended_rel_types == REL_EXCLUSIVE)
         initial_seekers = seeking_exclusive.sum()
         logger.info(f"  {initial_seekers:,} singles seeking exclusive relationships")
 
@@ -522,7 +644,7 @@ class RomanticDistributor:
             if len(venue_seekers) < 2:
                 continue
 
-            # Match within venue using same compatibility logic
+            # Match within venue using dynamic compatibility logic
             matches = self._match_within_group(
                 venue_seekers, sex, age, eth, orientations, seeking_exclusive, age_config
             )
@@ -548,101 +670,34 @@ class RomanticDistributor:
         unique_mgus = np.unique(mgu[mgu >= 0])
 
         for mgu_code in unique_mgus:
-            in_mgu = mgu == mgu_code
-
-            # Pool 1: Het males + Het/Bi females
-            het_males = np.where(
-                seeking_exclusive & in_mgu &
-                (sex == SEX_MALE) &
-                (orientations == ORIENTATION_HET)
-            )[0]
-
-            het_bi_females = np.where(
-                seeking_exclusive & in_mgu &
-                (sex == SEX_FEMALE) &
-                ((orientations == ORIENTATION_HET) | (orientations == ORIENTATION_BI))
-            )[0]
-
-            matches = self._match_pools(
-                het_males, het_bi_females, age, eth, age_config
-            )
-
-            for a, b in matches:
-                partners[a] = b
-                partners[b] = a
-                rel_types[a] = REL_EXCLUSIVE
-                rel_types[b] = REL_EXCLUSIVE
-                seeking_exclusive[a] = False
-                seeking_exclusive[b] = False
-
-            total_matches += len(matches)
-
-            # Pool 2: Het females + Het/Bi males (handles remaining het females)
-            het_females = np.where(
-                seeking_exclusive & in_mgu &
-                (sex == SEX_FEMALE) &
-                (orientations == ORIENTATION_HET)
-            )[0]
-
-            het_bi_males = np.where(
-                seeking_exclusive & in_mgu &
-                (sex == SEX_MALE) &
-                ((orientations == ORIENTATION_HET) | (orientations == ORIENTATION_BI))
-            )[0]
-
-            matches = self._match_pools(
-                het_females, het_bi_males, age, eth, age_config
-            )
-
-            for a, b in matches:
-                partners[a] = b
-                partners[b] = a
-                rel_types[a] = REL_EXCLUSIVE
-                rel_types[b] = REL_EXCLUSIVE
-                seeking_exclusive[a] = False
-                seeking_exclusive[b] = False
-
-            total_matches += len(matches)
-
-            # Pool 3: Homosexual males
-            hom_males = np.where(
-                seeking_exclusive & in_mgu &
-                (sex == SEX_MALE) &
-                ((orientations == ORIENTATION_HOM) | (orientations == ORIENTATION_BI))
-            )[0]
-
-            if len(hom_males) >= 2:
-                matches = self._match_single_pool(hom_males, age, eth, age_config)
-
-                for a, b in matches:
-                    partners[a] = b
-                    partners[b] = a
-                    rel_types[a] = REL_EXCLUSIVE
-                    rel_types[b] = REL_EXCLUSIVE
-                    seeking_exclusive[a] = False
-                    seeking_exclusive[b] = False
-
-                total_matches += len(matches)
-
-            # Pool 4: Homosexual females
-            hom_females = np.where(
-                seeking_exclusive & in_mgu &
-                (sex == SEX_FEMALE) &
-                ((orientations == ORIENTATION_HOM) | (orientations == ORIENTATION_BI))
-            )[0]
-
-            if len(hom_females) >= 2:
-                matches = self._match_single_pool(hom_females, age, eth, age_config)
-
-                for a, b in matches:
-                    partners[a] = b
-                    partners[b] = a
-                    rel_types[a] = REL_EXCLUSIVE
-                    rel_types[b] = REL_EXCLUSIVE
-                    seeking_exclusive[a] = False
-                    seeking_exclusive[b] = False
-
-                total_matches += len(matches)
+            in_mgu = (mgu == mgu_code)
+            
+            for (s1, o1), (s2, o2) in matching_groups:
+                if s1 == s2 and o1 == o2:
+                    pool = np.where(seeking_exclusive & in_mgu & (sex == s1) & (orientations == o1))[0]
+                    if len(pool) >= 2:
+                        matches = self._match_single_pool(pool, age, eth, age_config)
+                        for a, b in matches:
+                            partners[a] = b
+                            partners[b] = a
+                            rel_types[a] = REL_EXCLUSIVE
+                            rel_types[b] = REL_EXCLUSIVE
+                            seeking_exclusive[a] = False
+                            seeking_exclusive[b] = False
+                            total_matches += 1
+                else:
+                    pool1 = np.where(seeking_exclusive & in_mgu & (sex == s1) & (orientations == o1))[0]
+                    pool2 = np.where(seeking_exclusive & in_mgu & (sex == s2) & (orientations == o2))[0]
+                    if len(pool1) > 0 and len(pool2) > 0:
+                        matches = self._match_pools(pool1, pool2, age, eth, age_config)
+                        for a, b in matches:
+                            partners[a] = b
+                            partners[b] = a
+                            rel_types[a] = REL_EXCLUSIVE
+                            rel_types[b] = REL_EXCLUSIVE
+                            seeking_exclusive[a] = False
+                            seeking_exclusive[b] = False
+                            total_matches += 1
 
         mgu_matches = total_matches - venue_matches
         logger.info(f"    Created {mgu_matches:,} relationships from MGU matching")
@@ -655,75 +710,41 @@ class RomanticDistributor:
             logger.info(f"  Phase 3: LGU fallback for {remaining_seekers:,} remaining seekers...")
             lgu = arrays['lgu']
             unique_lgus = np.unique(lgu[lgu >= 0])
-            lgu_matches = 0
+            lgu_matches_count = 0
 
             for lgu_code in unique_lgus:
-                in_lgu = lgu == lgu_code
+                in_lgu = (lgu == lgu_code)
 
-                # Same matching logic as MGU but at LGU level
-                het_males = np.where(
-                    seeking_exclusive & in_lgu &
-                    (sex == SEX_MALE) &
-                    (orientations == ORIENTATION_HET)
-                )[0]
+                for (s1, o1), (s2, o2) in matching_groups:
+                    if s1 == s2 and o1 == o2:
+                        pool = np.where(seeking_exclusive & in_lgu & (sex == s1) & (orientations == o1))[0]
+                        if len(pool) >= 2:
+                            matches = self._match_single_pool(pool, age, eth, age_config)
+                            for a, b in matches:
+                                partners[a] = b
+                                partners[b] = a
+                                rel_types[a] = REL_EXCLUSIVE
+                                rel_types[b] = REL_EXCLUSIVE
+                                seeking_exclusive[a] = False
+                                seeking_exclusive[b] = False
+                                lgu_matches_count += 1
+                                total_matches += 1
+                    else:
+                        pool1 = np.where(seeking_exclusive & in_lgu & (sex == s1) & (orientations == o1))[0]
+                        pool2 = np.where(seeking_exclusive & in_lgu & (sex == s2) & (orientations == o2))[0]
+                        if len(pool1) > 0 and len(pool2) > 0:
+                            matches = self._match_pools(pool1, pool2, age, eth, age_config)
+                            for a, b in matches:
+                                partners[a] = b
+                                partners[b] = a
+                                rel_types[a] = REL_EXCLUSIVE
+                                rel_types[b] = REL_EXCLUSIVE
+                                seeking_exclusive[a] = False
+                                seeking_exclusive[b] = False
+                                lgu_matches_count += 1
+                                total_matches += 1
 
-                het_bi_females = np.where(
-                    seeking_exclusive & in_lgu &
-                    (sex == SEX_FEMALE) &
-                    ((orientations == ORIENTATION_HET) | (orientations == ORIENTATION_BI))
-                )[0]
-
-                if len(het_males) > 0 and len(het_bi_females) > 0:
-                    matches = self._match_pools(het_males, het_bi_females, age, eth, age_config)
-                    for a, b in matches:
-                        partners[a] = b
-                        partners[b] = a
-                        rel_types[a] = REL_EXCLUSIVE
-                        rel_types[b] = REL_EXCLUSIVE
-                        seeking_exclusive[a] = False
-                        seeking_exclusive[b] = False
-                    lgu_matches += len(matches)
-                    total_matches += len(matches)
-
-                # Homosexual males at LGU level
-                hom_males = np.where(
-                    seeking_exclusive & in_lgu &
-                    (sex == SEX_MALE) &
-                    ((orientations == ORIENTATION_HOM) | (orientations == ORIENTATION_BI))
-                )[0]
-
-                if len(hom_males) >= 2:
-                    matches = self._match_single_pool(hom_males, age, eth, age_config)
-                    for a, b in matches:
-                        partners[a] = b
-                        partners[b] = a
-                        rel_types[a] = REL_EXCLUSIVE
-                        rel_types[b] = REL_EXCLUSIVE
-                        seeking_exclusive[a] = False
-                        seeking_exclusive[b] = False
-                    lgu_matches += len(matches)
-                    total_matches += len(matches)
-
-                # Homosexual females at LGU level
-                hom_females = np.where(
-                    seeking_exclusive & in_lgu &
-                    (sex == SEX_FEMALE) &
-                    ((orientations == ORIENTATION_HOM) | (orientations == ORIENTATION_BI))
-                )[0]
-
-                if len(hom_females) >= 2:
-                    matches = self._match_single_pool(hom_females, age, eth, age_config)
-                    for a, b in matches:
-                        partners[a] = b
-                        partners[b] = a
-                        rel_types[a] = REL_EXCLUSIVE
-                        rel_types[b] = REL_EXCLUSIVE
-                        seeking_exclusive[a] = False
-                        seeking_exclusive[b] = False
-                    lgu_matches += len(matches)
-                    total_matches += len(matches)
-
-            logger.info(f"    Created {lgu_matches:,} relationships from LGU fallback")
+            logger.info(f"    Created {lgu_matches_count:,} relationships from LGU fallback")
 
         self.stats['exclusive_relationships_created'] = total_matches
         logger.info(f"  Created {total_matches:,} exclusive relationships total")
@@ -747,28 +768,39 @@ class RomanticDistributor:
         if len(pool_a) == 0 or len(pool_b) == 0:
             return []
 
-        # Find max age diff for the younger pool
+        # Find parameters for the younger pool
         min_age = min(age[pool_a].min(), age[pool_b].min())
-        max_age_diff = 10  # Default
-        for bracket, cfg in age_config.items():
-            if '-' in bracket:
-                start, end = map(int, bracket.split('-'))
-                if start <= min_age <= end:
-                    max_age_diff = cfg.get('max', 10)
-                    break
+        
+        # Defaults
+        min_age_diff = 0
+        max_age_diff = 10
+        pref_mean = 2.5
+        pref_std = 2.0
+
+        for group in self.age_groups:
+            if group['start'] <= min_age <= group['end']:
+                cfg = age_config.get(group['name'], {})
+                min_age_diff = cfg.get('min', 0)
+                max_age_diff = cfg.get('max', 10)
+                pref_mean = cfg.get('preferred_mean', 2.5)
+                pref_std = cfg.get('preferred_std', 2.0)
+                break
 
         matches_a, matches_b = np.empty(0), np.empty(0)
         seed = int(time.time() * 1000) % 1000000
 
         # Use Numba kernel - age and eth are already int64 from _build_attribute_arrays
-        if self.ethnicity_matrix is not None:
-            matches_a, matches_b = match_with_ethnicity(
+        if self.attribute_matrix is not None:
+            matches_a, matches_b = match_with_attribute_weighting(
                 pool_a,
                 pool_b,
                 age,
                 eth,
-                self.ethnicity_matrix,
+                self.attribute_matrix,
+                min_age_diff,
                 max_age_diff,
+                pref_mean,
+                pref_std,
                 seed
             )
         else:
@@ -776,7 +808,10 @@ class RomanticDistributor:
                 pool_a,
                 pool_b,
                 age,
+                min_age_diff,
                 max_age_diff,
+                pref_mean,
+                pref_std,
                 seed
             )
 
@@ -793,97 +828,71 @@ class RomanticDistributor:
         if len(pool) < 2:
             return []
 
-        # Compute max age diff based on median age in pool
+        # Compute params based on median age in pool
         median_age = int(np.median(age[pool]))
-        max_age_diff = self._get_max_age_diff(median_age)
+        
+        # Defaults
+        min_age_diff = 0
+        max_age_diff = 10
+        pref_mean = 2.5
+        pref_std = 2.0
+
+        for group in self.age_groups:
+            if group['start'] <= median_age <= group['end']:
+                cfg = age_config.get(group['name'], {})
+                min_age_diff = cfg.get('min', 0)
+                max_age_diff = cfg.get('max', 10)
+                pref_mean = cfg.get('preferred_mean', 2.5)
+                pref_std = cfg.get('preferred_std', 2.0)
+                break
+        
         seed = np.random.randint(0, 2**31)
 
         matches_a, matches_b = match_single_pool(
             pool,
             age,
+            min_age_diff,
             max_age_diff,
+            pref_mean,
+            pref_std,
             seed
         )
 
         return list(zip(matches_a, matches_b))
 
     def _match_within_group(self, group_indices, sex, age, eth, orientations, seeking, age_config):
-        """Match compatible people within a group (e.g., coworkers at same venue)."""
+        """Match compatible people within a group (e.g., coworkers at same venue) using dynamic matching groups."""
         all_matches = []
+        matching_groups = self._get_matching_groups()
 
         # Filter to only those still seeking
         active = np.array([i for i in group_indices if seeking[i]], dtype=np.int64)
         if len(active) < 2:
             return []
 
-        # Het males seeking het/bi females
-        het_males = active[(sex[active] == SEX_MALE) & (orientations[active] == ORIENTATION_HET)]
-        het_bi_females = active[
-            (sex[active] == SEX_FEMALE) &
-            ((orientations[active] == ORIENTATION_HET) | (orientations[active] == ORIENTATION_BI))
-        ]
+        for (s1, o1), (s2, o2) in matching_groups:
+            # Refresh active list
+            active = np.array([i for i in group_indices if seeking[i]], dtype=np.int64)
+            if len(active) < 2:
+                break
 
-        if len(het_males) > 0 and len(het_bi_females) > 0:
-            matches = self._match_pools(het_males, het_bi_females, age, eth, age_config)
-            for a, b in matches:
-                seeking[a] = False
-                seeking[b] = False
-            all_matches.extend(matches)
-
-        # Refresh active list
-        active = np.array([i for i in group_indices if seeking[i]], dtype=np.int64)
-        if len(active) < 2:
-            return all_matches
-
-        # Het females seeking het/bi males
-        het_females = active[(sex[active] == SEX_FEMALE) & (orientations[active] == ORIENTATION_HET)]
-        het_bi_males = active[
-            (sex[active] == SEX_MALE) &
-            ((orientations[active] == ORIENTATION_HET) | (orientations[active] == ORIENTATION_BI))
-        ]
-
-        if len(het_females) > 0 and len(het_bi_males) > 0:
-            matches = self._match_pools(het_females, het_bi_males, age, eth, age_config)
-            for a, b in matches:
-                seeking[a] = False
-                seeking[b] = False
-            all_matches.extend(matches)
-
-        # Refresh active list
-        active = np.array([i for i in group_indices if seeking[i]], dtype=np.int64)
-        if len(active) < 2:
-            return all_matches
-
-        # Homosexual males
-        hom_males = active[
-            (sex[active] == SEX_MALE) &
-            ((orientations[active] == ORIENTATION_HOM) | (orientations[active] == ORIENTATION_BI))
-        ]
-
-        if len(hom_males) >= 2:
-            matches = self._match_single_pool(hom_males, age, eth, age_config)
-            for a, b in matches:
-                seeking[a] = False
-                seeking[b] = False
-            all_matches.extend(matches)
-
-        # Refresh active list
-        active = np.array([i for i in group_indices if seeking[i]], dtype=np.int64)
-        if len(active) < 2:
-            return all_matches
-
-        # Homosexual females
-        hom_females = active[
-            (sex[active] == SEX_FEMALE) &
-            ((orientations[active] == ORIENTATION_HOM) | (orientations[active] == ORIENTATION_BI))
-        ]
-
-        if len(hom_females) >= 2:
-            matches = self._match_single_pool(hom_females, age, eth, age_config)
-            for a, b in matches:
-                seeking[a] = False
-                seeking[b] = False
-            all_matches.extend(matches)
+            if s1 == s2 and o1 == o2:
+                pool = active[(sex[active] == s1) & (orientations[active] == o1)]
+                if len(pool) >= 2:
+                    matches = self._match_single_pool(pool, age, eth, age_config)
+                    for a, b in matches:
+                        seeking[a] = False
+                        seeking[b] = False
+                    all_matches.extend(matches)
+            else:
+                pool1 = active[(sex[active] == s1) & (orientations[active] == o1)]
+                pool2 = active[(sex[active] == s2) & (orientations[active] == o2)]
+                if len(pool1) > 0 and len(pool2) > 0:
+                    matches = self._match_pools(pool1, pool2, age, eth, age_config)
+                    for a, b in matches:
+                        seeking[a] = False
+                        seeking[b] = False
+                    all_matches.extend(matches)
 
         return all_matches
 
@@ -892,7 +901,8 @@ class RomanticDistributor:
         arrays: Dict,
         orientations: np.ndarray,
         partners: np.ndarray,
-        rel_types: np.ndarray
+        rel_types: np.ndarray,
+        intended_rel_types: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, Dict[int, List[int]]]:
         """
         Create non-exclusive relationships using three-phase matching:
@@ -908,14 +918,9 @@ class RomanticDistributor:
         lgu = arrays['lgu']
         venue_to_people = arrays['venue_to_people']
 
-        # Identify remaining singles
+        # Identify who wants non-exclusive (explicit choice)
         is_single = partners < 0
-
-        # Sample who wants non-exclusive
-        base_prob = self.config['relationship_types']['base_probabilities']['non_exclusive']
-        wants_non_exclusive = np.random.random(n) < base_prob
-
-        seeking = is_single & wants_non_exclusive
+        seeking = is_single & (intended_rel_types == REL_NON_EXCLUSIVE)
         n_seeking = seeking.sum()
 
         logger.info(f"  {n_seeking:,} singles seeking non-exclusive relationships")
@@ -1003,54 +1008,32 @@ class RomanticDistributor:
         partners_dict: Dict[int, List[int]],
         age_config: Dict
     ) -> int:
-        """Helper to match by orientation pools within a geographic mask."""
+        """Helper to match by orientation pools within a geographic mask using dynamic rules."""
         matches_created = 0
+        matching_groups = self._get_matching_groups()
 
-        # Het males + het/bi females
-        het_males = np.where(mask & (sex == SEX_MALE) & (orientations == ORIENTATION_HET))[0]
-        het_bi_females = np.where(
-            mask & (sex == SEX_FEMALE) &
-            ((orientations == ORIENTATION_HET) | (orientations == ORIENTATION_BI))
-        )[0]
-
-        if len(het_males) > 0 and len(het_bi_females) > 0:
-            matches = self._match_pools(het_males, het_bi_females, age, eth, age_config)
-            for a, b in matches:
-                partners_dict[a].append(b)
-                partners_dict[b].append(a)
-                seeking[a] = False
-                seeking[b] = False
-                matches_created += 1
-
-        # Homosexual males
-        hom_males = np.where(
-            mask & (sex == SEX_MALE) &
-            ((orientations == ORIENTATION_HOM) | (orientations == ORIENTATION_BI))
-        )[0]
-
-        if len(hom_males) >= 2:
-            matches = self._match_single_pool(hom_males, age, eth, age_config)
-            for a, b in matches:
-                partners_dict[a].append(b)
-                partners_dict[b].append(a)
-                seeking[a] = False
-                seeking[b] = False
-                matches_created += 1
-
-        # Homosexual females
-        hom_females = np.where(
-            mask & (sex == SEX_FEMALE) &
-            ((orientations == ORIENTATION_HOM) | (orientations == ORIENTATION_BI))
-        )[0]
-
-        if len(hom_females) >= 2:
-            matches = self._match_single_pool(hom_females, age, eth, age_config)
-            for a, b in matches:
-                partners_dict[a].append(b)
-                partners_dict[b].append(a)
-                seeking[a] = False
-                seeking[b] = False
-                matches_created += 1
+        for (s1, o1), (s2, o2) in matching_groups:
+            if s1 == s2 and o1 == o2:
+                pool = np.where(mask & (sex == s1) & (orientations == o1))[0]
+                if len(pool) >= 2:
+                    matches = self._match_single_pool(pool, age, eth, age_config)
+                    for a, b in matches:
+                        partners_dict[a].append(b)
+                        partners_dict[b].append(a)
+                        seeking[a] = False
+                        seeking[b] = False
+                        matches_created += 1
+            else:
+                pool1 = np.where(mask & (sex == s1) & (orientations == o1))[0]
+                pool2 = np.where(mask & (sex == s2) & (orientations == o2))[0]
+                if len(pool1) > 0 and len(pool2) > 0:
+                    matches = self._match_pools(pool1, pool2, age, eth, age_config)
+                    for a, b in matches:
+                        partners_dict[a].append(b)
+                        partners_dict[b].append(a)
+                        seeking[a] = False
+                        seeking[b] = False
+                        matches_created += 1
 
         return matches_created
 
@@ -1060,7 +1043,8 @@ class RomanticDistributor:
         orientations: np.ndarray,
         partners: np.ndarray,
         rel_types: np.ndarray,
-        consensual: np.ndarray
+        consensual: np.ndarray,
+        intended_rel_types: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray, Dict[int, List[int]]]:
         """
         Process cheating/affairs using three-phase matching:
@@ -1094,8 +1078,8 @@ class RomanticDistributor:
         # Build affair partner pool
         in_non_exclusive = rel_types == REL_NON_EXCLUSIVE
         is_single = rel_types == REL_NO_PARTNER
-        non_excl_prob = self.config['relationship_types']['base_probabilities']['non_exclusive']
-        willing_singles = is_single & (np.random.random(n) < non_excl_prob)
+        # Willing singles are those who explicitly chose non-exclusive but haven't found a primary partner
+        willing_singles = is_single & (intended_rel_types == REL_NON_EXCLUSIVE)
 
         # Affair partners: non-exclusive OR willing singles, but NOT cheaters
         affair_pool_mask = (in_non_exclusive | willing_singles) & ~cheater_mask
@@ -1202,123 +1186,45 @@ class RomanticDistributor:
         consensual: np.ndarray,
         age_config: Dict
     ) -> int:
-        """Match cheaters with affair partners by orientation pools."""
+        """Match cheaters with affair partners by orientation pools using dynamic rules."""
         affairs_created = 0
+        matching_groups = self._get_matching_groups()
 
-        # Het male cheaters + het/bi female pool
-        het_male_cheaters = cheaters[(sex[cheaters] == SEX_MALE) & (orientations[cheaters] == ORIENTATION_HET)]
-        het_bi_female_pool = pool[
-            (sex[pool] == SEX_FEMALE) &
-            ((orientations[pool] == ORIENTATION_HET) | (orientations[pool] == ORIENTATION_BI))
-        ]
+        for (s1, o1), (s2, o2) in matching_groups:
+            # Direction 1: Cheaters of cat1 with Pool of cat2
+            c1_indices = np.where((sex[cheaters] == s1) & (orientations[cheaters] == o1))[0]
+            p2_indices = np.where((sex[pool] == s2) & (orientations[pool] == o2))[0]
+            
+            c1 = cheaters[c1_indices]
+            p2 = pool[p2_indices]
+            
+            if len(c1) > 0 and len(p2) > 0:
+                matches = self._match_pools(c1, p2, age, eth, age_config)
+                for cheater, partner in matches:
+                    affair_partners[cheater].append(partner)
+                    consensual[cheater] = False
+                    cheater_seeking[cheater] = False
+                    affair_available[partner] = False
+                    affairs_created += 1
 
-        if len(het_male_cheaters) > 0 and len(het_bi_female_pool) > 0:
-            matches = self._match_pools(het_male_cheaters, het_bi_female_pool, age, eth, age_config)
-            for cheater, partner in matches:
-                affair_partners[cheater].append(partner)
-                consensual[cheater] = False
-                cheater_seeking[cheater] = False
-                affair_available[partner] = False
-                affairs_created += 1
-
-        # Het female cheaters + het/bi male pool
-        het_female_cheaters = cheaters[(sex[cheaters] == SEX_FEMALE) & (orientations[cheaters] == ORIENTATION_HET)]
-        het_bi_male_pool = pool[
-            (sex[pool] == SEX_MALE) &
-            ((orientations[pool] == ORIENTATION_HET) | (orientations[pool] == ORIENTATION_BI))
-        ]
-
-        if len(het_female_cheaters) > 0 and len(het_bi_male_pool) > 0:
-            matches = self._match_pools(het_female_cheaters, het_bi_male_pool, age, eth, age_config)
-            for cheater, partner in matches:
-                affair_partners[cheater].append(partner)
-                consensual[cheater] = False
-                cheater_seeking[cheater] = False
-                affair_available[partner] = False
-                affairs_created += 1
-
-        # Homosexual male cheaters
-        hom_male_cheaters = cheaters[
-            (sex[cheaters] == SEX_MALE) &
-            ((orientations[cheaters] == ORIENTATION_HOM) | (orientations[cheaters] == ORIENTATION_BI))
-        ]
-        hom_bi_male_pool = pool[
-            (sex[pool] == SEX_MALE) &
-            ((orientations[pool] == ORIENTATION_HOM) | (orientations[pool] == ORIENTATION_BI))
-        ]
-
-        if len(hom_male_cheaters) > 0 and len(hom_bi_male_pool) > 0:
-            matches = self._match_pools(hom_male_cheaters, hom_bi_male_pool, age, eth, age_config)
-            for cheater, partner in matches:
-                affair_partners[cheater].append(partner)
-                consensual[cheater] = False
-                cheater_seeking[cheater] = False
-                affair_available[partner] = False
-                affairs_created += 1
-
-        # Homosexual female cheaters
-        hom_female_cheaters = cheaters[
-            (sex[cheaters] == SEX_FEMALE) &
-            ((orientations[cheaters] == ORIENTATION_HOM) | (orientations[cheaters] == ORIENTATION_BI))
-        ]
-        hom_bi_female_pool = pool[
-            (sex[pool] == SEX_FEMALE) &
-            ((orientations[pool] == ORIENTATION_HOM) | (orientations[pool] == ORIENTATION_BI))
-        ]
-
-        if len(hom_female_cheaters) > 0 and len(hom_bi_female_pool) > 0:
-            matches = self._match_pools(hom_female_cheaters, hom_bi_female_pool, age, eth, age_config)
-            for cheater, partner in matches:
-                affair_partners[cheater].append(partner)
-                consensual[cheater] = False
-                cheater_seeking[cheater] = False
-                affair_available[partner] = False
-                affairs_created += 1
+            # Direction 2: Cheaters of cat2 with Pool of cat1 (if different)
+            if s1 != s2 or o1 != o2:
+                c2_indices = np.where((sex[cheaters] == s2) & (orientations[cheaters] == o2))[0]
+                p1_indices = np.where((sex[pool] == s1) & (orientations[pool] == o1))[0]
+                
+                c2 = cheaters[c2_indices]
+                p1 = pool[p1_indices]
+                
+                if len(c2) > 0 and len(p1) > 0:
+                    matches = self._match_pools(c2, p1, age, eth, age_config)
+                    for cheater, partner in matches:
+                        affair_partners[cheater].append(partner)
+                        consensual[cheater] = False
+                        cheater_seeking[cheater] = False
+                        affair_available[partner] = False
+                        affairs_created += 1
 
         return affairs_created
-
-    def _get_age_group(self, age: int) -> str:
-        """Get age group string for an age value."""
-        if age < 26:
-            return "18-25"
-        elif age < 36:
-            return "26-35"
-        elif age < 51:
-            return "36-50"
-        elif age < 65:
-            return "51-64"
-        else:
-            return "65+"
-
-    def _get_max_age_diff(self, age: int) -> int:
-        """Get maximum age difference from config based on person's age group."""
-        age_group = self._get_age_group(age)
-        age_config = self.config.get('age_differences', {})
-        group_config = age_config.get(age_group, {})
-        return group_config.get('max', 15)  # Default to 15 if not configured
-
-    def _are_orientation_compatible(
-        self,
-        orientation1: int,
-        sex1: int,
-        orientation2: int,
-        sex2: int
-    ) -> bool:
-        """Check if two people are orientation-compatible for a relationship."""
-        # Heterosexual: attracted to opposite sex
-        # Homosexual: attracted to same sex
-        # Bisexual: attracted to both
-
-        def is_attracted_to(orientation, own_sex, target_sex):
-            if orientation == ORIENTATION_HET:
-                return own_sex != target_sex
-            elif orientation == ORIENTATION_HOM:
-                return own_sex == target_sex
-            else:  # Bisexual
-                return True
-
-        return (is_attracted_to(orientation1, sex1, sex2) and
-                is_attracted_to(orientation2, sex2, sex1))
 
     def _write_results(
         self,
@@ -1332,10 +1238,8 @@ class RomanticDistributor:
         non_exclusive_partners: Dict[int, List[int]]
     ):
         """Write results from arrays back to person objects."""
-        orientation_names = ['heterosexual', 'homosexual', 'bisexual']
-        
+        orientation_names = self.orientation_names
         rel_type_names = ['no_partner', 'exclusive', 'non_exclusive']
-
         ids = arrays['ids']
 
         for i, person in enumerate(adults):
@@ -1348,33 +1252,29 @@ class RomanticDistributor:
                 'consensual': bool(consensual[i])
             }
 
-            # Partners (convert numpy int64 to Python int for JSON serialization)
+            # Partners
             exclusive_partners_list = []
             non_exclusive_partners_list = []
 
-            # Primary partner (from exclusive or household couples)
             if partners[i] >= 0:
-                partner_id = int(ids[partners[i]])  # Convert to Python int
+                partner_id = int(ids[partners[i]])
                 rel_type = rel_type_names[rel_types[i]]
-
                 if rel_type == 'exclusive':
                     exclusive_partners_list.append(partner_id)
                 elif rel_type == 'non_exclusive':
                     non_exclusive_partners_list.append(partner_id)
 
-            # Non-exclusive partners from batch matching
             if i in non_exclusive_partners:
                 for partner_idx in non_exclusive_partners[i]:
-                    partner_id = int(ids[partner_idx])  # Convert to Python int
-                    if partner_id not in non_exclusive_partners_list:
-                        non_exclusive_partners_list.append(partner_id)
+                    pid = int(ids[partner_idx])
+                    if pid not in non_exclusive_partners_list:
+                        non_exclusive_partners_list.append(pid)
 
-            # Affair partners (added as non_exclusive)
             if i in affair_partners:
                 for affair_idx in affair_partners[i]:
-                    affair_id = int(ids[affair_idx])  # Convert to Python int
-                    if affair_id not in non_exclusive_partners_list:
-                        non_exclusive_partners_list.append(affair_id)
+                    aid = int(ids[affair_idx])
+                    if aid not in non_exclusive_partners_list:
+                        non_exclusive_partners_list.append(aid)
 
             person.properties[self.partners_key] = {
                 'exclusive': exclusive_partners_list,
@@ -1392,16 +1292,13 @@ class RomanticDistributor:
     ):
         """Print distribution statistics."""
         n = len(orientations)
-
-        logger.info("\n" + "=" * 40)
-        logger.info("DISTRIBUTION STATISTICS")
-        logger.info("=" * 40)
+        logger.info("\n" + "=" * 40 + "\nDISTRIBUTION STATISTICS\n" + "=" * 40)
 
         # Orientations
         logger.info("\nSexual Orientations:")
-        logger.info(f"  Heterosexual: {(orientations == ORIENTATION_HET).sum():,} ({100*(orientations == ORIENTATION_HET).mean():.1f}%)")
-        logger.info(f"  Homosexual: {(orientations == ORIENTATION_HOM).sum():,} ({100*(orientations == ORIENTATION_HOM).mean():.1f}%)")
-        logger.info(f"  Bisexual: {(orientations == ORIENTATION_BI).sum():,} ({100*(orientations == ORIENTATION_BI).mean():.1f}%)")
+        for i, name in enumerate(self.orientation_names):
+            count = (orientations == i).sum()
+            logger.info(f"  {name.capitalize()}: {count:,} ({100*count/n:.1f}%)")
 
         # Relationship types
         logger.info("\nRelationship Types:")
