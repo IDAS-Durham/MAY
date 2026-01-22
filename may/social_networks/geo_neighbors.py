@@ -10,6 +10,8 @@ import numpy as np
 import logging
 from typing import Optional
 
+import numpy.typing as npt
+
 logger = logging.getLogger("geo_neighbors")
 
 # Earth's radius in kilometers
@@ -24,7 +26,19 @@ type GraphCreator = Callable[[Any],Any]
 neighbour_finders: dict[str, GraphCreator] = {}
 def register_neighbour_finder(name: str):
     """
-    Used to catalog the different graph creation methods and their defaults. 
+    Decorator to register a neighbour finding method in the neighbour_finders registry.
+
+    Args:
+        name (str): Name to register the neighbour finder under.
+
+    Returns:
+        Callable: Decorator function that registers the wrapped function.
+
+    Example:
+        >>> @register_neighbour_finder("my_method")
+        ... def find_neighbours_my_method(geo_units, radius_km):
+        ...     return {}
+        >>> neighbours = neighbour_finders["my_method"](units, 10.0)
     """
     def decorator(func: GraphCreator):
         @wraps(func)
@@ -34,12 +48,55 @@ def register_neighbour_finder(name: str):
         return wrapper
     return decorator
 
+def _filter_units_with_valid_coords(geo_units: list['GeographicalUnit']) -> list['GeographicalUnit']:
+    """
+    Filter geographical units to only those with valid coordinates.
+
+    Args:
+        geo_units (list[GeographicalUnit]): List of geographical units to filter.
+
+    Returns:
+        list[GeographicalUnit]: Units that have non-null, non-NaN coordinates.
+    """
+    # Filter units with valid coordinates
+    units_with_coords = []
+    for unit in geo_units:
+        coords = getattr(unit, coordinate_attr, None)
+        if coords is not None and not (np.isnan(coords[0]) or np.isnan(coords[1])):
+            units_with_coords.append(unit)
+    return units_with_coords
+
+def _extract_coordinates(geo_units: list['GeographicalUnit']) -> npt.NDArray:
+    """
+    Extract coordinates from geographical units as a numpy array.
+
+    Args:
+        geo_units (list[GeographicalUnit]): List of geographical units with coordinates.
+
+    Returns:
+        np.ndarray: Array of shape (n, 2) with (longitude, latitude) pairs,
+            or empty dict if fewer than 2 units have valid coordinates.
+    """
+    units_with_coords = _filter_units_with_valid_coords(geo_units)
+    
+    if len(units_with_coords) < 2:
+        logger.warning("Need at least 2 units with coordinates")
+        return {}
+
+    # Extract coordinates as (lon, lat) - note: libpysal expects (x, y) = (lon, lat)
+    coordinates = np.array([
+        [unit.coordinates[1], unit.coordinates[0]]  # (lon, lat)
+        for unit in units_with_coords
+    ])
+
+    return coordinates
+
 @register_neighbour_finder('libpysal')
-def find_neighbours_libpysal(
-    geo_units: list,
+def _find_neighbours_libpysal(
+    geo_units: list['GeographicalUnit'],
     radius_km: float,
     coordinate_attr: str = "coordinates"
-) -> dict[str, list[str]]:
+) -> dict[id, list[id]]:
     """
     Find neighbouring geographical units using libpysal DistanceBand.
 
@@ -53,29 +110,14 @@ def find_neighbours_libpysal(
         coordinate_attr: Attribute name for coordinates tuple (lat, lon)
 
     Returns:
-        Dict mapping unit name -> list of neighbour unit names
+        Dict mapping unit id -> list of neighbour unit ids.
     """
     from libpysal import weights
 
-    # Filter units with valid coordinates
-    units_with_coords = []
-    for unit in geo_units:
-        coords = getattr(unit, coordinate_attr, None)
-        if coords is not None and not (np.isnan(coords[0]) or np.isnan(coords[1])):
-            units_with_coords.append(unit)
-
-    if len(units_with_coords) < 2:
-        logger.warning("Need at least 2 units with coordinates")
-        return {}
-
-    # Extract coordinates as (lon, lat) - note: libpysal expects (x, y) = (lon, lat)
-    coordinates = np.array([
-        [unit.coordinates[1], unit.coordinates[0]]  # (lon, lat)
-        for unit in units_with_coords
-    ])
-
-    # Approximate conversion: 1 degree ≈ 111 km at equator
-    # This is imprecise - use BallTree for accuracy
+    # Extract coordinates in the right format
+    coordinates = _extract_coordinates(geo_units)
+    
+    # Approximate conversion: 1 degree ≈ 111 km at equator. 
     threshold_degrees = radius_km / 111.0
 
     # Build distance band weights
@@ -85,7 +127,7 @@ def find_neighbours_libpysal(
     neighbours = {}
     for i, unit in enumerate(units_with_coords):
         neighbour_indices = dist_weights.neighbors.get(i, [])
-        neighbours[unit.name] = [units_with_coords[idx].name for idx in neighbour_indices]
+        neighbours[unit.id] = [units_with_coords[idx].id for idx in neighbour_indices]
 
     logger.info(f"Found neighbours for {len(neighbours)} units within ~{radius_km}km radius")
     avg_neighbours = np.mean([len(n) for n in neighbours.values()])
@@ -93,97 +135,60 @@ def find_neighbours_libpysal(
 
     return neighbours
 
-#@register_neighbour_finder('balltree')
-# def find_neighbours_balltree(
-#     geo_units: list,
-#     radius_km: float,
-#     coordinate_attr: str = "coordinates"
-# ) -> dict[str, list[str]]:
-#     """
-#     Find neighbouring geographical units within a radius using scipy BallTree.
-
-#     Uses haversine distance for accurate great-circle calculations on lat/lon.
-
-#     Args:
-#         geo_units: List of GeographicalUnit objects with coordinates (lat, lon)
-#         radius_km: Search radius in kilometers
-#         coordinate_attr: Attribute name for coordinates tuple (lat, lon)
-
-#     Returns:
-#         Dict mapping unit name -> list of neighbour unit names
-#     """
-#     from sklearn.neighbors import BallTree
-
-#     # Filter units with valid coordinates
-#     units_with_coords = []
-#     for unit in geo_units:
-#         coords = getattr(unit, coordinate_attr, None)
-#         if coords is not None and not (np.isnan(coords[0]) or np.isnan(coords[1])):
-#             units_with_coords.append(unit)
-
-#     if len(units_with_coords) < 2:
-#         logger.warning("Need at least 2 units with coordinates")
-#         return {}
-
-#     # Extract coordinates as (lat, lon) in radians for haversine
-#     coords_rad = np.array([
-#         [np.radians(unit.coordinates[0]), np.radians(unit.coordinates[1])]
-#         for unit in units_with_coords
-#     ])
-
-#     # Build BallTree with haversine metric
-#     tree = BallTree(coords_rad, metric='haversine')
-
-#     # Convert radius to radians (radius_km / earth_radius)
-#     radius_rad = radius_km / EARTH_RADIUS_KM
-
-#     # Query all neighbours within radius
-#     indices = tree.query_radius(coords_rad, r=radius_rad)
-
-#     # Build neighbour dict
-#     neighbours = {}
-#     for i, unit in enumerate(units_with_coords):
-#         # Exclude self from neighbours
-#         neighbour_indices = [idx for idx in indices[i] if idx != i]
-#         neighbours[unit.name] = [units_with_coords[idx].name for idx in neighbour_indices]
-
-#     logger.info(f"Found neighbours for {len(neighbours)} units within {radius_km}km radius")
-#     avg_neighbours = np.mean([len(n) for n in neighbours.values()])
-#     logger.info(f"Average neighbours per unit: {avg_neighbours:.1f}")
-
-#     return neighbours
-
-
-def find_neighbours(*args, method='libpysal', **kwargs):
+def find_neighbours(*args, method='libpysal', **kwargs) -> dict[id, list[id]]:
     """
-    Build a NetworkX graph of neighbouring geographical units.
+    Find neighbouring geographical units within a specified radius.
 
     Args:
-        geo_units: List of GeographicalUnit objects with coordinates
-        radius_km: Search radius in kilometers
-        method: "balltree" (accurate) or "libpysal" (fast)
+        *args: Arguments passed to the underlying neighbour finder method.
+        method (str): Method for finding neighbours. Options: 'libpysal' (fast,
+            uses Euclidean distance), 'balltree' (accurate, uses haversine).
+        **kwargs: Keyword arguments passed to the underlying method, typically:
+            - geo_units (list[GeographicalUnit]): Units with coordinates.
+            - radius_km (float): Search radius in kilometers.
 
     Returns:
-        NetworkX Graph with units as nodes and neighbour relationships as edges
-    """
+        dict[str, list[str]]: Mapping of unit ID to list of neighbour unit IDs.
 
-    find_neighbours_method = neighbour_finders[method]
-    if find_neighbours_method is None:
-        raise ValueError(f"Unknown method: {method}")
-    return find_neighbours_method(*args, **kwargs)
+    Example:
+        >>> from may.geography import Geography
+        >>> geo = Geography(data_dir="data/geography")
+        >>> geo.load_from_csv()
+        >>> units = list(geo.get_units_by_level("SGU").values())
+        >>> neighbours = find_neighbours(units, radius_km=10.0, method='libpysal')
+    """
+     find_neighbours_method = neighbour_finders[method]
+     if find_neighbours_method is None:
+         raise ValueError(f"Unknown method: {method}")
+     return find_neighbours_method(*args, **kwargs)
 
 
 def build_neighbour_network(
-        neighbours: dict[str, str]
+        neighbours: dict[str, list[str]]
         ) -> "nx.Graph":
+    """
+    Build a NetworkX graph from a neighbour dictionary.
+
+    Args:
+        neighbours (dict[str, list[str]]): Mapping of unit ID to list of neighbour unit IDs.
+
+    Returns:
+        nx.Graph: Undirected graph with units as nodes and neighbour relationships as edges.
+
+    Example:
+        >>> neighbours = {"A": ["B", "C"], "B": ["A"], "C": ["A"]}
+        >>> G = build_neighbour_network(neighbours)
+        >>> print(G.number_of_nodes(), G.number_of_edges())
+        3 2
+    """
     import networkx as nx
 
     # Build graph
     G = nx.Graph()
 
-    # Add all nodes
-    for unit_name in neighbours.keys():
-        G.add_node(unit_name)
+     # Add all nodes
+     for unit_name in neighbours.keys():
+         G.add_node(unit_name)
 
     # Add edges (undirected, so only add once)
     for unit_name, unit_neighbours in neighbours.items():

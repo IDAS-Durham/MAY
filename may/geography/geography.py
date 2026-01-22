@@ -206,3 +206,12 @@ class Geography:
     def __repr__(self):
         return f"<Geography: {len(self.units)} units across {len(self.levels)} levels>"
 
+    def __eq__(self, other):
+        for attribute in ['units','levels']:
+            if getattr(self, attribute) != getattr(other, attribute):
+                return False
+        return True
+
+    def __hash__(self):
+        return hash((self.data_dir, self.levels))
+

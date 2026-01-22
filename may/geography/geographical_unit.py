@@ -91,6 +91,16 @@ class GeographicalUnit:
             descendants.extend(child.get_descendants(level))
         return descendants
 
+    def get_people(self):
+        """ Get all people in the geo_unit and/or all its descendents """
+        people = set()
+        if self.people:
+            people.update(set(self.people))
+        if self.children:
+            for child in self.children:
+                people.update(child.get_people())
+        return people
+
     def __repr__(self):
         venue_info = f", {len(self.venues)} venues" if self.venues else ""
         people_info = f", {len(self.people)} people" if self.people else ""
