@@ -12,9 +12,9 @@ from may.population import PopulationManager
 from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
-from may.relationships import RelationshipBuilder
+from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples
-from check_multiple_jobs import analyze_multiple_jobs
+#from check_multiple_jobs import analyze_multiple_jobs
 
 
 from may.social_networks import *
@@ -32,7 +32,7 @@ def build_social_network(world):
         people = geo_unit.people
         logger.debug(f"Geo unit name - {geo_unit.name}, with {len(people)} people")
         
-        relationships = build_graph_relationships(
+        relationships = GraphRelationshipBuilder.build_graph_relationships(
             people,
             avg_connections=6,
             clustering_level=0.8,
@@ -43,34 +43,6 @@ def build_social_network(world):
     # Export relationships to CSV
     #storage_key = builder.config.get('storage', {}).get('key', builder.name)
     export_relationships(world, 'social_contacts', f"social_contacts.csv")
-
-    
-def build_relationships(world, relationship_config):
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info("RELATIONSHIP PIPELINE")
-    logger.info("=" * 60)
-    
-    relationship_configs = relationship_config.get("relationships", [])
-    
-    for rel_config in relationship_configs:
-        config_path = rel_config.get("config")
-        
-        logger.info("")
-        logger.info(f"[RELATIONSHIP] {config_path}")
-        
-        try:
-            builder = RelationshipBuilder(world, config_path)
-            builder.build_all(store=True)
-            
-            # Export relationships to CSV
-            storage_key = builder.config.get('storage', {}).get('key', builder.name)
-            export_relationships(world, storage_key, f"{storage_key}.csv")
-            
-        except Exception as e:
-            logger.error(f"Failed to build relationships from {config_path}: {e}")
-            logger.exception(e)
-
 
 def export_relationships(world, property_key, output_file):
     """Export relationships to CSV for inspection."""

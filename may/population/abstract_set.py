@@ -23,7 +23,6 @@ class AbstractSet(ABC):
         pass
 
     @property
-    @abstractmethod
     def size_collated(self, attribute, ifnot=False) -> int:
         """ """
         return len(self._collate(attribute, ifnot=ifnot))
@@ -39,7 +38,7 @@ class AbstractSet(ABC):
         """Whether or not the group contains people.
 
         """
-        return self.size() > 0
+        return self.size > 0
 
     
 

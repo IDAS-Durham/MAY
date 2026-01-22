@@ -114,44 +114,44 @@ class GraphRelationshipBuilder:
 
         return relationships
 
+    @staticmethod
+    def build_graph_relationships(
+        people: list[Person],
+        avg_connections: int = 6,
+        clustering_level: float = 0.7,
+        storage_key: str = "social_contacts",
+        store: bool = True
+    ) -> dict[int, list[int]]:
+        """
+        Convenience function to build graph-based relationships.
 
-def build_graph_relationships(
-    people: list[Person],
-    avg_connections: int = 6,
-    clustering_level: float = 0.7,
-    storage_key: str = "social_contacts",
-    store: bool = True
-) -> dict[int, list[int]]:
-    """
-    Convenience function to build graph-based relationships.
+        Args:
+            people: List of Person objects
+            avg_connections: Average connections per person (will be made even)
+            clustering_level: 0.0 (low clustering) to 1.0 (high clustering)
+            storage_key: Key for storing in person.properties
+            store: Whether to store relationships in person objects
 
-    Args:
-        people: List of Person objects
-        avg_connections: Average connections per person (will be made even)
-        clustering_level: 0.0 (low clustering) to 1.0 (high clustering)
-        storage_key: Key for storing in person.properties
-        store: Whether to store relationships in person objects
+        Returns:
+            Dict mapping person_id -> list of connected person_ids
 
-    Returns:
-        Dict mapping person_id -> list of connected person_ids
-
-    Example:
-        >>> from may.population.person import Person
-        >>> people = [Person(age=30, sex='male') for _ in range(100)]
-        >>> relationships = build_graph_relationships(
-        ...     people,
-        ...     avg_connections=8,
-        ...     clustering_level=0.8
-        ... )
-        >>> print(f"Person 0 has {len(relationships[0])} connections")
-    """
-    builder = GraphRelationshipBuilder(
-        people=people,
-        avg_connections=avg_connections,
-        clustering_level=clustering_level,
-        storage_key=storage_key
-    )
-    return builder.build_all(store=store)
+        Example:
+            >>> from may.population.person import Person
+            >>> people = [Person(age=30, sex='male') for _ in range(100)]
+            >>> relationships = build_graph_relationships(
+            ...     people,
+            ...     avg_connections=8,
+            ...     clustering_level=0.8
+            ... )
+            >>> print(f"Person 0 has {len(relationships[0])} connections")
+        """
+        builder = GraphRelationshipBuilder(
+            people=people,
+            avg_connections=avg_connections,
+            clustering_level=clustering_level,
+            storage_key=storage_key
+        )
+        return builder.build_all(store=store)
 
 
 if __name__ == "__main__":
@@ -173,7 +173,7 @@ if __name__ == "__main__":
     for clustering in [0.001, 0.1, 0.5]:
         laptime=time.perf_counter()
         logger.info(f"\n--- Clustering level: {clustering} ---")
-        relationships = build_graph_relationships(
+        relationships = GraphRelationshipBuilder.build_graph_relationships(
             people,
             avg_connections=6,
             clustering_level=clustering,
