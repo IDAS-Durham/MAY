@@ -400,6 +400,8 @@ class HouseholdPromoter:
                     rule_people_added = people_added - rule_start_people_added
                     logger.info(f"  Rule {rule_idx} progress: {households_processed}/{total_households} households checked ({percent_complete:.1f}%) - {rule_households_promoted} promoted, {rule_people_added} people added")
 
+                households_processed += 1
+
             # Log rule completion summary
             rule_households_promoted = households_promoted_count - rule_start_promoted
             rule_people_added = people_added - rule_start_people_added

@@ -144,13 +144,6 @@ settings:
     show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
 
 
-# ============================================================================
-# Work Mode Labels (for reference)
-# ============================================================================
-work_mode_labels:
-  From_Home: "Works from home (no commute)"
-  Hybrid: "Hybrid work (some days at workplace, some at home)"
-  Normal: "Normal commute to workplace"
 
 # ============================================================================
 # Notes

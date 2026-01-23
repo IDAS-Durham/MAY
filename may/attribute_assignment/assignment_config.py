@@ -251,6 +251,7 @@ class Role:
     name: str
     description: str
     subsets: List[str]  # List of subset names this role applies to
+    role_type: str = "general" # primary, secondary, extra, or general
 
     def matches(self, person, verbose: bool = False) -> bool:
         """
@@ -293,6 +294,7 @@ class AssignmentRule:
     priority: int
     description: str
     assignment: Dict[str, Any]
+    dependencies: List[str] = field(default_factory=list) # Roles this rule depends on
 
     def applies_to_role(self, role_name: str) -> bool:
         """Check if this rule applies to a role."""
@@ -418,10 +420,23 @@ class AttributeAssignmentConfig:
             if not isinstance(role_data, dict):
                 continue
 
+            # Use explicit 'type' if provided, otherwise infer from name for backward compatibility
+            role_type = role_data.get('type')
+            if not role_type:
+                if role_name.startswith('primary_'):
+                    role_type = 'primary'
+                elif role_name.startswith('secondary_'):
+                    role_type = 'secondary'
+                elif role_name.startswith('extra_'):
+                    role_type = 'extra'
+                else:
+                    role_type = 'general'
+
             roles[role_name] = Role(
                 name=role_name,
                 description=role_data.get('description', ''),
-                subsets=role_data.get('subsets', [])
+                subsets=role_data.get('subsets', []),
+                role_type=role_type
             )
 
         return roles
@@ -481,11 +496,25 @@ class AttributeAssignmentConfig:
 
             rules = []
             for rule_data in struct_rules_data.get('rules', []):
+                assignment_data = rule_data.get('assignment', {})
+                
+                # Extract dependencies from inheritance strategies
+                dependencies = []
+                inherit_from = assignment_data.get('inherit_from', {})
+                if inherit_from:
+                    # Forward inheritance uses 'roles' (list)
+                    if 'roles' in inherit_from:
+                        dependencies.extend(inherit_from['roles'])
+                    # Reverse inheritance uses 'role' (string)
+                    elif 'role' in inherit_from:
+                        dependencies.append(inherit_from['role'])
+
                 rules.append(AssignmentRule(
                     role=rule_data.get('role'),  # Can be string or list
                     priority=rule_data.get('priority', 999),
                     description=rule_data.get('description', ''),
-                    assignment=rule_data.get('assignment', {})
+                    assignment=assignment_data,
+                    dependencies=list(set(dependencies)) # Unique dependencies
                 ))
 
             # Sort rules by priority
@@ -601,34 +630,49 @@ class AttributeAssignmentConfig:
             if not matched:
                 continue
 
-            # Check if this role has been assigned already (for primary/secondary distinction)
+            # Check if this role has been assigned already
             role_count = assigned_roles.count(role_name)
 
-            # Determine if we should assign this role based on count and naming
-            # primary_* -> first occurrence
-            # secondary_* -> second occurrence
-            # extra_* -> third+ occurrences
-            if role_name.startswith('primary_') and role_count == 0:
+            # Determine if we should assign this role based on count and explicit type
+            if role.role_type == 'primary' and role_count == 0:
                 if verbose:
                     logger.debug(f"      ✓ Assigned role '{role_name}' (primary)")
                 return role_name
-            elif role_name.startswith('secondary_') and role_count == 0:
-                # Check if primary was assigned
-                primary_role = role_name.replace('secondary_', 'primary_')
-                if primary_role in assigned_roles:
+                
+            elif role.role_type == 'secondary' and role_count == 0:
+                # Check if a primary role for the same subset was already assigned
+                has_primary = False
+                for assigned_name in assigned_roles:
+                    assigned_role = self.roles.get(assigned_name)
+                    if assigned_role and assigned_role.role_type == 'primary':
+                        # Check if subsets overlap (e.g., both apply to 'Adults')
+                        if set(assigned_role.subsets) & set(role.subsets):
+                            has_primary = True
+                            break
+                            
+                if has_primary:
                     if verbose:
                         logger.debug(f"      ✓ Assigned role '{role_name}' (secondary)")
                     return role_name
-            elif role_name.startswith('extra_'):
-                # Check if both primary and secondary were assigned
-                primary_role = role_name.replace('extra_', 'primary_')
-                secondary_role = role_name.replace('extra_', 'secondary_')
-                if primary_role in assigned_roles and secondary_role in assigned_roles:
+                    
+            elif role.role_type == 'extra':
+                # Check if both primary and secondary for the same subset were assigned
+                has_primary = False
+                has_secondary = False
+                for assigned_name in assigned_roles:
+                    assigned_role = self.roles.get(assigned_name)
+                    if assigned_role:
+                        if assigned_role.role_type == 'primary' and (set(assigned_role.subsets) & set(role.subsets)):
+                            has_primary = True
+                        if assigned_role.role_type == 'secondary' and (set(assigned_role.subsets) & set(role.subsets)):
+                            has_secondary = True
+                            
+                if has_primary and has_secondary:
                     if verbose:
                         logger.debug(f"      ✓ Assigned role '{role_name}' (extra)")
                     return role_name
-            elif not role_name.startswith(('primary_', 'secondary_', 'extra_')):
-                # For non-primary/secondary/extra roles (like 'children', 'independent_young')
+                    
+            elif role.role_type == 'general':
                 if verbose:
                     logger.debug(f"      ✓ Assigned role '{role_name}'")
                 return role_name

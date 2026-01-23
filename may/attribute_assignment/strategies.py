@@ -55,6 +55,34 @@ class AssignmentStrategy:
         """
         raise NotImplementedError("Subclasses must implement assign()")
 
+    def _record_fallback(self, context: Dict[str, Any], reason: str):
+        """Record the reason for fallback in the context for diagnostics."""
+        context['fallback_reason'] = reason
+        logger.debug(f"      ! Fallback: {reason}")
+
+    def _fallback(self, person, household, context: Dict[str, Any], reason: str) -> Any:
+        """
+        Execute fallback strategy (either configured in YAML or default geo).
+        """
+        self._record_fallback(context, reason)
+        
+        # Check if a custom fallback is configured in the YAML
+        fallback_config = self.config.get('fallback')
+        if fallback_config:
+            strategy_type = fallback_config.get('strategy')
+            if strategy_type == 'probabilistic':
+                strat = ProbabilisticStrategy(fallback_config, self.data_manager)
+                return strat.assign(person, household, context)
+            elif strategy_type == 'constant':
+                return fallback_config.get('value')
+        
+        # Default: Probabilistic geo distribution
+        strat = ProbabilisticStrategy(
+            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
+            self.data_manager
+        )
+        return strat.assign(person, household, context)
+
     def _get_person_by_role(self, context: Dict[str, Any], role_name: str):
         """
         Get person by role name from context.
@@ -171,19 +199,18 @@ class PartnershipStrategy(AssignmentStrategy):
         if not first_person:
             logger.warning(f"Partner role '{self.partner_role}' not found in context")
             # Fall back to probabilistic
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "PARTNER_ROLE_NOT_FOUND")
 
         # Get first person's attribute value
         attribute_name = context.get('attribute_name')
         first_value = self._get_attribute_value(first_person, attribute_name)
         if not first_value:
             logger.warning(f"No {attribute_name} found for {self.partner_role}")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "PARTNER_VALUE_MISSING")
 
-        # Get geo unit
         if not household or not household.geographical_unit:
             logger.warning("No geographical unit found for household")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "GEO_UNIT_MISSING")
 
         geo_unit = household.geographical_unit.name
 
@@ -191,7 +218,7 @@ class PartnershipStrategy(AssignmentStrategy):
         probs = self.data_manager.lookup(self.data_source_name, geo_unit, first_value)
         if not probs:
             logger.warning(f"No pair probabilities for {geo_unit}, {first_value}")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "DATA_SOURCE_MISSING")
 
         # Sample from distribution
         values = list(probs.keys())
@@ -201,24 +228,6 @@ class PartnershipStrategy(AssignmentStrategy):
         logger.debug(f"Partnership: {sampled} (partner of {first_value}) for {person.id}")
         return sampled
 
-    def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
-        """
-        Fallback to geographical distribution if pair data not available.
-
-        Args:
-            person: Person object
-            household: Household object
-            context: Assignment context
-
-        Returns:
-            Sampled value from geo distribution
-        """
-        logger.debug("Falling back to geographical distribution")
-        fallback_strategy = ProbabilisticStrategy(
-            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
-            self.data_manager
-        )
-        return fallback_strategy.assign(person, household, context)
 
 
 class InheritanceStrategy(AssignmentStrategy):
@@ -273,7 +282,7 @@ class InheritanceStrategy(AssignmentStrategy):
 
         if not parent_values:
             logger.warning(f"No parent values found for inheritance")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "NO_PARENT_VALUES")
 
         # Evaluate logic blocks
         unique_values = list(set(parent_values))
@@ -302,41 +311,47 @@ class InheritanceStrategy(AssignmentStrategy):
                     elif isinstance(then_action, dict):
                         # Nested strategy - not implemented yet, fall back
                         logger.warning(f"Nested strategy in inheritance not yet supported")
-                        return self._fallback_probabilistic(person, household, context)
+                        return self._fallback(person, household, context, "NESTED_STRATEGY_UNSUPPORTED")
             except Exception as e:
                 logger.warning(f"Error evaluating inheritance logic: {e}")
                 continue
 
         # No logic matched - fallback
-        return self._fallback_probabilistic(person, household, context)
+        return self._fallback(person, household, context, "LOGIC_NO_MATCH")
 
     def _evaluate_condition(self, condition: str, context: dict) -> bool:
-        """Evaluate a when condition."""
+        """Evaluate a when condition with fast-paths for common patterns."""
+        # FAST PATH: These account for >90% of ethnicity inheritance calls
+        if condition == "count(unique_values) == 1":
+            return len(context['unique_values']) == 1
+        if condition == "count(unique_values) > 1":
+            return len(context['unique_values']) > 1
+            
         try:
-            # Use cached compiled expression for better performance
+            # Fallback to cached eval for complex conditions
             code = _compile_expression(condition, 'eval')
             return eval(code, {"__builtins__": {}}, context)
         except:
             return False
 
     def _resolve_value(self, value_expr: str, context: dict) -> Any:
-        """Resolve a value expression like 'values[0]' or 'M'."""
+        """Resolve a value expression with fast-paths for common patterns."""
+        # FAST PATH: Common resolutions like 'M' or 'values[0]'
+        if value_expr == "values[0]":
+            return context['values'][0] if context['values'] else None
+        if len(value_expr) <= 2: # Likely a literal code like "M", "W", etc.
+            # If it's in context, it's a variable, but for letters it's usually literal
+            if value_expr not in context:
+                return value_expr
+            
         try:
-            # Use cached compiled expression for better performance
+            # Fallback to cached eval
             code = _compile_expression(value_expr, 'eval')
             return eval(code, {"__builtins__": {}}, context)
         except:
             # If it fails, return as literal string
             return value_expr
 
-    def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
-        """Fallback to geographical distribution if no parents found."""
-        logger.debug("Falling back to geographical distribution")
-        fallback_strategy = ProbabilisticStrategy(
-            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
-            self.data_manager
-        )
-        return fallback_strategy.assign(person, household, context)
 
 
 class ReverseInheritanceStrategy(AssignmentStrategy):
@@ -378,18 +393,18 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         child_role = self.inherit_config.get('role')
         if not child_role:
             logger.warning("No child role specified for reverse inheritance")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "NO_CHILD_ROLE")
 
         # Get child's attribute value
         child = self._get_person_by_role(context, child_role)
         if not child:
             logger.warning(f"Child role '{child_role}' not found")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "CHILD_NOT_FOUND")
 
         child_value = self._get_attribute_value(child, attribute_name)
         if not child_value:
             logger.warning(f"No value found for child role '{child_role}'")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "CHILD_VALUE_MISSING")
 
         # Create evaluation context for logic blocks
         # Make child value accessible as "primary_adult.ethnicity" format
@@ -420,17 +435,26 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
                             return fallback_strategy.assign(person, household, context)
                         else:
                             logger.warning(f"Unknown nested strategy: {strategy_type}")
-                            return self._fallback_probabilistic(person, household, context)
+                            return self._fallback(person, household, context, "NESTED_STRATEGY_UNSUPPORTED")
             except Exception as e:
                 logger.warning(f"Error evaluating reverse inheritance logic: {e}")
                 continue
 
         # No logic matched - fallback
-        return self._fallback_probabilistic(person, household, context)
+        return self._fallback(person, household, context, "LOGIC_NO_MATCH")
 
     def _evaluate_condition_with_context(self, condition: str, eval_context: dict,
                                          child_role: str, attribute_name: str, child_value: Any) -> bool:
-        """Evaluate a when condition with attribute access."""
+        """Evaluate a when condition with attribute access and fast-paths."""
+        # FAST PATH: Pattern like "primary_adult.ethnicity == 'W'"
+        prefix = f"{child_role}.{attribute_name}"
+        if condition.startswith(prefix):
+            op_part = condition[len(prefix):].strip()
+            if op_part.startswith("=="):
+                # Extract value (handles both 'VAL' and "VAL")
+                val_part = op_part[2:].strip().strip("'").strip('"')
+                return str(child_value) == val_part
+
         try:
             # Build a safe evaluation context
             safe_context = {
@@ -761,29 +785,8 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             return result
 
     def _get_fallback(self, person, household, context):
-        """Get fallback value when commuting data not available."""
-        # Default fallback: work in same location as residence
-        fallback_config = self.config.get('fallback', {})
-        fallback_strategy_type = fallback_config.get('strategy')
-
-        if fallback_strategy_type == 'constant':
-            # Return constant values
-            data_source_name = fallback_config.get('data_source')
-            if data_source_name:
-                fallback_source = self.data_manager.get_source(data_source_name)
-                if fallback_source:
-                    return fallback_source.lookup(person)
-
-            # Hard-coded fallback: work at home
-            if len(self.outputs) == 1:
-                return person.geographical_unit.name
-            else:
-                return {
-                    'workplace_location': person.geographical_unit.name,
-                    'work_mode': 'Normal'
-                }
-
-        return None
+        """Standard fallback for commuting."""
+        return self._fallback(person, household, context, "COMMUTING_DATA_MISSING")
 
 
 class GUSamplerStrategy(AssignmentStrategy):
