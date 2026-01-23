@@ -26,3 +26,6 @@ venue_types:
 settings:
   # Filter venues to only include those in loaded geographical units
   filter_by_geography: true
+
+
+

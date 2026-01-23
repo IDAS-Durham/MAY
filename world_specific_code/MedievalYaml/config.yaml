@@ -194,6 +194,21 @@ relationship_pipeline:
   # - Add property names to serialization_config.yaml to include in HDF5 export
 
 # ========================================
+# POST-RELATIONSHIP PIPELINE
+# ========================================
+# Distributors that run AFTER relationship building.
+# These can use relationship data (social_contacts, friendships, etc.)
+# to derive new activities.
+
+post_relationship_pipeline:
+  enabled: true
+
+  steps:
+    # Assign visit_social_contact activity based on social contacts' residences
+    - type: distributor
+      config: "world_specific_code/MedievalYaml/yaml/distributors/social_contact_visit_distributor.yaml"
+
+# ========================================
 # EXAMPLES
 # ========================================
 

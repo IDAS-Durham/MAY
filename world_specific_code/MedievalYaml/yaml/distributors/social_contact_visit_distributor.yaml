@@ -1,0 +1,84 @@
+# ============================================================================
+# Social Contact Visit Distributor Configuration
+# ============================================================================
+# This distributor assigns the "visit_social_contact" activity to people based
+# on their social contacts' residences.
+#
+# For each person, the distributor:
+#   1. Looks up their social contacts (from person.properties)
+#   2. Gets each contact's residence venue
+#   3. Adds that residence to this person's activity_map under visit_social_contact
+#
+# This creates a derived activity where venues are determined by relationships,
+# allowing disease modeling to track visits to contacts' homes.
+#
+# IMPORTANT: This must run AFTER:
+#   - Residence allocation (so contacts have homes)
+#   - Relationship building (so people have social_contacts)
+# ============================================================================
+
+# Distributor type identifier (used by factory function)
+distributor_type: "social_contact_visit"
+
+distributor_name: "social_contact_visit_distributor"
+
+# ============================================================================
+# Activity Configuration
+# ============================================================================
+
+# Activity name in person.activity_map
+# Result: person.activity_map['visit_social_contact']['household'] = [subsets]
+activity_map_key: "visit_social_contact"
+
+# Venue type key for nesting (typically 'household' since visiting residences)
+activity_type: "household"
+
+# ============================================================================
+# Source Configuration
+# ============================================================================
+# Where to find the list of social contacts for each person
+
+source:
+  # Property key where social contact IDs are stored
+  # Typically populated by FriendshipBuilder or social network building
+  property_key: "social_contacts_local"
+
+# ============================================================================
+# Optional Limits
+# ============================================================================
+
+# Maximum number of contacts to assign visit venues for (null = no limit)
+# Useful for performance or to model that people only regularly visit some contacts
+max_contacts: null
+
+# ============================================================================
+# Eligibility Filters
+# ============================================================================
+# Only assign visit activity to people matching these criteria
+
+eligibility:
+  global_filters:
+    # Example: Only people age 5+ can visit others independently
+    - attribute: "age"
+      min: 5
+
+    # Example: Filter by social class (uncomment if needed)
+    # - attribute: "properties.social_class"
+    #   values: ["serf", "villain", "freeman", "noble"]
+
+# ============================================================================
+# Subset Configuration
+# ============================================================================
+
+# Which subset to conceptually add visitors to (for tracking purposes)
+# Note: This distributor doesn't actually add people to venue subsets,
+# it just records the venue in the visitor's activity_map
+subset_key: "visitor"
+
+# ============================================================================
+# Settings
+# ============================================================================
+
+settings:
+  verbose: false
+  debug: false
