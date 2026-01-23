@@ -52,10 +52,13 @@ class CompositionPattern:
     requirements: List[Tuple[str, int]]  # List of (operator, count) for each category
     # operator can be "exact", "gte" (>=), or "lte" (<=)
 
+    # Object cache for CompositionPattern instances
+    _instance_cache = {}
+
     @classmethod
     def from_string(cls, pattern: str) -> 'CompositionPattern':
         """
-        Parse a composition pattern string.
+        Parse a composition pattern string (with object-level caching).
 
         Args:
             pattern: Pattern string like ">=2 >=0 2 <=2"
@@ -63,9 +66,22 @@ class CompositionPattern:
         Returns:
             CompositionPattern object
         """
-        # Use cached parsing function
+        pattern = pattern.strip()
+        if pattern in cls._instance_cache:
+            return cls._instance_cache[pattern]
+
+        # Use cached parsing function for internal requirements
         requirements_tuple = _parse_pattern_cached(pattern)
-        return cls(original_pattern=pattern, requirements=list(requirements_tuple))
+        instance = cls(original_pattern=pattern, requirements=list(requirements_tuple))
+        
+        # Cache the instance
+        cls._instance_cache[pattern] = instance
+        return instance
+
+    def __post_init__(self):
+        """Initialize cached properties."""
+        self._string_repr = None
+        self._min_size = None
 
     def get_min_count(self, category_idx: int) -> int:
         """Get minimum required count for a category."""
@@ -96,8 +112,10 @@ class CompositionPattern:
         return operator in ("gte", "lte")
 
     def min_household_size(self) -> int:
-        """Calculate minimum household size required."""
-        return sum(self.get_min_count(i) for i in range(len(self.requirements)))
+        """Calculate minimum household size required (with caching)."""
+        if self._min_size is None:
+            self._min_size = sum(self.get_min_count(i) for i in range(len(self.requirements)))
+        return self._min_size
 
     def validate_against_rules(self, validation_rules: List[Dict],
                               category_name_to_idx: Dict[str, int]) -> bool:
@@ -119,39 +137,44 @@ class CompositionPattern:
 
             # Get category indices
             cond_category = condition.get('category')
-            req_category = requirement.get('category')
-
             if cond_category not in category_name_to_idx:
                 logger.warning(f"Rule '{rule_name}': Unknown category '{cond_category}'")
                 continue
-            if req_category not in category_name_to_idx:
-                logger.warning(f"Rule '{rule_name}': Unknown category '{req_category}'")
-                continue
-
+            
             cond_cat_idx = category_name_to_idx[cond_category]
-            req_cat_idx = category_name_to_idx[req_category]
-
-            # Get counts for this pattern
             cond_count = self.get_min_count(cond_cat_idx)
-            req_count = self.get_min_count(req_cat_idx)
-
+            
             # Evaluate condition
             cond_operator = condition.get('operator')
             cond_value = condition.get('value')
-            condition_met = self._evaluate_operator(cond_count, cond_operator, cond_value)
+            if not self._evaluate_operator(cond_count, cond_operator, cond_value):
+                continue # Condition not met, skip to next rule
 
-            # If condition is met, check requirement
-            if condition_met:
-                req_operator = requirement.get('operator')
-                req_value = requirement.get('value')
-                requirement_met = self._evaluate_operator(req_count, req_operator, req_value)
+            # Condition met, check requirement(s)
+            # requirement can be a single dict or a list of dicts (OR condition)
+            req_list = requirement if isinstance(requirement, list) else [requirement]
+            
+            any_req_met = False
+            for req in req_list:
+                req_category = req.get('category')
+                if req_category not in category_name_to_idx:
+                    logger.warning(f"Rule '{rule_name}': Unknown category '{req_category}'")
+                    continue
 
-                if not requirement_met:
-                    logger.debug(f"  Pattern violates rule '{rule_name}': "
-                               f"{cond_category} {cond_operator} {cond_value} implies "
-                               f"{req_category} {req_operator} {req_value}, "
-                               f"but {req_category}={req_count}")
-                    return False
+                req_cat_idx = category_name_to_idx[req_category]
+                req_count = self.get_min_count(req_cat_idx)
+                
+                req_operator = req.get('operator')
+                req_value = req.get('value')
+                
+                if self._evaluate_operator(req_count, req_operator, req_value):
+                    any_req_met = True
+                    break
+
+            if not any_req_met:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"  Pattern violates rule '{rule_name}': {self}")
+                return False
 
         return True
 
@@ -307,8 +330,10 @@ class CompositionPattern:
         return " ".join(parts)
 
     def __repr__(self):
-        return f"Pattern({self._requirements_to_string(self.requirements)})"
+        return f"Pattern({self.to_string()})"
 
     def to_string(self) -> str:
-        """Get current pattern as string."""
-        return self._requirements_to_string(self.requirements)
+        """Get current pattern as string (with lazy caching)."""
+        if self._string_repr is None:
+            self._string_repr = self._requirements_to_string(self.requirements)
+        return self._string_repr

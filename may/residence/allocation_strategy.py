@@ -234,7 +234,7 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
         household_distributor.config['demotion']['enabled'] = enable_demotion
 
     try:
-        stats = household_distributor.distribute_households_round(
+        stats = household_distributor.round_distributor.distribute_households_round(
             pattern_filter=pattern_list,
             pattern_assumptions=pattern_assumptions,
             max_households=max_households,

@@ -13,7 +13,6 @@ selection_strategy:
   use_best_candidate: true
   penalty_mode: "squared"
   log_violations: true
-  log_best_candidates: true
 
   # Backtracking: Retry with different first-role selection before demotion
   backtracking:

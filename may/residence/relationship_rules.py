@@ -17,10 +17,12 @@ No hardcoded assumptions about specific attributes - everything is configurable 
 import os
 import logging
 import yaml
+import operator
 import numpy as np
+from operator import attrgetter
 from collections import defaultdict
 from itertools import islice
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any, Callable
 from dataclasses import dataclass
 
 from may.population.person import Person
@@ -146,6 +148,71 @@ class RelationshipRulesValidator:
 
         return None
 
+    def _get_attribute_getter(self, attribute: str) -> Callable[[Person], Any]:
+        """
+        Create an efficient attribute getter for Person objects.
+        
+        Args:
+            attribute: Name of the attribute to get
+            
+        Returns:
+            Callable that takes a Person and returns the attribute value
+        """
+        if attribute == 'age':
+            return lambda p: p.age
+        elif attribute == 'sex':
+            return lambda p: p.sex
+        elif attribute in Person.__slots__:
+            return attrgetter(attribute)
+        else:
+            # Fallback to properties dict
+            return lambda p: p.properties.get(attribute)
+
+    def validate_composition(self, composition: Dict[str, int], constraints: List[Dict]) -> Tuple[bool, Optional[str]]:
+        """
+        Validate a household composition against a set of constraints.
+
+        This unifies the validation logic previously scattered across classes.
+
+        Args:
+            composition: Dict of category_name -> count
+            constraints: List of constraint dicts (category_sum, category, household_size)
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        for constraint in constraints:
+            # Category sum constraint
+            if 'category_sum' in constraint:
+                categories = constraint['category_sum']
+                max_sum = constraint.get('max')
+
+                if max_sum is not None:
+                    current_sum = sum(composition.get(cat, 0) for cat in categories)
+                    if current_sum > max_sum:
+                        return False, f"Constraint violated: sum({categories}) = {current_sum} > {max_sum}"
+
+            # Single category constraint
+            elif 'category' in constraint:
+                category = constraint['category']
+                max_count = constraint.get('max')
+
+                if max_count is not None:
+                    current_count = composition.get(category, 0)
+                    if current_count > max_count:
+                        return False, f"Constraint violated: {category} = {current_count} > {max_count}"
+
+            # Household size constraint
+            elif 'household_size' in constraint:
+                max_size = constraint.get('max')
+
+                if max_size is not None:
+                    current_size = sum(composition.values())
+                    if current_size > max_size:
+                        return False, f"Constraint violated: household size = {current_size} > {max_size}"
+
+        return True, None
+
     def validate_numerical_attribute_difference_constraint(self,
                                           person1: Person,
                                           people2: List[Person],
@@ -186,15 +253,18 @@ class RelationshipRulesValidator:
 
         # Override max based on categorical attribute if specified
         max_diff_by_cat = constraint.get('max_difference_by_categorical_attribute', {})
+        getter = self._get_attribute_getter(attribute)
+        
         if max_diff_by_cat:
             cat_attr_name = max_diff_by_cat.get('attribute')
             cat_values = max_diff_by_cat.get('values', {})
-            person1_cat_value = getattr(person1, cat_attr_name, None)
+            cat_getter = self._get_attribute_getter(cat_attr_name)
+            person1_cat_value = cat_getter(person1)
             if person1_cat_value and person1_cat_value in cat_values:
                 max_diff = cat_values[person1_cat_value]
 
         # Get attribute values
-        person1_value = getattr(person1, attribute)
+        person1_value = getter(person1)
 
         # Use cached min/max values if provided (performance optimization)
         if cached_values and attribute in cached_values:
@@ -206,11 +276,11 @@ class RelationshipRulesValidator:
                 min_value = float('inf')
                 max_value = float('-inf')
                 for p in people2:
-                    val = getattr(p, attribute)
+                    val = getter(p)
                     if val < min_value: min_value = val
                     if val > max_value: max_value = val
             else:
-                people2_values = np.array([getattr(p, attribute) for p in people2])
+                people2_values = np.array([getter(p) for p in people2])
                 max_value = people2_values.max()
                 min_value = people2_values.min()
 
@@ -256,8 +326,9 @@ class RelationshipRulesValidator:
         attribute = num_attr_config.get('attribute', 'age')
         max_absolute = num_attr_config.get('max_absolute_difference', 100)
 
-        value1 = getattr(person1, attribute)
-        value2 = getattr(person2, attribute)
+        getter = self._get_attribute_getter(attribute)
+        value1 = getter(person1)
+        value2 = getter(person2)
         diff = abs(value1 - value2)
 
         if diff > max_absolute:
@@ -291,8 +362,9 @@ class RelationshipRulesValidator:
         mean = num_attr_config.get('mean_difference', 3.0)
         std = num_attr_config.get('std_difference', 5.0)
 
-        value1 = getattr(person1, attribute)
-        value2 = getattr(person2, attribute)
+        getter = self._get_attribute_getter(attribute)
+        value1 = getter(person1)
+        value2 = getter(person2)
         diff = abs(value1 - value2)
 
         # Z-score: how many standard deviations from mean
@@ -348,8 +420,8 @@ class RelationshipRulesValidator:
                 role_2 = constraint.get('role_2')
                 people_2 = existing_people_by_role.get(role_2, [])
                 if people_2:
-                    # Sample target age difference from distribution
                     attribute = constraint.get('attribute', 'age')
+                    getter = self._get_attribute_getter(attribute)
                     dist_type = pref_dist.get('type', 'normal')
 
                     if dist_type == 'normal':
@@ -367,7 +439,7 @@ class RelationshipRulesValidator:
                     max_diff = constraint.get('max_difference', 50)
                     target_diff = max(min_diff, min(max_diff, target_diff))
 
-                    people_2_values = [getattr(p, attribute) for p in people_2]
+                    people_2_values = [getter(p) for p in people_2]
                     reference_value = max(people_2_values)
                     target_value = reference_value + target_diff
 
@@ -376,7 +448,7 @@ class RelationshipRulesValidator:
                     # Optimized prioritized_candidates filter
                     new_prioritized = []
                     for p in prioritized_candidates:
-                        p_val = getattr(p, attribute)
+                        p_val = getter(p)
                         if target_value - tolerance <= p_val <= target_value + tolerance:
                             new_prioritized.append(p)
                     prioritized_candidates = new_prioritized
@@ -390,10 +462,26 @@ class RelationshipRulesValidator:
                         logger.debug(f"  ℹ Prioritizing {len(prioritized_candidates)}/{len(candidates)} candidates near target {attribute}={target_value:.1f} (±{tolerance})")
 
         constraint_people_cache = {}
+        constraint_value_cache = {}
         for constraint in relevant_constraints:
             role_2 = constraint.get('role_2')
             if role_2 not in constraint_people_cache:
-                constraint_people_cache[role_2] = existing_people_by_role.get(role_2, [])
+                people_2 = existing_people_by_role.get(role_2, [])
+                constraint_people_cache[role_2] = people_2
+                
+                # Pre-calculate min/max for numerical attributes
+                if people_2:
+                    attribute = constraint.get('attribute', 'age')
+                    getter = self._get_attribute_getter(attribute)
+                    if role_2 not in constraint_value_cache:
+                        constraint_value_cache[role_2] = {}
+                        
+                    if attribute not in constraint_value_cache[role_2]:
+                        values = [getter(p) for p in people_2]
+                        constraint_value_cache[role_2][attribute] = {
+                            'min': min(values),
+                            'max': max(values)
+                        }
 
         shuffled_candidates = prioritized_candidates.copy()
         np.random.shuffle(shuffled_candidates)
@@ -412,7 +500,9 @@ class RelationshipRulesValidator:
                 people_2 = constraint_people_cache.get(role_2, [])
 
                 is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                    candidate, people_2, constraint, log_rejection=show_detailed_logs
+                    candidate, people_2, constraint, 
+                    log_rejection=show_detailed_logs,
+                    cached_values=constraint_value_cache.get(role_2)
                 )
 
                 if not is_valid:
@@ -444,7 +534,8 @@ class RelationshipRulesValidator:
                     people_2 = existing_people_by_role.get(role_2, [])
 
                     is_valid, penalty = self.validate_numerical_attribute_difference_constraint(
-                        candidate, people_2, constraint
+                        candidate, people_2, constraint,
+                        cached_values=constraint_value_cache.get(role_2)
                     )
                     total_penalty += penalty
 
@@ -525,7 +616,8 @@ class RelationshipRulesValidator:
                 people_2 = existing_people_by_role.get(role_2, [])
                 if people_2:
                     attribute = rc.get('attribute', 'age')
-                    values = [getattr(p, attribute) for p in people_2]
+                    getter = self._get_attribute_getter(attribute)
+                    values = [getter(p) for p in people_2]
                     logger.debug(f"    {attribute.capitalize()} constraints: Both partners must be {rc.get('min_difference')}-{rc.get('max_difference')} {attribute} units older than {role_2} ({attribute}s: {values})")
 
         max_attempts = self.selection_strategy.get('max_attempts', 50)
@@ -538,8 +630,9 @@ class RelationshipRulesValidator:
         # Pre-group candidates by categorical attribute AND cache attribute values
         candidates_by_cat = defaultdict(list)
         candidate_cat_values = {}  # Cache categorical attribute values
+        cat_getter = self._get_attribute_getter(cat_attribute)
         for p in candidates:
-            cat_val = getattr(p, cat_attribute)
+            cat_val = cat_getter(p)
             candidates_by_cat[cat_val].append(p)
             candidate_cat_values[p.id] = cat_val
 
@@ -555,10 +648,11 @@ class RelationshipRulesValidator:
                 # Pre-compute min/max for numerical attributes
                 if people_2:
                     attribute = rel_constraint.get('attribute', 'age')
+                    getter = self._get_attribute_getter(attribute)
                     if role_2 not in constraint_value_cache:
                         constraint_value_cache[role_2] = {}
                     if attribute not in constraint_value_cache[role_2]:
-                        values = np.array([getattr(p, attribute) for p in people_2])
+                        values = np.array([getter(p) for p in people_2])
                         constraint_value_cache[role_2][attribute] = {
                             'min': values.min(),
                             'max': values.max()
@@ -663,8 +757,9 @@ class RelationshipRulesValidator:
                         num_attr_config = constraint.get('numerical_attribute', {})
                         if num_attr_config:
                             num_attr = num_attr_config.get('attribute', 'age')
-                            val1 = getattr(first_person, num_attr)
-                            val2 = getattr(candidate, num_attr)
+                            getter = self._get_attribute_getter(num_attr)
+                            val1 = getter(first_person)
+                            val2 = getter(candidate)
                             diff = abs(val1 - val2)
                             if candidates_rejected > 0:
                                 logger.debug(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
@@ -686,9 +781,13 @@ class RelationshipRulesValidator:
                         num_attr_config = constraint.get('numerical_attribute', {})
                         if num_attr_config:
                             num_attr = num_attr_config.get('attribute')
-                            if num_attr and hasattr(first_person, num_attr) and hasattr(candidate, num_attr):
-                                diff = abs(getattr(first_person, num_attr) - getattr(candidate, num_attr))
-                                self.stats['numerical_attribute_differences'].append(diff)
+                            if num_attr:
+                                getter = self._get_attribute_getter(num_attr)
+                                try:
+                                    diff = abs(getter(first_person) - getter(candidate))
+                                    self.stats['numerical_attribute_differences'].append(diff)
+                                except (AttributeError, TypeError):
+                                    pass
 
                         # Track categorical attribute statistics
                         if is_same_category:
@@ -727,9 +826,13 @@ class RelationshipRulesValidator:
                     num_attr_config = constraint.get('numerical_attribute', {})
                     if num_attr_config:
                         num_attr = num_attr_config.get('attribute')
-                        if num_attr and hasattr(first_person, num_attr) and hasattr(best_partner, num_attr):
-                            diff = abs(getattr(first_person, num_attr) - getattr(best_partner, num_attr))
-                            self.stats['numerical_attribute_differences'].append(diff)
+                        if num_attr:
+                            getter = self._get_attribute_getter(num_attr)
+                            try:
+                                diff = abs(getter(first_person) - getter(best_partner))
+                                self.stats['numerical_attribute_differences'].append(diff)
+                            except (AttributeError, TypeError):
+                                pass
 
                     # Track categorical attribute statistics
                     if is_same_category:
