@@ -122,13 +122,9 @@ settings:
   # Limit number of allocations (null = no limit)
   max_allocations: null
 
-  # Random seed for reproducibility
-  random_seed: null
-
   # Logging
   verbose: true
   log_summary: true
-  debug: false
 
 # ============================================================================
 # FALLBACK BEHAVIOR

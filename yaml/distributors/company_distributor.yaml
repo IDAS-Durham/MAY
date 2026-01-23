@@ -102,10 +102,8 @@ allocation:
 settings:
   priority: 5  # Run after school (10) and university (1)
   max_allocations: null
-  random_seed: null
   verbose: true
   log_summary: true
-  debug: false  # Enable debug logging to see why allocation is failing
 
 fallback:
   strategy: "skip"  # Skip if no matching companies found

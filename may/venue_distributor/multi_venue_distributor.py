@@ -1,8 +1,7 @@
 """
 MultiVenueDistributor: Generic distributor for assigning multiple venue options
 
-This is a GENERIC distributor that works with any set of venue types.
-All configuration is driven by YAML - no hardcoded venue types or activity names.
+This is a distributor that works with any set of venue types.
 
 Structure:
     person.activity_map[activity_map_key] = {
@@ -18,25 +17,23 @@ Example use cases:
     - Any other scenario requiring multiple venue options
 """
 
-import yaml
+import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import Dict, List, Optional
-from scipy.spatial import cKDTree
-import logging
+from typing import Dict, List, Optional, Tuple, Any
 
+from .base_distributor import BaseDistributor
 from may.population import Subset
 
 logger = logging.getLogger(__name__)
 
 
-class MultiVenueDistributor:
+class MultiVenueDistributor(BaseDistributor):
     """
-    Generic distributor for assigning multiple venue options to people.
+    Distributor for assigning multiple venue options to people.
 
     Features:
-    - Completely generic - all configuration from YAML
     - Handles any number of venue types
     - Assigns N closest venues per type to each person
     - Stores in nested dict: activity_map[key][venue_type] = [subsets]
@@ -51,15 +48,13 @@ class MultiVenueDistributor:
         Args:
             config_path: Path to distributor YAML file
         """
-        self.config_path = Path(config_path)
-        self.config = self._load_config()
+        super().__init__(config_file=config_path)
 
-        # Extract configuration (all from YAML, nothing hardcoded)
+        # Extract configuration
         self.distributor_name = self.config.get('distributor_name', 'multi_venue_distributor')
         self.activity_map_key = self.config.get('activity_map_key')
         self.subset_key = self.config.get('subset_key', 'default')
         self.venue_types = self.config.get('venue_types', [])
-        self.verbose = self.config.get('settings', {}).get('verbose', False)
 
         # Validation
         if not self.activity_map_key:
@@ -70,7 +65,6 @@ class MultiVenueDistributor:
         # Venue selection config
         venue_selection = self.config.get('venue_selection', {})
         self.default_venue_count = venue_selection.get('count', 5)
-        self.venue_geo_level = venue_selection.get('venue_geo_level', 'SGU')
         self.distance_metric = venue_selection.get('distance_metric', 'haversine')
 
         # Per-venue-type configuration
@@ -96,10 +90,6 @@ class MultiVenueDistributor:
                 self.max_age = filter_rule.get('max')
                 break
 
-        # Spatial indices (one per venue type)
-        self.spatial_indices = {}  # venue_type -> cKDTree
-        self.venue_lists = {}  # venue_type -> list of venues
-
         logger.info(f"Initialized {self.distributor_name}")
         logger.info(f"  activity_map_key: '{self.activity_map_key}'")
         logger.info(f"  venue_types: {self.venue_types}")
@@ -117,27 +107,9 @@ class MultiVenueDistributor:
         if self.min_age is not None or self.max_age is not None:
             logger.info(f"  age_filter: [{self.min_age}, {self.max_age}]")
 
-    def _load_config(self) -> Dict:
-        """Load and parse YAML configuration file."""
-        with open(self.config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        return config
-
     def _get_venue_count_for_type(self, venue_type: str) -> int:
-        """
-        Get the number of venues to assign for a specific venue type.
-
-        Args:
-            venue_type: Type of venue
-
-        Returns:
-            Number of venues to assign (from config override or default)
-        """
-        if venue_type in self.venue_type_config:
-            type_config = self.venue_type_config[venue_type]
-            if 'count' in type_config:
-                return type_config['count']
-        return self.default_venue_count
+        """Get the number of venues to assign for a specific type, including overrides."""
+        return self.venue_type_config.get(venue_type, {}).get('count', self.default_venue_count)
 
     def _load_participation_data(self, venue_type: str, filter_config: Dict):
         """
@@ -454,8 +426,8 @@ class MultiVenueDistributor:
         logger.info(f"Starting {self.distributor_name} allocation")
         logger.info(f"Processing venue types: {self.venue_types}")
 
-        # Build spatial indices for each venue type
-        self._build_spatial_indices(world)
+        # Build spatial indices for each venue type using base class method
+        self._build_spatial_indices({vt: world.venues_by_type(vt) for vt in self.venue_types})
 
         # Get eligible people
         eligible_people = self._get_eligible_people(world)
@@ -472,40 +444,6 @@ class MultiVenueDistributor:
         if self.config.get('settings', {}).get('log_summary', True):
             self._log_summary(world)
 
-    def _build_spatial_indices(self, world):
-        """
-        Build KDTree spatial indices for each venue type.
-
-        Args:
-            world: World object
-        """
-        for venue_type in self.venue_types:
-            venues = world.venues_by_type(venue_type)
-
-            if not venues:
-                logger.warning(f"No venues found for type '{venue_type}'")
-                self.spatial_indices[venue_type] = None
-                self.venue_lists[venue_type] = []
-                continue
-
-            coords = []
-            venue_list = []
-
-            for venue in venues:
-                if venue.coordinates is not None and len(venue.coordinates) == 2:
-                    lat, lon = venue.coordinates
-                    if lat is not None and lon is not None:
-                        coords.append([lat, lon])
-                        venue_list.append(venue)
-
-            if coords:
-                self.spatial_indices[venue_type] = cKDTree(np.array(coords))
-                self.venue_lists[venue_type] = venue_list
-                logger.info(f"Built spatial index for '{venue_type}': {len(coords)} venues")
-            else:
-                logger.warning(f"No venues with coordinates found for type '{venue_type}'")
-                self.spatial_indices[venue_type] = None
-                self.venue_lists[venue_type] = []
 
     def _get_eligible_people(self, world) -> List:
         """
@@ -542,9 +480,7 @@ class MultiVenueDistributor:
         """
         Allocate venues to each person using geo_unit batching for performance.
 
-        Groups people by their geographical_unit coordinates to avoid redundant
-        spatial index queries. Since 100-300 people share the same S.G.U coordinates,
-        this reduces queries from ~millions to ~thousands.
+        Groups people by their geographical_unit coordinates.
 
         Args:
             people: List of eligible people
@@ -576,8 +512,8 @@ class MultiVenueDistributor:
             # Query once per venue type for this geo_unit
             for venue_type in self.venue_types:
                 cache_key = (geo_unit, venue_type)
-                geo_unit_venue_cache[cache_key] = self._find_closest_venues_for_coords(
-                    coords, venue_type
+                geo_unit_venue_cache[cache_key] = self._find_closest_venues(
+                    coords, venue_type, self._get_venue_count_for_type(venue_type)
                 )
 
         # Step 3: Assign cached venue results to all people in each geo_unit
@@ -628,69 +564,6 @@ class MultiVenueDistributor:
                     logger.info(f"  Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
 
         logger.info(f"Allocated venues to {allocated_count} people")
-
-    def _find_closest_venues_for_coords(self, coords: List[float], venue_type: str) -> List:
-        """
-        Find the N closest venues of a specific type for given coordinates.
-
-        This method is called once per geo_unit per venue_type (not per person),
-        enabling massive batching optimization.
-
-        Args:
-            coords: [lat, lon] coordinates
-            venue_type: Type of venue
-
-        Returns:
-            List of Venue objects (not subsets - those are created later)
-        """
-        # Get spatial index for this venue type
-        spatial_index = self.spatial_indices.get(venue_type)
-        venue_list = self.venue_lists.get(venue_type)
-
-        if spatial_index is None or not venue_list:
-            return []
-
-        # Query spatial index for N closest venues (use per-venue-type count)
-        venue_count = self._get_venue_count_for_type(venue_type)
-        n_venues = min(venue_count, len(venue_list))
-
-        try:
-            distances, indices = spatial_index.query(coords, k=n_venues)
-        except Exception as e:
-            logger.debug(f"Failed to query spatial index for coords {coords}: {e}")
-            return []
-
-        # Handle single result (not in array)
-        if n_venues == 1:
-            indices = [indices]
-
-        # Get venues
-        venues = []
-        for idx in indices:
-            if idx < len(venue_list):
-                venue = venue_list[idx]
-                venues.append(venue)
-
-        return venues
-
-    def _get_person_coordinates(self, person, world) -> Optional[List[float]]:
-        """
-        Get coordinates for a person.
-
-        Args:
-            person: Person object
-            world: World object
-
-        Returns:
-            [lat, lon] or None if not available
-        """
-        # Use geographical_unit coordinates
-        if person.geographical_unit and person.geographical_unit.coordinates:
-            lat, lon = person.geographical_unit.coordinates
-            if lat is not None and lon is not None:
-                return [lat, lon]
-
-        return None
 
     def _get_or_create_subset(self, venue):
         """

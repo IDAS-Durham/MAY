@@ -1,5 +1,5 @@
 """
-VenueDistributor: YAML-driven system for allocating people to venues
+VenueDistributor: System for allocating people to venues
 
 This module reads distributor configuration from YAML files and allocates people
 to venues based on flexible rules including:
@@ -9,18 +9,18 @@ to venues based on flexible rules including:
 - Special case handling (e.g., boarding school students)
 """
 
-import yaml
+from .base_distributor import BaseDistributor
+import logging
 import numpy as np
 import pandas as pd
+from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from scipy.spatial import cKDTree
-import logging
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
 
-class VenueDistributor:
+class VenueDistributor(BaseDistributor):
     """
     Main class for distributing people to venues based on YAML configuration.
 
@@ -41,20 +41,11 @@ class VenueDistributor:
             config_file: Path to YAML config file
             config_dict: Dictionary config (alternative to file)
         """
-        # Load config
-        if config_file:
-            self.config = self._load_config(config_file)
-            self.config_path = Path(config_file) # Keep for relative path resolution
-        elif config_dict:
-            self.config = config_dict
-            self.config_path = None # No config file path if dict is used
-        else:
-            raise ValueError("Must provide either config_file or config_dict")
+        super().__init__(config_file, config_dict)
 
         # Initialize core attributes
         self.venue_type = self.config.get('venue_type', 'unknown')
         self.activity_map_key = self.config.get('activity_map_key', 'unknown')
-        self.verbose = self.config.get('settings', {}).get('verbose', False)
 
         # Attribute lookup cache
         self.person_loc_attr = self.config.get('venue_selection', {}).get('person_location_source', 'geographical_unit.coordinates')
@@ -64,20 +55,11 @@ class VenueDistributor:
         self._pre_processed_filters = []
         self._pre_processed_exclude = {}
 
-        # Spatial index
-        self.spatial_index = None
-        self.venue_list = []
-
         # Attribute index
         self.venue_attribute_cache = {}
         self.categorical_index = {}
         self.attribute_index_built = False
 
-        # Vectorized population arrays
-        self.population_arrays = {}
-
-        # Statistics
-        self.stats = {}
         # Probability allocation cache
         # Maps (file_path, probability_column) -> {geo_unit_name: probability}
         self.probability_cache = {}
@@ -89,30 +71,10 @@ class VenueDistributor:
         self.subset_key = self.config.get('subset_key', None)
         self.activity_type = self.config.get('activity_type', None)  # Override for activity_map nesting
 
-        # Geographical level configuration (default to SGU for backward compatibility)
-        self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level', 'SGU')
-
-        # Batch geographical level (for grouping people during allocation)
-        # Defaults to venue_geo_level if not specified
-        self.batch_geo_level = self.config.get('venue_selection', {}).get('batch_geo_level', self.venue_geo_level)
-
         # Load probability files for priority allocation groups
         self._load_probability_files()
 
-        # Set logging level
-        if self.config.get('settings', {}).get('debug', False):
-            logger.setLevel(logging.DEBUG)
-
-        if self.batch_geo_level != self.venue_geo_level:
-            logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at venue_geo_level='{self.venue_geo_level}', batch_geo_level='{self.batch_geo_level}', using location='{self.person_location_attribute}'")
-        else:
-            logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at geo_level='{self.venue_geo_level}' using location='{self.person_location_attribute}'")
-
-    def _load_config(self, config_path: str) -> Dict:
-        """Load and parse YAML configuration file."""
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        return config
+        logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}' at venue_geo_level='{self.venue_geo_level}', batch_geo_level='{self.batch_geo_level}', using location='{self.person_location_attribute}'")
 
     def _parse_location_attribute(self, attr_string: str) -> Dict:
         """
@@ -210,186 +172,6 @@ class VenueDistributor:
             except Exception as e:
                 logger.error(f"Failed to load probability file {full_path}: {e}")
 
-    def _get_venue_capacity(self, venue) -> int:
-        """
-        Get the capacity of a venue based on the configured capacity_column or fixed_capacity. (Optimized)
-        """
-        # Use cached fixed_capacity if available
-        if self._fixed_capacity is not None:
-            return int(self._fixed_capacity)
-
-        if not self._capacity_column:
-            return 0
-
-        # Get capacity from venue properties (Avoid dict.get(..., 0) if common)
-        capacity = venue.properties.get(self._capacity_column)
-
-        # Handle missing capacity based on config
-        if capacity is None or (isinstance(capacity, (int, float)) and pd.isna(capacity)):
-            if_missing = self._capacity_handling.get('if_missing', 'skip')
-            if if_missing == 'ignore':
-                return 1_000_000  # Effective unlimited
-            elif if_missing == 'default':
-                return int(self._capacity_handling.get('default_capacity', 1000))
-            else:
-                return 0
-        
-        try:
-            capacity = int(float(capacity)) if capacity != '' else None
-        except (ValueError, TypeError):
-            capacity = None
-
-        if capacity is None:
-            if_missing = self._capacity_handling.get('if_missing', 'skip')
-            if if_missing == 'ignore':
-                return 1_000_000
-            elif if_missing == 'default':
-                return int(self._capacity_handling.get('default_capacity', 1000))
-            return 0
-        
-        # Handle zero capacity based on config
-        if capacity == 0:
-            if_zero = self._capacity_handling.get('if_zero', 'skip')
-            if if_zero == 'ignore':
-                return 1_000_000  # Effective unlimited
-            return 0
-
-        return capacity
-
-    def _get_venue_current_count(self, venue) -> int:
-        """
-        Get the current number of people allocated to this venue.
-
-        Args:
-            venue: Venue object
-
-        Returns:
-            Current count
-        """
-        venue_id = id(venue)
-        return self.venue_capacity_tracker.get(venue_id, 0)
-
-    def _venue_has_capacity(self, venue) -> bool:
-        """
-        Check if a venue has available capacity.
-
-        Args:
-            venue: Venue object
-
-        Returns:
-            True if venue has space, False otherwise
-        """
-        capacity = self._get_venue_capacity(venue)
-        if capacity == 0:
-            # No capacity configured = skip this venue
-            return False
-
-        current_count = self._get_venue_current_count(venue)
-        return current_count < capacity
-
-    def _increment_venue_count(self, venue):
-        """
-        Increment the allocation count for a venue.
-
-        Args:
-            venue: Venue object
-        """
-        venue_id = id(venue)
-        self.venue_capacity_tracker[venue_id] = self.venue_capacity_tracker.get(venue_id, 0) + 1
-
-    def _filter_venues_by_capacity(self, venues: List) -> List:
-        """
-        Filter venues to only include those with available capacity.
-
-        Args:
-            venues: List of venue objects
-
-        Returns:
-            List of venues with available capacity
-        """
-        allocation_config = self.config.get('allocation', {})
-
-        # Check if capacity tracking is enabled
-        track_capacity = allocation_config.get('track_capacity', False)
-        if not track_capacity:
-            # No capacity tracking - return all venues
-            return venues
-
-        # Filter to venues with capacity
-        venues_with_capacity = [v for v in venues if self._venue_has_capacity(v)]
-        return venues_with_capacity
-
-    def _get_geo_unit_at_level(self, person, world=None, target_level=None):
-        """
-        Get the person's geographical unit at a specified level.
-
-        This enables flexibility: if venues are at MGU or LGU level but people are at SGU,
-        we automatically traverse up the hierarchy to find the matching ancestor.
-
-        Supports custom location attributes (e.g., workplace_location) via person_location_attribute config.
-
-        Args:
-            person: Person object with geographical_unit or custom location attribute
-            world: World object (required if using custom location attribute)
-            target_level: Target geographical level (defaults to self.venue_geo_level)
-
-        Returns:
-            GeographicalUnit at the target level, or None if not found
-        """
-        if target_level is None:
-            target_level = self.venue_geo_level
-
-        loc_attr_config = self.person_location_attribute
-        person_geo_unit = None
-
-        if loc_attr_config['type'] == 'direct':
-            # Default: use residence location
-            if not hasattr(person, loc_attr_config['attribute']) or getattr(person, loc_attr_config['attribute']) is None:
-                return None
-            person_geo_unit = getattr(person, loc_attr_config['attribute'])
-        elif loc_attr_config['type'] == 'properties':
-            # Custom attribute from person.properties dict
-            location_value = person.properties.get(loc_attr_config['attribute']) if hasattr(person, 'properties') else None
-            if location_value is None:
-                return None
-            if world is None or not hasattr(world, 'geography'):
-                logger.warning(f"Cannot resolve {self.person_loc_attr}='{location_value}' without world.geography")
-                return None
-            person_geo_unit = world.geography.get_unit(location_value)
-        elif loc_attr_config['type'] == 'nested':
-            # Nested attribute (e.g., geographical_unit.coordinates)
-            base_attr = getattr(person, loc_attr_config['attribute'], None)
-            if base_attr and hasattr(base_attr, loc_attr_config['sub_attribute']):
-                # If it's a GeographicalUnit object, use it directly
-                if hasattr(base_attr, 'level') and hasattr(base_attr, 'name'):
-                    person_geo_unit = base_attr
-                else:
-                    # It's a string/code, need to look it up via world.geography
-                    location_value = getattr(base_attr, loc_attr_config['sub_attribute'], None)
-                    if location_value is None:
-                        return None
-                    if world is None or not hasattr(world, 'geography'):
-                        logger.warning(f"Cannot resolve {self.person_loc_attr}='{location_value}' without world.geography")
-                        return None
-                    person_geo_unit = world.geography.get_unit(location_value)
-
-        if person_geo_unit is None:
-            if self.verbose:
-                logger.debug(f"Could not find geo_unit for person from {self.person_loc_attr}")
-            return None
-
-        # If person is already at the target level, return it
-        if person_geo_unit.level == target_level:
-            return person_geo_unit
-
-        # Otherwise, traverse up to find ancestor at target level
-        ancestor = person_geo_unit.get_ancestor_by_level(target_level)
-
-        if ancestor is None and self.verbose:
-            logger.debug(f"Person at {person_geo_unit.level} '{person_geo_unit.name}' has no ancestor at {target_level}")
-
-        return ancestor
-
     def allocate(self, world):
         """
         Main entry point: Allocate people to venues.
@@ -415,7 +197,7 @@ class VenueDistributor:
 
         # Build spatial index if needed
         if self.config.get('settings', {}).get('use_spatial_index', True):
-            self._build_spatial_index(venues)
+            self._build_spatial_indices({self.venue_type: venues})
 
         # Build attribute index for fast filtering (critical performance optimization)
         self._build_attribute_index(venues)
@@ -441,31 +223,56 @@ class VenueDistributor:
             logger.info("No unassigned people to allocate")
             return
             
+        # Prepare vectorized population arrays
+        # Collect all attributes used in filters to ensure they are vectorized
+        attrs_to_vectorize = set()
+        
+        # Global filters
+        global_filters = self.config.get('eligibility', {}).get('global_filters', [])
+        for f in global_filters:
+            if 'attribute' in f:
+                attrs_to_vectorize.add(f['attribute'])
+        
+        # Priority group filters
+        priority_config = self.config.get('eligibility', {}).get('priority_allocation', {})
+        for group in priority_config.get('groups', []):
+            for f in group.get('filters', []):
+                if 'attribute' in f:
+                    attrs_to_vectorize.add(f['attribute'])
+        
         # Build vectorized arrays for the full population of unassigned people
-        self._build_population_arrays(all_unassigned)
+        self._build_population_arrays(all_unassigned, attributes=list(attrs_to_vectorize))
 
-        remaining_people = self._handle_special_cases(all_unassigned, venues, world)
+        remaining_people, special_unallocated = self._handle_special_cases(all_unassigned, venues, world)
         logger.info(f"{len(remaining_people)} people remaining after special cases")
 
         # Now apply global filters for priority/normal allocation - VECTORIZED
         eligible_people = self._apply_global_filters(remaining_people)
         logger.info(f"{len(eligible_people)} people eligible after global filters (special cases excluded)")
 
+        unallocated_total = special_unallocated
+
         if not eligible_people:
-            logger.info("No eligible people remaining for priority/normal allocation")
-            # Log summary for special cases only
+            # Fallback for special case failures even if no one else is eligible
+            if unallocated_total and self.config.get('fallback'):
+                self._handle_fallbacks(unallocated_total, venues, world)
+                
             if self.config.get('settings', {}).get('log_summary', True):
                 self._log_allocation_summary(world)
             return
 
         # Phase 2: Priority allocation (if configured)
-        remaining_people = eligible_people
-        if remaining_people:
-            remaining_people = self._handle_priority_allocation(remaining_people, venues)
+        remaining_people, priority_unallocated = self._handle_priority_allocation(eligible_people, venues)
+        unallocated_total.extend(priority_unallocated)
 
         # Phase 3: Normal allocation (remaining people)
         if remaining_people:
-            self._allocate_normal(remaining_people, venues)
+            normal_unallocated = self._allocate_normal(remaining_people, venues)
+            unallocated_total.extend(normal_unallocated)
+
+        # Phase 4: Handle fallbacks for anyone still unallocated
+        if unallocated_total and self.config.get('fallback'):
+            self._handle_fallbacks(unallocated_total, venues, world)
 
         # Log summary
         if self.config.get('settings', {}).get('log_summary', True):
@@ -473,87 +280,6 @@ class VenueDistributor:
 
             # Check for unallocated priority people
             self._check_priority_coverage(world)
-
-    def _build_population_arrays(self, people: List):
-        """Extract key attributes into NumPy arrays for vectorized filtering."""
-        n = len(people)
-        if n == 0:
-            return
-
-        # Initialize arrays
-        self.population_arrays = {
-            'indices': np.arange(n, dtype=np.int32),
-            'people': np.array(people, dtype=object),
-            'age': np.zeros(n, dtype=np.int16),
-            'sex': np.zeros(n, dtype=np.int8),  # 0=F, 1=M
-            'residence_type': np.zeros(n, dtype=np.int8)  # 0=Household, 1=Other
-        }
-
-        # Bulk extraction
-        for i, person in enumerate(people):
-            self.population_arrays['age'][i] = person.age
-            self.population_arrays['sex'][i] = 1 if person.sex == 'male' else 0
-            
-            res_type = 0 # Default to household
-            if hasattr(person, 'residence_type'):
-                rt = person.residence_type
-                if rt == 'care_home': res_type = 1
-                elif rt == 'student_dorms': res_type = 2
-                elif rt == 'prison': res_type = 3
-                elif rt == 'boarding_school': res_type = 4
-                elif rt == 'university': res_type = 5
-            self.population_arrays['residence_type'][i] = res_type
-
-    def _apply_filters_vectorized(self, indices: np.ndarray, filters: List[Dict]) -> np.ndarray:
-        """Apply filters using vectorized boolean masks."""
-        if len(indices) == 0:
-            return indices
-
-        mask = np.ones(len(indices), dtype=bool)
-        
-        # Access arrays directly using the indices
-        # Optimization: Don't slice the big arrays, just index them
-        current_ages = self.population_arrays['age'][indices]
-        current_sexs = self.population_arrays['sex'][indices]
-        current_res_types = self.population_arrays['residence_type'][indices]
-
-        for rule in filters:
-            attr = rule.get('attribute')
-            
-            if attr == 'age':
-                min_val = rule.get('min')
-                max_val = rule.get('max')
-                if min_val is not None:
-                    mask &= (current_ages >= min_val)
-                if max_val is not None:
-                    mask &= (current_ages <= max_val)
-                    
-            elif attr == 'sex':
-                val = rule.get('value')
-                target = 1 if val == 'male' else 0
-                mask &= (current_sexs == target)
-                
-            elif attr == 'residence.type':
-                vals = rule.get('values', [])
-                # Map string values to our int codes
-                allowed_codes = []
-                for v in vals:
-                    if v == 'household': allowed_codes.append(0)
-                    elif v == 'care_home': allowed_codes.append(1)
-                    elif v == 'student_dorms': allowed_codes.append(2)
-                    elif v == 'prison': allowed_codes.append(3)
-                    elif v == 'boarding_school': allowed_codes.append(4)
-                    elif v == 'university': allowed_codes.append(5)
-                
-                if allowed_codes:
-                    # vectorized "isin"
-                    res_mask = np.zeros(len(indices), dtype=bool)
-                    for code in allowed_codes:
-                        res_mask |= (current_res_types == code)
-                    mask &= res_mask
-
-        return indices[mask]
-
 
     def _get_unassigned_people(self, world) -> List:
         """
@@ -601,19 +327,23 @@ class VenueDistributor:
         Updated to use vectorized filtering where possible.
         """
         # If we have population arrays, use vectorized path
-        if self.population_arrays and len(people) > 1000:
-            # Re-map people objects to their indices in the arrays
-            # This works because 'people' is a subset of 'all_unassigned' which we built arrays from
-            # However, mapping back is slow O(N). 
-            # Better strategy: keep indices flowing through the system.
-            # For now, let's just create a quick lookup map if it's not too expensive,
-            # OR just re-extract indices if `people` is exactly `all_unassigned` (common case).
+        if self.population_arrays and len(people) > 1000 and self._can_vectorize_filters(self._pre_processed_filters):
+            # Convert person objects to their corresponding indices in the vectorized arrays
+            # This allows us to use NumPy speed even if 'people' is a subset/reordered.
+            indices = []
+            for p in people:
+                idx = self.person_id_to_index.get(p.id)
+                if idx is not None:
+                    indices.append(idx)
             
-            # FAST PATH: If people is exactly the array we built
-            if len(people) == len(self.population_arrays['people']) and people[0] is self.population_arrays['people'][0]:
-                 indices = self.population_arrays['indices']
-                 filtered_indices = self._apply_filters_vectorized(indices, self._pre_processed_filters)
-                 return self.population_arrays['people'][filtered_indices].tolist()
+            if len(indices) == len(people):
+                # All people matched indices, proceed with full vectorization
+                indices_arr = np.array(indices, dtype=np.int32)
+                filtered_indices = self._apply_filters_vectorized(indices_arr, self._pre_processed_filters)
+                return self.population_arrays['people'][filtered_indices].tolist()
+            
+            # If partial overlap, we could still vectorize the subset, but for simplicity
+            # we fall back to scalar loop if some people are missing from the index.
         
         # Fallback to original loop for complex cases or small lists
         eligible = []
@@ -740,28 +470,16 @@ class VenueDistributor:
                             'case_sensitive': case_sensitive
                         }
 
-                        # Build categorical index ONLY for identity mappings
-                        # Identity mapping: venue_value maps to itself (e.g., "A": ["A"])
-                        # NOT for rule-based mappings (e.g., "Mixed": ["male", "female"])
-                        # This optimization only works when person_value == venue_value
-                        allowed_values = matching_rules.get(venue_value, None)
-                        is_identity_mapping = (
-                            allowed_values is not None and
-                            len(allowed_values) == 1 and
-                            allowed_values[0] == venue_value
-                        )
-
-                        if is_identity_mapping:
-                            # Track this attribute for indexing
-                            if attr_name not in [a[0] for a in categorical_attrs_to_index]:
-                                categorical_attrs_to_index.append((attr_name, venue_column, case_sensitive))
-
-                            # Add this venue to the categorical index
-                            # Store venue ID (not object) for fast set operations
-                            index_key = (attr_name, venue_value)
-                            if index_key not in self.categorical_index:
-                                self.categorical_index[index_key] = set()
-                            self.categorical_index[index_key].add(id(venue))
+                        # Build categorical index for ALL allowed person values
+                        # This allows instant filtering based on person attribute
+                        # e.g., if a Mixed school accepts 'male' and 'female', index it under both
+                        allowed_person_values = matching_rules.get(venue_value, [])
+                        if allowed_person_values:
+                            for p_val in allowed_person_values:
+                                index_key = (attr_name, p_val)
+                                if index_key not in self.categorical_index:
+                                    self.categorical_index[index_key] = set()
+                                self.categorical_index[index_key].add(id(venue))
 
             # Store cache using venue id (fast lookup)
             self.venue_attribute_cache[id(venue)] = venue_cache
@@ -781,16 +499,16 @@ class VenueDistributor:
         Handle priority allocation groups (processed before normal allocation).
 
         Returns:
-            List of people NOT in priority groups (for normal allocation)
+            Tuple of (remaining_people, unallocated_priority_people)
         """
         priority_config = self.config.get('eligibility', {}).get('priority_allocation', {})
 
         if not priority_config.get('enabled', False):
-            return people  # No priority allocation configured
+            return people, []  # No priority allocation configured
 
         groups = priority_config.get('groups', [])
         if not groups:
-            return people
+            return people, []
 
         logger.info("")
         logger.info("=" * 60)
@@ -802,6 +520,7 @@ class VenueDistributor:
 
         remaining_people = list(people)
         all_priority_people = []
+        unallocated_priority_people = []
 
         # Process each priority group
         for group in groups_sorted:
@@ -811,9 +530,29 @@ class VenueDistributor:
 
             # Filter people matching this group
             group_people = []
-            for person in remaining_people:
-                if self._person_matches_filters(person, filters):
-                    group_people.append(person)
+            
+            # VECTORIZED OPTIMIZATION for priority group selection
+            if self.population_arrays and len(remaining_people) > 1000 and self._can_vectorize_filters(filters):
+                indices = []
+                for p in remaining_people:
+                    idx = self.person_id_to_index.get(p.id)
+                    if idx is not None:
+                        indices.append(idx)
+                
+                if len(indices) == len(remaining_people):
+                    indices_arr = np.array(indices, dtype=np.int32)
+                    filtered_indices = self._apply_filters_vectorized(indices_arr, filters)
+                    group_people = self.population_arrays['people'][filtered_indices].tolist()
+                else:
+                    # Missing indices, use scalar loop
+                    for person in remaining_people:
+                        if self._person_matches_filters(person, filters):
+                            group_people.append(person)
+            else:
+                # Normal path for small lists or complex filters
+                for person in remaining_people:
+                    if self._person_matches_filters(person, filters):
+                        group_people.append(person)
 
             if not group_people:
                 logger.info(f"Group '{group_name}': 0 people match")
@@ -845,7 +584,24 @@ class VenueDistributor:
 
             # Pass group-specific search_limits if defined, otherwise use global
             group_search_limits = group.get('search_limits', None)
+            
+            # For unallocated tracking, we need to know who was NOT allocated
+            # _allocate_group also returns Allocated Count, but doesn't return the list of people.
+            # However, we can track people's assignment.
+            
             allocated_count = self._allocate_group(group_people, venues, allow_overflow=allow_overflow, group_search_limits=group_search_limits)
+
+            # Find who in group_people was NOT allocated
+            for p in group_people:
+                if self.activity_map_key not in p.activity_map:
+                    unallocated_priority_people.append(p)
+                else:
+                    activity_venues = p.activity_map[self.activity_map_key]
+                    if isinstance(activity_venues, dict):
+                        if self.venue_type not in activity_venues or not activity_venues[self.venue_type]:
+                            unallocated_priority_people.append(p)
+                    elif not activity_venues:
+                         unallocated_priority_people.append(p)
 
             if allow_overflow:
                 # Restore original setting
@@ -863,10 +619,10 @@ class VenueDistributor:
         priority_ids = {p.id for p in all_priority_people}
         remaining_people = [p for p in remaining_people if p.id not in priority_ids]
 
-        logger.info(f"Priority allocation complete: {len(all_priority_people)} people processed, {len(remaining_people)} remaining for normal allocation")
+        logger.info(f"Priority allocation complete: {len(all_priority_people)} people processed, {len(unallocated_priority_people)} failed, {len(remaining_people)} remaining for normal allocation")
         logger.info("=" * 60)
 
-        return remaining_people
+        return remaining_people, unallocated_priority_people
 
     def _pre_process_filters(self, filters: List[Dict]) -> List[Dict]:
         """Pre-process filters to avoid repeated path parsing."""
@@ -1176,7 +932,7 @@ class VenueDistributor:
             # Try to find nearby venues with fallback
             geo_unit_nearby_venues = []
             for search_count in search_attempts:
-                geo_unit_nearby_venues = self._find_closest_venues((lat, lon), venues, search_count)
+                geo_unit_nearby_venues = self._find_closest_venues((lat, lon), self.venue_type, search_count, allowed_venue_ids={id(v) for v in venues})
                 if geo_unit_nearby_venues:
                     break
 
@@ -1213,22 +969,18 @@ class VenueDistributor:
                     people_by_attributes[attr_values] = []
                 people_by_attributes[attr_values].append(person)
 
-            # For each unique attribute combo, filter venues ONCE
+            # For each unique attribute combo, filter venues ONCE (Attribute Batching)
             for attr_values, people_group in people_by_attributes.items():
-                # Filter venues based on this attribute combination
-                # Use first person in group as representative (they all have same attributes)
                 representative_person = people_group[0]
-                eligible_venues = self._filter_venues_by_person(representative_person, geo_unit_nearby_venues)
-
-                if not eligible_venues and len(geo_unit_nearby_venues) < total_venues:
-                    # Fallback: try expanding search if needed
-                    for search_count in search_attempts[1:]:  # Skip first, already tried
-                        expanded_venues = self._find_closest_venues((lat, lon), venues, search_count)
-                        eligible_venues = self._filter_venues_by_person(representative_person, expanded_venues)
-                        if eligible_venues:
-                            if self.verbose:
-                                logger.debug(f"Geo unit {geo_unit.name} ({geo_unit.level}) with attributes {attr_values} required expanded search ({search_count} venues)")
-                            break
+                
+                # REFACTORED: Use unified expansion logic
+                eligible_venues = self._filter_venues_with_expansion(
+                    person=representative_person,
+                    venues=venues,
+                    initial_pool=geo_unit_nearby_venues,
+                    location=(lat, lon),
+                    search_limits=search_attempts
+                )
 
                 # OPTIMIZATION 3: Skip attribute-group if no venues have capacity (for non-overflow groups)
                 # This saves per-person checks when we know the whole group can't be allocated
@@ -1368,16 +1120,16 @@ class VenueDistributor:
             else:
                 logger.info(f"✓ PRIORITY GROUP '{group_name}': All people allocated")
 
-    def _handle_special_cases(self, people: List, venues: List, world) -> List:
+    def _handle_special_cases(self, people: List, venues: List, world) -> Tuple[List, List]:
         """
         Handle special case allocations (e.g., boarding school students).
 
         Returns:
-            List of people NOT handled by special cases
+            Tuple of (remaining_people, unallocated_special_case_people)
         """
         special_cases = self.config.get('special_cases', [])
         if not special_cases:
-            return people
+            return people, []
 
         # OPTIMIZATION: Build venue index for fast lookup by (name, geo_unit)
         # This avoids O(N_people * N_venues) search, reducing 58 min -> seconds for special cases
@@ -1391,27 +1143,32 @@ class VenueDistributor:
             logger.debug(f"Built special case venue index with {len(venue_index)} entries")
 
         remaining_people = []
+        unallocated_special_case_people = []
         allocated_count = 0
 
         for person in people:
+            matched_any = False
             allocated = False
 
             for case in special_cases:
                 if self._matches_special_case(person, case):
+                    matched_any = True
                     # Try to allocate according to special case rule
                     if self._allocate_special_case(person, case, venues, venue_index):
                         allocated = True
                         allocated_count += 1
                         break
 
-            if not allocated:
+            if not matched_any:
                 remaining_people.append(person)
+            elif not allocated:
+                unallocated_special_case_people.append(person)
 
         if allocated_count > 0:
             logger.info(f"Allocated {allocated_count} people via special cases")
             self.allocated_this_run += allocated_count
 
-        return remaining_people
+        return remaining_people, unallocated_special_case_people
 
     def _matches_special_case(self, person, case: Dict) -> bool:
         """Check if person matches special case condition."""
@@ -1644,14 +1401,14 @@ class VenueDistributor:
 
         return value
 
-    def _allocate_normal(self, people: List, venues: List):
+    def _allocate_normal(self, people: List, venues: List) -> List:
         """Normal allocation for people not handled by special cases."""
         batch_by = self.config.get('allocation', {}).get('batch_by', 'geo_unit')
 
         if batch_by == 'geo_unit':
-            self._allocate_by_geo_unit(people, venues)
+            return self._allocate_by_geo_unit(people, venues)
         else:
-            self._allocate_individual(people, venues)
+            return self._allocate_individual(people, venues)
 
     def _allocate_by_geo_unit(self, people: List, venues: List):
         """Batch allocation by geo_unit for performance."""
@@ -1686,6 +1443,7 @@ class VenueDistributor:
 
         # Process each geo_unit
         allocated_count = 0
+        unallocated_people = []
         for geo_unit, geo_unit_people in people_by_geo_unit.items():
             # geo_unit is already a GeographicalUnit object at batch_geo_level
 
@@ -1728,22 +1486,43 @@ class VenueDistributor:
                     attributes_to_extract.append(rule.get('name'))
             attributes_to_extract = list(set(attributes_to_extract))
 
-            # Allocate each person in this batch
+            # ATTRIBUTE BATCHING OPTIMIZATION
+            # Group people in this geo_unit by unique attributes
+            # This avoids filtering venues million of times for identical people
+            people_by_attrs = defaultdict(list)
             for person in geo_unit_people:
-                if eligible_venues:
-                    # Pre-extract attributes for this specific person
-                    person_attrs = {}
-                    for attr_name in attributes_to_extract:
-                        val = getattr(person, attr_name, None)
-                        if val is None and hasattr(person, 'properties'):
-                            val = person.properties.get(attr_name)
-                        person_attrs[attr_name] = val
+                # Build tuple of attribute values for grouping
+                attr_vals = []
+                for attr_name in attributes_to_extract:
+                    val = getattr(person, attr_name, None)
+                    if val is None and hasattr(person, 'properties'):
+                        val = person.properties.get(attr_name)
+                    attr_vals.append(val)
+                people_by_attrs[tuple(attr_vals)].append(person)
 
-                    # Filter venues by person attributes
-                    person_venues = self._filter_venues_by_person(person, eligible_venues, person_attrs=person_attrs)
+            # Process each attribute group
+            for attr_vals, group_people in people_by_attrs.items():
+                representative = group_people[0]
+                
+                # Pre-build person_attrs dict for filtering
+                person_attrs = dict(zip(attributes_to_extract, attr_vals))
 
-                    if person_venues:
-                        # Try to allocate to venues with capacity first
+                # CONDITIONAL SPATIAL EXPANSION (Optimization 2)
+                # This uses a tiered approach: search 20, then expand only if needed
+                person_venues = self._filter_venues_with_expansion(
+                    person=representative,
+                    venues=venues,
+                    initial_pool=eligible_venues,
+                    location=(lat, lon),
+                    search_limits=[50, 150, 500], # Standard expansion steps for normal allocation
+                    person_attrs=person_attrs
+                )
+
+                # Allocate everyone in this attribute group
+                if person_venues:
+                    # Filter for remaining capacity
+                    # Note: We still check capacity per-person to ensure we don't over-fill
+                    for person in group_people:
                         venues_with_capacity = self._filter_venues_by_capacity(person_venues)
                         if venues_with_capacity:
                             venue = self._select_venue(person, venues_with_capacity, (lat, lon))
@@ -1751,19 +1530,28 @@ class VenueDistributor:
                                 venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key, activity_type=self.activity_type)
                                 self._increment_venue_count(venue)
                                 allocated_count += 1
+                                continue
+                        
+                        # At capacity or no selection - person remains unallocated
+                        unallocated_people.append(person)
+                else:
+                    # Non-match - everyone in group remains unallocated
+                    unallocated_people.extend(group_people)
 
-                # Update progress tracking (count all people, not just allocated)
-                people_processed += 1
-                if people_processed % progress_interval == 0 or people_processed == total_people:
-                    percent_complete = (people_processed / total_people) * 100
+                # Update progress tracking
+                people_processed += len(group_people)
+                if people_processed % progress_interval == 0 or people_processed >= total_people:
+                    percent_complete = min(100, (people_processed / total_people) * 100)
                     logger.info(f"  Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
 
-        logger.info(f"Normal allocation: Allocated {allocated_count} people")
+        logger.info(f"Normal allocation: Allocated {allocated_count} people, {len(unallocated_people)} unallocated")
         self.allocated_this_run += allocated_count
+        return unallocated_people
 
-    def _allocate_individual(self, people: List, venues: List):
+    def _allocate_individual(self, people: List, venues: List) -> List:
         """Allocate people individually (slower, but more precise)."""
         allocated_count = 0
+        unallocated_people = []
 
         # Progress tracking
         total_people = len(people)
@@ -1776,10 +1564,16 @@ class VenueDistributor:
                 continue
 
             # Find eligible venues
-            eligible_venues = self._find_eligible_venues_for_location(location, venues)
+            initial_venues = self._find_eligible_venues_for_location(location, venues)
 
-            # Filter by person attributes
-            person_venues = self._filter_venues_by_person(person, eligible_venues)
+            # Filter by person attributes with tiered expansion
+            person_venues = self._filter_venues_with_expansion(
+                person=person,
+                venues=venues,
+                initial_pool=initial_venues,
+                location=location,
+                search_limits=[50, 200, 1000]
+            )
 
             if person_venues:
                 # Try to allocate to venues with capacity first
@@ -1790,14 +1584,119 @@ class VenueDistributor:
                         venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key, activity_type=self.activity_type)
                         self._increment_venue_count(venue)
                         allocated_count += 1
+                        continue # Success
+
+            # If we reach here, person was not allocated
+            unallocated_people.append(person)
 
             # Update progress tracking
             if i % progress_interval == 0 or i == total_people:
                 percent_complete = (i / total_people) * 100
                 logger.info(f"  Progress: {i}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
 
-        logger.info(f"Normal allocation: Allocated {allocated_count} people")
+        logger.info(f"Normal allocation: Allocated {allocated_count} people, {len(unallocated_people)} unallocated")
         self.allocated_this_run += allocated_count
+        return unallocated_people
+
+    def _handle_fallbacks(self, unallocated_people: List, venues: List, world) -> List:
+        """Handle people who couldn't be allocated during the normal pass."""
+        fallback_config = self.config.get('fallback', {})
+        strategy = fallback_config.get('strategy', 'skip')
+        
+        if strategy == 'skip' or not unallocated_people:
+            return unallocated_people
+            
+        logger.info(f"Handling fallbacks for {len(unallocated_people)} people using strategy '{strategy}'")
+        
+        still_unallocated = []
+        
+        if strategy == 'relax_distance':
+            # Retry with increased radius
+            still_unallocated = self._fallback_relax_distance(unallocated_people, venues, fallback_config)
+        elif strategy == 'relax_capacity':
+            # Retry without capacity checking
+            still_unallocated = self._fallback_relax_capacity(unallocated_people, venues)
+        elif strategy == 'assign_closest':
+            # Assign to absolute closest regardless of attributes/capacity
+            still_unallocated = self._fallback_assign_closest(unallocated_people, venues)
+        else:
+            logger.warning(f"Unknown fallback strategy: {strategy}")
+            still_unallocated = unallocated_people
+            
+        return still_unallocated
+
+    def _fallback_relax_distance(self, people: List, venues: List, config: Dict) -> List:
+        """Retry allocation with progressively relaxed distance constraints."""
+        relax_params = config.get('relax_params', {})
+        multiplier = relax_params.get('distance_multiplier', 2.0)
+        max_iters = relax_params.get('max_iterations', 3)
+        
+        remaining = list(people)
+        
+        # We need to temporarily modify venue_selection config for _allocate_individual to pick it up
+        selection_config = self.config.get('venue_selection', {})
+        original_max_dist = selection_config.get('max_distance')
+        original_count = selection_config.get('count')
+        
+        try:
+            for i in range(max_iters):
+                if not remaining: break
+                
+                # Increase distance constraints
+                if 'max_distance' in selection_config:
+                    selection_config['max_distance'] *= multiplier
+                if 'count' in selection_config:
+                    selection_config['count'] = int(selection_config['count'] * multiplier)
+                
+                logger.info(f"  Relaxation iteration {i+1}/{max_iters} (distance x{multiplier**(i+1)})...")
+                remaining = self._allocate_individual(remaining, venues)
+        finally:
+            # Restore original config
+            if original_max_dist is not None:
+                selection_config['max_distance'] = original_max_dist
+            if original_count is not None:
+                selection_config['count'] = original_count
+            
+        return remaining
+
+    def _fallback_relax_capacity(self, people: List, venues: List) -> List:
+        """Retry allocation while ignoring capacity limits."""
+        # Temporarily enable overflow
+        original_when_full = self.config.get('allocation', {}).get('when_full', 'exclude')
+        self.config.setdefault('allocation', {})['when_full'] = 'overflow'
+        
+        try:
+            logger.info("  Relaxing capacity constraints...")
+            remaining = self._allocate_individual(people, venues)
+        finally:
+            self.config['allocation']['when_full'] = original_when_full
+            
+        return remaining
+
+    def _fallback_assign_closest(self, people: List, venues: List) -> List:
+        """Assign each person to their absolute closest venue, ignoring ALL other constraints."""
+        allocated_count = 0
+        logger.info("  Assigning to closest venue regardless of eligibility or capacity...")
+        
+        for person in people:
+            location = self._get_person_location(person)
+            if location:
+                # Find absolute closest venue among all venues of this type
+                # Bypass _find_eligible_venues_for_location entirely as it enforces distance/count constraints
+                closest = self._find_closest_venues(location, self.venue_type, 1)
+                if closest:
+                    venue = closest[0]
+                    venue.add_to_subset(person, subset_key=self.subset_key, activity_name=self.activity_map_key, activity_type=self.activity_type)
+                    self._increment_venue_count(venue)
+                    allocated_count += 1
+                else:
+                    logger.warning(f"Could not find ANY venue for person {person.id} even in assign_closest fallback")
+            
+        self.allocated_this_run += allocated_count
+        logger.info(f"  assign_closest: Allocated {allocated_count}/{len(people)} people")
+        
+        # Return those who still couldn't be allocated (e.g. they had no location)
+        return [p for p in people if self._get_person_location(p) is None]
 
     def _get_person_location(self, person) -> Optional[Tuple[float, float]]:
         """Get person's location coordinates."""
@@ -1829,78 +1728,41 @@ class VenueDistributor:
 
         if consider_by == 'count':
             count = selection.get('count', 5)
-            return self._find_closest_venues(location, venues, count)
+            criteria = selection.get('criteria', 'closest')
+            
+            if criteria == 'largest_capacity':
+                return self._find_largest_venues(location, venues, count)
+            return self._find_closest_venues(location, self.venue_type, count, allowed_venue_ids={id(v) for v in venues})
 
         elif consider_by == 'distance':
             max_distance = selection.get('max_distance', 10)
             max_distance_unit = selection.get('max_distance_unit', 'km')
-            return self._find_venues_within_distance(location, venues, max_distance, max_distance_unit)
-
-        elif consider_by == 'geo_unit':
-            # Would need geo_unit filtering
-            return venues
+            eligible = self._find_venues_within_distance(location, venues, max_distance, max_distance_unit)
+            
+            # If criteria is largest_capacity, sort the results by capacity
+            if selection.get('criteria') == 'largest_capacity':
+                eligible.sort(key=lambda v: self._get_venue_capacity(v), reverse=True)
+            return eligible
 
         return venues
 
-    def _find_closest_venues(
+    def _find_largest_venues(
         self, location: Tuple[float, float], venues: List, count: int
     ) -> List:
-        """Find N closest venues using spatial index."""
-        if self.spatial_index is None:
-            # Fallback: calculate all distances
-            return self._find_closest_venues_brute_force(location, venues, count)
-
-        # Create a set of allowed venue IDs for fast lookup
-        allowed_venue_ids = {id(venue) for venue in venues}
-
-        # BUG FIX: If venues list is filtered, we need to query MORE venues from the spatial index
-        # and then filter the results to only include venues in our allowed list.
-        # Query enough venues to ensure we get at least 'count' after filtering.
-        max_query = min(len(self.venue_list), count * 10)  # Query 10x to be safe
-
-        # Query KDTree for closest venues from ALL venues
-        distances, indices = self.spatial_index.query(location, k=max_query)
-
-        # Handle single result (scalar) vs multiple (array)
-        if np.isscalar(indices):
-            indices = [indices]
-        else:
-            indices = indices.tolist()
-
-        # Filter results to only include venues in our allowed set
-        closest_venues = []
-        for i in indices:
-            if 0 <= i < len(self.venue_list):
-                venue = self.venue_list[i]
-                if id(venue) in allowed_venue_ids:
-                    closest_venues.append(venue)
-                    if len(closest_venues) >= count:
-                        break
-
-        return closest_venues
-
-    def _find_closest_venues_brute_force(
-        self, location: Tuple[float, float], venues: List, count: int
-    ) -> List:
-        """Fallback: Find closest venues without spatial index."""
-        venues_with_dist = []
-        for venue in venues:
-            if venue.coordinates is not None and len(venue.coordinates) == 2:
-                lat, lon = venue.coordinates
-                if lat is not None and lon is not None:
-                    dist = self._haversine_distance(location, (lat, lon))
-                    venues_with_dist.append((venue, dist))
-
-        # Sort by distance and take top N
-        venues_with_dist.sort(key=lambda x: x[1])
-        return [v for v, d in venues_with_dist[:count]]
+        """Find venues with largest capacity among a pool of closest candidates."""
+        # Query a larger pool of closest venues first to find large ones reasonably nearby
+        pool_size = max(count * 5, 20)
+        closest_pool = self._find_closest_venues(location, self.venue_type, pool_size, allowed_venue_ids={id(v) for v in venues})
+        
+        # Sort that pool by capacity (descending)
+        closest_pool.sort(key=lambda v: self._get_venue_capacity(v), reverse=True)
+        return closest_pool[:count]
 
     def _find_venues_within_distance(
         self, location: Tuple[float, float], venues: List,
         max_distance: float, unit: str
     ) -> List:
         """Find all venues within distance radius."""
-        # Convert to km if needed
         if unit == 'miles':
             max_distance *= 1.60934
         elif unit == 'meters':
@@ -1916,24 +1778,6 @@ class VenueDistributor:
                         eligible.append(venue)
 
         return eligible
-
-    def _haversine_distance(
-        self, loc1: Tuple[float, float], loc2: Tuple[float, float]
-    ) -> float:
-        """Calculate distance between two lat/lon points in km."""
-        lat1, lon1 = np.radians(loc1)
-        lat2, lon2 = np.radians(loc2)
-
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
-
-        a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-        c = 2 * np.arcsin(np.sqrt(a))
-
-        # Earth radius in km
-        r = 6371
-
-        return c * r
 
     def _prefilter_venues_by_categorical(self, person, venues: List, person_attrs: Optional[Dict] = None) -> List:
         """
@@ -1997,6 +1841,46 @@ class VenueDistributor:
             return result
         else:
             return venues  # No categorical filters, return all venues
+
+    def _filter_venues_with_expansion(self, person, venues: List, initial_pool: List, location: Tuple[float, float], search_limits: List[int], person_attrs: Optional[Dict] = None) -> List:
+        """
+        Filter venues for a person, expanding the spatial search iteratively if no matches found.
+        
+        Args:
+            person: Person object
+            venues: List of ALL venues of this type (passed to _find_closest_venues)
+            initial_pool: Initial candidate pool (usually closest 20-50)
+            location: (lat, lon) coordinates
+            search_limits: List of candidate counts to try (e.g., [50, 200, 1000])
+            person_attrs: Pre-extracted attributes for the person
+            
+        Returns:
+            List of eligible venues
+        """
+        # Tier 1: Try the initial pool (Fast path)
+        eligible = self._filter_venues_by_person(person, initial_pool, person_attrs=person_attrs)
+        if eligible:
+            return eligible
+            
+        # Expansion Tiers: Only triggered if initial pool failed
+        if self.config.get('venue_selection', {}).get('consider_by') == 'count':
+            # Start from the search limits
+            for search_count in search_limits:
+                # Skip limits that are smaller than or equal to what we already checked
+                if search_count <= len(initial_pool):
+                    continue
+                
+                if self.verbose:
+                    logger.debug(f"Expanding search for person {person.id} to k={search_count}")
+                
+                # Fetch more candidates from spatial index
+                expanded_pool = self._find_closest_venues(location, self.venue_type, search_count, allowed_venue_ids={id(v) for v in venues})
+                eligible = self._filter_venues_by_person(person, expanded_pool, person_attrs=person_attrs)
+                
+                if eligible:
+                    return eligible
+                    
+        return []
 
     def _filter_venues_by_person(self, person, venues: List, person_attrs: Optional[Dict] = None) -> List:
         """Filter venues based on person's attributes (age, gender, etc.)."""
@@ -2174,6 +2058,17 @@ class VenueDistributor:
             weights = [1.0 / (d + 0.1) for d in distances]  # +0.1 to avoid division by zero
             weights = np.array(weights) / sum(weights)
             return np.random.choice(valid_venues, p=weights)
+
+        elif strategy == 'largest_capacity':
+            # Pick the venue with the largest total capacity
+            best_venue = None
+            max_cap = -1
+            for v in venues:
+                cap = self._get_venue_capacity(v)
+                if cap > max_cap:
+                    max_cap = cap
+                    best_venue = v
+            return best_venue
 
         return venues[0]
 
