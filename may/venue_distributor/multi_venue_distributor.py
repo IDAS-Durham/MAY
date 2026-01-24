@@ -203,7 +203,7 @@ class MultiVenueDistributor(BaseDistributor):
             match_type = filter_config.get('match_type', 'exact')
 
             # Get person attribute value
-            person_value = getattr(person, person_attr, None)
+            person_value = self._get_person_attribute(person_attr, person)
             if person_value is None:
                 return False
 
@@ -279,7 +279,7 @@ class MultiVenueDistributor(BaseDistributor):
             person_attr = prob_config.get('person_attribute')
 
             if person_attr:
-                person_value = getattr(person, person_attr, None)
+                person_value = self._get_person_attribute(person_attr, person)
                 if person_value is None:
                     return None
 
@@ -333,7 +333,7 @@ class MultiVenueDistributor(BaseDistributor):
             match_type = filter_cfg.get('match_type', 'exact')
 
             # Get person attribute value
-            person_value = getattr(person, person_attr, None)
+            person_value = self._get_person_attribute(person_attr, person)
             if person_value is None:
                 return False
 
@@ -403,7 +403,7 @@ class MultiVenueDistributor(BaseDistributor):
         if isinstance(prob_value, dict):
             # Template-based: select probability by person attribute
             person_attr = prob_config.get('person_attribute')
-            attr_value = getattr(person, person_attr, None)
+            attr_value = self._get_person_attribute(person_attr, person)
             if attr_value:
                 probability = prob_value.get(str(attr_value).lower())
         else:

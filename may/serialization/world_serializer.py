@@ -873,22 +873,23 @@ class WorldSerializer:
         venue_to_id = self._venue_to_global_id
 
         for person_idx, person in enumerate(people_sorted, 1):
-            # Pre-filter subsets once (Optimized)
-            relevant_subsets = []
-            for name, types in person.activity_map.items():
+            person_id = person.id
+            activity_map = person.activity_map
+            
+            # Accessing activities directly to avoid repeated .items() calls if possible
+            # However, we need both name and types, so items() is generally okay if
+            # the dict is small. The real bottleneck is the intermediate list.
+            for name, types in activity_map.items():
                 if name in activity_to_idx:
-                    for v_type, subsets_list in types.items():
-                        # We hope it's a list; skipping isinstance for speed in hot path
+                    act_idx = activity_to_idx[name]
+                    for subsets_list in types.values():
                         for subset in subsets_list:
                             v_id = id(subset.venue)
                             if v_id in venue_to_id:
-                                relevant_subsets.append((activity_to_idx[name], venue_to_id[v_id], subset.subset_index))
-
-            for act_idx, g_id, s_idx in relevant_subsets:
-                p_ids.append(person.id)
-                a_idxs.append(act_idx)
-                v_ids_list.append(g_id)
-                s_idxs.append(s_idx)
+                                p_ids.append(person_id)
+                                a_idxs.append(act_idx)
+                                v_ids_list.append(venue_to_id[v_id])
+                                s_idxs.append(subset.subset_index)
 
             activity_offsets.append(len(p_ids))
 

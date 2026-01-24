@@ -564,7 +564,8 @@ class RelationshipRulesValidator:
                      existing_people_by_role: Optional[Dict[str, List[Person]]] = None,
                      constraints: Optional[List[Dict]] = None,
                      current_role: Optional[str] = None,
-                     show_detailed_logs: bool = False) -> Optional[Tuple[Person, Person]]:
+                     show_detailed_logs: bool = False,
+                     candidates_by_cat: Optional[Dict[Any, List[Person]]] = None) -> Optional[Tuple[Person, Person]]:
         """
         Select 2 people from candidates to form a compatible pair.
 
@@ -628,13 +629,19 @@ class RelationshipRulesValidator:
         np.random.shuffle(shuffled_candidates)
 
         # Pre-group candidates by categorical attribute AND cache attribute values
-        candidates_by_cat = defaultdict(list)
-        candidate_cat_values = {}  # Cache categorical attribute values
         cat_getter = self._get_attribute_getter(cat_attribute)
-        for p in candidates:
-            cat_val = cat_getter(p)
-            candidates_by_cat[cat_val].append(p)
-            candidate_cat_values[p.id] = cat_val
+        
+        if candidates_by_cat is None:
+            candidates_by_cat = defaultdict(list)
+            candidate_cat_values = {}  # Cache categorical attribute values
+            for p in candidates:
+                cat_val = cat_getter(p)
+                candidates_by_cat[cat_val].append(p)
+                candidate_cat_values[p.id] = cat_val
+        else:
+            # We still need the cat_values mapping for the first person optimization below
+            # Since we only do this once per select_pair, we can just call cat_getter on first_person
+            candidate_cat_values = None
 
         # Pre-compute min/max values for each constraint (performance optimization)
         constraint_people_cache = {}
@@ -691,8 +698,8 @@ class RelationshipRulesValidator:
             if not first_valid:
                 continue
 
-            # Use cached categorical attribute value
-            first_cat_value = candidate_cat_values[first_person.id]
+            # Get categorical attribute value for first person
+            first_cat_value = candidate_cat_values[first_person.id] if candidate_cat_values is not None else cat_getter(first_person)
             if is_same_category:
                 required_cat_value = first_cat_value
             else:

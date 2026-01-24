@@ -14,8 +14,9 @@ import yaml
 import math
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set, Any
 from itertools import islice
+from collections import defaultdict
 
 from may.geography.geography import Geography
 from may.geography.venue import Venue
@@ -106,8 +107,16 @@ class HouseholdDistributor:
         # Initialize promoter
         self.promoter = HouseholdPromoter(self)
 
-        # Initialize round distributor
         self.round_distributor = HouseholdRoundDistributor(self)
+
+        # Pre-calculate demotion fallback priority
+        priority_config = self.config.get('demotion', {}).get('priority', {})
+        priority_order = []
+        for cat_idx, cat in enumerate(self.categories):
+            priority = priority_config.get(cat.name, 999)
+            priority_order.append((priority, cat_idx))
+        priority_order.sort()  # Sort by priority (lower = demote first)
+        self.fallback_priority = [idx for _, idx in priority_order]
 
         logger.info(f"Initialized HouseholdDistributor with {len(self.categories)} categories")
         for cat in self.categories:
@@ -354,7 +363,7 @@ class HouseholdDistributor:
         logger.debug(f"Rule: {rule.name}")
         logger.debug(f"Selection order: {' → '.join(rule.selection_order)}")
         logger.debug("")
-        self._show_detailed_logs = True
+        self._show_detailed_logs = logger.isEnabledFor(logging.DEBUG)
 
         # Get backtracking config
         backtrack_config = self.relationship_rules.selection_strategy.get('backtracking', {})
@@ -730,13 +739,21 @@ class HouseholdDistributor:
                             already_selected = sum(len(people) for people in selected_by_role.values())
                             logger.debug(f"  Constraints: Must validate against {already_selected} already-selected people")
 
+                    # OPTIMIZATION: Pre-group candidates by categorical attribute
+                    cat_attr = pair_constraint.get('categorical_attribute', {}).get('attribute', 'sex')
+                    cat_getter = self.relationship_rules._get_attribute_getter(cat_attr)
+                    candidates_by_cat = defaultdict(list)
+                    for p in candidates:
+                        candidates_by_cat[cat_getter(p)].append(p)
+
                     pair = self.relationship_rules.select_pair(
                         candidates,
                         pair_constraint,
                         existing_people_by_role=selected_by_role,
                         constraints=rule.constraints,
                         current_role=role_name,
-                        show_detailed_logs=show_detailed_logs
+                        show_detailed_logs=show_detailed_logs,
+                        candidates_by_cat=candidates_by_cat
                     )
                     if not pair:
                         # Couldn't find valid pair
@@ -1072,14 +1089,8 @@ class HouseholdDistributor:
         Returns:
             Venue object if successful, None otherwise
         """
-        # Get demotion priority from config (used as fallback)
-        priority_config = self.config['demotion']['priority']
-        priority_order = []
-        for cat_idx, cat in enumerate(self.categories):
-            priority = priority_config.get(cat.name, 999)
-            priority_order.append((priority, cat_idx))
-        priority_order.sort()  # Sort by priority (lower = demote first)
-        fallback_priority = [idx for _, idx in priority_order]
+        # Fallback priority is pre-calculated in __init__
+        fallback_priority = self.fallback_priority
 
         current_pattern = pattern
 

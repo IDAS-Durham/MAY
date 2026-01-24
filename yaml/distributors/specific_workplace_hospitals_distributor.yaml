@@ -54,7 +54,7 @@ eligibility:
       values: ["household"]
 
   attributes:
-    - name: "work_sector"
+    - name: "properties.work_sector"
       type: "categorical"
       description: "Person's work_sector (from properties) should be Q (Health)"
 

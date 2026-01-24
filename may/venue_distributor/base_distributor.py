@@ -1,4 +1,5 @@
 import yaml
+import math
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -71,16 +72,34 @@ class BaseDistributor:
         return None
 
     def _haversine_distance(self, loc1: Tuple[float, float], loc2: Tuple[float, float]) -> float:
-        """Calculate distance between two lat/lon points in km."""
-        lat1, lon1 = np.radians(loc1)
-        lat2, lon2 = np.radians(loc2)
+        """Calculate distance between two lat/lon points in km (Optimized for scalars)."""
+        lat1, lon1 = loc1
+        lat2, lon2 = loc2
+        
+        # Convert degrees to radians - math.radians is much faster than np.radians for scalars
+        r_lat1 = math.radians(lat1)
+        r_lon1 = math.radians(lon1)
+        r_lat2 = math.radians(lat2)
+        r_lon2 = math.radians(lon2)
 
-        dlat = lat2 - lat1
-        dlon = lon2 - lon1
+        dlat = r_lat2 - r_lat1
+        dlon = r_lon2 - r_lon1
 
-        a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-        c = 2 * np.arcsin(np.sqrt(a))
+        a = math.sin(dlat/2)**2 + math.cos(r_lat1) * math.cos(r_lat2) * math.sin(dlon/2)**2
+        c = 2 * math.asin(math.sqrt(a))
         return c * 6371  # Earth radius in km
+
+    def _haversine_distance_vectorized(self, loc1: Tuple[float, float], locs2: np.ndarray) -> np.ndarray:
+        """Calculate distance between one point and many points in km (Vectorized)."""
+        lat1, lon1 = np.radians(loc1)
+        lats2, lons2 = np.radians(locs2[:, 0]), np.radians(locs2[:, 1])
+
+        dlat = lats2 - lat1
+        dlon = lons2 - lon1
+
+        a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lats2) * np.sin(dlon/2)**2
+        c = 2 * np.arcsin(np.sqrt(a))
+        return c * 6371
 
     def _get_geo_unit_at_level(self, person, world, target_level=None):
         """
@@ -205,17 +224,26 @@ class BaseDistributor:
         self.person_id_to_index = {person.id: i for i, person in enumerate(people)}
         self.attribute_mappings = {}
 
+        # Pre-calculate path parts to avoid repeated splitting
+        attr_metadata = {}
+        for attr in attrs_to_vectorize:
+            if attr == 'age':
+                attr_metadata[attr] = {'parts': ['age'], 'type': 'direct'}
+            elif attr == 'sex':
+                attr_metadata[attr] = {'parts': ['sex'], 'type': 'direct'}
+            elif attr == 'residence.type':
+                attr_metadata[attr] = {'parts': ['residence_type'], 'type': 'property'}
+            else:
+                attr_metadata[attr] = {'parts': attr.split('.'), 'type': 'nested'}
+
         # First pass: Identify all unique values for categorical attributes to build mappings
         categorical_vals = defaultdict(set)
         
-        # We'll determine which attributes are categorical based on person data
-        # (Numerical attributes like 'age' are handled directly)
-        
         for person in people:
-            for attr in attrs_to_vectorize:
+            for attr, meta in attr_metadata.items():
                 if attr == 'age': continue
                 
-                val = self._get_person_attribute_for_vectorization(person, attr)
+                val = self._get_person_attribute_for_vectorization(person, attr, meta['parts'])
                 if val is not None:
                     categorical_vals[attr].add(val)
 
@@ -224,39 +252,113 @@ class BaseDistributor:
             self.attribute_mappings[attr] = {val: i+1 for i, val in enumerate(sorted(list(vals)))}
 
         # Second pass: Fill arrays
-        for attr in attrs_to_vectorize:
+        for attr, meta in attr_metadata.items():
             if attr == 'age':
-                self.population_arrays['age'] = np.zeros(n, dtype=np.int16)
-                for i, person in enumerate(people):
-                    self.population_arrays['age'][i] = getattr(person, 'age', 0)
+                self.population_arrays['age'] = np.array([getattr(p, 'age', 0) for p in people], dtype=np.int16)
             else:
-                self.population_arrays[attr] = np.zeros(n, dtype=np.int16)
                 mapping = self.attribute_mappings.get(attr, {})
-                for i, person in enumerate(people):
-                    val = self._get_person_attribute_for_vectorization(person, attr)
-                    self.population_arrays[attr][i] = mapping.get(val, 0)
-
-    def _get_person_attribute_for_vectorization(self, person, attr_path: str) -> Any:
-        """Helper to get attribute value from person including nested/residence paths."""
-        if attr_path == 'residence.type':
-            return getattr(person, 'residence_type', None)
-        elif '.' in attr_path:
-            # Simple nested support (e.g. residence.properties.xxx)
-            parts = attr_path.split('.')
-            curr = person
-            for p in parts:
-                if curr is None: return None
-                if hasattr(curr, p):
-                    curr = getattr(curr, p)
-                elif hasattr(curr, 'properties') and isinstance(curr.properties, dict) and p in curr.properties:
-                    curr = curr.properties[p]
-                elif isinstance(curr, dict) and p in curr:
-                    curr = curr[p]
+                parts = meta['parts']
+                # Fast-path for common attributes
+                if attr == 'sex':
+                    self.population_arrays[attr] = np.array([mapping.get(p.sex, 0) for p in people], dtype=np.int16)
+                elif attr == 'residence.type':
+                    self.population_arrays[attr] = np.array([mapping.get(p.residence_type, 0) for p in people], dtype=np.int16)
                 else:
-                    return None
-            return curr
+                    # General nested path
+                    self.population_arrays[attr] = np.array([
+                        mapping.get(self._get_nested_value_with_dict_support(p, parts), 0) 
+                        for p in people
+                    ], dtype=np.int16)
+
+    def _get_person_attribute_for_vectorization(self, person, attr_path: str, parts: Optional[List[str]] = None) -> Any:
+        """Helper to get attribute value from person including nested/residence paths."""
+        # Fast-path for most common attributes
+        if attr_path == 'age':
+            return person.age
+        if attr_path == 'sex':
+            return person.sex
+        if attr_path == 'residence.type':
+            return person.residence_type
+            
+        return self._get_nested_value_with_dict_support(person, parts or attr_path)
+
+    def _get_person_attribute(self, path: str, person: Any):
+        """
+        Get value from person with special handling for residence.
+
+        For paths like 'residence.name' or 'residence.geographical_unit.name',
+        this looks at the person.residence property.
+        """
+        if path.startswith('residence.'):
+            residence = getattr(person, 'residence', None)
+            if residence is None:
+                return None
+            attr_path = path.replace('residence.', '')
+            return self._get_nested_value_with_dict_support(residence, attr_path)
+
+        return self._get_nested_value_with_dict_support(person, path)
+
+    def _get_nested_value(self, obj, path: str):
+        """Get value from nested object path (e.g., 'name' or 'geo_unit')."""
+        if not path: return obj
+        parts = path.split('.')
+        value = obj
+        for part in parts:
+            if value is None: return None
+            if hasattr(value, part):
+                value = getattr(value, part)
+            else:
+                return None
+        return value
+
+    def _create_path_getter(self, path: List[str]):
+        """Create an optimized getter function for a specific nested path."""
+        if not path:
+            return lambda obj: obj
+            
+        if len(path) == 1:
+            part = path[0]
+            def single_getter(obj):
+                if obj is None: return None
+                if isinstance(obj, dict): return obj.get(part)
+                return getattr(obj, part, None)
+            return single_getter
+        
+        # Nested path: pre-bind the parts to avoid loops
+        def nested_getter(obj):
+            val = obj
+            for part in path:
+                if val is None: return None
+                if isinstance(val, dict): val = val.get(part)
+                else: val = getattr(val, part, None)
+            return val
+        return nested_getter
+
+    def _get_nested_value_with_dict_support(self, obj, path: Any):
+        """
+        Get value from nested path supporting both object attributes and dictionaries.
+        """
+        if not path: return obj
+        
+        # Performance optimization: skip split/isinstance if we already have a list/tuple
+        if isinstance(path, (list, tuple)):
+            parts = path
         else:
-            return getattr(person, attr_path, None)
+            parts = path.split('.')
+        
+        value = obj
+        for part in parts:
+            if value is None:
+                return None
+
+            # Optimization: Try dict access first if value is actually a dict
+            # This is significantly faster than try/except getattr for dicts
+            if type(value) is dict:
+                value = value.get(part)
+            else:
+                value = getattr(value, part, None)
+                
+        return value
 
     def _can_vectorize_filters(self, filters: List[Dict]) -> bool:
         """Check if all filters in the list are supported by the current vectorized arrays."""
