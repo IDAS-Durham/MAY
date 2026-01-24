@@ -157,10 +157,10 @@ def find_neighbours(*args, method='libpysal', **kwargs) -> dict[id, list[id]]:
         >>> units = list(geo.get_units_by_level("SGU").values())
         >>> neighbours = find_neighbours(units, radius_km=10.0, method='libpysal')
     """
-     find_neighbours_method = neighbour_finders[method]
-     if find_neighbours_method is None:
-         raise ValueError(f"Unknown method: {method}")
-     return find_neighbours_method(*args, **kwargs)
+    find_neighbours_method = neighbour_finders[method]
+    if find_neighbours_method is None:
+        raise ValueError(f"Unknown method: {method}")
+    return find_neighbours_method(*args, **kwargs)
 
 
 def build_neighbour_network(
@@ -186,9 +186,9 @@ def build_neighbour_network(
     # Build graph
     G = nx.Graph()
 
-     # Add all nodes
-     for unit_name in neighbours.keys():
-         G.add_node(unit_name)
+    # Add all nodes
+    for unit_name in neighbours.keys():
+        G.add_node(unit_name)
 
     # Add edges (undirected, so only add once)
     for unit_name, unit_neighbours in neighbours.items():

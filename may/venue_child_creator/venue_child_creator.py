@@ -214,7 +214,7 @@ class VenueChildCreator:
 
         Args:
             members: List of Person objects
-            attribute_name: Name of attribute to group by (e.g., "age", "sex")
+            attribute_name: Name of attribute to group by (e.g., "age", "sex", "properties.ethnicity")
 
         Returns:
             Dict of {group_key: [Person, ...]}
@@ -223,7 +223,7 @@ class VenueChildCreator:
 
         for person in members:
             # Get attribute value from person
-            attr_value = getattr(person, attribute_name, None)
+            attr_value = self._get_attribute_value(person, attribute_name)
 
             if attr_value is not None:
                 # Apply attribute mapping if configured
@@ -247,6 +247,50 @@ class VenueChildCreator:
                 groups['unknown'].append(person)
 
         return dict(groups)
+
+    def _get_attribute_value(self, person, path: str):
+        """
+        Get value from person supporting dot-notation and special handling for residence.
+        Consistent with BaseDistributor._get_person_attribute.
+        """
+        if not path:
+            return None
+
+        if path.startswith('residence.'):
+            residence = getattr(person, 'residence', None)
+            if residence is None:
+                return None
+            attr_path = path.replace('residence.', '')
+            return self._get_nested_value(residence, attr_path)
+
+        return self._get_nested_value(person, path)
+
+    def _get_nested_value(self, obj, path: str):
+        """
+        Get value from nested path supporting both object attributes and properties dict.
+        """
+        parts = path.split('.')
+        current = obj
+        
+        for part in parts:
+            if current is None:
+                return None
+            
+            # 1. Try properties dict if it exists (for Person or Venue objects)
+            if hasattr(current, 'properties') and isinstance(current.properties, dict):
+                if part in current.properties:
+                    current = current.properties[part]
+                    continue
+            
+            # 2. Try dict access (for general dicts)
+            if isinstance(current, dict):
+                current = current.get(part)
+            
+            # 3. Try direct attribute/property
+            else:
+                current = getattr(current, part, None)
+                
+        return current
 
     def _create_children_for_group(self, parent_venue, group_key, group_members, world):
         """
@@ -352,7 +396,7 @@ class VenueChildCreator:
         # If replacing parent activity, clear the existing activity first
         if self.replace_parent_activity and self.activity_map_key:
             if self.activity_map_key in person.activity_map:
-                person.activity_map[self.activity_map_key] = []
+                person.activity_map[self.activity_map_key] = {}
 
         # Add person to child venue
         child_venue.add_to_subset(
