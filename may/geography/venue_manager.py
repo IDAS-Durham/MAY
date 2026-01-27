@@ -208,8 +208,8 @@ class VenueManager:
         has_coords = lat_col is not None and lon_col is not None
 
         # Get additional property columns
-        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude', 'Latitude', 'Longitude'}
-        property_cols = [col for col in venue_df.columns if col not in reserved_cols]
+        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
+        property_cols = [col for col in venue_df.columns if col.lower() not in reserved_cols]
         properties={}
 
         # Filter DataFrame upfront if geography filtering is enabled

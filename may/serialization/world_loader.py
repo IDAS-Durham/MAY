@@ -288,7 +288,7 @@ def _load_venues(venues_group, geography, config):
                 properties_by_venue_type[venue_type][prop_name] = prop_data
 
     # Create VenueManager
-    venue_manager = VenueManager()
+    venue_manager = VenueManager(geography, filter_by_geography=False)
 
     # Get all geo units for lookup (by ID, not name)
     all_units = geography.units_by_id
