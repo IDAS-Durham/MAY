@@ -38,13 +38,13 @@ steps:
   # ---------------------------------------------
   # WAVE 2: ADULT COUPLES
   # ---------------------------------------------
-  - name: "Adults without children"
+  - name: "Adults only"
     type: "household"
     description: "Adult couples without children"
     rule: "Medieval Couple"
 
     patterns:
-      - pattern: "Adults without children"
+      - pattern: "Adults only"
         assumption: "0 0 2"
     
     max_households: null
@@ -56,7 +56,7 @@ steps:
     type: "household_excess"
     refresh_pools: false
     target_patterns:
-      - ">=1 >=0 >=0"
+      - "Adults with children"
     add_category: "Kids"
     add_distribution:
       type: "poisson"
@@ -68,8 +68,8 @@ steps:
     type: "household_excess"
     refresh_pools: false
     target_patterns:
-      - ">=1 >=0 >=0"
-      - "0 >=0 >=0"
+      - "Adults with children"
+      - "Adults only"
     add_category: "Young Adults"
     add_distribution:
       type: "poisson"
@@ -81,11 +81,11 @@ steps:
     type: "household_excess"
     refresh_pools: false
     target_patterns:
-      - ">=1 >=0 >=0"
-      - "0 >=0 >=0"
+      - "Adults with children"
+      - "Adults only"
     add_category: "Adults"
     add_distribution:
       type: "poisson"
-      mean: 2
+      mean: 3
       min: 0     
       max: 4 

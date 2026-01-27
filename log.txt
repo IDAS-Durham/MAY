@@ -1,316 +1,523 @@
-2026-01-27 14:07:10,296 - create_world - INFO - ============================================================
-2026-01-27 14:07:10,296 - create_world - INFO - May - World Creation
-2026-01-27 14:07:10,296 - create_world - INFO - ============================================================
-2026-01-27 14:07:10,297 - create_world - INFO - Loading configuration from: world_specific_code/MedievalYaml/config.yaml
-2026-01-27 14:07:10,308 - config_loader - INFO - Loading all geographical units (no filters)
-2026-01-27 14:07:10,308 - geography - INFO - Loading geography from world_specific_code/MedievalYaml/data/geography
-2026-01-27 14:07:10,317 - geography - INFO - Loaded hierarchy with 19710 entries
-2026-01-27 14:07:10,329 - geography - INFO - Loaded 19710 coordinates for MBD_Temp_ID
-2026-01-27 14:07:10,330 - geography - INFO - Loaded 41 coordinates for County
-2026-01-27 14:07:10,330 - geography - WARNING - No coordinate file found for Country
-2026-01-27 14:07:10,361 - geography - INFO - Created 19752 total units
-2026-01-27 14:07:11,545 - geography - INFO - Built hierarchical relationships
-2026-01-27 14:07:11,545 - geography - INFO -   MBD_Temp_ID: 19710 units
-2026-01-27 14:07:11,545 - geography - INFO -   County: 41 units
-2026-01-27 14:07:11,545 - geography - INFO -   Country: 1 units
-2026-01-27 14:07:11,545 - create_world - INFO - 
-2026-01-27 14:07:11,545 - create_world - INFO - Loading venues...
-2026-01-27 14:07:11,547 - venuemanager - INFO - Loading venue configuration from world_specific_code/MedievalYaml/yaml/venues/venues_config.yaml
-2026-01-27 14:07:11,571 - venuemanager - INFO - Skipping disabled venue types: ['household', 'hospital', 'school', 'university', 'care_home', 'prison', 'company', 'boarding_school', 'student_dorms', 'cinema', 'grocery', 'gym', 'pub']
-2026-01-27 14:07:11,571 - venuemanager - INFO - Loading 0 venue types from YAML config
-2026-01-27 14:07:11,571 - venuemanager - INFO - Total venues created: 0
-2026-01-27 14:07:11,571 - create_world - INFO - 
-2026-01-27 14:07:11,571 - create_world - INFO - Loading population...
-2026-01-27 14:07:11,572 - population - INFO - Filtering demographics to 19710 MBD_Temp_IDs in loaded geography
-2026-01-27 14:07:11,572 - population - INFO - Loading male demographics from world_specific_code/MedievalYaml/data/population/demography_male.csv
-2026-01-27 14:07:11,625 - population - INFO - Loading female demographics from world_specific_code/MedievalYaml/data/population/demography_female.csv
-2026-01-27 14:07:11,688 - population - INFO - Filtered to 19710 male geo units and 19710 female geo units
-2026-01-27 14:07:11,688 - population - INFO - Processing male demographics...
-2026-01-27 14:07:11,821 - population - INFO - Processing female demographics...
-2026-01-27 14:07:11,942 - population - INFO - Building demographic dictionary...
-2026-01-27 14:07:13,051 - population - INFO - Loaded precise demographics for 19710 geographical units
-2026-01-27 14:07:13,052 - population - INFO - Total people in demographics: 4,751,126
-2026-01-27 14:07:13,059 - population - INFO - Generating population from precise demographics...
-2026-01-27 14:07:29,314 - population - INFO - Generated 4,751,126 people across 19710 MBD_Temp_IDs
-2026-01-27 14:07:29,314 - population - INFO - Average: 241.1 people per MBD_Temp_ID
-2026-01-27 14:07:29,417 - world - INFO - 
-2026-01-27 14:07:29,417 - world - INFO - Distributing households...
-2026-01-27 14:07:29,437 - relationship_rules - INFO - Loaded 3 relationship rules
-2026-01-27 14:07:29,438 - household - INFO - Initialized HouseholdDistributor with 3 categories
-2026-01-27 14:07:29,438 - household - INFO -   - Kids(age:0-11)
-2026-01-27 14:07:29,438 - household - INFO -   - Young Adults(age:12-20)
-2026-01-27 14:07:29,438 - household - INFO -   - Adults(age:21-∞)
-2026-01-27 14:07:29,438 - household - INFO - Loading household data from world_specific_code/MedievalYaml/data/households/household_comp_simple.csv
-2026-01-27 14:07:29,438 - household - INFO - Filtering household data to 19710 MBD_Temp_IDs in loaded geography
-2026-01-27 14:07:29,448 - household - INFO - Filtered to 19710 geo_units with 2 household types
-2026-01-27 14:07:30,532 - household - INFO - Loaded household data for 19710 geographical units
-2026-01-27 14:07:30,532 - world - INFO - Using unified allocation strategy from world_specific_code/MedievalYaml/yaml/households/allocation_strategy.yaml
-2026-01-27 14:07:30,532 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:30,533 - allocation_strategy - INFO - Executing Unified Allocation Strategy
-2026-01-27 14:07:30,533 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:30,533 - allocation_strategy - INFO - Loading allocation strategy from world_specific_code/MedievalYaml/yaml/households/allocation_strategy.yaml
-2026-01-27 14:07:30,540 - allocation_strategy - INFO - Found 5 allocation steps
-2026-01-27 14:07:30,540 - allocation_strategy - INFO - 
-2026-01-27 14:07:30,540 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:30,540 - allocation_strategy - INFO - Step 1: Adults with children (household)
-2026-01-27 14:07:30,540 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:30,540 - allocation_strategy - INFO - Description: Primary medieval family structure: Couple + Kid
-2026-01-27 14:07:30,540 - allocation_strategy - INFO - 
-2026-01-27 14:07:30,540 - allocation_strategy - INFO -   Using explicit relationship rule: 'Nuclear Family'
-2026-01-27 14:07:30,540 - allocation_strategy - INFO -   Pattern '>=1 >=0 >=0' has assumption: '1 0 2'
-2026-01-27 14:07:30,540 - household - INFO - ============================================================
-2026-01-27 14:07:30,540 - household - INFO - Starting round: Adults with children
-2026-01-27 14:07:30,540 - household - INFO - ============================================================
-2026-01-27 14:07:30,540 - household - INFO - Preparing person pools by geo_unit and age category...
-2026-01-27 14:07:31,116 - household - INFO -   Progress: 1971/19710 geo_units processed (10.0%)
-2026-01-27 14:07:31,614 - household - INFO -   Progress: 3942/19710 geo_units processed (20.0%)
-2026-01-27 14:07:32,105 - household - INFO -   Progress: 5913/19710 geo_units processed (30.0%)
-2026-01-27 14:07:32,622 - household - INFO -   Progress: 7884/19710 geo_units processed (40.0%)
-2026-01-27 14:07:33,110 - household - INFO -   Progress: 9855/19710 geo_units processed (50.0%)
-2026-01-27 14:07:33,598 - household - INFO -   Progress: 11826/19710 geo_units processed (60.0%)
-2026-01-27 14:07:34,076 - household - INFO -   Progress: 13797/19710 geo_units processed (70.0%)
-2026-01-27 14:07:34,569 - household - INFO -   Progress: 15768/19710 geo_units processed (80.0%)
-2026-01-27 14:07:35,103 - household - INFO -   Progress: 17739/19710 geo_units processed (90.0%)
-2026-01-27 14:07:35,764 - household - INFO -   Progress: 19710/19710 geo_units processed (100.0%)
-2026-01-27 14:07:35,788 - household - INFO - Prepared person pools for 19710 geo_units (4751126 total people)
-2026-01-27 14:07:35,794 - household - INFO - Allocating 0 households...
-2026-01-27 14:07:35,799 - household - INFO - ============================================================
-2026-01-27 14:07:35,799 - household - INFO - Adults with children complete!
-2026-01-27 14:07:35,799 - household - INFO -   Requested households (filtered): 0
-2026-01-27 14:07:35,799 - household - INFO -   Created households: 0 (0.0%)
-2026-01-27 14:07:35,799 - household - INFO -   People allocated this round: 0
-2026-01-27 14:07:35,799 - household - INFO -   Total households so far: 0
-2026-01-27 14:07:35,799 - household - INFO -   Total people allocated: 0
-2026-01-27 14:07:35,799 - household - INFO -   People remaining: 4,751,126
-2026-01-27 14:07:35,799 - household - INFO - ============================================================
-2026-01-27 14:07:35,800 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,800 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,800 - allocation_strategy - INFO - Step 2: Adults without children (household)
-2026-01-27 14:07:35,800 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,800 - allocation_strategy - INFO - Description: Adult couples without children
-2026-01-27 14:07:35,800 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,800 - allocation_strategy - INFO -   Using explicit relationship rule: 'Medieval Couple'
-2026-01-27 14:07:35,800 - allocation_strategy - INFO -   Pattern '0 >=0 >=0' has assumption: '0 0 2'
-2026-01-27 14:07:35,800 - household - INFO - ============================================================
-2026-01-27 14:07:35,800 - household - INFO - Starting round: Adults without children
-2026-01-27 14:07:35,800 - household - INFO - ============================================================
-2026-01-27 14:07:35,805 - household - INFO - Allocating 0 households...
-2026-01-27 14:07:35,811 - household - INFO - ============================================================
-2026-01-27 14:07:35,811 - household - INFO - Adults without children complete!
-2026-01-27 14:07:35,811 - household - INFO -   Requested households (filtered): 0
-2026-01-27 14:07:35,811 - household - INFO -   Created households: 0 (0.0%)
-2026-01-27 14:07:35,811 - household - INFO -   People allocated this round: 0
-2026-01-27 14:07:35,811 - household - INFO -   Total households so far: 0
-2026-01-27 14:07:35,811 - household - INFO -   Total people allocated: 0
-2026-01-27 14:07:35,811 - household - INFO -   People remaining: 4,751,126
-2026-01-27 14:07:35,811 - household - INFO - ============================================================
-2026-01-27 14:07:35,811 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,811 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,811 - allocation_strategy - INFO - Step 3: Excess Kids (household_excess)
-2026-01-27 14:07:35,811 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,811 - household - INFO - ============================================================
-2026-01-27 14:07:35,811 - household - INFO - Starting excess allocation round: Excess Kids
-2026-01-27 14:07:35,811 - household - INFO - ============================================================
-2026-01-27 14:07:35,811 - household - INFO - Target patterns: ['>=1 >=0 >=0']
-2026-01-27 14:07:35,811 - household - INFO - Adding category: Kids
-2026-01-27 14:07:35,811 - household - INFO - Constraints: None
-2026-01-27 14:07:35,811 - household - INFO - 
-2026-01-27 14:07:35,811 - household - INFO - Found 0 households matching target patterns
-2026-01-27 14:07:35,812 - household - WARNING - No households found matching target patterns
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - Step 4: Excess Young Adults (household_excess)
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,812 - household - INFO - ============================================================
-2026-01-27 14:07:35,812 - household - INFO - Starting excess allocation round: Excess Young Adults
-2026-01-27 14:07:35,812 - household - INFO - ============================================================
-2026-01-27 14:07:35,812 - household - INFO - Target patterns: ['>=1 >=0 >=0', '0 >=0 >=0']
-2026-01-27 14:07:35,812 - household - INFO - Adding category: Young Adults
-2026-01-27 14:07:35,812 - household - INFO - Constraints: None
-2026-01-27 14:07:35,812 - household - INFO - 
-2026-01-27 14:07:35,812 - household - INFO - Found 0 households matching target patterns
-2026-01-27 14:07:35,812 - household - WARNING - No households found matching target patterns
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - Step 5: Excess Adults (household_excess)
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,812 - household - INFO - ============================================================
-2026-01-27 14:07:35,812 - household - INFO - Starting excess allocation round: Excess Adults
-2026-01-27 14:07:35,812 - household - INFO - ============================================================
-2026-01-27 14:07:35,812 - household - INFO - Target patterns: ['>=1 >=0 >=0', '0 >=0 >=0']
-2026-01-27 14:07:35,812 - household - INFO - Adding category: Adults
-2026-01-27 14:07:35,812 - household - INFO - Constraints: None
-2026-01-27 14:07:35,812 - household - INFO - 
-2026-01-27 14:07:35,812 - household - INFO - Found 0 households matching target patterns
-2026-01-27 14:07:35,812 - household - WARNING - No households found matching target patterns
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - UNIFIED ALLOCATION STRATEGY SUMMARY
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - 1. Adults with children (household):
-2026-01-27 14:07:35,812 - allocation_strategy - INFO -    Households: 0
-2026-01-27 14:07:35,812 - allocation_strategy - INFO -    People: 0
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,812 - allocation_strategy - INFO - 2. Adults without children (household):
-2026-01-27 14:07:35,812 - allocation_strategy - INFO -    Households: 0
-2026-01-27 14:07:35,812 - allocation_strategy - INFO -    People: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - 3. Excess Kids (household_excess):
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -    Households modified: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -    People added: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - 4. Excess Young Adults (household_excess):
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -    Households modified: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -    People added: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - 5. Excess Adults (household_excess):
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -    Households modified: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -    People added: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - 
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - Overall Totals:
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   Total households: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   People in households (initial): 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   People added to households (excess): 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   People added to households (overflow): 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   People in venues: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   Total allocated: 0
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   Remaining unallocated: 4,751,126
-2026-01-27 14:07:35,813 - allocation_strategy - INFO -   Allocation rate: 0.0%
-2026-01-27 14:07:35,813 - allocation_strategy - INFO - ============================================================
-2026-01-27 14:07:35,813 - household - INFO - Exporting unallocated people to unallocated_people.csv...
-2026-01-27 14:07:43,240 - household - INFO - Exported 4751126 unallocated people to world_specific_code/MedievalYaml/data/households/unallocated_people.csv
-2026-01-27 14:07:43,355 - household - INFO - Exporting household data to household_allocations.csv...
-2026-01-27 14:07:43,357 - household - INFO - Exported 0 households to world_specific_code/MedievalYaml/data/households/household_allocations.csv
-2026-01-27 14:07:43,357 - venuemanager - INFO - Exporting venue allocation data to venue_allocations.csv...
-2026-01-27 14:07:43,358 - venuemanager - INFO - Exported 0 venues to world_specific_code/MedievalYaml/data/venues/venue_allocations.csv
-2026-01-27 14:07:43,358 - world - INFO - 
-2026-01-27 14:07:43,358 - world - INFO - ============================================================
-2026-01-27 14:07:43,358 - world - INFO - HOUSEHOLD STORAGE LOCATIONS
-2026-01-27 14:07:43,358 - world - INFO - ============================================================
-2026-01-27 14:07:43,358 - world - INFO - Total households created: 0
-2026-01-27 14:07:43,358 - world - INFO - 
-2026-01-27 14:07:43,358 - world - INFO - Households are stored in VenueManager:
-2026-01-27 14:07:43,358 - world - INFO -   1. venues.get_venues_by_type('household')  -> List of all household Venues
-2026-01-27 14:07:43,358 - world - INFO -   2. venues.get_venue_by_type_and_id('household', id)  -> Specific household by ID
-2026-01-27 14:07:43,358 - world - INFO -   3. venues.venues['household_0']  -> Specific household by name
-2026-01-27 14:07:43,358 - world - INFO - 
-2026-01-27 14:07:43,358 - world - INFO - 
-2026-01-27 14:07:43,358 - world - INFO - ============================================================
-2026-01-27 14:07:43,358 - world - INFO - PEOPLE IN HOUSEHOLDS - How to find where someone lives
-2026-01-27 14:07:43,358 - world - INFO - ============================================================
-2026-01-27 14:07:43,358 - world - INFO - 
-2026-01-27 14:07:43,358 - world - INFO - ============================================================
-2026-01-27 14:07:43,358 - create_world - INFO - 
-2026-01-27 14:07:43,358 - create_world - INFO - Creating World object...
-2026-01-27 14:07:43,358 - world - INFO - Registered 5 residence types: ['household', 'care_home', 'prison', 'boarding_school', 'student_dorms']
-2026-01-27 14:07:43,358 - create_world - INFO - <World: 19752 units, 4,751,126 people, 0 venues (0 households, 0 other)>
-2026-01-27 14:07:43,358 - create_world - INFO - Building Relationships
-2026-01-27 14:10:00,594 - create_world - INFO - 
-2026-01-27 14:10:00,594 - create_world - INFO - ============================================================
-2026-01-27 14:10:00,594 - create_world - INFO - POST-RELATIONSHIP PIPELINE
-2026-01-27 14:10:00,594 - create_world - INFO - ============================================================
-2026-01-27 14:10:00,594 - create_world - INFO - 
-2026-01-27 14:10:00,594 - create_world - INFO - [DISTRIBUTOR] world_specific_code/MedievalYaml/yaml/distributors/social_contact_visit_distributor.yaml
-2026-01-27 14:10:00,602 - may.venue_distributor.social_contact_visit_distributor - INFO - Initialized SocialContactVisitDistributor: activity_map_key='visit_social_contact', source='social_contacts_local', max_contacts=None
-2026-01-27 14:10:00,602 - may.venue_distributor.social_contact_visit_distributor - INFO - Starting social contact visit allocation...
-2026-01-27 14:10:00,603 - may.venue_distributor.social_contact_visit_distributor - INFO -   Source property: social_contacts_local
-2026-01-27 14:10:00,603 - may.venue_distributor.social_contact_visit_distributor - INFO -   Activity key: visit_social_contact
-2026-01-27 14:10:55,021 - may.venue_distributor.social_contact_visit_distributor - INFO - Social contact visit allocation complete:
-2026-01-27 14:10:55,021 - may.venue_distributor.social_contact_visit_distributor - INFO -   People processed: 4,751,126
-2026-01-27 14:10:55,021 - may.venue_distributor.social_contact_visit_distributor - INFO -   People with contacts: 4,015,839
-2026-01-27 14:10:55,021 - may.venue_distributor.social_contact_visit_distributor - INFO -   Total visit venues assigned: 0
-2026-01-27 14:10:55,021 - may.venue_distributor.social_contact_visit_distributor - WARNING -   Contacts without residence: 24,094,040
-2026-01-27 14:10:55,021 - create_world - INFO - 
-2026-01-27 14:10:55,021 - create_world - INFO - ============================================================
-2026-01-27 14:10:55,021 - create_world - INFO - World creation complete!
-2026-01-27 14:10:55,021 - create_world - INFO - Geography: 19752 units
-2026-01-27 14:10:55,021 - create_world - INFO - Venues: 0 venues across 0 types
-2026-01-27 14:10:55,021 - create_world - INFO - Population: 4,751,126 people
-2026-01-27 14:10:55,021 - create_world - INFO - ============================================================
-2026-01-27 14:10:55,021 - debug_output - INFO - Exporting venue allocations to venue_allocations.csv...
-2026-01-27 14:10:55,022 - debug_output - INFO - No non-household venues to export
-2026-01-27 14:10:55,022 - debug_output - INFO - Exporting people to people.csv...
-2026-01-27 14:11:36,715 - debug_output - INFO - Exported 4751126 people to people.csv
-2026-01-27 14:11:37,449 - debug_output - INFO -   People with residence: 0/4751126 (0.0%)
-2026-01-27 14:11:37,801 - world - INFO - 
-2026-01-27 14:11:37,801 - world - INFO - ============================================================
-2026-01-27 14:11:37,801 - world - INFO - EXPORTING WORLD TO HDF5
-2026-01-27 14:11:37,801 - world - INFO - ============================================================
-2026-01-27 14:11:37,801 - serialization_config - INFO - Loading serialization config from yaml/serialization_config.yaml
-2026-01-27 14:11:37,810 - serialization_config - INFO - Population: 7 additional properties to serialize
-2026-01-27 14:11:37,810 - serialization_config - INFO -   Properties: ['ethnicity', 'comorbidities', 'work_mode', 'friendships', 'sexual_orientation', 'romantic_partners', 'relationship_status']
-2026-01-27 14:11:37,810 - serialization_config - INFO - Geography: coordinates=True, 0 additional properties
-2026-01-27 14:11:37,810 - serialization_config - INFO - Venue 'household': 2 properties to serialize
-2026-01-27 14:11:37,810 - serialization_config - INFO -   Properties: ['capacity', 'original_pattern']
-2026-01-27 14:11:37,810 - serialization_config - INFO - Venue 'school': 1 properties to serialize
-2026-01-27 14:11:37,810 - serialization_config - INFO -   Properties: ['Gender']
-2026-01-27 14:11:37,810 - serialization_config - INFO - Venue 'company': 1 properties to serialize
-2026-01-27 14:11:37,810 - serialization_config - INFO -   Properties: ['work_sector']
-2026-01-27 14:11:37,810 - serialization_config - INFO - Venue 'boarding_school': 1 properties to serialize
-2026-01-27 14:11:37,810 - serialization_config - INFO -   Properties: ['Gender']
-2026-01-27 14:11:37,810 - serialization_config - INFO - Venue 'classroom': 1 properties to serialize
-2026-01-27 14:11:37,810 - serialization_config - INFO -   Properties: ['capacity']
-2026-01-27 14:11:37,810 - serialization_config - INFO - Venue 'office': 1 properties to serialize
-2026-01-27 14:11:37,810 - serialization_config - INFO -   Properties: ['capacity']
-2026-01-27 14:11:37,810 - world_serializer - INFO - ============================================================
-2026-01-27 14:11:37,810 - world_serializer - INFO - Exporting World to HDF5
-2026-01-27 14:11:37,810 - world_serializer - INFO - ============================================================
-2026-01-27 14:11:37,810 - world_serializer - INFO - Output file: world_state_martha_medieval.h5
-2026-01-27 14:11:37,826 - world_serializer - INFO - Writing metadata...
-2026-01-27 14:11:37,827 - world_serializer - INFO - Serializing geography...
-2026-01-27 14:11:37,850 - world_serializer - INFO -   Wrote 19752 geographical units
-2026-01-27 14:11:37,851 - world_serializer - INFO - Serializing population...
-2026-01-27 14:11:37,851 - world_serializer - INFO -   Serializing 4,751,126 people...
-2026-01-27 14:11:37,851 - world_serializer - INFO -     Sorting people by geo_unit_id for partitioning...
-2026-01-27 14:11:38,838 - world_serializer - INFO -     ✓ Sorted 4,751,126 people by geo_unit_id
-2026-01-27 14:11:40,073 - world_serializer - INFO -     ✓ Built core attribute arrays
-2026-01-27 14:11:40,074 - world_serializer - INFO -     Building partition index...
-2026-01-27 14:11:40,344 - world_serializer - INFO -       Created partition index for 19710 geo_units
-2026-01-27 14:11:40,344 - world_serializer - INFO -       Min people per geo_unit: 92
-2026-01-27 14:11:40,344 - world_serializer - INFO -       Max people per geo_unit: 60000
-2026-01-27 14:11:40,344 - world_serializer - INFO -       Avg people per geo_unit: 241.1
-2026-01-27 14:11:40,344 - world_serializer - INFO -     ✓ Wrote partition index
-2026-01-27 14:11:42,059 - world_serializer - INFO -     ✓ Wrote core datasets to HDF5
-2026-01-27 14:11:42,059 - world_serializer - INFO -     Writing property 1/7: ethnicity...
-2026-01-27 14:11:43,829 - world_serializer - INFO -     Writing property 2/7: comorbidities...
-2026-01-27 14:11:45,586 - world_serializer - INFO -     Writing property 3/7: work_mode...
-2026-01-27 14:11:47,348 - world_serializer - INFO -     Writing property 4/7: friendships...
-2026-01-27 14:11:49,091 - world_serializer - INFO -     Writing property 5/7: sexual_orientation...
-2026-01-27 14:11:50,856 - world_serializer - INFO -     Writing property 6/7: romantic_partners...
-2026-01-27 14:11:52,657 - world_serializer - INFO -     Writing property 7/7: relationship_status...
-2026-01-27 14:11:54,431 - world_serializer - INFO -   Wrote 4,751,126 people
-2026-01-27 14:11:54,431 - world_serializer - INFO -     Including properties: ['ethnicity', 'comorbidities', 'work_mode', 'friendships', 'sexual_orientation', 'romantic_partners', 'relationship_status']
-2026-01-27 14:11:54,434 - world_serializer - INFO - Serializing venues...
-2026-01-27 14:11:54,434 - world_serializer - WARNING - No venues to serialize
-2026-01-27 14:11:54,434 - world_serializer - INFO - Serializing activity mappings...
-2026-01-27 14:11:55,918 - world_serializer - INFO -     Progress: 475,112/4,751,126 people processed (10.0%) - 0 mappings
-2026-01-27 14:11:56,369 - world_serializer - INFO -     Progress: 950,224/4,751,126 people processed (20.0%) - 0 mappings
-2026-01-27 14:11:56,819 - world_serializer - INFO -     Progress: 1,425,336/4,751,126 people processed (30.0%) - 0 mappings
-2026-01-27 14:11:57,267 - world_serializer - INFO -     Progress: 1,900,448/4,751,126 people processed (40.0%) - 0 mappings
-2026-01-27 14:11:57,715 - world_serializer - INFO -     Progress: 2,375,560/4,751,126 people processed (50.0%) - 0 mappings
-2026-01-27 14:11:58,165 - world_serializer - INFO -     Progress: 2,850,672/4,751,126 people processed (60.0%) - 0 mappings
-2026-01-27 14:11:58,609 - world_serializer - INFO -     Progress: 3,325,784/4,751,126 people processed (70.0%) - 0 mappings
-2026-01-27 14:11:59,056 - world_serializer - INFO -     Progress: 3,800,896/4,751,126 people processed (80.0%) - 0 mappings
-2026-01-27 14:11:59,506 - world_serializer - INFO -     Progress: 4,276,008/4,751,126 people processed (90.0%) - 0 mappings
-2026-01-27 14:11:59,942 - world_serializer - INFO -     Progress: 4,751,120/4,751,126 people processed (100.0%) - 0 mappings
-2026-01-27 14:11:59,943 - world_serializer - INFO -     Progress: 4,751,126/4,751,126 people processed (100.0%) - 0 mappings
-2026-01-27 14:12:00,046 - world_serializer - INFO -   Building activity mapping partition index...
-2026-01-27 14:12:00,427 - world_serializer - INFO -       Created activity mapping partition index for 19710 geo_units
-2026-01-27 14:12:00,427 - world_serializer - INFO -       Min mappings per geo_unit: 0
-2026-01-27 14:12:00,427 - world_serializer - INFO -       Max mappings per geo_unit: 0
-2026-01-27 14:12:00,427 - world_serializer - INFO -       Avg mappings per geo_unit: 0.0
-2026-01-27 14:12:00,427 - world_serializer - INFO -     ✓ Wrote activity mapping partition index
-2026-01-27 14:12:00,465 - world_serializer - INFO -   Activity map: 1 unique activities
-2026-01-27 14:12:00,465 - world_serializer - INFO -     Total activity mappings: 0
-2026-01-27 14:12:00,513 - world_serializer - INFO - 
-2026-01-27 14:12:00,513 - world_serializer - INFO - Export complete!
-2026-01-27 14:12:00,513 - world_serializer - INFO -   Geography units: 19,752
-2026-01-27 14:12:00,513 - world_serializer - INFO -   People: 4,751,126
-2026-01-27 14:12:00,513 - world_serializer - INFO -   Venues: 0
-2026-01-27 14:12:00,513 - world_serializer - INFO -   Subsets: 0
-2026-01-27 14:12:00,513 - world_serializer - INFO - ============================================================
-2026-01-27 14:12:00,513 - world - INFO - 
-2026-01-27 14:12:00,513 - world - INFO - Successfully exported world to: world_state_martha_medieval.h5
-2026-01-27 14:12:00,513 - world - INFO - ============================================================
-2026-01-27 14:12:00,561 - create_world - INFO - Performance profiling data saved to simulation_profile.stats
+2026-01-27 15:28:55,368 - create_world - INFO - ============================================================
+2026-01-27 15:28:55,368 - create_world - INFO - May - World Creation
+2026-01-27 15:28:55,368 - create_world - INFO - ============================================================
+2026-01-27 15:28:55,369 - create_world - INFO - Loading configuration from: world_specific_code/MedievalYaml/config.yaml
+2026-01-27 15:28:55,380 - config_loader - INFO - Loading all geographical units (no filters)
+2026-01-27 15:28:55,380 - geography - INFO - Loading geography from world_specific_code/MedievalYaml/data/geography
+2026-01-27 15:28:55,390 - geography - INFO - Loaded hierarchy with 19710 entries
+2026-01-27 15:28:55,401 - geography - INFO - Loaded 19710 coordinates for MBD_Temp_ID
+2026-01-27 15:28:55,403 - geography - INFO - Loaded 41 coordinates for County
+2026-01-27 15:28:55,403 - geography - WARNING - No coordinate file found for Country
+2026-01-27 15:28:55,434 - geography - INFO - Created 19752 total units
+2026-01-27 15:28:56,604 - geography - INFO - Built hierarchical relationships
+2026-01-27 15:28:56,604 - geography - INFO -   MBD_Temp_ID: 19710 units
+2026-01-27 15:28:56,604 - geography - INFO -   County: 41 units
+2026-01-27 15:28:56,604 - geography - INFO -   Country: 1 units
+2026-01-27 15:28:56,605 - create_world - INFO - 
+2026-01-27 15:28:56,605 - create_world - INFO - Loading venues...
+2026-01-27 15:28:56,606 - venuemanager - INFO - Loading venue configuration from world_specific_code/MedievalYaml/yaml/venues/venues_config.yaml
+2026-01-27 15:28:56,630 - venuemanager - INFO - Skipping disabled venue types: ['household', 'hospital', 'school', 'university', 'care_home', 'prison', 'company', 'boarding_school', 'student_dorms', 'cinema', 'grocery', 'gym', 'pub']
+2026-01-27 15:28:56,630 - venuemanager - INFO - Loading 0 venue types from YAML config
+2026-01-27 15:28:56,630 - venuemanager - INFO - Total venues created: 0
+2026-01-27 15:28:56,630 - create_world - INFO - 
+2026-01-27 15:28:56,630 - create_world - INFO - Loading population...
+2026-01-27 15:28:56,631 - population - INFO - Filtering demographics to 19710 MBD_Temp_IDs in loaded geography
+2026-01-27 15:28:56,631 - population - INFO - Loading male demographics from world_specific_code/MedievalYaml/data/population/demography_male.csv
+2026-01-27 15:28:56,680 - population - INFO - Loading female demographics from world_specific_code/MedievalYaml/data/population/demography_female.csv
+2026-01-27 15:28:56,739 - population - INFO - Filtered to 19710 male geo units and 19710 female geo units
+2026-01-27 15:28:56,739 - population - INFO - Processing male demographics...
+2026-01-27 15:28:56,874 - population - INFO - Processing female demographics...
+2026-01-27 15:28:56,996 - population - INFO - Building demographic dictionary...
+2026-01-27 15:28:58,115 - population - INFO - Loaded precise demographics for 19710 geographical units
+2026-01-27 15:28:58,115 - population - INFO - Total people in demographics: 4,751,126
+2026-01-27 15:28:58,123 - population - INFO - Generating population from precise demographics...
+2026-01-27 15:29:14,527 - population - INFO - Generated 4,751,126 people across 19710 MBD_Temp_IDs
+2026-01-27 15:29:14,527 - population - INFO - Average: 241.1 people per MBD_Temp_ID
+2026-01-27 15:29:14,624 - world - INFO - 
+2026-01-27 15:29:14,624 - world - INFO - Distributing households...
+2026-01-27 15:29:14,644 - relationship_rules - INFO - Loaded 3 relationship rules
+2026-01-27 15:29:14,644 - household - INFO - Initialized HouseholdDistributor with 3 categories
+2026-01-27 15:29:14,644 - household - INFO -   - Kids(age:0-11)
+2026-01-27 15:29:14,644 - household - INFO -   - Young Adults(age:12-20)
+2026-01-27 15:29:14,644 - household - INFO -   - Adults(age:21-∞)
+2026-01-27 15:29:14,644 - household - INFO - Loading household data from world_specific_code/MedievalYaml/data/households/household_comp_simple.csv
+2026-01-27 15:29:14,645 - household - INFO - Filtering household data to 19710 MBD_Temp_IDs in loaded geography
+2026-01-27 15:29:14,655 - household - INFO - Filtered to 19710 geo_units with 2 household types
+2026-01-27 15:29:15,741 - household - INFO - Loaded household data for 19710 geographical units
+2026-01-27 15:29:15,742 - world - INFO - Using unified allocation strategy from world_specific_code/MedievalYaml/yaml/households/allocation_strategy.yaml
+2026-01-27 15:29:15,742 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:29:15,742 - allocation_strategy - INFO - Executing Unified Allocation Strategy
+2026-01-27 15:29:15,742 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:29:15,742 - allocation_strategy - INFO - Loading allocation strategy from world_specific_code/MedievalYaml/yaml/households/allocation_strategy.yaml
+2026-01-27 15:29:15,750 - allocation_strategy - INFO - Found 5 allocation steps
+2026-01-27 15:29:15,750 - allocation_strategy - INFO - 
+2026-01-27 15:29:15,750 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:29:15,750 - allocation_strategy - INFO - Step 1: Adults with children (household)
+2026-01-27 15:29:15,750 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:29:15,750 - allocation_strategy - INFO - Description: Primary medieval family structure: Couple + Kid
+2026-01-27 15:29:15,750 - allocation_strategy - INFO - 
+2026-01-27 15:29:15,750 - allocation_strategy - INFO -   Using explicit relationship rule: 'Nuclear Family'
+2026-01-27 15:29:15,750 - allocation_strategy - INFO -   Pattern 'Adults with children' has assumption: '1 0 2'
+2026-01-27 15:29:15,750 - household - INFO - ============================================================
+2026-01-27 15:29:15,750 - household - INFO - Starting round: Adults with children
+2026-01-27 15:29:15,750 - household - INFO - ============================================================
+2026-01-27 15:29:15,750 - household - INFO - Preparing person pools by geo_unit and age category...
+2026-01-27 15:29:16,314 - household - INFO -   Progress: 1971/19710 geo_units processed (10.0%)
+2026-01-27 15:29:16,812 - household - INFO -   Progress: 3942/19710 geo_units processed (20.0%)
+2026-01-27 15:29:17,314 - household - INFO -   Progress: 5913/19710 geo_units processed (30.0%)
+2026-01-27 15:29:17,831 - household - INFO -   Progress: 7884/19710 geo_units processed (40.0%)
+2026-01-27 15:29:18,325 - household - INFO -   Progress: 9855/19710 geo_units processed (50.0%)
+2026-01-27 15:29:18,818 - household - INFO -   Progress: 11826/19710 geo_units processed (60.0%)
+2026-01-27 15:29:19,299 - household - INFO -   Progress: 13797/19710 geo_units processed (70.0%)
+2026-01-27 15:29:19,794 - household - INFO -   Progress: 15768/19710 geo_units processed (80.0%)
+2026-01-27 15:29:20,337 - household - INFO -   Progress: 17739/19710 geo_units processed (90.0%)
+2026-01-27 15:29:21,019 - household - INFO -   Progress: 19710/19710 geo_units processed (100.0%)
+2026-01-27 15:29:21,044 - household - INFO - Prepared person pools for 19710 geo_units (4751126 total people)
+2026-01-27 15:29:21,050 - household - INFO - Allocating 478,726 households...
+2026-01-27 15:29:35,325 - household - INFO -   Progress: 47872/478726 households processed (10.0%) - 47854 created
+2026-01-27 15:29:46,487 - household - INFO -   Progress: 95744/478726 households processed (20.0%) - 95726 created
+2026-01-27 15:30:07,866 - household - INFO -   Progress: 143616/478726 households processed (30.0%) - 143592 created
+2026-01-27 15:30:19,991 - household - INFO -   Progress: 191488/478726 households processed (40.0%) - 191457 created
+2026-01-27 15:30:30,003 - household - INFO -   Progress: 239360/478726 households processed (50.0%) - 239326 created
+2026-01-27 15:30:40,466 - household - INFO -   Progress: 287232/478726 households processed (60.0%) - 287178 created
+2026-01-27 15:30:53,688 - household - INFO -   Progress: 335104/478726 households processed (70.0%) - 335039 created
+2026-01-27 15:31:10,913 - household - INFO -   Progress: 382976/478726 households processed (80.0%) - 382888 created
+2026-01-27 15:31:26,568 - household - INFO -   Progress: 430848/478726 households processed (90.0%) - 430728 created
+2026-01-27 15:33:02,795 - household - INFO -   Progress: 478720/478726 households processed (100.0%) - 478591 created
+2026-01-27 15:33:02,804 - household - INFO -   Progress: 478726/478726 households processed (100.0%) - 478597 created
+2026-01-27 15:33:02,804 - household - INFO - ============================================================
+2026-01-27 15:33:02,804 - household - INFO - Adults with children complete!
+2026-01-27 15:33:02,805 - household - INFO -   Requested households (filtered): 478,726
+2026-01-27 15:33:02,805 - household - INFO -   Created households: 478,597 (100.0%)
+2026-01-27 15:33:02,805 - household - INFO -   People allocated this round: 1,435,783
+2026-01-27 15:33:02,805 - household - INFO -   Total households so far: 478,597
+2026-01-27 15:33:02,805 - household - INFO -   Total people allocated: 1,435,783
+2026-01-27 15:33:02,805 - household - INFO -   People remaining: 3,315,343
+2026-01-27 15:33:02,805 - household - INFO - ============================================================
+2026-01-27 15:33:02,805 - allocation_strategy - INFO - 
+2026-01-27 15:33:02,805 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:33:02,805 - allocation_strategy - INFO - Step 2: Adults without children (household)
+2026-01-27 15:33:02,805 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:33:02,805 - allocation_strategy - INFO - Description: Adult couples without children
+2026-01-27 15:33:02,805 - allocation_strategy - INFO - 
+2026-01-27 15:33:02,805 - allocation_strategy - INFO -   Using explicit relationship rule: 'Medieval Couple'
+2026-01-27 15:33:02,805 - allocation_strategy - INFO -   Pattern 'Adults without children' has assumption: '0 0 2'
+2026-01-27 15:33:02,805 - household - INFO - ============================================================
+2026-01-27 15:33:02,805 - household - INFO - Starting round: Adults without children
+2026-01-27 15:33:02,805 - household - INFO - ============================================================
+2026-01-27 15:33:02,810 - household - INFO - Allocating 0 households...
+2026-01-27 15:33:02,816 - household - INFO - ============================================================
+2026-01-27 15:33:02,816 - household - INFO - Adults without children complete!
+2026-01-27 15:33:02,816 - household - INFO -   Requested households (filtered): 0
+2026-01-27 15:33:02,816 - household - INFO -   Created households: 0 (0.0%)
+2026-01-27 15:33:02,816 - household - INFO -   People allocated this round: 0
+2026-01-27 15:33:02,816 - household - INFO -   Total households so far: 478,597
+2026-01-27 15:33:02,816 - household - INFO -   Total people allocated: 1,435,783
+2026-01-27 15:33:02,816 - household - INFO -   People remaining: 3,315,343
+2026-01-27 15:33:02,816 - household - INFO - ============================================================
+2026-01-27 15:33:02,816 - allocation_strategy - INFO - 
+2026-01-27 15:33:02,816 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:33:02,816 - allocation_strategy - INFO - Step 3: Excess Kids (household_excess)
+2026-01-27 15:33:02,816 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:33:02,816 - household - INFO - ============================================================
+2026-01-27 15:33:02,816 - household - INFO - Starting excess allocation round: Excess Kids
+2026-01-27 15:33:02,816 - household - INFO - ============================================================
+2026-01-27 15:33:02,816 - household - INFO - Target patterns: ['Adults with children']
+2026-01-27 15:33:02,816 - household - INFO - Adding category: Kids
+2026-01-27 15:33:02,816 - household - INFO - Constraints: None
+2026-01-27 15:33:02,816 - household - INFO - 
+2026-01-27 15:33:03,000 - household - INFO - Found 478597 households matching target patterns
+2026-01-27 15:33:03,039 - household - INFO - Processing 478,597 target households...
+2026-01-27 15:33:09,493 - household - INFO -   Progress: 47859/478597 households processed (10.0%) - 46961 modified, 189468 people added
+2026-01-27 15:33:13,086 - household - INFO -   Progress: 95718/478597 households processed (20.0%) - 93877 modified, 379137 people added
+2026-01-27 15:33:16,644 - household - INFO -   Progress: 143577/478597 households processed (30.0%) - 140736 modified, 568614 people added
+2026-01-27 15:33:20,187 - household - INFO -   Progress: 191436/478597 households processed (40.0%) - 186885 modified, 753345 people added
+2026-01-27 15:33:23,543 - household - INFO -   Progress: 239295/478597 households processed (50.0%) - 230312 modified, 924069 people added
+2026-01-27 15:33:26,283 - household - INFO -   Progress: 287154/478597 households processed (60.0%) - 266758 modified, 1062922 people added
+2026-01-27 15:33:27,994 - household - INFO -   Progress: 335013/478597 households processed (70.0%) - 288895 modified, 1141954 people added
+2026-01-27 15:33:29,019 - household - INFO - ============================================================
+2026-01-27 15:33:29,019 - household - INFO - Excess Kids complete!
+2026-01-27 15:33:29,019 - household - INFO -   Target households: 478,597
+2026-01-27 15:33:29,019 - household - INFO -   Households modified: 302,676
+2026-01-27 15:33:29,019 - household - INFO -   People added: 1,185,553
+2026-01-27 15:33:29,020 - household - INFO -   Total people allocated: 2,621,336
+2026-01-27 15:33:29,020 - household - INFO -   People remaining: 2,129,790
+2026-01-27 15:33:29,020 - household - INFO - 
+2026-01-27 15:33:31,264 - household - INFO -   Remaining by category:
+2026-01-27 15:33:31,265 - household - INFO -     Kids: 169
+2026-01-27 15:33:31,265 - household - INFO -     Young Adults: 1,064,999
+2026-01-27 15:33:31,265 - household - INFO -     Adults: 1,064,622
+2026-01-27 15:33:31,265 - household - INFO - ============================================================
+2026-01-27 15:33:31,270 - allocation_strategy - INFO - 
+2026-01-27 15:33:31,270 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:33:31,270 - allocation_strategy - INFO - Step 4: Excess Young Adults (household_excess)
+2026-01-27 15:33:31,270 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:33:31,270 - household - INFO - ============================================================
+2026-01-27 15:33:31,270 - household - INFO - Starting excess allocation round: Excess Young Adults
+2026-01-27 15:33:31,270 - household - INFO - ============================================================
+2026-01-27 15:33:31,270 - household - INFO - Target patterns: ['Adults with children', 'Adults without children']
+2026-01-27 15:33:31,270 - household - INFO - Adding category: Young Adults
+2026-01-27 15:33:31,270 - household - INFO - Constraints: None
+2026-01-27 15:33:31,270 - household - INFO - 
+2026-01-27 15:33:31,455 - household - INFO - Found 478597 households matching target patterns
+2026-01-27 15:33:31,496 - household - INFO - Processing 478,597 target households...
+2026-01-27 15:33:34,282 - household - INFO -   Progress: 47859/478597 households processed (10.0%) - 41304 modified, 95796 people added
+2026-01-27 15:33:37,059 - household - INFO -   Progress: 95718/478597 households processed (20.0%) - 82624 modified, 191459 people added
+2026-01-27 15:33:39,808 - household - INFO -   Progress: 143577/478597 households processed (30.0%) - 124049 modified, 287642 people added
+2026-01-27 15:33:42,632 - household - INFO -   Progress: 191436/478597 households processed (40.0%) - 165365 modified, 383452 people added
+2026-01-27 15:33:49,809 - household - INFO -   Progress: 239295/478597 households processed (50.0%) - 206691 modified, 478512 people added
+2026-01-27 15:33:52,606 - household - INFO -   Progress: 287154/478597 households processed (60.0%) - 247865 modified, 573309 people added
+2026-01-27 15:33:55,374 - household - INFO -   Progress: 335013/478597 households processed (70.0%) - 288783 modified, 667634 people added
+2026-01-27 15:34:00,637 - household - INFO -   Progress: 430731/478597 households processed (90.0%) - 366934 modified, 845078 people added
+2026-01-27 15:34:03,007 - household - INFO -   Progress: 478590/478597 households processed (100.0%) - 401983 modified, 923025 people added
+2026-01-27 15:34:03,007 - household - INFO -   Progress: 478597/478597 households processed (100.0%) - 401989 modified, 923041 people added
+2026-01-27 15:34:03,008 - household - INFO - ============================================================
+2026-01-27 15:34:03,008 - household - INFO - Excess Young Adults complete!
+2026-01-27 15:34:03,008 - household - INFO -   Target households: 478,597
+2026-01-27 15:34:03,008 - household - INFO -   Households modified: 401,989
+2026-01-27 15:34:03,008 - household - INFO -   People added: 923,041
+2026-01-27 15:34:03,008 - household - INFO -   Total people allocated: 3,544,377
+2026-01-27 15:34:03,008 - household - INFO -   People remaining: 1,206,749
+2026-01-27 15:34:03,008 - household - INFO - 
+2026-01-27 15:34:04,516 - household - INFO -   Remaining by category:
+2026-01-27 15:34:04,516 - household - INFO -     Kids: 169
+2026-01-27 15:34:04,516 - household - INFO -     Young Adults: 141,958
+2026-01-27 15:34:04,516 - household - INFO -     Adults: 1,064,622
+2026-01-27 15:34:04,516 - household - INFO - ============================================================
+2026-01-27 15:34:04,521 - allocation_strategy - INFO - 
+2026-01-27 15:34:04,521 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:34:04,521 - allocation_strategy - INFO - Step 5: Excess Adults (household_excess)
+2026-01-27 15:34:04,521 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:34:04,521 - household - INFO - ============================================================
+2026-01-27 15:34:04,521 - household - INFO - Starting excess allocation round: Excess Adults
+2026-01-27 15:34:04,521 - household - INFO - ============================================================
+2026-01-27 15:34:04,521 - household - INFO - Target patterns: ['Adults with children', 'Adults without children']
+2026-01-27 15:34:04,521 - household - INFO - Adding category: Adults
+2026-01-27 15:34:04,521 - household - INFO - Constraints: None
+2026-01-27 15:34:04,521 - household - INFO - 
+2026-01-27 15:34:04,707 - household - INFO - Found 478597 households matching target patterns
+2026-01-27 15:34:04,745 - household - INFO - Processing 478,597 target households...
+2026-01-27 15:34:07,385 - household - INFO -   Progress: 47859/478597 households processed (10.0%) - 44922 modified, 113702 people added
+2026-01-27 15:34:09,992 - household - INFO -   Progress: 95718/478597 households processed (20.0%) - 89746 modified, 226934 people added
+2026-01-27 15:34:12,606 - household - INFO -   Progress: 143577/478597 households processed (30.0%) - 134504 modified, 340394 people added
+2026-01-27 15:34:15,236 - household - INFO -   Progress: 191436/478597 households processed (40.0%) - 178911 modified, 452937 people added
+2026-01-27 15:34:17,784 - household - INFO -   Progress: 239295/478597 households processed (50.0%) - 222589 modified, 563306 people added
+2026-01-27 15:34:20,258 - household - INFO -   Progress: 287154/478597 households processed (60.0%) - 264806 modified, 669352 people added
+2026-01-27 15:34:22,738 - household - INFO -   Progress: 335013/478597 households processed (70.0%) - 304408 modified, 767939 people added
+2026-01-27 15:34:26,684 - household - INFO -   Progress: 430731/478597 households processed (90.0%) - 370113 modified, 929376 people added
+2026-01-27 15:34:27,992 - household - INFO -   Progress: 478590/478597 households processed (100.0%) - 392755 modified, 983790 people added
+2026-01-27 15:34:27,992 - household - INFO - ============================================================
+2026-01-27 15:34:27,992 - household - INFO - Excess Adults complete!
+2026-01-27 15:34:27,992 - household - INFO -   Target households: 478,597
+2026-01-27 15:34:27,992 - household - INFO -   Households modified: 392,758
+2026-01-27 15:34:27,992 - household - INFO -   People added: 983,798
+2026-01-27 15:34:27,992 - household - INFO -   Total people allocated: 4,528,175
+2026-01-27 15:34:27,992 - household - INFO -   People remaining: 222,951
+2026-01-27 15:34:27,992 - household - INFO - 
+2026-01-27 15:34:28,397 - household - INFO -   Remaining by category:
+2026-01-27 15:34:28,397 - household - INFO -     Kids: 169
+2026-01-27 15:34:28,397 - household - INFO -     Young Adults: 141,958
+2026-01-27 15:34:28,397 - household - INFO -     Adults: 80,824
+2026-01-27 15:34:28,397 - household - INFO - ============================================================
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - 
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - UNIFIED ALLOCATION STRATEGY SUMMARY
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - 
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - 1. Adults with children (household):
+2026-01-27 15:34:28,402 - allocation_strategy - INFO -    Households: 478,597
+2026-01-27 15:34:28,402 - allocation_strategy - INFO -    People: 1,435,783
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - 
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - 2. Adults without children (household):
+2026-01-27 15:34:28,402 - allocation_strategy - INFO -    Households: 0
+2026-01-27 15:34:28,402 - allocation_strategy - INFO -    People: 0
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - 
+2026-01-27 15:34:28,402 - allocation_strategy - INFO - 3. Excess Kids (household_excess):
+2026-01-27 15:34:28,402 - allocation_strategy - INFO -    Households modified: 302,676
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -    People added: 1,185,553
+2026-01-27 15:34:28,403 - allocation_strategy - INFO - 
+2026-01-27 15:34:28,403 - allocation_strategy - INFO - 4. Excess Young Adults (household_excess):
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -    Households modified: 401,989
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -    People added: 923,041
+2026-01-27 15:34:28,403 - allocation_strategy - INFO - 
+2026-01-27 15:34:28,403 - allocation_strategy - INFO - 5. Excess Adults (household_excess):
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -    Households modified: 392,758
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -    People added: 983,798
+2026-01-27 15:34:28,403 - allocation_strategy - INFO - 
+2026-01-27 15:34:28,403 - allocation_strategy - INFO - Overall Totals:
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   Total households: 478,597
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   People in households (initial): 1,435,783
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   People added to households (excess): 3,092,392
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   People added to households (overflow): 0
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   People in venues: 0
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   Total allocated: 4,528,175
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   Remaining unallocated: 222,951
+2026-01-27 15:34:28,403 - allocation_strategy - INFO -   Allocation rate: 95.3%
+2026-01-27 15:34:28,403 - allocation_strategy - INFO - ============================================================
+2026-01-27 15:34:28,403 - household - INFO - Exporting unallocated people to unallocated_people.csv...
+2026-01-27 15:34:28,988 - household - INFO - Exported 222951 unallocated people to world_specific_code/MedievalYaml/data/households/unallocated_people.csv
+2026-01-27 15:34:29,003 - household - INFO - Exporting household data to household_allocations.csv...
+2026-01-27 15:34:42,466 - household - INFO - Exported 478597 households to world_specific_code/MedievalYaml/data/households/household_allocations.csv
+2026-01-27 15:34:42,526 - venuemanager - INFO - Exporting venue allocation data to venue_allocations.csv...
+2026-01-27 15:34:45,199 - venuemanager - INFO - Exported 478597 venues to world_specific_code/MedievalYaml/data/venues/venue_allocations.csv
+2026-01-27 15:34:45,243 - world - INFO - 
+2026-01-27 15:34:45,243 - world - INFO - ============================================================
+2026-01-27 15:34:45,243 - world - INFO - HOUSEHOLD STORAGE LOCATIONS
+2026-01-27 15:34:45,243 - world - INFO - ============================================================
+2026-01-27 15:34:45,243 - world - INFO - Total households created: 478,597
+2026-01-27 15:34:45,243 - world - INFO - 
+2026-01-27 15:34:45,243 - world - INFO - Households are stored in VenueManager:
+2026-01-27 15:34:45,243 - world - INFO -   1. venues.get_venues_by_type('household')  -> List of all household Venues
+2026-01-27 15:34:45,243 - world - INFO -   2. venues.get_venue_by_type_and_id('household', id)  -> Specific household by ID
+2026-01-27 15:34:45,243 - world - INFO -   3. venues.venues['household_0']  -> Specific household by name
+2026-01-27 15:34:45,243 - world - INFO - 
+2026-01-27 15:34:45,243 - world - INFO - Example Households (5 random):
+2026-01-27 15:34:45,243 - world - INFO - 
+2026-01-27 15:34:45,244 - world - INFO -   Household ID: 86881 (type-scoped ID)
+2026-01-27 15:34:45,244 - world - INFO -   Venue ID: 140154859194960 (Python object ID)
+2026-01-27 15:34:45,244 - world - INFO -   Name: household_86881
+2026-01-27 15:34:45,244 - world - INFO -   Type: household
+2026-01-27 15:34:45,244 - world - INFO -   Location: TEMP003383
+2026-01-27 15:34:45,244 - world - INFO -   Size: 7 people
+2026-01-27 15:34:45,244 - world - INFO -   Composition: {'Kids': 2, 'Young Adults': 1, 'Adults': 4}
+2026-01-27 15:34:45,244 - world - INFO -   Members: Person_316226(2f), Person_887255(6f), Person_2737902(21f), Person_4225169(41f), Person_4420896(46m), Person_3811502(33m), Person_2104212(15m)
+2026-01-27 15:34:45,244 - world - INFO - 
+2026-01-27 15:34:45,244 - world - INFO -   Household ID: 49866 (type-scoped ID)
+2026-01-27 15:34:45,244 - world - INFO -   Venue ID: 140154966374464 (Python object ID)
+2026-01-27 15:34:45,244 - world - INFO -   Name: household_49866
+2026-01-27 15:34:45,244 - world - INFO -   Type: household
+2026-01-27 15:34:45,244 - world - INFO -   Location: TEMP001832
+2026-01-27 15:34:45,244 - world - INFO -   Size: 11 people
+2026-01-27 15:34:45,244 - world - INFO -   Composition: {'Kids': 3, 'Young Adults': 4, 'Adults': 4}
+2026-01-27 15:34:45,244 - world - INFO -   Members: Person_233809(1m), Person_882154(6f), Person_1153085(8f), Person_4518594(50m), Person_3136954(25f), Person_3440140(28m), Person_4389525(45m), Person_2399032(18f), Person_2452450(18m), Person_2282005(17f), Person_2218775(16m)
+2026-01-27 15:34:45,244 - world - INFO - 
+2026-01-27 15:34:45,244 - world - INFO -   Household ID: 325634 (type-scoped ID)
+2026-01-27 15:34:45,244 - world - INFO -   Venue ID: 140154168553008 (Python object ID)
+2026-01-27 15:34:45,244 - world - INFO -   Name: household_325634
+2026-01-27 15:34:45,244 - world - INFO -   Type: household
+2026-01-27 15:34:45,244 - world - INFO -   Location: TEMP013808
+2026-01-27 15:34:45,244 - world - INFO -   Size: 9 people
+2026-01-27 15:34:45,244 - world - INFO -   Composition: {'Kids': 3, 'Young Adults': 1, 'Adults': 5}
+2026-01-27 15:34:45,244 - world - INFO -   Members: Person_50969(0f), Person_1320137(9f), Person_50967(0f), Person_3160451(25f), Person_3339118(27f), Person_4067706(37m), Person_3830748(33m), Person_3065406(24f), Person_1952346(14f)
+2026-01-27 15:34:45,244 - world - INFO - 
+2026-01-27 15:34:45,244 - world - INFO -   Household ID: 242624 (type-scoped ID)
+2026-01-27 15:34:45,244 - world - INFO -   Venue ID: 140154408144896 (Python object ID)
+2026-01-27 15:34:45,244 - world - INFO -   Name: household_242624
+2026-01-27 15:34:45,244 - world - INFO -   Type: household
+2026-01-27 15:34:45,244 - world - INFO -   Location: TEMP010095
+2026-01-27 15:34:45,244 - world - INFO -   Size: 15 people
+2026-01-27 15:34:45,244 - world - INFO -   Composition: {'Kids': 8, 'Young Adults': 1, 'Adults': 6}
+2026-01-27 15:34:45,244 - world - INFO -   Members: Person_698887(4m), Person_412875(2m), Person_38060(0f), Person_38061(0f), Person_908438(6f), Person_1504151(10m), Person_557368(3m), Person_339385(2f), Person_3949188(35m), Person_3106310(24m), Person_3722446(32f), Person_3918995(35f), Person_3058104(24f), Person_3058105(24f), Person_1693755(12f)
+2026-01-27 15:34:45,244 - world - INFO - 
+2026-01-27 15:34:45,244 - world - INFO -   Household ID: 65729 (type-scoped ID)
+2026-01-27 15:34:45,244 - world - INFO -   Venue ID: 140154919965232 (Python object ID)
+2026-01-27 15:34:45,245 - world - INFO -   Name: household_65729
+2026-01-27 15:34:45,245 - world - INFO -   Type: household
+2026-01-27 15:34:45,245 - world - INFO -   Location: TEMP002439
+2026-01-27 15:34:45,245 - world - INFO -   Size: 6 people
+2026-01-27 15:34:45,245 - world - INFO -   Composition: {'Kids': 1, 'Young Adults': 0, 'Adults': 5}
+2026-01-27 15:34:45,245 - world - INFO -   Members: Person_1478856(10m), Person_3846592(34f), Person_4407106(46f), Person_3086472(24m), Person_2989137(23m), Person_3270557(26m)
+2026-01-27 15:34:45,245 - world - INFO - 
+2026-01-27 15:34:45,245 - world - INFO - ============================================================
+2026-01-27 15:34:45,245 - world - INFO - PEOPLE IN HOUSEHOLDS - How to find where someone lives
+2026-01-27 15:34:45,245 - world - INFO - ============================================================
+2026-01-27 15:34:45,289 - world - INFO - 
+2026-01-27 15:34:45,289 - world - INFO -   Person 4196830 (age=40, sex=male)
+2026-01-27 15:34:45,289 - world - INFO -   Activity map: {'residence': {'household': [<may.population.subset.Subset object at 0x7f78fd354230>]}}
+2026-01-27 15:34:45,289 - world - INFO -   Lives in: household_15582 (ID=15582)
+2026-01-27 15:34:45,289 - world - INFO -   Location: TEMP000509
+2026-01-27 15:34:45,289 - world - INFO -   Household size: 18
+2026-01-27 15:34:45,289 - world - INFO -   Household composition: {'Kids': 9, 'Young Adults': 3, 'Adults': 6}
+2026-01-27 15:34:45,289 - world - INFO - 
+2026-01-27 15:34:45,289 - world - INFO -   Person 514114 (age=3, sex=female)
+2026-01-27 15:34:45,289 - world - INFO -   Activity map: {'residence': {'household': [<may.population.subset.Subset object at 0x7f7819b08170>]}}
+2026-01-27 15:34:45,289 - world - INFO -   Lives in: household_440838 (ID=440838)
+2026-01-27 15:34:45,289 - world - INFO -   Location: TEMP018327
+2026-01-27 15:34:45,289 - world - INFO -   Household size: 15
+2026-01-27 15:34:45,289 - world - INFO -   Household composition: {'Kids': 7, 'Young Adults': 3, 'Adults': 5}
+2026-01-27 15:34:45,289 - world - INFO - 
+2026-01-27 15:34:45,289 - world - INFO -   Person 737178 (age=5, sex=female)
+2026-01-27 15:34:45,289 - world - INFO -   Activity map: {'residence': {'household': [<may.population.subset.Subset object at 0x7f79096a1910>]}}
+2026-01-27 15:34:45,289 - world - INFO -   Lives in: household_14168 (ID=14168)
+2026-01-27 15:34:45,289 - world - INFO -   Location: TEMP000441
+2026-01-27 15:34:45,289 - world - INFO -   Household size: 12
+2026-01-27 15:34:45,289 - world - INFO -   Household composition: {'Kids': 4, 'Young Adults': 3, 'Adults': 5}
+2026-01-27 15:34:45,290 - world - INFO - 
+2026-01-27 15:34:45,290 - world - INFO -   Person 2995626 (age=23, sex=male)
+2026-01-27 15:34:45,290 - world - INFO -   Activity map: {'residence': {'household': [<may.population.subset.Subset object at 0x7f78fb6316d0>]}}
+2026-01-27 15:34:45,290 - world - INFO -   Lives in: household_122796 (ID=122796)
+2026-01-27 15:34:45,290 - world - INFO -   Location: TEMP004937
+2026-01-27 15:34:45,290 - world - INFO -   Household size: 9
+2026-01-27 15:34:45,290 - world - INFO -   Household composition: {'Kids': 3, 'Young Adults': 2, 'Adults': 4}
+2026-01-27 15:34:45,290 - world - INFO - 
+2026-01-27 15:34:45,290 - world - INFO -   Person 892489 (age=6, sex=female)
+2026-01-27 15:34:45,290 - world - INFO -   Activity map: {'residence': {'household': [<may.population.subset.Subset object at 0x7f78538976b0>]}}
+2026-01-27 15:34:45,290 - world - INFO -   Lives in: household_126409 (ID=126409)
+2026-01-27 15:34:45,290 - world - INFO -   Location: TEMP005118
+2026-01-27 15:34:45,290 - world - INFO -   Household size: 6
+2026-01-27 15:34:45,290 - world - INFO -   Household composition: {'Kids': 3, 'Young Adults': 1, 'Adults': 2}
+2026-01-27 15:34:45,290 - world - INFO - 
+2026-01-27 15:34:45,290 - world - INFO - ============================================================
+2026-01-27 15:34:45,290 - create_world - INFO - 
+2026-01-27 15:34:45,290 - create_world - INFO - Creating World object...
+2026-01-27 15:34:45,290 - world - INFO - Registered 5 residence types: ['household', 'care_home', 'prison', 'boarding_school', 'student_dorms']
+2026-01-27 15:34:45,290 - create_world - INFO - <World: 19752 units, 4,751,126 people, 478597 venues (478597 households, 0 other)>
+2026-01-27 15:34:45,290 - create_world - INFO - 
+2026-01-27 15:34:45,290 - create_world - INFO - ============================================================
+2026-01-27 15:34:45,290 - create_world - INFO - VENUE PIPELINE
+2026-01-27 15:34:45,290 - create_world - INFO - ============================================================
+2026-01-27 15:34:45,290 - create_world - INFO - 
+2026-01-27 15:34:45,290 - create_world - INFO - [CHILD CREATOR] world_specific_code/MedievalYaml/yaml/venue_child_creators/household_lands.yaml
+2026-01-27 15:34:45,290 - venue_child_creator - INFO - Loading VenueChildCreator config from world_specific_code/MedievalYaml/yaml/venue_child_creators/household_lands.yaml
+2026-01-27 15:34:45,293 - venue_child_creator - INFO -   Parent type: household → Child type: land
+2026-01-27 15:34:45,293 - venue_child_creator - INFO -   Member filters: 1 filter(s) configured
+2026-01-27 15:34:45,293 - venue_child_creator - INFO -     - age: 12 to ∞
+2026-01-27 15:34:45,293 - venue_child_creator - INFO - 
+2026-01-27 15:34:45,293 - venue_child_creator - INFO - ============================================================
+2026-01-27 15:34:45,293 - venue_child_creator - INFO - Creating lands for households
+2026-01-27 15:34:45,294 - venue_child_creator - INFO - ============================================================
+2026-01-27 15:34:45,294 - venue_child_creator - INFO - Processing 478597 household(s)
+2026-01-27 15:35:21,803 - venue_child_creator - INFO - 
+2026-01-27 15:35:21,803 - venue_child_creator - INFO - Summary:
+2026-01-27 15:35:21,803 - venue_child_creator - INFO -   Parents processed: 478597
+2026-01-27 15:35:21,803 - venue_child_creator - INFO -   Children created: 478597
+2026-01-27 15:35:21,803 - venue_child_creator - INFO -   People redistributed: 2864025
+2026-01-27 15:35:21,803 - venue_child_creator - INFO -   People filtered out: 1664150
+2026-01-27 15:35:21,803 - venue_child_creator - INFO - ============================================================
+2026-01-27 15:35:21,804 - create_world - INFO - Building Relationships
+2026-01-27 15:37:41,177 - create_world - INFO - 
+2026-01-27 15:37:41,177 - create_world - INFO - ============================================================
+2026-01-27 15:37:41,178 - create_world - INFO - POST-RELATIONSHIP PIPELINE
+2026-01-27 15:37:41,178 - create_world - INFO - ============================================================
+2026-01-27 15:37:41,178 - create_world - INFO - 
+2026-01-27 15:37:41,178 - create_world - INFO - [DISTRIBUTOR] world_specific_code/MedievalYaml/yaml/distributors/social_contact_visit_distributor.yaml
+2026-01-27 15:37:41,185 - may.venue_distributor.social_contact_visit_distributor - INFO - Initialized SocialContactVisitDistributor: activity_map_key='visit_social_contact', source='social_contacts_local', max_contacts=None
+2026-01-27 15:37:41,186 - may.venue_distributor.social_contact_visit_distributor - INFO - Starting social contact visit allocation...
+2026-01-27 15:37:41,186 - may.venue_distributor.social_contact_visit_distributor - INFO -   Source property: social_contacts_local
+2026-01-27 15:37:41,186 - may.venue_distributor.social_contact_visit_distributor - INFO -   Activity key: visit_social_contact
+2026-01-27 15:39:11,023 - may.venue_distributor.social_contact_visit_distributor - INFO - Social contact visit allocation complete:
+2026-01-27 15:39:11,023 - may.venue_distributor.social_contact_visit_distributor - INFO -   People processed: 4,751,126
+2026-01-27 15:39:11,023 - may.venue_distributor.social_contact_visit_distributor - INFO -   People with contacts: 4,015,839
+2026-01-27 15:39:11,023 - may.venue_distributor.social_contact_visit_distributor - INFO -   Total visit venues assigned: 18,623,343
+2026-01-27 15:39:11,023 - may.venue_distributor.social_contact_visit_distributor - WARNING -   Contacts without residence: 1,140,470
+2026-01-27 15:39:11,023 - create_world - INFO - 
+2026-01-27 15:39:11,023 - create_world - INFO - ============================================================
+2026-01-27 15:39:11,023 - create_world - INFO - World creation complete!
+2026-01-27 15:39:11,023 - create_world - INFO - Geography: 19752 units
+2026-01-27 15:39:11,023 - create_world - INFO - Venues: 957194 venues across 2 types
+2026-01-27 15:39:11,023 - create_world - INFO - Population: 4,751,126 people
+2026-01-27 15:39:11,024 - create_world - INFO - ============================================================
+2026-01-27 15:39:11,024 - debug_output - INFO - Exporting venue allocations to venue_allocations.csv...
+2026-01-27 15:39:14,950 - debug_output - INFO - Exported 478597 venues to venue_allocations.csv
+2026-01-27 15:39:15,360 - debug_output - INFO - Total capacity: 47,859,700, Total allocated: 2,864,025 (6.0% utilization)
+2026-01-27 15:39:15,361 - debug_output - INFO - Breakdown by venue type:
+2026-01-27 15:39:15,361 - debug_output - INFO -   land: 478597 venues, 2,864,025/47,859,700 people (6.0%)
+2026-01-27 15:39:15,467 - debug_output - INFO - Exporting people to people.csv...
+2026-01-27 15:40:20,945 - debug_output - INFO - Exported 4751126 people to people.csv
+2026-01-27 15:40:22,281 - debug_output - INFO -   People with residence: 4528175/4751126 (95.3%)
+2026-01-27 15:40:23,901 - world - INFO - 
+2026-01-27 15:40:23,901 - world - INFO - ============================================================
+2026-01-27 15:40:23,901 - world - INFO - EXPORTING WORLD TO HDF5
+2026-01-27 15:40:23,901 - world - INFO - ============================================================
+2026-01-27 15:40:23,901 - serialization_config - INFO - Loading serialization config from yaml/serialization_config.yaml
+2026-01-27 15:40:23,910 - serialization_config - INFO - Population: 7 additional properties to serialize
+2026-01-27 15:40:23,910 - serialization_config - INFO -   Properties: ['ethnicity', 'comorbidities', 'work_mode', 'friendships', 'sexual_orientation', 'romantic_partners', 'relationship_status']
+2026-01-27 15:40:23,910 - serialization_config - INFO - Geography: coordinates=True, 0 additional properties
+2026-01-27 15:40:23,910 - serialization_config - INFO - Venue 'household': 2 properties to serialize
+2026-01-27 15:40:23,910 - serialization_config - INFO -   Properties: ['capacity', 'original_pattern']
+2026-01-27 15:40:23,910 - serialization_config - INFO - Venue 'school': 1 properties to serialize
+2026-01-27 15:40:23,910 - serialization_config - INFO -   Properties: ['Gender']
+2026-01-27 15:40:23,910 - serialization_config - INFO - Venue 'company': 1 properties to serialize
+2026-01-27 15:40:23,910 - serialization_config - INFO -   Properties: ['work_sector']
+2026-01-27 15:40:23,910 - serialization_config - INFO - Venue 'boarding_school': 1 properties to serialize
+2026-01-27 15:40:23,910 - serialization_config - INFO -   Properties: ['Gender']
+2026-01-27 15:40:23,910 - serialization_config - INFO - Venue 'classroom': 1 properties to serialize
+2026-01-27 15:40:23,910 - serialization_config - INFO -   Properties: ['capacity']
+2026-01-27 15:40:23,910 - serialization_config - INFO - Venue 'office': 1 properties to serialize
+2026-01-27 15:40:23,910 - serialization_config - INFO -   Properties: ['capacity']
+2026-01-27 15:40:23,910 - world_serializer - INFO - ============================================================
+2026-01-27 15:40:23,910 - world_serializer - INFO - Exporting World to HDF5
+2026-01-27 15:40:23,910 - world_serializer - INFO - ============================================================
+2026-01-27 15:40:23,910 - world_serializer - INFO - Output file: world_state_martha_medieval.h5
+2026-01-27 15:40:23,935 - world_serializer - INFO - Writing metadata...
+2026-01-27 15:40:23,935 - world_serializer - INFO - Serializing geography...
+2026-01-27 15:40:23,958 - world_serializer - INFO -   Wrote 19752 geographical units
+2026-01-27 15:40:23,959 - world_serializer - INFO - Serializing population...
+2026-01-27 15:40:23,959 - world_serializer - INFO -   Serializing 4,751,126 people...
+2026-01-27 15:40:23,959 - world_serializer - INFO -     Sorting people by geo_unit_id for partitioning...
+2026-01-27 15:40:24,931 - world_serializer - INFO -     ✓ Sorted 4,751,126 people by geo_unit_id
+2026-01-27 15:40:26,099 - world_serializer - INFO -     ✓ Built core attribute arrays
+2026-01-27 15:40:26,099 - world_serializer - INFO -     Building partition index...
+2026-01-27 15:40:26,369 - world_serializer - INFO -       Created partition index for 19710 geo_units
+2026-01-27 15:40:26,369 - world_serializer - INFO -       Min people per geo_unit: 92
+2026-01-27 15:40:26,369 - world_serializer - INFO -       Max people per geo_unit: 60000
+2026-01-27 15:40:26,369 - world_serializer - INFO -       Avg people per geo_unit: 241.1
+2026-01-27 15:40:26,369 - world_serializer - INFO -     ✓ Wrote partition index
+2026-01-27 15:40:28,049 - world_serializer - INFO -     ✓ Wrote core datasets to HDF5
+2026-01-27 15:40:28,049 - world_serializer - INFO -     Writing property 1/7: ethnicity...
+2026-01-27 15:40:29,853 - world_serializer - INFO -     Writing property 2/7: comorbidities...
+2026-01-27 15:40:31,656 - world_serializer - INFO -     Writing property 3/7: work_mode...
+2026-01-27 15:40:33,499 - world_serializer - INFO -     Writing property 4/7: friendships...
+2026-01-27 15:40:35,300 - world_serializer - INFO -     Writing property 5/7: sexual_orientation...
+2026-01-27 15:40:37,116 - world_serializer - INFO -     Writing property 6/7: romantic_partners...
+2026-01-27 15:40:38,921 - world_serializer - INFO -     Writing property 7/7: relationship_status...
+2026-01-27 15:40:40,738 - world_serializer - INFO -   Wrote 4,751,126 people
+2026-01-27 15:40:40,738 - world_serializer - INFO -     Including properties: ['ethnicity', 'comorbidities', 'work_mode', 'friendships', 'sexual_orientation', 'romantic_partners', 'relationship_status']
+2026-01-27 15:40:40,741 - world_serializer - INFO - Serializing venues...
+2026-01-27 15:40:40,922 - world_serializer - INFO -     Sorting 957,194 venues by geo_unit_id for partitioning...
+2026-01-27 15:40:41,066 - world_serializer - INFO -     ✓ Sorted 957,194 venues by geo_unit_id
+2026-01-27 15:40:42,860 - world_serializer - INFO -     Building venue partition index...
+2026-01-27 15:40:42,921 - world_serializer - INFO -       Created venue partition index for 19710 geo_units
+2026-01-27 15:40:42,921 - world_serializer - INFO -       Min venues per geo_unit: 14
+2026-01-27 15:40:42,921 - world_serializer - INFO -       Max venues per geo_unit: 12056
+2026-01-27 15:40:42,921 - world_serializer - INFO -       Avg venues per geo_unit: 48.6
+2026-01-27 15:40:42,921 - world_serializer - INFO -     ✓ Wrote venue partition index
+2026-01-27 15:40:43,472 - world_serializer - INFO -     household: 2 properties (478597 venues)
+2026-01-27 15:40:44,228 - world_serializer - INFO -     Sorting 1,837,780 subsets by venue's geo_unit_id for partitioning...
+2026-01-27 15:40:44,564 - world_serializer - INFO -     ✓ Sorted 1,837,780 subsets by venue's geo_unit_id
+2026-01-27 15:40:45,656 - world_serializer - INFO -     Building subset metadata partition index...
+2026-01-27 15:40:45,779 - world_serializer - INFO -       Created subset metadata partition index for 19710 geo_units
+2026-01-27 15:40:45,779 - world_serializer - INFO -       Min subsets per geo_unit: 24
+2026-01-27 15:40:45,779 - world_serializer - INFO -       Max subsets per geo_unit: 23273
+2026-01-27 15:40:45,779 - world_serializer - INFO -       Avg subsets per geo_unit: 93.2
+2026-01-27 15:40:45,779 - world_serializer - INFO -     ✓ Wrote subset metadata partition index
+2026-01-27 15:40:48,579 - world_serializer - INFO -     Building subset members partition index...
+2026-01-27 15:40:48,695 - world_serializer - INFO -       Created subset partition index for 19710 geo_units
+2026-01-27 15:40:48,695 - world_serializer - INFO -       Min members per geo_unit: 95
+2026-01-27 15:40:48,695 - world_serializer - INFO -       Max members per geo_unit: 96080
+2026-01-27 15:40:48,695 - world_serializer - INFO -       Avg members per geo_unit: 375.0
+2026-01-27 15:40:48,695 - world_serializer - INFO -     ✓ Wrote subset members partition index
+2026-01-27 15:40:49,259 - world_serializer - INFO -     Total subset memberships: 7,392,200
+2026-01-27 15:40:49,285 - world_serializer - INFO -   Wrote 957,194 venues
+2026-01-27 15:40:49,285 - world_serializer - INFO -   Wrote 1,837,780 subsets
+2026-01-27 15:40:49,306 - world_serializer - INFO - Serializing activity mappings...
+2026-01-27 15:40:54,273 - world_serializer - INFO -     Progress: 475,112/4,751,126 people processed (10.0%) - 2,620,879 mappings
+2026-01-27 15:40:58,173 - world_serializer - INFO -     Progress: 950,224/4,751,126 people processed (20.0%) - 5,220,556 mappings
+2026-01-27 15:41:02,132 - world_serializer - INFO -     Progress: 1,425,336/4,751,126 people processed (30.0%) - 7,810,692 mappings
+2026-01-27 15:41:06,023 - world_serializer - INFO -     Progress: 1,900,448/4,751,126 people processed (40.0%) - 10,402,482 mappings
+2026-01-27 15:41:09,932 - world_serializer - INFO -     Progress: 2,375,560/4,751,126 people processed (50.0%) - 12,991,953 mappings
+2026-01-27 15:41:13,840 - world_serializer - INFO -     Progress: 2,850,672/4,751,126 people processed (60.0%) - 15,569,265 mappings
+2026-01-27 15:41:17,758 - world_serializer - INFO -     Progress: 3,325,784/4,751,126 people processed (70.0%) - 18,157,891 mappings
+2026-01-27 15:41:21,746 - world_serializer - INFO -     Progress: 3,800,896/4,751,126 people processed (80.0%) - 20,779,425 mappings
+2026-01-27 15:41:25,722 - world_serializer - INFO -     Progress: 4,276,008/4,751,126 people processed (90.0%) - 23,378,874 mappings
+2026-01-27 15:41:29,984 - world_serializer - INFO -     Progress: 4,751,120/4,751,126 people processed (100.0%) - 26,015,502 mappings
+2026-01-27 15:41:29,984 - world_serializer - INFO -     Progress: 4,751,126/4,751,126 people processed (100.0%) - 26,015,543 mappings
+2026-01-27 15:41:32,616 - world_serializer - INFO -   Building activity mapping partition index...
+2026-01-27 15:41:33,023 - world_serializer - INFO -       Created activity mapping partition index for 19710 geo_units
+2026-01-27 15:41:33,023 - world_serializer - INFO -       Min mappings per geo_unit: 312
+2026-01-27 15:41:33,023 - world_serializer - INFO -       Max mappings per geo_unit: 356675
+2026-01-27 15:41:33,024 - world_serializer - INFO -       Avg mappings per geo_unit: 1319.9
+2026-01-27 15:41:33,024 - world_serializer - INFO -     ✓ Wrote activity mapping partition index
+2026-01-27 15:41:36,395 - world_serializer - INFO -   Activity map: 3 unique activities
+2026-01-27 15:41:36,395 - world_serializer - INFO -     Total activity mappings: 26,015,543
+2026-01-27 15:41:36,533 - world_serializer - INFO - 
+2026-01-27 15:41:36,534 - world_serializer - INFO - Export complete!
+2026-01-27 15:41:36,534 - world_serializer - INFO -   Geography units: 19,752
+2026-01-27 15:41:36,534 - world_serializer - INFO -   People: 4,751,126
+2026-01-27 15:41:36,534 - world_serializer - INFO -   Venues: 957,194
+2026-01-27 15:41:36,534 - world_serializer - INFO -   Subsets: 1,837,780
+2026-01-27 15:41:36,534 - world_serializer - INFO - ============================================================
+2026-01-27 15:41:36,534 - world - INFO - 
+2026-01-27 15:41:36,534 - world - INFO - Successfully exported world to: world_state_martha_medieval.h5
+2026-01-27 15:41:36,534 - world - INFO - ============================================================
+2026-01-27 15:41:36,587 - create_world - INFO - Performance profiling data saved to simulation_profile.stats
