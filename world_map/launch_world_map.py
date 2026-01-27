@@ -61,7 +61,7 @@ def create_example_world():
     return world
 
 
-def load_world_from_file(filepath):
+def load_world_from_file(filepath, **kwargs):
     """
     Load a World instance from a saved file.
 
@@ -73,8 +73,20 @@ def load_world_from_file(filepath):
     """
     # TODO: Implement loading from your saved format
     # Example with joblib:
-    import joblib
-    return joblib.load(filepath)
+    file_path = Path(filepath)
+    extension = file_path.suffix
+    match extension:
+        case '.joblib':
+            import joblib
+            return joblib.load(filepath, **kwargs)
+        case '.h5':
+            from may.serialization.world_loader import load_world_from_hdf5
+            return load_world_from_hdf5(filepath, **kwargs)
+        case '.h5py':
+            from may.serialization.world_loader import load_world_from_hdf5
+            return load_world_from_hdf5(filepath, **kwargs)
+        case _:
+            raise NotImplementedError(f"No implemented loading function for this type of world file with extension {extension}")
 
     # raise NotImplementedError(
     #     "Implement this function to load your World instance from a file. "
