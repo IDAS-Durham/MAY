@@ -254,21 +254,21 @@ class BaseDistributor:
         # Second pass: Fill arrays
         for attr, meta in attr_metadata.items():
             if attr == 'age':
-                self.population_arrays['age'] = np.array([getattr(p, 'age', 0) for p in people], dtype=np.int16)
+                self.population_arrays['age'] = np.array([getattr(p, 'age', 0) for p in people], dtype=np.int32)
             else:
                 mapping = self.attribute_mappings.get(attr, {})
                 parts = meta['parts']
                 # Fast-path for common attributes
                 if attr == 'sex':
-                    self.population_arrays[attr] = np.array([mapping.get(p.sex, 0) for p in people], dtype=np.int16)
+                    self.population_arrays[attr] = np.array([mapping.get(p.sex, 0) for p in people], dtype=np.int32)
                 elif attr == 'residence.type':
-                    self.population_arrays[attr] = np.array([mapping.get(p.residence_type, 0) for p in people], dtype=np.int16)
+                    self.population_arrays[attr] = np.array([mapping.get(p.residence_type, 0) for p in people], dtype=np.int32)
                 else:
                     # General nested path
                     self.population_arrays[attr] = np.array([
                         mapping.get(self._get_nested_value_with_dict_support(p, parts), 0) 
                         for p in people
-                    ], dtype=np.int16)
+                    ], dtype=np.int32)
 
     def _get_person_attribute_for_vectorization(self, person, attr_path: str, parts: Optional[List[str]] = None) -> Any:
         """Helper to get attribute value from person including nested/residence paths."""

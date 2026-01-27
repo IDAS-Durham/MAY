@@ -7,6 +7,13 @@
 
 name: "romantic_relationships"
 
+# ============================================================================
+# General Constraints
+# ============================================================================
+# Age limits for romantic relationships
+min_age: 18
+max_age: 75
+
 
 # ============================================================================
 # Sexual Orientation Configuration
@@ -82,7 +89,7 @@ relationship_types:
 
 cheating:
   # Base probability (applied to people in exclusive relationships)
-  base_probability: 0.30
+  base_probability: 0.1
 
 
 # ============================================================================

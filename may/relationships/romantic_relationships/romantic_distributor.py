@@ -81,6 +81,10 @@ class RomanticDistributor:
         attr_config = self.config.get('attribute_matching', {})
         self.matching_attr = attr_config.get('attribute', 'ethnicity')
         
+        # General constraints
+        self.min_age = self.config.get('min_age', 18)
+        self.max_age = self.config.get('max_age', 120)
+
         if self._is_attribute_matching_enabled():
             self._load_attribute_matrix()
 
@@ -193,15 +197,15 @@ class RomanticDistributor:
         logger.info(f"Starting {self.name} distribution")
         logger.info("=" * 60)
 
-        # Get all adults
-        all_adults = [p for p in self.world.population.people if p.age >= 18]
-        n = len(all_adults)
-        logger.info(f"Processing {n:,} adults")
+        # Get all eligible people
+        eligible_people = [p for p in self.world.population.people if self.min_age <= p.age <= self.max_age]
+        n = len(eligible_people)
+        logger.info(f"Processing {n:,} eligible people (age {self.min_age}-{self.max_age})")
 
         # Step 1: Extract all attributes into NumPy arrays
         logger.info("\n[Step 1] Extracting attributes to NumPy arrays...")
         t0 = time.time()
-        arrays = self._build_attribute_arrays(all_adults)
+        arrays = self._build_attribute_arrays(eligible_people)
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
         # Step 2: Assign sexual orientations
@@ -251,14 +255,14 @@ class RomanticDistributor:
         # Step 8: Write results back to person objects
         logger.info("\n[Step 8] Writing results to person objects...")
         t0 = time.time()
-        self._write_results(all_adults, arrays, orientations, partners, rel_types, consensual, affair_partners, non_exclusive_partners)
+        self._write_results(eligible_people, arrays, orientations, partners, rel_types, consensual, affair_partners, non_exclusive_partners)
         logger.info(f"  Time: {time.time() - t0:.2f}s")
 
         # Print statistics
         self._print_statistics(orientations, partners, rel_types, consensual)
 
         # Export detailed CSVs
-        person_by_id = {p.id: p for p in all_adults}
+        """ person_by_id = {p.id: p for p in all_adults}
         export_relationships_csv(
             self.world.population,
             person_by_id,
@@ -274,7 +278,7 @@ class RomanticDistributor:
             self.status_key,
             self.orientation_key,
             "cheating_network_detailed.csv"
-        )
+        ) """
 
         total_time = time.time() - total_start
         logger.info("\n" + "=" * 60)
@@ -367,6 +371,19 @@ class RomanticDistributor:
             for person_idx in people_set:
                 person_venues[person_idx].add(venue_id)
 
+        # Build geography indices for fast lookup
+        indices_by_mgu = defaultdict(list)
+        indices_by_lgu = defaultdict(list)
+        for i in range(n):
+            if mgu_codes[i] >= 0:
+                indices_by_mgu[mgu_codes[i]].append(i)
+            if lgu_codes[i] >= 0:
+                indices_by_lgu[lgu_codes[i]].append(i)
+
+        # Convert to numpy arrays for better performance
+        indices_by_mgu = {k: np.array(v, dtype=np.int64) for k, v in indices_by_mgu.items()}
+        indices_by_lgu = {k: np.array(v, dtype=np.int64) for k, v in indices_by_lgu.items()}
+
         logger.info(f"  Extracted {n:,} adults into arrays")
         logger.info(f"  {len(mgu_encoder)} unique MGUs, {len(lgu_encoder)} unique LGUs")
         logger.info(f"  {len(venue_to_people)} unique activity venues indexed")
@@ -384,6 +401,8 @@ class RomanticDistributor:
             'mgu_to_lgu': mgu_to_lgu,
             'venue_to_people': dict(venue_to_people),
             'person_venues': dict(person_venues),
+            'indices_by_mgu': indices_by_mgu,
+            'indices_by_lgu': indices_by_lgu,
             'n': n
         }
 
@@ -670,11 +689,18 @@ class RomanticDistributor:
         unique_mgus = np.unique(mgu[mgu >= 0])
 
         for mgu_code in unique_mgus:
-            in_mgu = (mgu == mgu_code)
+            # OPTIMIZATION: Only look at people in this MGU
+            mgu_indices = arrays['indices_by_mgu'][mgu_code]
+            in_mgu_seeking = seeking_exclusive[mgu_indices]
+            
+            if not np.any(in_mgu_seeking):
+                continue
+                
+            active_mgu_indices = mgu_indices[in_mgu_seeking]
             
             for (s1, o1), (s2, o2) in matching_groups:
                 if s1 == s2 and o1 == o2:
-                    pool = np.where(seeking_exclusive & in_mgu & (sex == s1) & (orientations == o1))[0]
+                    pool = active_mgu_indices[(sex[active_mgu_indices] == s1) & (orientations[active_mgu_indices] == o1)]
                     if len(pool) >= 2:
                         matches = self._match_single_pool(pool, age, eth, age_config)
                         for a, b in matches:
@@ -686,8 +712,8 @@ class RomanticDistributor:
                             seeking_exclusive[b] = False
                             total_matches += 1
                 else:
-                    pool1 = np.where(seeking_exclusive & in_mgu & (sex == s1) & (orientations == o1))[0]
-                    pool2 = np.where(seeking_exclusive & in_mgu & (sex == s2) & (orientations == o2))[0]
+                    pool1 = active_mgu_indices[(sex[active_mgu_indices] == s1) & (orientations[active_mgu_indices] == o1)]
+                    pool2 = active_mgu_indices[(sex[active_mgu_indices] == s2) & (orientations[active_mgu_indices] == o2)]
                     if len(pool1) > 0 and len(pool2) > 0:
                         matches = self._match_pools(pool1, pool2, age, eth, age_config)
                         for a, b in matches:
@@ -713,11 +739,18 @@ class RomanticDistributor:
             lgu_matches_count = 0
 
             for lgu_code in unique_lgus:
-                in_lgu = (lgu == lgu_code)
+                # OPTIMIZATION: Only look at people in this LGU
+                lgu_indices = arrays['indices_by_lgu'][lgu_code]
+                in_lgu_seeking = seeking_exclusive[lgu_indices]
+                
+                if not np.any(in_lgu_seeking):
+                    continue
+                    
+                active_lgu_indices = lgu_indices[in_lgu_seeking]
 
                 for (s1, o1), (s2, o2) in matching_groups:
                     if s1 == s2 and o1 == o2:
-                        pool = np.where(seeking_exclusive & in_lgu & (sex == s1) & (orientations == o1))[0]
+                        pool = active_lgu_indices[(sex[active_lgu_indices] == s1) & (orientations[active_lgu_indices] == o1)]
                         if len(pool) >= 2:
                             matches = self._match_single_pool(pool, age, eth, age_config)
                             for a, b in matches:
@@ -730,8 +763,8 @@ class RomanticDistributor:
                                 lgu_matches_count += 1
                                 total_matches += 1
                     else:
-                        pool1 = np.where(seeking_exclusive & in_lgu & (sex == s1) & (orientations == o1))[0]
-                        pool2 = np.where(seeking_exclusive & in_lgu & (sex == s2) & (orientations == o2))[0]
+                        pool1 = active_lgu_indices[(sex[active_lgu_indices] == s1) & (orientations[active_lgu_indices] == o1)]
+                        pool2 = active_lgu_indices[(sex[active_lgu_indices] == s2) & (orientations[active_lgu_indices] == o2)]
                         if len(pool1) > 0 and len(pool2) > 0:
                             matches = self._match_pools(pool1, pool2, age, eth, age_config)
                             for a, b in matches:
@@ -965,11 +998,15 @@ class RomanticDistributor:
         unique_mgus = np.unique(mgu[mgu >= 0])
 
         for mgu_code in unique_mgus:
-            in_mgu = mgu == mgu_code
-            mgu_matches += self._match_by_orientation_pools(
-                seeking & in_mgu, sex, age, eth, orientations, seeking,
-                non_exclusive_partners, age_config
-            )
+            mgu_indices = arrays['indices_by_mgu'][mgu_code]
+            # Use intersection of seeking and mgu_indices
+            in_mgu_seeking_indices = mgu_indices[seeking[mgu_indices]]
+            
+            if len(in_mgu_seeking_indices) > 0:
+                mgu_matches += self._match_by_orientation_pools(
+                    in_mgu_seeking_indices, sex, age, eth, orientations, seeking,
+                    non_exclusive_partners, age_config
+                )
 
         total_created += mgu_matches
         logger.info(f"    Phase 2 (MGU): {mgu_matches:,} relationships")
@@ -983,11 +1020,14 @@ class RomanticDistributor:
             unique_lgus = np.unique(lgu[lgu >= 0])
 
             for lgu_code in unique_lgus:
-                in_lgu = lgu == lgu_code
-                lgu_matches += self._match_by_orientation_pools(
-                    seeking & in_lgu, sex, age, eth, orientations, seeking,
-                    non_exclusive_partners, age_config
-                )
+                lgu_indices = arrays['indices_by_lgu'][lgu_code]
+                in_lgu_seeking_indices = lgu_indices[seeking[lgu_indices]]
+                
+                if len(in_lgu_seeking_indices) > 0:
+                    lgu_matches += self._match_by_orientation_pools(
+                        in_lgu_seeking_indices, sex, age, eth, orientations, seeking,
+                        non_exclusive_partners, age_config
+                    )
 
             total_created += lgu_matches
             logger.info(f"    Phase 3 (LGU): {lgu_matches:,} relationships")
@@ -999,7 +1039,7 @@ class RomanticDistributor:
 
     def _match_by_orientation_pools(
         self,
-        mask: np.ndarray,
+        active_indices: np.ndarray,
         sex: np.ndarray,
         age: np.ndarray,
         eth: np.ndarray,
@@ -1008,13 +1048,18 @@ class RomanticDistributor:
         partners_dict: Dict[int, List[int]],
         age_config: Dict
     ) -> int:
-        """Helper to match by orientation pools within a geographic mask using dynamic rules."""
+        """Helper to match by orientation pools within a set of active indices."""
         matches_created = 0
         matching_groups = self._get_matching_groups()
 
         for (s1, o1), (s2, o2) in matching_groups:
+            # Refresh active indices based on current seeking status
+            current_active = active_indices[seeking[active_indices]]
+            if len(current_active) < 2:
+                break
+
             if s1 == s2 and o1 == o2:
-                pool = np.where(mask & (sex == s1) & (orientations == o1))[0]
+                pool = current_active[(sex[current_active] == s1) & (orientations[current_active] == o1)]
                 if len(pool) >= 2:
                     matches = self._match_single_pool(pool, age, eth, age_config)
                     for a, b in matches:
@@ -1024,8 +1069,8 @@ class RomanticDistributor:
                         seeking[b] = False
                         matches_created += 1
             else:
-                pool1 = np.where(mask & (sex == s1) & (orientations == o1))[0]
-                pool2 = np.where(mask & (sex == s2) & (orientations == o2))[0]
+                pool1 = current_active[(sex[current_active] == s1) & (orientations[current_active] == o1)]
+                pool2 = current_active[(sex[current_active] == s2) & (orientations[current_active] == o2)]
                 if len(pool1) > 0 and len(pool2) > 0:
                     matches = self._match_pools(pool1, pool2, age, eth, age_config)
                     for a, b in matches:
@@ -1125,9 +1170,10 @@ class RomanticDistributor:
         unique_mgus = np.unique(mgu[mgu >= 0])
 
         for mgu_code in unique_mgus:
-            in_mgu = mgu == mgu_code
-            mgu_cheaters = np.where(cheater_seeking & in_mgu)[0]
-            mgu_pool = np.where(affair_available & in_mgu)[0]
+            mgu_indices = arrays['indices_by_mgu'][mgu_code]
+            
+            mgu_cheaters = mgu_indices[cheater_seeking[mgu_indices]]
+            mgu_pool = mgu_indices[affair_available[mgu_indices]]
 
             if len(mgu_cheaters) == 0 or len(mgu_pool) == 0:
                 continue
@@ -1150,9 +1196,10 @@ class RomanticDistributor:
             unique_lgus = np.unique(lgu[lgu >= 0])
 
             for lgu_code in unique_lgus:
-                in_lgu = lgu == lgu_code
-                lgu_cheaters = np.where(cheater_seeking & in_lgu)[0]
-                lgu_pool = np.where(affair_available & in_lgu)[0]
+                lgu_indices = arrays['indices_by_lgu'][lgu_code]
+                
+                lgu_cheaters = lgu_indices[cheater_seeking[lgu_indices]]
+                lgu_pool = lgu_indices[affair_available[lgu_indices]]
 
                 if len(lgu_cheaters) == 0 or len(lgu_pool) == 0:
                     continue

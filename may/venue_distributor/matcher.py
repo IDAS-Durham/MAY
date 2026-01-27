@@ -56,8 +56,8 @@ class VenueMatcher:
                 })
                 # Initialize arrays for this numerical attribute
                 self.num_constraints[attr_name] = {
-                    'min': np.full(len(venues), -1000, dtype=np.int16),
-                    'max': np.full(len(venues), 1000, dtype=np.int16)
+                    'min': np.full(len(venues), -1000, dtype=np.int32),
+                    'max': np.full(len(venues), 1000, dtype=np.int32)
                 }
             elif attr_type == 'categorical' and rule.get('venue_column'):
                 active_rules.append({
