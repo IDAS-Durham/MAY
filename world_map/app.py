@@ -11,6 +11,8 @@ from flask_cors import CORS
 import logging
 from collections import defaultdict
 import json
+import yaml
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,8 +29,75 @@ _map_config = {
     'attribution': None
 }
 
+# Global info panel configuration
+_panel_config = None
 
-def initialize_app(world, map_config=None):
+
+def load_panel_config(config_path=None):
+    """Load info panel configuration from YAML file."""
+    global _panel_config
+
+    if config_path is None:
+        config_path = Path(__file__).parent / 'config' / 'info_panel_config.yaml'
+
+    try:
+        with open(config_path, 'r') as f:
+            _panel_config = yaml.safe_load(f)
+        logger.info(f"Loaded panel config from {config_path}")
+    except FileNotFoundError:
+        logger.warning(f"Panel config not found at {config_path}, using defaults")
+        _panel_config = _get_default_panel_config()
+    except Exception as e:
+        logger.error(f"Error loading panel config: {e}")
+        _panel_config = _get_default_panel_config()
+
+    return _panel_config
+
+
+def _convert_numpy_types(obj):
+    """Recursively convert numpy types to Python native types for JSON serialization."""
+    import numpy as np
+
+    if obj is None:
+        return None
+    if isinstance(obj, (np.integer, np.int64, np.int32)):
+        return int(obj)
+    if isinstance(obj, (np.floating, np.float64, np.float32)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.str_):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {str(k): _convert_numpy_types(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_convert_numpy_types(item) for item in obj]
+    return obj
+
+
+def _get_default_panel_config():
+    """Return default panel configuration."""
+    return {
+        'geo_unit_panel': {
+            'title_field': 'name',
+            'popup': {'enabled': True},
+            'detail_sections': []
+        },
+        'venue_panel': {
+            'title_field': 'name',
+            'popup': {'enabled': True},
+            'detail_sections': []
+        },
+        'marker_styles': {
+            'geo_unit': {
+                'size': {'method': 'sqrt', 'min_radius': 5, 'max_radius': 15, 'scale_factor': 0.5},
+                'fill_opacity': 0.7
+            }
+        }
+    }
+
+
+def initialize_app(world, map_config=None, panel_config_path=None):
     """
     Initialize the Flask app with a World instance and optional map configuration.
 
@@ -39,6 +108,7 @@ def initialize_app(world, map_config=None):
             - image_url: URL or path to background image (required if background_type='image')
             - bounds: [[south, west], [north, east]] geographic bounds (required if background_type='image')
             - attribution: Attribution text for the image
+        panel_config_path: Path to info panel YAML config (optional)
 
     Returns:
         Flask app instance
@@ -48,6 +118,9 @@ def initialize_app(world, map_config=None):
 
     if map_config:
         _map_config.update(map_config)
+
+    # Load panel configuration
+    load_panel_config(panel_config_path)
 
     logger.info(f"Initialized world map with: {world}")
     logger.info(f"Map configuration: {_map_config}")
@@ -82,6 +155,15 @@ def get_map_config():
     return jsonify(_map_config)
 
 
+@app.route('/api/panel/config')
+def get_panel_config():
+    """Get info panel configuration for customizing displayed attributes."""
+    global _panel_config
+    if _panel_config is None:
+        load_panel_config()
+    return jsonify(_panel_config)
+
+
 # ============================================================================
 # API: Geography
 # ============================================================================
@@ -112,7 +194,7 @@ def get_geography_level(level):
     Get all geographical units at a specific level as GeoJSON.
 
     Returns point features with coordinates and metadata.
-    
+    For units with children, aggregates population and venue counts from all descendants.
     """
     try:
         world = get_world()
@@ -130,31 +212,39 @@ def get_geography_level(level):
 
             lat, lon = unit.coordinates
 
-            # Count population and venues
-            population = len(unit.people) if unit.people else 0
-            venues_count = len(unit.venues) if unit.venues else 0
+            # Use get_people() to recursively get all people from unit and descendants
+            all_people = unit.get_people()
+            population = len(all_people) if all_people else 0
 
-            # Get venue breakdown
+            # Aggregate venues from unit and all descendants
+            all_venues = list(unit.venues) if unit.venues else []
+            if unit.children:
+                for descendant in unit.get_descendants():
+                    if descendant.venues:
+                        all_venues.extend(descendant.venues)
+            venues_count = len(all_venues)
+
+            # Get venue breakdown from all aggregated venues
             venue_types = defaultdict(int)
-            if unit.venues:
-                for venue in unit.venues:
-                    venue_types[venue.type] += 1
+            for venue in all_venues:
+                venue_types[str(venue.type)] += 1
 
             feature = {
                 'type': 'Feature',
                 'properties': {
-                    'id': unit.id,
-                    'name': unit.name,
-                    'level': unit.level,
-                    'population': population,
-                    'venues_count': venues_count,
+                    'id': int(unit.id) if hasattr(unit.id, 'item') else unit.id,
+                    'name': str(unit.name),
+                    'level': str(unit.level),
+                    'population': int(population),
+                    'venues_count': int(venues_count),
                     'venue_types': dict(venue_types),
                     'has_parent': unit.parent is not None,
-                    'children_count': len(unit.children) if unit.children else 0
+                    'children_count': int(len(unit.children)) if unit.children else 0
                 },
                 'geometry': {
                     'type': 'Point',
-                    'coordinates': [lon, lat]  # GeoJSON: [longitude, latitude]
+                    # Convert numpy floats to Python floats for JSON serialization
+                    'coordinates': [float(lon), float(lat)]
                 }
             }
             features.append(feature)
@@ -174,7 +264,10 @@ def get_geography_level(level):
 
 @app.route('/api/geography/unit/<unit_name>')
 def get_unit_details(unit_name):
-    """Get detailed information about a specific geographical unit."""
+    """Get detailed information about a specific geographical unit.
+
+    For units with children, aggregates statistics from all descendants.
+    """
     try:
         world = get_world()
         if not world.geography:
@@ -184,7 +277,10 @@ def get_unit_details(unit_name):
         if not unit:
             return jsonify({'error': f'Unit {unit_name} not found'}), 404
 
-        # Collect detailed statistics
+        # Use get_people() to recursively get all people from unit and descendants
+        all_people = unit.get_people()
+
+        # Collect detailed statistics from all people
         age_groups = {
             '0-15': 0, '16-24': 0, '25-34': 0,
             '35-49': 0, '50-64': 0, '65+': 0
@@ -192,7 +288,7 @@ def get_unit_details(unit_name):
 
         sex_distribution = defaultdict(int)
 
-        for person in unit.people:
+        for person in all_people:
             # Age groups
             if person.age <= 15:
                 age_groups['0-15'] += 1
@@ -210,12 +306,20 @@ def get_unit_details(unit_name):
             # Sex distribution
             sex_distribution[person.sex] += 1
 
-        # Venue breakdown
+        # Aggregate venues from unit and all descendants
+        all_venues = list(unit.venues) if unit.venues else []
+        if unit.children:
+            for descendant in unit.get_descendants():
+                if descendant.venues:
+                    all_venues.extend(descendant.venues)
+
+        # Venue breakdown from all aggregated venues
         venue_details = []
         venue_types = defaultdict(int)
-        if unit.venues:
-            for venue in unit.venues:
-                venue_types[venue.type] += 1
+        for venue in all_venues:
+            venue_types[venue.type] += 1
+            # Only include details for first 50 venues
+            if len(venue_details) < 50:
                 venue_details.append({
                     'id': venue.id,
                     'name': venue.name,
@@ -236,11 +340,13 @@ def get_unit_details(unit_name):
         children_info = []
         if unit.children:
             for child in unit.children:
+                # Use get_people() for children too to show aggregated population
+                child_population = len(child.get_people())
                 children_info.append({
                     'id': child.id,
                     'name': child.name,
                     'level': child.level,
-                    'population': len(child.people)
+                    'population': child_population
                 })
 
         return jsonify({
@@ -248,12 +354,12 @@ def get_unit_details(unit_name):
             'name': unit.name,
             'level': unit.level,
             'coordinates': unit.coordinates,
-            'population': len(unit.people),
+            'population': len(all_people),
             'age_distribution': age_groups,
             'sex_distribution': dict(sex_distribution),
-            'venues_count': len(unit.venues),
+            'venues_count': len(all_venues),
             'venue_types': dict(venue_types),
-            'venue_details': venue_details[:50],  # Limit to first 50
+            'venue_details': venue_details,
             'parent': parent_info,
             'children': children_info,
             'properties': unit.properties
@@ -383,16 +489,17 @@ def get_venues_by_type(venue_type):
             feature = {
                 'type': 'Feature',
                 'properties': {
-                    'id': venue.id,
-                    'name': venue.name,
-                    'type': venue.type,
-                    'geographical_unit': venue.geographical_unit.name if venue.geographical_unit else None,
-                    'num_members': total_members,
-                    'properties': venue.properties
+                    'id': int(venue.id) if hasattr(venue.id, 'item') else venue.id,
+                    'name': str(venue.name),
+                    'type': str(venue.type),
+                    'geographical_unit': str(venue.geographical_unit.name) if venue.geographical_unit else None,
+                    'num_members': int(total_members),
+                    'properties': _convert_numpy_types(venue.properties) if venue.properties else {}
                 },
                 'geometry': {
                     'type': 'Point',
-                    'coordinates': [lon, lat]
+                    # Convert numpy floats to Python floats for JSON serialization
+                    'coordinates': [float(lon), float(lat)]
                 }
             }
             features.append(feature)
@@ -501,6 +608,8 @@ def get_world_statistics():
     try:
         world = get_world()
         stats = world.get_statistics()
+        # Convert numpy types to Python native types for JSON serialization
+        stats = _convert_numpy_types(stats)
         return jsonify(stats)
 
     except Exception as e:

@@ -14,6 +14,23 @@ import time
 logger = logging.getLogger("world_loader")
 
 
+def _convert_numpy_value(value):
+    """Convert a numpy value to its Python native equivalent."""
+    if value is None:
+        return None
+    if isinstance(value, (np.integer, np.int64, np.int32)):
+        return int(value)
+    if isinstance(value, (np.floating, np.float64, np.float32)):
+        return float(value)
+    if isinstance(value, np.ndarray):
+        return [_convert_numpy_value(v) for v in value]
+    if isinstance(value, (np.str_, np.bytes_)):
+        return str(value)
+    if isinstance(value, bytes):
+        return value.decode('utf-8')
+    return value
+
+
 def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml"):
     """
     Load a World object from an HDF5 file created by export_to_hdf5.
@@ -127,8 +144,9 @@ def _load_geography(geo_group, config):
     # Read core datasets
     ids = geo_group['ids'][:]
     names = geo_group['names'][:].astype(str)
-    levels = geo_group['levels'][:].astype(str) # Only unique levels
-    unique_levels = list(dict.fromkeys(levels)) # Only unique levels
+    levels = geo_group['levels'][:].astype(str)
+    # Convert numpy strings to Python strings for levels
+    unique_levels = list(dict.fromkeys(str(lvl) for lvl in levels))
     parent_ids = geo_group['parent_ids'][:]
 
     # Read optional coordinates
@@ -144,8 +162,6 @@ def _load_geography(geo_group, config):
         props_group = geo_group['properties']
         for prop_name in props_group.keys():
             prop_data = props_group[prop_name][:]
-            # if prop_data.dtype.kind == 'S' or prop_data.dtype.kind == 'O':
-            #     prop_data = prop_data.astype(str)
             properties_by_unit[prop_name] = prop_data
 
     # Create Geography object
@@ -155,29 +171,33 @@ def _load_geography(geo_group, config):
     # Creates it as a dict object as it's hashable, so quick for setting the parent relationships
     units_by_id = {}
     for i, (unit_id, name, level) in enumerate(zip(ids, names, levels)):
+        # Convert coordinates to Python floats for JSON serialization compatibility
         coordinates = None
         if latitudes is not None and not np.isnan(latitudes[i]):
-            coordinates = (latitudes[i], longitudes[i])
+            coordinates = (float(latitudes[i]), float(longitudes[i]))
 
-        # Collect properties for this unit
+        # Collect properties for this unit, converting numpy types to Python natives
         properties = {}
         for prop_name, prop_array in properties_by_unit.items():
-            properties[prop_name] = prop_array[i]
+            properties[prop_name] = _convert_numpy_value(prop_array[i])
 
         unit = GeographicalUnit(
-            unit_id,
-            name=name,
-            level=level,
+            int(unit_id),  # Convert to Python int
+            name=str(name),  # Convert to Python str
+            level=str(level),  # Convert to Python str
             parent=None,  # Will be set in next pass
             coordinates=coordinates,
             properties=properties
         )
-        units_by_id[unit_id] = unit
+        units_by_id[int(unit_id)] = unit
 
-    # Set parent relationships
+    # Set parent relationships and add children to parent's children list
     for i, (unit_id, parent_id) in enumerate(zip(ids, parent_ids)):
-        if parent_id != -1:
-            units_by_id[unit_id].parent = units_by_id[parent_id]
+        if int(parent_id) != -1:
+            child_unit = units_by_id[int(unit_id)]
+            parent_unit = units_by_id[int(parent_id)]
+            child_unit.parent = parent_unit
+            parent_unit.children.append(child_unit)
 
     # Add units to Geography
     geography.add_geo_units(units_by_id.values())
@@ -223,17 +243,17 @@ def _load_population(pop_group, geography, config):
     progress_interval = max(1, num_people // 10)
 
     for i, (person_id, age, sex, geo_unit_id) in enumerate(zip(ids, ages, sexes, geo_unit_ids)):
-        # Find geographical unit
-        geo_unit = all_units.get(geo_unit_id)
+        # Find geographical unit (convert numpy int to Python int for lookup)
+        geo_unit = all_units.get(int(geo_unit_id))
 
-        # Collect properties for this person
+        # Collect properties for this person, converting numpy types
         properties = {}
         for prop_name, prop_array in properties_by_person.items():
-            properties[prop_name] = prop_array[i]
+            properties[prop_name] = _convert_numpy_value(prop_array[i])
 
-        # Create Person
-        person = Person(age=age, sex=sex, geographical_unit=geo_unit, properties=properties)
-        person.id = person_id  # Restore original ID
+        # Create Person with Python native types
+        person = Person(age=int(age), sex=str(sex), geographical_unit=geo_unit, properties=properties)
+        person.id = int(person_id)  # Restore original ID as Python int
 
         # Add to population
         population.add_person(person)
@@ -301,43 +321,44 @@ def _load_venues(venues_group, geography, config):
     venue_type_counters = {}  # Track type-specific indices for properties
 
     for i, (venue_id, name, venue_type, geo_unit_id) in enumerate(zip(ids, names, types, geo_unit_ids)):
-        # Get type-specific index for property lookup
-        type_idx = venue_type_counters.get(venue_type, 0)
-        venue_type_counters[venue_type] = type_idx + 1
+        # Get type-specific index for property lookup (convert numpy str to Python str)
+        venue_type_str = str(venue_type)
+        type_idx = venue_type_counters.get(venue_type_str, 0)
+        venue_type_counters[venue_type_str] = type_idx + 1
 
-        # Find geographical unit
-        geo_unit = all_units.get(geo_unit_id)
+        # Find geographical unit (convert numpy int to Python int for lookup)
+        geo_unit = all_units.get(int(geo_unit_id))
 
-        # Coordinates
+        # Coordinates - convert to Python floats
         coordinates = None
         if latitudes is not None and not np.isnan(latitudes[i]):
-            coordinates = (latitudes[i], longitudes[i])
+            coordinates = (float(latitudes[i]), float(longitudes[i]))
 
-        # Collect properties for this venue
+        # Collect properties for this venue, converting numpy types
         properties = {}
         if is_residence is not None:
             properties['is_residence'] = bool(is_residence[i])
 
-        if venue_type in properties_by_venue_type:
-            for prop_name, prop_array in properties_by_venue_type[venue_type].items():
-                properties[prop_name] = prop_array[type_idx]
+        if venue_type_str in properties_by_venue_type:
+            for prop_name, prop_array in properties_by_venue_type[venue_type_str].items():
+                properties[prop_name] = _convert_numpy_value(prop_array[type_idx])
 
-        # Create Venue
+        # Create Venue with Python native types
         venue = Venue(
-            name=name,
-            venue_type=venue_type,
+            name=str(name),
+            venue_type=venue_type_str,
             geographical_unit=geo_unit,
             coordinates=coordinates,
             properties=properties
         )
         # Note: venue.id will be set by VenueManager (type-scoped), but we track global ID
         venue_manager.add_venue(venue)
-        venues_by_global_id[venue_id] = venue
+        venues_by_global_id[int(venue_id)] = venue
 
     # Set parent relationships
     for venue_id, parent_id in zip(ids, parent_ids):
-        if parent_id != -1:
-            venues_by_global_id[venue_id].parent = venues_by_global_id[parent_id]
+        if int(parent_id) != -1:
+            venues_by_global_id[int(venue_id)].parent = venues_by_global_id[int(parent_id)]
 
     logger.info(f"  Loaded {num_venues:,} venues")
 
@@ -373,16 +394,21 @@ def _load_subsets(subsets_group, venues_by_global_id):
     subsets_by_venue_and_index = {}
 
     for i, (venue_id, subset_idx, subset_name) in enumerate(zip(venue_ids, subset_indices, subset_names)):
-        venue = venues_by_global_id[venue_id]
+        # Convert numpy types to Python natives
+        venue_id_int = int(venue_id)
+        subset_idx_int = int(subset_idx)
+        subset_name_str = str(subset_name)
 
-        # Create Subset
-        subset = Subset(venue=venue, subset_index=subset_idx, subset_name=subset_name)
+        venue = venues_by_global_id[venue_id_int]
+
+        # Create Subset with Python native types
+        subset = Subset(venue=venue, subset_index=subset_idx_int, subset_name=subset_name_str)
 
         # Add to venue
-        venue.subsets[subset_name] = subset
+        venue.subsets[subset_name_str] = subset
 
         # Store for relationship loading
-        subsets_by_venue_and_index[(venue_id, subset_idx)] = subset
+        subsets_by_venue_and_index[(venue_id_int, subset_idx_int)] = subset
 
     logger.info(f"  Loaded {num_subsets:,} subsets")
 
@@ -416,9 +442,9 @@ def _load_relationships(rel_group, population, venue_manager):
     for person_idx in range(num_people):
         # Get person_id from first row of their activity data
         if person_idx < len(activity_offsets):
-            start_idx = activity_offsets[person_idx]
+            start_idx = int(activity_offsets[person_idx])
             if start_idx < len(activity_data):
-                person_id = activity_data[start_idx, 0]
+                person_id = int(activity_data[start_idx, 0])
             else:
                 continue
         else:
@@ -430,13 +456,17 @@ def _load_relationships(rel_group, population, venue_manager):
             continue
 
         # Get all activity mappings for this person
-        start_idx = activity_offsets[person_idx]
-        end_idx = activity_offsets[person_idx + 1] if person_idx + 1 < len(activity_offsets) else len(activity_data)
+        start_idx = int(activity_offsets[person_idx])
+        end_idx = int(activity_offsets[person_idx + 1]) if person_idx + 1 < len(activity_offsets) else len(activity_data)
 
         for row in activity_data[start_idx:end_idx]:
             _, activity_idx, venue_id, subset_idx = row
+            # Convert numpy types to Python natives
+            activity_idx = int(activity_idx)
+            venue_id = int(venue_id)
+            subset_idx = int(subset_idx)
 
-            activity_name = activity_names[activity_idx]
+            activity_name = str(activity_names[activity_idx])
             venue = venues_by_global_id.get(venue_id)
 
             if venue is None:
