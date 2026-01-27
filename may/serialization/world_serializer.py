@@ -600,6 +600,8 @@ class WorldSerializer:
         all_venues = world.venues.get_all_venues_list()
         if not all_venues:
             logger.warning("No venues to serialize")
+            # Initialize empty mapping for activity map serialization
+            self._venue_to_global_id = {}
             return 0
 
         num_venues = len(all_venues)

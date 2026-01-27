@@ -1,0 +1,58 @@
+# VenueChildCreator Configuration - Household Lands
+#
+# Creates one "land" venue per household and assigns household members
+# aged 12+ to work on the land as their primary_activity.
+#
+# Workflow:
+# 1. Households are created during household allocation
+# 2. This config runs and:
+#    - Filters to only household members aged 12+
+#    - Creates one land per household
+#    - Assigns filtered members to the land's worker subset
+#
+# Members under 12 remain in the household but are not assigned to land.
+
+parent_venue_type: household     # Parent venues to process
+child_venue_type: land           # Type of child venues to create
+
+# No grouping - create exactly one land per household
+group_by_attribute: null
+
+# High capacity ensures only one land is created per household
+max_capacity: 100
+
+# Minimum members needed to create a land
+# Set to 1 so even single-person households get a land if person is 12+
+min_capacity: 1
+
+# Filter: Only assign members aged 12 and above to the land
+member_filters:
+  - attribute: "age"
+    type: "numerical"
+    min: 12
+
+# Properties to add to each created land venue
+child_properties:
+  capacity: 100
+
+# Distribution strategy (not really relevant with one child per household)
+distribution_strategy: even
+
+# ========================================
+# ACTIVITY MANAGEMENT
+# ========================================
+
+# Activity map key: Where to store the land assignment
+activity_map_key: "primary_activity"
+
+# Subset key: Which subset to add workers to in the land
+subset_key: "worker"
+
+# Keep residence activity - don't replace it with land
+# This means person.activity_map will have both:
+#   - 'residence': {'household': [subset]}  (from household allocation)
+#   - 'primary_activity': {'land': [subset]}  (from this child creator)
+replace_parent_activity: false
+
+# Keep person in household's subset for reference
+remove_from_parent: false
