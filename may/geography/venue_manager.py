@@ -46,7 +46,7 @@ class VenueManager:
         self._next_id_by_type[venue_type] += 1
         return next_id
 
-    def add_venue(self, venue, geo_unit):
+    def add_venue(self, venue):
         """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
         self.venues[venue.name] = venue
         # Store by type and ID
@@ -54,7 +54,7 @@ class VenueManager:
         # Group by type
         self.venues_by_type[venue.type].append(venue)
         # Add venue to its geographical unit
-        geo_unit.add_venue(venue)
+        venue.geographical_unit.add_venue(venue)
 
     def create_venue(self, venue_type, geo_unit, properties=None):
         """
@@ -91,7 +91,7 @@ class VenueManager:
         venue.id = venue_id
 
         # Add to manager
-        self.add_venue(venue, geo_unit)
+        self.add_venue(venue)
 
         return venue
 

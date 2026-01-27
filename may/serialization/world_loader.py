@@ -9,6 +9,7 @@ import logging
 import h5py
 import numpy as np
 from .serialization_config import SerializationConfig
+import time
 
 logger = logging.getLogger("world_loader")
 
@@ -68,6 +69,7 @@ def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml
             raise OSError
         
         # Load Population
+        laptime = time.perf_counter()
         population = None
         if 'population' in f:
             logger.info("Loading population...")
@@ -79,7 +81,7 @@ def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml
         else:
             logger.warning("No population data found in HDF5 file")
             logger.warning("World will be created without population")
-
+        logger.info(f"Population created in {time.perf_counter() - laptime:.2f} seconds")
         # Load Venues
         venue_manager = None
         if 'venues' in f:
@@ -323,7 +325,7 @@ def _load_venues(venues_group, geography, config):
         # Create Venue
         venue = Venue(
             name=name,
-            type=venue_type,
+            venue_type=venue_type,
             geographical_unit=geo_unit,
             coordinates=coordinates,
             properties=properties
