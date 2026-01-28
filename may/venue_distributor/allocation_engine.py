@@ -116,9 +116,18 @@ class AllocationEngine:
             if geo: people_by_geo[geo].append(person)
 
         venues_by_geo = defaultdict(list)
+        v_level = self.distributor.venue_geo_level
         for v in venues:
-            gn = v.geographical_unit.name if v.geographical_unit else None
-            venues_by_geo[gn].append(v)
+            if not v.geographical_unit:
+                continue
+            
+            # Use the ancestor at the correct venue_geo_level for matching
+            target_unit = v.geographical_unit
+            if target_unit.level != v_level:
+                target_unit = target_unit.get_ancestor_by_level(v_level)
+            
+            if target_unit:
+                venues_by_geo[target_unit.name].append(v)
         
         total = len(people)
         processed = 0

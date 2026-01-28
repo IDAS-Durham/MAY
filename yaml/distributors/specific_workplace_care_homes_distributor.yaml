@@ -76,7 +76,7 @@ venue_selection:
   consider_by: "geo_unit"
 
   # Care homes are typically at SGU or MGU level
-  venue_geo_level: "SGU"
+  venue_geo_level: "LGU"
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to care homes near their WORK location, not home

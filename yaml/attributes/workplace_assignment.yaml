@@ -43,6 +43,10 @@ filters:
       min: 18
       max: 64
 
+  # Exclude people who already have a primary activity (e.g. students)
+  activities:
+    exclude: ["primary_activity"]
+
 # ============================================================================
 # Data Sources
 # ============================================================================

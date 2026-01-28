@@ -75,7 +75,7 @@ venue_selection:
   consider_by: "geo_unit"
 
   # Hospitals are typically at MGU or LGU level
-  venue_geo_level: "SGU"
+  venue_geo_level: "LGU"
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to hospitals near their WORK location, not home
