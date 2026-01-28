@@ -112,87 +112,124 @@ def main():
     world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
     logger.info(world)
 
-    # Assign attributes
-    attribute_config = config.get("attributes", {})
-    if attribute_config.get("enabled", True):
-        # Support both single config and list of configs
-        configs = attribute_config.get("configs")
-        if configs is None:
-            # Legacy: single config
-            configs = [attribute_config.get("config", "yaml/attribute_assignment.yaml")]
-
-        # Assign each attribute in sequence
-        for config_path in configs:
-            logger.info(f"Assigning attributes from: {config_path}")
-            world.assign_attributes(config_path)
-
     # ========================================
-    # VENUE PIPELINE - Unified distributors and child creators
+    # TIMELINE - Unified Event Processing
     # ========================================
-    # Interleave distributors and child creators in any order
-    # Each step runs sequentially in the order specified
+    # This replaces the separate "attributes" and "venue_pipeline" sections if "timeline" is present.
+    
+    timeline_config = config.get("timeline", {})
 
-    pipeline_config = config.get("venue_pipeline", {})
-
-    if pipeline_config.get("enabled", False):
+    if timeline_config.get("enabled", False) and timeline_config.get("steps"):
         logger.info("")
         logger.info("=" * 60)
-        logger.info("VENUE PIPELINE")
+        logger.info("SIMULATION TIMELINE")
         logger.info("=" * 60)
+        
+        for step in timeline_config.get("steps", []):
+            step_type = step.get("type")
+            step_config = step.get("config")
+            
+            if step_type == "attribute":
+                logger.info("")
+                logger.info(f"[ATTRIBUTE] {step_config}")
+                world.assign_attributes(step_config)
+                
+            elif step_type == "distributor":
+                logger.info("")
+                logger.info(f"[DISTRIBUTOR] {step_config}")
+                try:
+                    distributor = VenueDistributor.from_yaml(step_config)
+                    distributor.allocate(world)
+                except Exception as e:
+                    logger.error(f"Failed to run distributor {step_config}: {e}")
+                    logger.exception(e)
+                    
+            elif step_type == "child_creator":
+                logger.info("")
+                logger.info(f"[CHILD CREATOR] {step_config}")
+                try:
+                    creator = VenueChildCreator.from_yaml(step_config)
+                    creator.create_children(world)
+                except Exception as e:
+                    logger.error(f"Failed to run child creator {step_config}: {e}")
+                    logger.exception(e)
+                    
+            else:
+                logger.warning(f"Unknown timeline step type: {step_type}")
 
-        pipeline_steps = pipeline_config.get("steps", [])
+    else:
+        # FALLBACK: LEGACY BEHAVIOR
+        logger.info("No timeline configured, using legacy pipeline attributes -> venues")
 
-        if not pipeline_steps:
-            logger.info("No pipeline steps configured")
-        else:
-            # Execute each step in sequence
-            for step in pipeline_steps:
-                step_type = step.get("type")
-                step_config = step.get("config")
+        # Assign attributes
+        attribute_config = config.get("attributes", {})
+        if attribute_config.get("enabled", True):
+            # Support both single config and list of configs
+            configs = attribute_config.get("configs")
+            if configs is None:
+                # Legacy: single config
+                configs = [attribute_config.get("config", "yaml/attribute_assignment.yaml")]
 
-                if step_type == "distributor":
-                    logger.info("")
-                    logger.info(f"[DISTRIBUTOR] {step_config}")
-                    try:
-                        distributor = VenueDistributor.from_yaml(step_config)
-                        distributor.allocate(world)
+            # Assign each attribute in sequence
+            for config_path in configs:
+                logger.info(f"Assigning attributes from: {config_path}")
+                world.assign_attributes(config_path)
 
-                        # Export allocations to CSV
-                        venue_type = distributor.venue_type
-                        output_file = f"{venue_type}_allocations.csv"
-                        #distributor.export_allocations(world, output_file)
-                        #logger.info(f"Saved allocations to: {output_file}")
+        # Venue Pipeline
+        pipeline_config = config.get("venue_pipeline", {})
 
-                    except Exception as e:
-                        logger.error(f"Failed to run distributor {step_config}: {e}")
-                        logger.exception(e)
+        if pipeline_config.get("enabled", False):
+            logger.info("")
+            logger.info("=" * 60)
+            logger.info("VENUE PIPELINE")
+            logger.info("=" * 60)
 
-                elif step_type == "child_creator":
-                    logger.info("")
-                    logger.info(f"[CHILD CREATOR] {step_config}")
-                    try:
-                        creator = VenueChildCreator.from_yaml(step_config)
-                        creator.create_children(world)
+            pipeline_steps = pipeline_config.get("steps", [])
 
-                        # Export allocations to CSV
-                        child_type = creator.child_venue_type
-                        output_file = f"{child_type}_allocations.csv"
-                        #creator.export_allocations(world, output_file)
-                        #logger.info(f"Saved allocations to: {output_file}")
+            if not pipeline_steps:
+                logger.info("No pipeline steps configured")
+            else:
+                # Execute each step in sequence
+                for step in pipeline_steps:
+                    step_type = step.get("type")
+                    step_config = step.get("config")
 
-                    except Exception as e:
-                        logger.error(f"Failed to run child creator {step_config}: {e}")
-                        logger.exception(e)
+                    if step_type == "distributor":
+                        logger.info("")
+                        logger.info(f"[DISTRIBUTOR] {step_config}")
+                        try:
+                            distributor = VenueDistributor.from_yaml(step_config)
+                            distributor.allocate(world)
 
-                else:
-                    logger.warning(f"Unknown pipeline step type: {step_type}")
+                            # Export allocations to CSV
+                            venue_type = distributor.venue_type
+                            output_file = f"{venue_type}_allocations.csv"
+                            #distributor.export_allocations(world, output_file)
+                            #logger.info(f"Saved allocations to: {output_file}")
 
-        # Analyze multiple jobs after venue pipeline completes
-        """ logger.info("")
-        logger.info("=" * 60)
-        logger.info("MULTIPLE JOBS ANALYSIS")
-        logger.info("=" * 60)
-        analyze_multiple_jobs(world) """
+                        except Exception as e:
+                            logger.error(f"Failed to run distributor {step_config}: {e}")
+                            logger.exception(e)
+
+                    elif step_type == "child_creator":
+                        logger.info("")
+                        logger.info(f"[CHILD CREATOR] {step_config}")
+                        try:
+                            creator = VenueChildCreator.from_yaml(step_config)
+                            creator.create_children(world)
+
+                            # Export allocations to CSV
+                            child_type = creator.child_venue_type
+                            output_file = f"{child_type}_allocations.csv"
+                            #creator.export_allocations(world, output_file)
+                            #logger.info(f"Saved allocations to: {output_file}")
+
+                        except Exception as e:
+                            logger.error(f"Failed to run child creator {step_config}: {e}")
+                            logger.exception(e)
+
+                    else:
+                        logger.warning(f"Unknown pipeline step type: {step_type}")
 
     # ========================================
     # RELATIONSHIP PIPELINE - Build agent networks

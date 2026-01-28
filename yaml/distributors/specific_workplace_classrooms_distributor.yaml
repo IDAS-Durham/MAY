@@ -76,7 +76,7 @@ venue_selection:
   consider_by: "geo_unit"
 
   # Classrooms inherit geo_unit from parent school (typically SGU or MGU)
-  venue_geo_level: "SGU"
+  venue_geo_level: "LGU"
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to classrooms near their WORK location, not home

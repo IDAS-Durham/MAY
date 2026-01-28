@@ -220,7 +220,7 @@ class VenueDistributor(BaseDistributor):
         unassigned_count = len(all_unassigned)
         if not eligible:
             if unallocated_total: self.fallbacks.handle_fallbacks(unallocated_total, venues, world)
-            self.reporting.log_allocation_summary(world, eligible_count=unassigned_count)
+            self.reporting.log_allocation_summary(world, eligible_count=len(eligible))
             return
 
         remaining, priority_unallocated = self._handle_priority_allocation(eligible, venues)
@@ -235,7 +235,7 @@ class VenueDistributor(BaseDistributor):
         if unallocated_total:
             self.fallbacks.handle_fallbacks(unallocated_total, venues, world)
 
-        self.reporting.log_allocation_summary(world, eligible_count=unassigned_count)
+        self.reporting.log_allocation_summary(world, eligible_count=len(eligible))
         # self.reporting.check_priority_coverage(world) # Temporarily disabled for performance (slow 630k scan)
 
     def _prepare_vectorized_data(self, people: List):
