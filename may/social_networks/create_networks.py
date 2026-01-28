@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 
 from .graph_relationship_builder import GraphRelationshipBuilder
 from .geo_neighbors import find_neighbours
-from may.serialization.export_properties import export_relationships
+#from may.serialization.export_properties import export_relationships
+from debug_output import export_relationships
 
 if TYPE_CHECKING:
     from may.geography import Geography, GeographicalUnit
@@ -35,9 +36,9 @@ def _collate_people_in_geo_units(geography: "Geography", geo_unit_ids: set["Geog
 
 
 def build_local_social_network(
-        world: "World",
-        mean_connections_per_person: float = 6,
-        clustering_level: float = 0.8,
+        geography: "Geography",
+        mean_connections_per_person: float, # e.g. 0.6
+        clustering_level: float, # e.g. 0.8
         storage_key: str = f"social_contacts_local",
         store: bool = True,
         export:bool = False,
@@ -50,7 +51,7 @@ def build_local_social_network(
     specified clustering parameters.
 
     Args:
-        world (World): World object containing geography and population.
+        geography (Geography): geography object containing geo_units and population.
         mean_connections_per_person (float): Average number of social connections per person.
         clustering_level (float): Clustering coefficient from 0.0 (random) to 1.0 (high clustering).
         storage_key (str): Key used to store connections in person.properties.
@@ -67,8 +68,6 @@ def build_local_social_network(
         >>> # Access contacts for a person
         >>> contacts = world.population.people[0].properties['social_contacts_local']
     """
-    geography = world.geography
-
     # Go through all geo units
     geo_units = geography.get_units_by_level(geography.levels[0])
     for geo_unit in geo_units.values():
@@ -77,7 +76,7 @@ def build_local_social_network(
         
         relationships = GraphRelationshipBuilder.build_graph_relationships(
             people,
-            avg_connections=mean_connections_per_person,
+            mean_connections_per_person=mean_connections_per_person,
             clustering_level=clustering_level,
             storage_key=storage_key,
             store=store
@@ -93,9 +92,9 @@ def build_bounded_distance_social_network(
         geography: "Geography",
         radius_km: float,
         mean_connections_per_person: float,
+        clustering_level: float,        
         geo_unit_level: str = None,
-        clustering_level: float=0.8,
-        storage_key: str=f"social_contacts_radius_km_{radius_km}",
+        storage_key: str=None,
         store: bool=True,
         method: str='libpysal',
 ) -> None:
@@ -130,6 +129,8 @@ def build_bounded_distance_social_network(
         ...     clustering_level=0.7
         ... )
     """
+    if storage_key is None:
+        storage_key = f"social_contacts_radius_km_{radius_km}"
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
 
@@ -144,7 +145,7 @@ def build_bounded_distance_social_network(
         people_in_network = _collate_people_in_geo_units(geography, connected_ids)
         relationships = GraphRelationshipBuilder.build_graph_relationships(
             people_in_network,
-            avg_connections=mean_connections_per_person / 2,  # the /2 is because this process will happen twice due to double-counting.
+            mean_connections_per_person=mean_connections_per_person / 2,  # the /2 is because this process will happen twice due to double-counting.
             clustering_level=clustering_level,
             storage_key=storage_key,
             store=store,

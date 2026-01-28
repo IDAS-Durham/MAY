@@ -204,8 +204,17 @@ def main():
 
     if relationship_config.get("enabled", True):
         logger.info("Building Relationships")
-        #build_relationships(world, relationship_config)
-        build_social_network(world) # Gavin's version
+        build_local_social_network(
+            world.geography,
+            mean_connections_per_person=6,
+            clustering_level=0.8,
+        ) 
+        build_bounded_distance_social_network(
+            world.geography,
+            radius_km=10, # 10km radius
+            mean_connections_per_person=6, # mean of 6 contacts per person
+            clustering_level=0.8,
+        )
 
     logger.info("")
     logger.info("=" * 60)
