@@ -216,5 +216,12 @@ class AllocationEngine:
         return unallocated
 
     def _log_progress(self, current, total, interval, count, prefix="    "):
-        if interval > 0 and (current % interval == 0 or current >= total):
+        if interval <= 0:
+            return
+        
+        # Calculate which interval threshold was reached/crossed
+        prev_threshold = (current - 1) // interval if current > 0 else -1
+        curr_threshold = current // interval
+        
+        if curr_threshold > prev_threshold or current >= total:
             logger.info(f"{prefix}Progress: {current}/{total} people processed ({min(100, current/total*100):.1f}%) - {count} allocated")
