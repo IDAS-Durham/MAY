@@ -135,36 +135,117 @@ class AllocationEngine:
         allocated = 0
         unallocated = []
 
+        # Cache for venues by (search_unit, attribute_values) to avoid repeated attribute filtering
+        # This keeps it correct even if different people in the same SGU have different eligibility
+        pool_cache = {}
+        
+        # Determine strategy once
+        strategy = self.config.get('allocation', {}).get('strategy', 'random')
+        respect_capacity = self.config.get('venue_selection', {}).get('respect_capacity', True)
+
         for geo_unit, geo_people in people_by_geo.items():
             venue_search_unit = geo_unit if self.distributor.batch_geo_level == self.distributor.venue_geo_level else geo_unit.get_ancestor_by_level(self.distributor.venue_geo_level)
-            if not venue_search_unit or not (geo_unit.coordinates and len(geo_unit.coordinates) == 2): continue
+            if not venue_search_unit:
+                unallocated.extend(geo_people)
+                processed += len(geo_people)
+                self._log_progress(processed, total, interval, allocated, prefix="  ")
+                continue
 
-            lat, lon = geo_unit.coordinates
-            eligible_pool = venues_by_geo.get(venue_search_unit.name, []) if self.config.get('venue_selection', {}).get('consider_by') == 'geo_unit' else self.distributor.matcher.find_eligible_venues_for_location((lat, lon), venues)
-
+            lat, lon = geo_unit.coordinates if (geo_unit.coordinates and len(geo_unit.coordinates) == 2) else (None, None)
+            
+            # Group by attributes within the SGU to ensure correctness for cases like schools/multisectors
             people_by_attrs = defaultdict(list)
             for person in geo_people:
                 vals = tuple(getter(person) for getter in self.attr_getters)
                 people_by_attrs[vals].append(person)
 
             for attr_vals, group in people_by_attrs.items():
-                p_attrs = dict(zip(self.attribute_names, attr_vals))
-                # STRICT DEFAULT: Only use first limit or small pool
-                search_limits = self.config.get('venue_selection', {}).get('search_limits', [20])
-                p_venues = self.distributor.matcher.filter_venues_with_expansion(
-                    person=group[0], 
-                    venues=venues, 
-                    initial_pool=eligible_pool, 
-                    location=(lat, lon), 
-                    search_limits=search_limits, 
-                    person_attrs=p_attrs
-                )
+                cache_key = (venue_search_unit.name, attr_vals)
+                
+                # 1. Get/Cache the pool of venues for this (LGU, attributes) combination
+                if cache_key not in pool_cache:
+                    eligible_pool = venues_by_geo.get(venue_search_unit.name, []) if self.config.get('venue_selection', {}).get('consider_by') == 'geo_unit' else self.distributor.matcher.find_eligible_venues_for_location((lat, lon), venues)
+                    
+                    if eligible_pool:
+                        p_attrs = dict(zip(self.attribute_names, attr_vals))
+                        pool_cache[cache_key] = self.distributor.matcher.filter_venues_by_person(
+                            group[0], eligible_pool, person_attrs=p_attrs
+                        )
+                    else:
+                        pool_cache[cache_key] = []
+                
+                p_venues = pool_cache[cache_key]
 
-                if p_venues:
+                if not p_venues:
+                    unallocated.extend(group)
+                    processed += len(group)
+                    self._log_progress(processed, total, interval, allocated, prefix="  ")
+                    continue
+
+                # 2. Optimization: Efficient capacity iteration
+                
+                # Local available pool for this attribute group in this SGU
+                if respect_capacity:
+                    available_venues = [v for v in p_venues if self.distributor._get_venue_capacity(v) > 0]
+                else:
+                    available_venues = list(p_venues)
+
+                if not available_venues:
+                    unallocated.extend(group)
+                    processed += len(group)
+                    self._log_progress(processed, total, interval, allocated, prefix="  ")
+                    continue
+
+                if strategy == 'random' and lat is not None:
+                    np.random.shuffle(available_venues)
+                    venue_ptr = 0
+                    
                     for person in group:
-                        with_cap = self.distributor._filter_venues_by_capacity(p_venues)
+                        assigned = False
+                        while venue_ptr < len(available_venues):
+                            v = available_venues[venue_ptr]
+                            if not respect_capacity or self.distributor._get_venue_capacity(v) > 0:
+                                v.add_to_subset(person, subset_key=self.distributor.subset_key, 
+                                              activity_name=self.distributor.activity_map_key, activity_type=self.distributor.activity_type)
+                                self.distributor._increment_venue_count(v)
+                                allocated += 1
+                                assigned = True
+                                if respect_capacity and self.distributor._get_venue_capacity(v) <= 0:
+                                    venue_ptr += 1
+                                break
+                            else:
+                                venue_ptr += 1
+                                
+                        if not assigned:
+                            unallocated.append(person)
+                            
+                elif strategy == 'closest' and lat is not None:
+                    available_venues.sort(key=lambda v: self.distributor._haversine_distance((lat, lon), v.coordinates))
+                    venue_ptr = 0
+                    
+                    for person in group:
+                        assigned = False
+                        while venue_ptr < len(available_venues):
+                            v = available_venues[venue_ptr]
+                            if not respect_capacity or self.distributor._get_venue_capacity(v) > 0:
+                                v.add_to_subset(person, subset_key=self.distributor.subset_key, 
+                                              activity_name=self.distributor.activity_map_key, activity_type=self.distributor.activity_type)
+                                self.distributor._increment_venue_count(v)
+                                allocated += 1
+                                assigned = True
+                                if respect_capacity and self.distributor._get_venue_capacity(v) <= 0:
+                                    venue_ptr += 1
+                                break
+                            else:
+                                venue_ptr += 1
+                        if not assigned:
+                            unallocated.append(person)
+                else:
+                    # Fallback for complex strategies or missing coordinates
+                    for person in group:
+                        with_cap = [v for v in available_venues if not respect_capacity or self.distributor._get_venue_capacity(v) > 0]
                         if with_cap:
-                            venue = self.distributor.matcher.select_venue(person, with_cap, (lat, lon))
+                            venue = self.distributor.matcher.select_venue(person, with_cap, (lat, lon) if lat is not None else None)
                             if venue:
                                 venue.add_to_subset(person, subset_key=self.distributor.subset_key, 
                                                   activity_name=self.distributor.activity_map_key, activity_type=self.distributor.activity_type)
@@ -172,8 +253,6 @@ class AllocationEngine:
                                 allocated += 1
                                 continue
                         unallocated.append(person)
-                else:
-                    unallocated.extend(group)
 
                 processed += len(group)
                 self._log_progress(processed, total, interval, allocated, prefix="  ")
