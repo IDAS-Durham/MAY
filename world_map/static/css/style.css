@@ -279,6 +279,33 @@ header h1 {
     font-size: 0.8rem;
 }
 
+/* List Section (for configurable panels) */
+.list-section {
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 10px 0;
+}
+
+.list-item {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #495057;
+    border-left: 3px solid #667eea;
+}
+
+.list-item:hover {
+    background: #e9ecef;
+}
+
+.list-more {
+    font-style: italic;
+    color: #6c757d;
+    border-left-color: #6c757d;
+}
+
 /* Leaflet Customization */
 .leaflet-popup-content {
     margin: 13px 15px;

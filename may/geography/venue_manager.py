@@ -46,7 +46,7 @@ class VenueManager:
         self._next_id_by_type[venue_type] += 1
         return next_id
 
-    def add_venue(self, venue, geo_unit):
+    def add_venue(self, venue):
         """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
         self.venues[venue.name] = venue
         # Store by type and ID
@@ -54,7 +54,7 @@ class VenueManager:
         # Group by type
         self.venues_by_type[venue.type].append(venue)
         # Add venue to its geographical unit
-        geo_unit.add_venue(venue)
+        venue.geographical_unit.add_venue(venue)
 
     def create_venue(self, venue_type, geo_unit, properties=None):
         """
@@ -91,7 +91,7 @@ class VenueManager:
         venue.id = venue_id
 
         # Add to manager
-        self.add_venue(venue, geo_unit)
+        self.add_venue(venue)
 
         return venue
 
@@ -208,8 +208,8 @@ class VenueManager:
         has_coords = lat_col is not None and lon_col is not None
 
         # Get additional property columns
-        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude', 'Latitude', 'Longitude'}
-        property_cols = [col for col in venue_df.columns if col not in reserved_cols]
+        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
+        property_cols = [col for col in venue_df.columns if col.lower() not in reserved_cols]
         properties={}
 
         # Filter DataFrame upfront if geography filtering is enabled

@@ -1,10 +1,12 @@
 // World Map Visualization - Main JavaScript
+// ==========================================
+// Modular, configurable map visualization
 
 // Global state
 const state = {
     map: null,
-    baseLayer: null,  // Track base layer separately
-    imageBounds: null,  // Bounds for image overlay
+    baseLayer: null,
+    imageBounds: null,
     layers: {
         geography: null,
         venues: {}
@@ -13,19 +15,27 @@ const state = {
     selectedVenueType: null,
     showPopulation: true,
     showVenues: false,
-    mapConfig: null  // Store map configuration
+    mapConfig: null,
+    panelConfig: null  // Info panel configuration
 };
 
-// Initialize the application
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('Initializing World Map Visualization...');
 
-    // Load map configuration first
-    await loadMapConfiguration();
+    // Load configurations
+    await Promise.all([
+        loadMapConfiguration(),
+        loadPanelConfiguration()
+    ]);
 
-    // Initialize map with configuration
+    // Initialize map
     initializeMap();
 
+    // Load data
     loadWorldStatistics();
     loadGeographyLevels();
     loadVenueTypes();
@@ -40,7 +50,6 @@ async function loadMapConfiguration() {
         console.log('Map configuration loaded:', state.mapConfig);
     } catch (error) {
         console.error('Error loading map configuration:', error);
-        // Fall back to default OSM configuration
         state.mapConfig = {
             background_type: 'osm',
             image_url: null,
@@ -50,29 +59,58 @@ async function loadMapConfiguration() {
     }
 }
 
-// Initialize Leaflet map
+// Load panel configuration from backend
+async function loadPanelConfiguration() {
+    try {
+        const response = await fetch('/api/panel/config');
+        state.panelConfig = await response.json();
+        console.log('Panel configuration loaded:', state.panelConfig);
+    } catch (error) {
+        console.error('Error loading panel configuration:', error);
+        state.panelConfig = getDefaultPanelConfig();
+    }
+}
+
+// Default panel configuration fallback
+function getDefaultPanelConfig() {
+    return {
+        geo_unit_panel: {
+            title_field: 'name',
+            popup: { enabled: true },
+            detail_sections: []
+        },
+        marker_styles: {
+            geo_unit: {
+                size: { method: 'sqrt', min_radius: 5, max_radius: 15, scale_factor: 0.5 },
+                fill_opacity: 0.7
+            }
+        }
+    };
+}
+
+// =============================================================================
+// MAP INITIALIZATION
+// =============================================================================
+
 function initializeMap() {
     const config = state.mapConfig;
 
     if (config.background_type === 'image' && config.image_url && config.bounds) {
         // IMAGE-BASED MAP WITH GEOGRAPHIC PROJECTION
-
         const [[south, west], [north, east]] = config.bounds;
         const centerLat = (south + north) / 2;
         const centerLon = (west + east) / 2;
 
-        // Create map with standard geographic CRS
         state.map = L.map('map', {
-            crs: L.CRS.EPSG3857,  // Standard web mercator
+            crs: L.CRS.EPSG3857,
             minZoom: 1,
             maxZoom: 18,
             attributionControl: true
         }).setView([centerLat, centerLon], 6);
 
-        // Add image overlay with geographic bounds
         const bounds = L.latLngBounds(
-            L.latLng(south, west),  // southwest
-            L.latLng(north, east)   // northeast
+            L.latLng(south, west),
+            L.latLng(north, east)
         );
 
         state.baseLayer = L.imageOverlay(config.image_url, bounds, {
@@ -85,16 +123,10 @@ function initializeMap() {
         state.map.fitBounds(bounds);
 
         console.log('Map initialized with georeferenced image');
-        console.log('Image URL:', config.image_url);
-        console.log('Bounds:', bounds);
-
     } else {
         // OPENSTREETMAP TILES (DEFAULT)
-
-        // Create map with default view
         state.map = L.map('map').setView([51.5074, -0.1278], 6);
 
-        // Add OpenStreetMap tile layer
         state.baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
@@ -104,7 +136,10 @@ function initializeMap() {
     }
 }
 
-// Setup event listeners
+// =============================================================================
+// EVENT LISTENERS
+// =============================================================================
+
 function setupEventListeners() {
     // Close panel button
     document.getElementById('close-panel').addEventListener('click', () => {
@@ -124,7 +159,6 @@ function setupEventListeners() {
         if (state.showVenues && state.selectedVenueType) {
             loadVenues(state.selectedVenueType);
         } else {
-            // Clear venue layers
             Object.values(state.layers.venues).forEach(layer => {
                 if (layer) state.map.removeLayer(layer);
             });
@@ -132,13 +166,15 @@ function setupEventListeners() {
     });
 }
 
-// Load world statistics
+// =============================================================================
+// STATISTICS
+// =============================================================================
+
 async function loadWorldStatistics() {
     try {
         const response = await fetch('/api/world/statistics');
         const stats = await response.json();
 
-        // Update stats summary in header
         const summaryEl = document.getElementById('stats-summary');
         if (stats.population && stats.geography) {
             summaryEl.innerHTML = `
@@ -147,14 +183,12 @@ async function loadWorldStatistics() {
             `;
         }
 
-        // Update detailed stats in sidebar
         displayWorldStats(stats);
     } catch (error) {
         console.error('Error loading world statistics:', error);
     }
 }
 
-// Display world statistics
 function displayWorldStats(stats) {
     const statsEl = document.getElementById('world-stats');
     let html = '';
@@ -202,7 +236,10 @@ function displayWorldStats(stats) {
     statsEl.innerHTML = html;
 }
 
-// Load geography levels
+// =============================================================================
+// GEOGRAPHY LEVELS
+// =============================================================================
+
 async function loadGeographyLevels() {
     try {
         const response = await fetch('/api/geography/levels');
@@ -217,7 +254,7 @@ async function loadGeographyLevels() {
             </button>
         `).join('');
 
-        // Auto-select first level
+        // Auto-select first (smallest) level
         if (data.levels.length > 0) {
             selectGeographyLevel(data.levels[0]);
         }
@@ -226,11 +263,9 @@ async function loadGeographyLevels() {
     }
 }
 
-// Select a geography level
 async function selectGeographyLevel(level) {
     state.selectedLevel = level;
 
-    // Update active button
     document.querySelectorAll('.level-button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.level === level);
     });
@@ -238,7 +273,10 @@ async function selectGeographyLevel(level) {
     await loadGeographyLevel(level);
 }
 
-// Load geography level data
+// =============================================================================
+// GEOGRAPHY LAYER - Circle Markers
+// =============================================================================
+
 async function loadGeographyLevel(level) {
     try {
         // Remove existing geography layer
@@ -253,41 +291,46 @@ async function loadGeographyLevel(level) {
         const response = await fetch(`/api/geography/${level}`);
         const geojson = await response.json();
 
-        // Create marker cluster or regular markers
+        console.log(`Received ${geojson.features.length} features for level ${level}`);
+
+        if (geojson.features.length === 0) {
+            console.warn('No features returned - check if coordinates exist in HDF5');
+            return;
+        }
+
+        // Get marker style config
+        const styleConfig = state.panelConfig?.marker_styles?.geo_unit || {};
+
         state.layers.geography = L.geoJSON(geojson, {
             pointToLayer: (feature, latlng) => {
                 const props = feature.properties;
-                const population = props.population;
+                const population = props.population || 0;
 
-                // Size marker based on population
-                const radius = Math.max(5, Math.min(15, Math.sqrt(population) / 2));
+                // Calculate radius based on config
+                const radius = calculateMarkerRadius(population, styleConfig.size);
+
+                // Get color based on config
+                const fillColor = getPopulationColor(population, styleConfig.color);
+
+                const borderConfig = styleConfig.border || {};
 
                 return L.circleMarker(latlng, {
                     radius: radius,
-                    fillColor: getPopulationColor(population),
-                    color: '#fff',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.7
+                    fillColor: fillColor,
+                    color: borderConfig.color || '#fff',
+                    weight: borderConfig.weight || 1,
+                    opacity: borderConfig.opacity || 1,
+                    fillOpacity: styleConfig.fill_opacity || 0.7
                 });
             },
             onEachFeature: (feature, layer) => {
                 const props = feature.properties;
 
-                // Create popup
-                const popupContent = `
-                    <div class="popup-title">${props.name}</div>
-                    <div class="popup-info"><strong>Level:</strong> ${props.level}</div>
-                    <div class="popup-info"><strong>Population:</strong> ${props.population.toLocaleString()}</div>
-                    <div class="popup-info"><strong>Venues:</strong> ${props.venues_count}</div>
-                    <button class="popup-button" onclick="showUnitDetails('${props.name}')">
-                        View Details
-                    </button>
-                `;
-
+                // Create popup based on config
+                const popupContent = createGeoUnitPopup(props);
                 layer.bindPopup(popupContent);
 
-                // Click handler
+                // Click handler for detail panel
                 layer.on('click', () => {
                     showUnitDetails(props.name);
                 });
@@ -305,19 +348,105 @@ async function loadGeographyLevel(level) {
     }
 }
 
-// Get color based on population
-function getPopulationColor(population) {
-    return population > 10000 ? '#800026' :
-           population > 5000  ? '#BD0026' :
-           population > 2000  ? '#E31A1C' :
-           population > 1000  ? '#FC4E2A' :
-           population > 500   ? '#FD8D3C' :
-           population > 200   ? '#FEB24C' :
-           population > 100   ? '#FED976' :
-                                '#FFEDA0';
+// Calculate marker radius based on config
+function calculateMarkerRadius(population, sizeConfig) {
+    if (!sizeConfig) {
+        return Math.max(5, Math.min(15, Math.sqrt(population) / 2));
+    }
+
+    const method = sizeConfig.method || 'sqrt';
+    const minRadius = sizeConfig.min_radius || 5;
+    const maxRadius = sizeConfig.max_radius || 15;
+    const scaleFactor = sizeConfig.scale_factor || 0.5;
+
+    let rawRadius;
+    switch (method) {
+        case 'sqrt':
+            rawRadius = Math.sqrt(population) * scaleFactor;
+            break;
+        case 'log':
+            rawRadius = Math.log10(population + 1) * scaleFactor * 3;
+            break;
+        case 'linear':
+            rawRadius = population * scaleFactor / 100;
+            break;
+        default:
+            rawRadius = Math.sqrt(population) * scaleFactor;
+    }
+
+    return Math.max(minRadius, Math.min(maxRadius, rawRadius));
 }
 
-// Show unit details
+// Get color based on population thresholds from config
+function getPopulationColor(population, colorConfig) {
+    if (!colorConfig || !colorConfig.thresholds) {
+        // Default color scheme
+        return population > 10000 ? '#800026' :
+               population > 5000  ? '#BD0026' :
+               population > 2000  ? '#E31A1C' :
+               population > 1000  ? '#FC4E2A' :
+               population > 500   ? '#FD8D3C' :
+               population > 200   ? '#FEB24C' :
+               population > 100   ? '#FED976' :
+                                    '#FFEDA0';
+    }
+
+    const thresholds = colorConfig.thresholds;
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+        const threshold = thresholds[i];
+        if (threshold.value === null || population > threshold.value) {
+            return threshold.color;
+        }
+    }
+
+    return thresholds[0]?.color || '#FFEDA0';
+}
+
+// Create popup content for geo unit
+function createGeoUnitPopup(props) {
+    const popupConfig = state.panelConfig?.geo_unit_panel?.popup;
+
+    if (!popupConfig || !popupConfig.enabled) {
+        // Default popup
+        return `
+            <div class="popup-title">${props.name}</div>
+            <div class="popup-info"><strong>Level:</strong> ${props.level}</div>
+            <div class="popup-info"><strong>Population:</strong> ${props.population.toLocaleString()}</div>
+            <div class="popup-info"><strong>Venues:</strong> ${props.venues_count}</div>
+            <button class="popup-button" onclick="showUnitDetails('${props.name}')">
+                View Details
+            </button>
+        `;
+    }
+
+    // Build popup from config
+    let html = '';
+    const fields = popupConfig.fields || [];
+
+    for (const field of fields) {
+        const value = getFieldValue(props, field.name);
+        const formattedValue = formatValue(value, field.format);
+
+        if (field.name === 'name') {
+            html += `<div class="popup-title">${formattedValue}</div>`;
+        } else {
+            html += `<div class="popup-info"><strong>${field.label}:</strong> ${formattedValue}</div>`;
+        }
+    }
+
+    html += `
+        <button class="popup-button" onclick="showUnitDetails('${props.name}')">
+            View Details
+        </button>
+    `;
+
+    return html;
+}
+
+// =============================================================================
+// DETAIL PANEL - Configurable
+// =============================================================================
+
 async function showUnitDetails(unitName) {
     try {
         const response = await fetch(`/api/geography/unit/${encodeURIComponent(unitName)}`);
@@ -326,92 +455,8 @@ async function showUnitDetails(unitName) {
         const panel = document.getElementById('info-panel');
         const content = document.getElementById('info-content');
 
-        let html = `
-            <h2>${unit.name}</h2>
-
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-item-label">Level</div>
-                    <div class="info-item-value">${unit.level}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-item-label">Population</div>
-                    <div class="info-item-value">${unit.population.toLocaleString()}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-item-label">Venues</div>
-                    <div class="info-item-value">${unit.venues_count}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-item-label">Children Units</div>
-                    <div class="info-item-value">${unit.children.length}</div>
-                </div>
-            </div>
-        `;
-
-        // Age distribution
-        if (unit.age_distribution) {
-            html += `
-                <h3>Age Distribution</h3>
-                <div class="bar-chart">
-                    ${Object.entries(unit.age_distribution)
-                        .map(([group, count]) => {
-                            const percentage = (count / unit.population * 100).toFixed(1);
-                            return `
-                                <div class="bar-item">
-                                    <div class="bar-label">${group}</div>
-                                    <div class="bar-wrapper">
-                                        <div class="bar-fill" style="width: ${percentage}%"></div>
-                                    </div>
-                                    <div class="bar-value">${count}</div>
-                                </div>
-                            `;
-                        }).join('')}
-                </div>
-            `;
-        }
-
-        // Sex distribution
-        if (unit.sex_distribution) {
-            html += `
-                <h3>Sex Distribution</h3>
-                <div class="bar-chart">
-                    ${Object.entries(unit.sex_distribution)
-                        .map(([sex, count]) => {
-                            const percentage = (count / unit.population * 100).toFixed(1);
-                            return `
-                                <div class="bar-item">
-                                    <div class="bar-label">${sex}</div>
-                                    <div class="bar-wrapper">
-                                        <div class="bar-fill" style="width: ${percentage}%"></div>
-                                    </div>
-                                    <div class="bar-value">${count}</div>
-                                </div>
-                            `;
-                        }).join('')}
-                </div>
-            `;
-        }
-
-        // Venue types
-        if (unit.venue_types && Object.keys(unit.venue_types).length > 0) {
-            html += `
-                <h3>Venue Types</h3>
-                <div class="bar-chart">
-                    ${Object.entries(unit.venue_types)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([type, count]) => `
-                            <div class="bar-item">
-                                <div class="bar-label">${type}</div>
-                                <div class="bar-wrapper">
-                                    <div class="bar-fill" style="width: ${count / Math.max(...Object.values(unit.venue_types)) * 100}%"></div>
-                                </div>
-                                <div class="bar-value">${count}</div>
-                            </div>
-                        `).join('')}
-                </div>
-            `;
-        }
+        // Build panel from config
+        const html = buildDetailPanel(unit, 'geo_unit_panel');
 
         content.innerHTML = html;
         panel.classList.remove('hidden');
@@ -420,7 +465,357 @@ async function showUnitDetails(unitName) {
     }
 }
 
-// Load venue types
+// Build detail panel based on configuration
+function buildDetailPanel(data, panelType) {
+    const panelConfig = state.panelConfig?.[panelType];
+
+    if (!panelConfig) {
+        // Fallback to default rendering
+        return buildDefaultGeoUnitPanel(data);
+    }
+
+    let html = '';
+
+    // Title
+    const titleField = panelConfig.title_field || 'name';
+    const title = getFieldValue(data, titleField);
+    html += `<h2>${title}</h2>`;
+
+    // Sections
+    const sections = panelConfig.detail_sections || [];
+
+    for (const section of sections) {
+        if (!section.enabled) continue;
+
+        html += buildPanelSection(section, data);
+    }
+
+    return html;
+}
+
+// Build individual panel section
+function buildPanelSection(section, data) {
+    let html = '';
+
+    // Section title
+    if (section.title) {
+        html += `<h3>${section.title}</h3>`;
+    }
+
+    switch (section.type) {
+        case 'grid':
+            html += buildGridSection(section, data);
+            break;
+        case 'distribution':
+            html += buildDistributionSection(section, data);
+            break;
+        case 'breakdown':
+            html += buildBreakdownSection(section, data);
+            break;
+        case 'list':
+            html += buildListSection(section, data);
+            break;
+        case 'properties':
+            html += buildPropertiesSection(section, data);
+            break;
+        default:
+            console.warn(`Unknown section type: ${section.type}`);
+    }
+
+    return html;
+}
+
+// Build grid section (basic info)
+function buildGridSection(section, data) {
+    const fields = section.fields || [];
+    let html = '<div class="info-grid">';
+
+    for (const field of fields) {
+        const value = getFieldValue(data, field.source || field.name);
+        const formattedValue = formatValue(value, field.format);
+
+        html += `
+            <div class="info-item">
+                <div class="info-item-label">${field.label}</div>
+                <div class="info-item-value">${formattedValue}</div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Build distribution section (bar chart)
+function buildDistributionSection(section, data) {
+    const source = section.source;
+    const distribution = getFieldValue(data, source);
+
+    if (!distribution || typeof distribution !== 'object') {
+        return '';
+    }
+
+    const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+    if (total === 0) return '';
+
+    let html = '<div class="bar-chart">';
+
+    for (const [group, count] of Object.entries(distribution)) {
+        const percentage = (count / total * 100).toFixed(1);
+
+        html += `
+            <div class="bar-item">
+                <div class="bar-label">${group}</div>
+                <div class="bar-wrapper">
+                    <div class="bar-fill" style="width: ${percentage}%"></div>
+                </div>
+                <div class="bar-value">${count.toLocaleString()}</div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Build breakdown section (venue types, etc.)
+function buildBreakdownSection(section, data) {
+    const source = section.source;
+    const breakdown = getFieldValue(data, source);
+
+    if (!breakdown || typeof breakdown !== 'object' || Object.keys(breakdown).length === 0) {
+        return '<p><em>No data available</em></p>';
+    }
+
+    // Sort entries
+    let entries = Object.entries(breakdown);
+    if (section.sort_by === 'count') {
+        entries.sort((a, b) => section.sort_order === 'desc' ? b[1] - a[1] : a[1] - b[1]);
+    } else if (section.sort_by === 'name') {
+        entries.sort((a, b) => section.sort_order === 'desc' ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0]));
+    }
+
+    // Limit items
+    if (section.max_items) {
+        entries = entries.slice(0, section.max_items);
+    }
+
+    const maxValue = Math.max(...entries.map(([_, v]) => v));
+
+    let html = '<div class="bar-chart">';
+
+    for (const [type, count] of entries) {
+        const width = (count / maxValue * 100).toFixed(1);
+
+        html += `
+            <div class="bar-item">
+                <div class="bar-label">${type}</div>
+                <div class="bar-wrapper">
+                    <div class="bar-fill" style="width: ${width}%"></div>
+                </div>
+                <div class="bar-value">${count.toLocaleString()}</div>
+            </div>
+        `;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Build list section (venues, children, etc.)
+function buildListSection(section, data) {
+    const source = section.source;
+    let items = getFieldValue(data, source);
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return '<p><em>No items</em></p>';
+    }
+
+    // Limit items
+    if (section.max_items) {
+        items = items.slice(0, section.max_items);
+    }
+
+    const fields = section.fields || [];
+
+    let html = '<div class="list-section">';
+
+    for (const item of items) {
+        let itemText = fields.map(f => {
+            const value = getFieldValue(item, f.name);
+            return value !== undefined ? value : '';
+        }).filter(v => v).join(' - ');
+
+        html += `<div class="list-item">${itemText}</div>`;
+    }
+
+    if (data[source] && data[source].length > items.length) {
+        html += `<div class="list-item list-more">... and ${data[source].length - items.length} more</div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// Build properties section (JSON display)
+function buildPropertiesSection(section, data) {
+    const props = data.properties;
+
+    if (!props || Object.keys(props).length === 0) {
+        return '';
+    }
+
+    // Filter out excluded properties
+    const exclude = section.exclude || [];
+    const filtered = Object.fromEntries(
+        Object.entries(props).filter(([k]) => !exclude.includes(k))
+    );
+
+    if (Object.keys(filtered).length === 0) {
+        return '';
+    }
+
+    return `
+        <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.85rem; overflow-x: auto;">
+${JSON.stringify(filtered, null, 2)}
+        </pre>
+    `;
+}
+
+// Default geo unit panel (fallback)
+function buildDefaultGeoUnitPanel(unit) {
+    let html = `
+        <h2>${unit.name}</h2>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-item-label">Level</div>
+                <div class="info-item-value">${unit.level}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-item-label">Population</div>
+                <div class="info-item-value">${unit.population.toLocaleString()}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-item-label">Venues</div>
+                <div class="info-item-value">${unit.venues_count}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-item-label">Children Units</div>
+                <div class="info-item-value">${unit.children.length}</div>
+            </div>
+        </div>
+    `;
+
+    // Age distribution
+    if (unit.age_distribution) {
+        html += `
+            <h3>Age Distribution</h3>
+            <div class="bar-chart">
+                ${Object.entries(unit.age_distribution)
+                    .map(([group, count]) => {
+                        const percentage = (count / unit.population * 100).toFixed(1);
+                        return `
+                            <div class="bar-item">
+                                <div class="bar-label">${group}</div>
+                                <div class="bar-wrapper">
+                                    <div class="bar-fill" style="width: ${percentage}%"></div>
+                                </div>
+                                <div class="bar-value">${count}</div>
+                            </div>
+                        `;
+                    }).join('')}
+            </div>
+        `;
+    }
+
+    // Sex distribution
+    if (unit.sex_distribution) {
+        html += `
+            <h3>Sex Distribution</h3>
+            <div class="bar-chart">
+                ${Object.entries(unit.sex_distribution)
+                    .map(([sex, count]) => {
+                        const percentage = (count / unit.population * 100).toFixed(1);
+                        return `
+                            <div class="bar-item">
+                                <div class="bar-label">${sex}</div>
+                                <div class="bar-wrapper">
+                                    <div class="bar-fill" style="width: ${percentage}%"></div>
+                                </div>
+                                <div class="bar-value">${count}</div>
+                            </div>
+                        `;
+                    }).join('')}
+            </div>
+        `;
+    }
+
+    // Venue types
+    if (unit.venue_types && Object.keys(unit.venue_types).length > 0) {
+        html += `
+            <h3>Venue Types</h3>
+            <div class="bar-chart">
+                ${Object.entries(unit.venue_types)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([type, count]) => `
+                        <div class="bar-item">
+                            <div class="bar-label">${type}</div>
+                            <div class="bar-wrapper">
+                                <div class="bar-fill" style="width: ${count / Math.max(...Object.values(unit.venue_types)) * 100}%"></div>
+                            </div>
+                            <div class="bar-value">${count}</div>
+                        </div>
+                    `).join('')}
+            </div>
+        `;
+    }
+
+    return html;
+}
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+// Get nested field value from object (supports 'parent.child' paths)
+function getFieldValue(obj, path) {
+    if (!path) return undefined;
+
+    const parts = path.split('.');
+    let value = obj;
+
+    for (const part of parts) {
+        if (value === null || value === undefined) return undefined;
+        value = value[part];
+    }
+
+    return value;
+}
+
+// Format value based on format type
+function formatValue(value, format) {
+    if (value === undefined || value === null) return '-';
+
+    switch (format) {
+        case 'number':
+            return typeof value === 'number' ? value.toLocaleString() : value;
+        case 'percentage':
+            return typeof value === 'number' ? `${value.toFixed(1)}%` : value;
+        case 'decimal':
+            return typeof value === 'number' ? value.toFixed(2) : value;
+        default:
+            if (typeof value === 'number') {
+                return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+            }
+            return value;
+    }
+}
+
+// =============================================================================
+// VENUE TYPES
+// =============================================================================
+
 async function loadVenueTypes() {
     try {
         const response = await fetch('/api/venues/types');
@@ -440,26 +835,25 @@ async function loadVenueTypes() {
     }
 }
 
-// Select venue type
 function selectVenueType(venueType) {
     state.selectedVenueType = venueType;
 
-    // Update active button
     document.querySelectorAll('.venue-type-button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.type === venueType);
     });
 
-    // Enable venues checkbox
     document.getElementById('show-venues').checked = true;
     state.showVenues = true;
 
     loadVenues(venueType);
 }
 
-// Load venues
+// =============================================================================
+// VENUE LAYER
+// =============================================================================
+
 async function loadVenues(venueType) {
     try {
-        // Remove existing venue layer
         if (state.layers.venues[venueType]) {
             state.map.removeLayer(state.layers.venues[venueType]);
         }
@@ -471,15 +865,20 @@ async function loadVenues(venueType) {
         const response = await fetch(`/api/venues/${venueType}`);
         const geojson = await response.json();
 
+        const styleConfig = state.panelConfig?.marker_styles?.venue || {};
+
         state.layers.venues[venueType] = L.geoJSON(geojson, {
             pointToLayer: (feature, latlng) => {
+                const venueColors = styleConfig.colors || {};
+                const fillColor = venueColors[feature.properties.type] || venueColors.default || '#95a5a6';
+
                 return L.circleMarker(latlng, {
-                    radius: 6,
-                    fillColor: getVenueColor(feature.properties.type),
-                    color: '#fff',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8
+                    radius: styleConfig.radius || 6,
+                    fillColor: fillColor,
+                    color: styleConfig.border?.color || '#fff',
+                    weight: styleConfig.border?.weight || 1,
+                    opacity: styleConfig.border?.opacity || 1,
+                    fillOpacity: styleConfig.fill_opacity || 0.8
                 });
             },
             onEachFeature: (feature, layer) => {
@@ -505,20 +904,10 @@ async function loadVenues(venueType) {
     }
 }
 
-// Get color based on venue type
-function getVenueColor(type) {
-    const colors = {
-        'school': '#e74c3c',
-        'hospital': '#3498db',
-        'university': '#9b59b6',
-        'company': '#f39c12',
-        'household': '#2ecc71',
-        'default': '#95a5a6'
-    };
-    return colors[type] || colors['default'];
-}
+// =============================================================================
+// VENUE DETAILS
+// =============================================================================
 
-// Show venue details
 async function showVenueDetails(venueId) {
     try {
         const response = await fetch(`/api/venues/venue/${venueId}`);

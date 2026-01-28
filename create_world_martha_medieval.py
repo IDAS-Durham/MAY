@@ -204,6 +204,7 @@ def main():
 
     if relationship_config.get("enabled", True):
         logger.info("Building Relationships")
+<<<<<<< HEAD
         build_local_social_network(
             world.geography,
             mean_connections_per_person=6,
@@ -215,6 +216,62 @@ def main():
             mean_connections_per_person=6, # mean of 6 contacts per person
             clustering_level=0.8,
         )
+=======
+        #build_relationships(world, relationship_config)
+        build_local_social_network(
+            world,
+            mean_connections_per_person=6,
+            clustering_level=0.8,
+            storage_key="social_contacts_local",
+            store=True,
+            export=False,
+        )
+
+        # Commented out: requires libpysal dependency
+        # radius = 10  # km
+        # build_bounded_distance_social_network(
+        #     geography=world.geography,
+        #     radius_km=radius,
+        #     mean_connections_per_person=6,
+        #     geo_unit_level=None,
+        #     clustering_level=0.8,
+        #     storage_key=f"social_contacts_radius_{radius}",
+        #     store=True,
+        #     method='libpysal',
+        # )
+
+    # ========================================
+    # POST-RELATIONSHIP PIPELINE
+    # ========================================
+    # Run distributors that depend on relationship data
+    post_rel_config = config.get("post_relationship_pipeline", {})
+
+    if post_rel_config.get("enabled", False):
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("POST-RELATIONSHIP PIPELINE")
+        logger.info("=" * 60)
+
+        post_rel_steps = post_rel_config.get("steps", [])
+
+        for step in post_rel_steps:
+            step_type = step.get("type")
+            step_config = step.get("config")
+
+            if step_type == "distributor":
+                logger.info("")
+                logger.info(f"[DISTRIBUTOR] {step_config}")
+                try:
+                    distributor = VenueDistributor.from_yaml(step_config)
+                    distributor.allocate(world)
+                except Exception as e:
+                    logger.error(f"Failed to run post-relationship distributor {step_config}: {e}")
+                    logger.exception(e)
+            else:
+                logger.warning(f"Unknown post-relationship pipeline step type: {step_type}")
+
+
+>>>>>>> world_map
 
     logger.info("")
     logger.info("=" * 60)

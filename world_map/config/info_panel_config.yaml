@@ -1,0 +1,262 @@
+# Info Panel Configuration
+# ==========================
+# This file controls what attributes are displayed in the map info panels
+# when clicking on geographical units, venues, or other map elements.
+#
+# To customize the display:
+# 1. Enable/disable sections by setting 'enabled: true/false'
+# 2. Add/remove fields from each section
+# 3. Reorder fields to change display order
+#
+# Field types:
+#   - 'attribute': Direct attribute from the data (e.g., 'population', 'name')
+#   - 'computed': Computed from multiple attributes (e.g., 'population_density')
+#   - 'distribution': Shows a bar chart distribution (e.g., 'age_distribution')
+#   - 'breakdown': Shows counts by category (e.g., 'venue_types')
+#   - 'list': Shows a list of items (e.g., 'venue_details')
+
+# =============================================================================
+# GEOGRAPHICAL UNIT INFO PANEL
+# =============================================================================
+# Displayed when clicking on a geo_unit circle marker
+
+geo_unit_panel:
+  title_field: "name"  # Which field to use as the panel title
+
+  # Quick info shown in popup (before clicking "View Details")
+  popup:
+    enabled: true
+    fields:
+      - name: "name"
+        label: "Name"
+        type: "attribute"
+      - name: "level"
+        label: "Level"
+        type: "attribute"
+      - name: "population"
+        label: "Population"
+        type: "attribute"
+        format: "number"  # Adds thousand separators
+      - name: "venues_count"
+        label: "Venues"
+        type: "attribute"
+
+  # Detailed info panel sections (shown when clicking "View Details")
+  detail_sections:
+
+    # Basic Info Grid
+    - name: "basic_info"
+      title: null  # No title for basic info grid
+      type: "grid"
+      enabled: true
+      fields:
+        - name: "level"
+          label: "Level"
+          type: "attribute"
+        - name: "population"
+          label: "Population"
+          type: "attribute"
+          format: "number"
+        - name: "venues_count"
+          label: "Venues"
+          type: "attribute"
+        - name: "children_count"
+          label: "Children Units"
+          type: "computed"
+          source: "children.length"
+
+    # Age Distribution Chart
+    - name: "age_distribution"
+      title: "Age Distribution"
+      type: "distribution"
+      enabled: true
+      source: "age_distribution"
+      chart_type: "bar"
+      show_percentage: true
+
+    # Sex Distribution Chart
+    - name: "sex_distribution"
+      title: "Sex Distribution"
+      type: "distribution"
+      enabled: true
+      source: "sex_distribution"
+      chart_type: "bar"
+      show_percentage: true
+
+    # Venue Types Breakdown
+    - name: "venue_breakdown"
+      title: "Venue Types"
+      type: "breakdown"
+      enabled: true
+      source: "venue_types"
+      sort_by: "count"  # 'count', 'name', or 'none'
+      sort_order: "desc"
+      max_items: 20
+
+    # Venue Details List
+    - name: "venue_list"
+      title: "Venues"
+      type: "list"
+      enabled: true
+      source: "venue_details"
+      max_items: 50
+      fields:
+        - name: "type"
+          label: "Type"
+        - name: "name"
+          label: "Name"
+
+    # Custom Properties (from geo_unit.properties)
+    - name: "custom_properties"
+      title: "Additional Properties"
+      type: "properties"
+      enabled: false  # Enable if you have custom properties to show
+      exclude:
+        - "internal_id"  # Properties to exclude from display
+
+# =============================================================================
+# VENUE INFO PANEL
+# =============================================================================
+# Displayed when clicking on a venue marker
+
+venue_panel:
+  title_field: "name"
+
+  popup:
+    enabled: true
+    fields:
+      - name: "name"
+        label: "Name"
+        type: "attribute"
+      - name: "type"
+        label: "Type"
+        type: "attribute"
+      - name: "geographical_unit"
+        label: "Area"
+        type: "attribute"
+      - name: "num_members"
+        label: "Members"
+        type: "attribute"
+
+  detail_sections:
+    - name: "basic_info"
+      title: null
+      type: "grid"
+      enabled: true
+      fields:
+        - name: "type"
+          label: "Type"
+          type: "attribute"
+        - name: "geographical_unit.name"
+          label: "Area"
+          type: "attribute"
+
+    - name: "subsets"
+      title: "Subsets"
+      type: "list"
+      enabled: true
+      source: "subsets"
+      fields:
+        - name: "name"
+          label: "Name"
+        - name: "num_members"
+          label: "Members"
+        - name: "capacity"
+          label: "Capacity"
+          optional: true
+
+    - name: "venue_properties"
+      title: "Properties"
+      type: "properties"
+      enabled: true
+      format: "json"  # 'json', 'table', or 'list'
+
+# =============================================================================
+# MARKER STYLING
+# =============================================================================
+# Controls how markers are rendered on the map
+
+marker_styles:
+
+  # Geo unit circle markers
+  geo_unit:
+    # Size based on population
+    size:
+      method: "sqrt"  # 'sqrt', 'log', 'linear'
+      min_radius: 5
+      max_radius: 15
+      scale_factor: 0.5
+
+    # Color based on population thresholds
+    color:
+      method: "threshold"  # 'threshold', 'gradient'
+      thresholds:
+        - value: 100
+          color: "#FFEDA0"
+        - value: 200
+          color: "#FED976"
+        - value: 500
+          color: "#FEB24C"
+        - value: 1000
+          color: "#FD8D3C"
+        - value: 2000
+          color: "#FC4E2A"
+        - value: 5000
+          color: "#E31A1C"
+        - value: 10000
+          color: "#BD0026"
+        - value: null  # Anything above
+          color: "#800026"
+
+    # Border styling
+    border:
+      color: "#ffffff"
+      weight: 1
+      opacity: 1
+
+    fill_opacity: 0.7
+
+  # Venue markers
+  venue:
+    radius: 6
+    fill_opacity: 0.8
+
+    # Color by venue type
+    colors:
+      school: "#e74c3c"
+      hospital: "#3498db"
+      university: "#9b59b6"
+      company: "#f39c12"
+      household: "#2ecc71"
+      land: "#8B4513"
+      church: "#9932CC"
+      market: "#FF6347"
+      default: "#95a5a6"
+
+    border:
+      color: "#ffffff"
+      weight: 1
+      opacity: 1
+
+# =============================================================================
+# DISPLAY OPTIONS
+# =============================================================================
+
+display:
+  # Number formatting
+  number_format:
+    use_thousands_separator: true
+    decimal_places: 1
+
+  # Chart defaults
+  charts:
+    bar_height: 20
+    max_bar_width: 100
+    show_values: true
+    show_percentages: true
+
+  # Panel behavior
+  panel:
+    width: 400
+    animation: "slide"  # 'slide', 'fade', 'none'
+    close_on_map_click: false

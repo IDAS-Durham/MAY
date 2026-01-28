@@ -13,19 +13,19 @@ geography:
   levels: ["MBD_Temp_ID", "County", "Country"]
 
   # Load all geographical units (ignores all filters below if true)
-  load_all: false
+  load_all: true
 
   # ========================================
   # FILTER - Specify which geographical units to load
   # ========================================
 
-  filter:
+  # filter:
     # Level to filter on: LGU, MGU, or SGU
     # Leave as null to load all units
-    level: County
+    # level: County
 
     # Codes to filter (for small lists, comma-separated)
-    codes: ["DURHAM", "NORTHUMBERLAND"]
+    # codes: ["DURHAM", "NORTHUMBERLAND"]
     #codes: ["County Durham"]
 
     # Or specify a file path with codes (for large lists)
@@ -118,14 +118,18 @@ attributes:
 # This gives you full control over the sequence of operations
 
 venue_pipeline:
-  enabled: false
+  enabled: true
 
   steps:
-    # # Step 1: Distribute students to schools
+    # Step 1: Create lands for households (one land per household, members 12+ assigned)
+    - type: child_creator
+      config: "world_specific_code/MedievalYaml/yaml/venue_child_creators/household_lands.yaml"
+
+    # # Step 2: Distribute students to schools
     # # - type: distributor
     # #   config: "world_specific_code/MedievalYaml/yaml/distributors/school_distributor.yaml"
 
-    # # Step 2: Create classrooms within schools (based on student age)
+    # # Step 3: Create classrooms within schools (based on student age)
     # # - type: child_creator
     # #   config: "world_specific_code/MedievalYaml/yaml/venue_child_creators/school_classrooms.yaml"
 
@@ -192,6 +196,21 @@ relationship_pipeline:
   # - Relationships are built AFTER venue assignments (so activity_map is populated)
   # - Connections are stored in person.properties (key defined in Yaml config)
   # - Add property names to serialization_config.yaml to include in HDF5 export
+
+# ========================================
+# POST-RELATIONSHIP PIPELINE
+# ========================================
+# Distributors that run AFTER relationship building.
+# These can use relationship data (social_contacts, friendships, etc.)
+# to derive new activities.
+
+post_relationship_pipeline:
+  enabled: true
+
+  steps:
+    # Assign visit_social_contact activity based on social contacts' residences
+    - type: distributor
+      config: "world_specific_code/MedievalYaml/yaml/distributors/social_contact_visit_distributor.yaml"
 
 # ========================================
 # EXAMPLES

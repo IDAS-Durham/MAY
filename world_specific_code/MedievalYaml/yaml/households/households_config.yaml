@@ -31,33 +31,33 @@ categories:
       min: 0
       max: 11
 
-  - name: "Youth"
-    symbol: "Y"
+  - name: "Young Adults"
+    symbol: "YA"
     attribute: "age"
     type: "numerical"
     numerical:
       min: 12
-      max: 17
+      max: 20
 
   - name: "Adults"
     symbol: "A"
     attribute: "age"
     type: "numerical"
     numerical:
-      min: 18
+      min: 21
       max: null
 
 # Composition pattern format
-# Patterns follow the format: "<kids> <youth> <adults>" (3 categories)
+# Patterns follow the format: "<kids> <young_adults> <adults> <old_adults>"
 # Each field can be:
 #   - A number: exact count (e.g., "2")
 #   - ">=N": N or more (e.g., ">=2")
 #
 # Example patterns:
-#   "2 0 2"      -> exactly 2 kids, 0 youth, 2 adults
-#   ">=2 >=0 2"  -> 2+ kids, any youth, 2 adults
-#   ">=1 >=0 >=1" -> 1+ kids, any youth, 1+ adults (flexible family)
-#   "0 >=0 >=1"  -> no kids, any youth, 1+ adults (adult-only household)
+#   "2 0 2 0"      -> exactly 2 kids, 0 young adults, 2 adults, 0 old adults
+#   ">=2 >=0 2 0"  -> 2+ kids, any young adults, 2 adults, 0 old adults
+#   "1 >=0 1 0"    -> 1 kid, any young adults, 1 adult, 0 old adults
+#   "0 >=0 0 0"    -> singles/couples with no specific age requirement
 
 # Demotion rules
 # When there aren't enough people in a category to fill household requirements,
@@ -85,7 +85,7 @@ demotion:
   # Strategy: Demote scarce/flexible categories first, preserve essential ones
   priority:
     Kids: 1           # Demote kids first (often scarce, flexible count)
-    Youth: 2
+    Young Adults: 2   # Then young adults (moderately flexible)
     Adults: 3         # Demote adults LAST (essential for supervision/stability)
 
   # Validation rules for demoted patterns
@@ -104,7 +104,7 @@ demotion:
   #   - "<": less than
   #
   # Special values:
-  #   - Use category names: Kids, Youth, Adults
+  #   - Use category names: Kids, Young Adults, Adults, Old Adults
   #
   # Example: "If Kids >= 1, then Adults must be >= 1"
   #   This ensures children are never left without adult supervision
@@ -120,16 +120,17 @@ demotion:
         operator: ">="
         value: 1
 
-    - name: "Youth require adult supervision"
-      description: "If there is youth in the household, there must be at least one adult"
-      condition:
-        category: "Youth"
-        operation: ">="
-        value: 1
-      requirement:
-        category: "Adults"
-        operator: ">="
-        value: 1
+    # Example: Add more rules as needed
+    # - name: "Old adults should have care"
+    #   description: "If 2+ old adults, ensure at least 1 regular adult for care"
+    #   condition:
+    #     category: "Old Adults"
+    #     operator: ">="
+    #     value: 2
+    #   requirement:
+    #     category: "Adults"
+    #     operator: ">="
+    #     value: 1
 
 # Promotion rules
 # When there are leftover people after all allocations,
@@ -154,9 +155,9 @@ promotion:
   # LOWER NUMBER = PROMOTE FIRST (to accommodate leftover people)
   # Strategy: Promote flexible/scarce categories first
   priority:
-    Adults: 1         # Then adults
-    Youth: 2
-    Kids: 3          # Promote kids last (as they need supervision)
+    Young Adults: 1   # Promote young adults first (often leftover)
+    Adults: 2         # Then adults
+    Kids: 4           # Promote kids last (need supervision)
 
   # Validation rules for promoted patterns (same format as demotion)
   validation_rules:
@@ -177,12 +178,12 @@ allocation:
   # Options:
   #   - "random": Randomly select from available people
   #   - "age_sorted": Sort by age and allocate in order
-  #   - "balanced": Try to balance age distributions (what does this mean?)
+  #   - "balanced": Try to balance age distributions
   strategy: "random"
 
   # Whether to allow partial household allocation
   # If false, households that can't be fully filled are skipped
-  allow_partial: true
+  allow_partial: false
 
   # Random seed for reproducibility (null = use global seed)
   seed: null

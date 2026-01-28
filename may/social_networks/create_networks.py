@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from .graph_relationship_builder import GraphRelationshipBuilder
 from .geo_neighbors import find_neighbours
-#from may.serialization.export_properties import export_relationships
+
 from debug_output import export_relationships
 
 if TYPE_CHECKING:
@@ -94,6 +94,10 @@ def build_bounded_distance_social_network(
         mean_connections_per_person: float,
         clustering_level: float,        
         geo_unit_level: str = None,
+<<<<<<< HEAD
+=======
+        clustering_level: float=0.8,
+>>>>>>> world_map
         storage_key: str=None,
         store: bool=True,
         method: str='libpysal',
@@ -130,7 +134,12 @@ def build_bounded_distance_social_network(
         ... )
     """
     if storage_key is None:
+<<<<<<< HEAD
         storage_key = f"social_contacts_radius_km_{radius_km}"
+=======
+        storage_key = f"social_contacts_radius_km_{radius_km}",
+    
+>>>>>>> world_map
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
 

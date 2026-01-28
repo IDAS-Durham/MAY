@@ -81,7 +81,7 @@ class GraphRelationshipBuilder:
         if self.n_people < 2:
             logger.warning("Need at least 2 people to create relationships")
             return {}
-        
+
         # Ensure k doesn't exceed what's possible for the graph
         if self.mean_connections_per_person > (self.n_people - 1):
             logger.warning(f'Average connections {self.mean_connections_per_person} exceeds the max possible for the graph n_people-1={self.n_people - 1}. Reducing to the max possible')
