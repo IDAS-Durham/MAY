@@ -186,6 +186,12 @@ Examples:
         help='Attribution text for custom map image'
     )
 
+    parser.add_argument(
+        '--events-file',
+        type=str,
+        help='Path to simulation_events.h5 file for event visualization'
+    )
+
     args = parser.parse_args()
 
     # Load or create world
@@ -306,6 +312,21 @@ Examples:
 
     # Initialize and run the Flask app
     app = initialize_app(world, map_config=map_config)
+
+    # Initialize events if provided
+    if args.events_file:
+        events_path = Path(args.events_file)
+        if events_path.exists():
+            print(f"\nLoading events from: {events_path}")
+            try:
+                from app import initialize_events, load_event_config
+                load_event_config()
+                initialize_events(str(events_path), world)
+                print("Events loaded successfully!")
+            except Exception as e:
+                print(f"WARNING: Failed to load events: {e}")
+        else:
+            print(f"\nWARNING: Events file not found: {events_path}")
 
     print("\n" + "=" * 60)
     print("🗺️  World Map Visualization")

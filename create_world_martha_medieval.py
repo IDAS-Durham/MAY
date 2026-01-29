@@ -204,74 +204,70 @@ def main():
 
     if relationship_config.get("enabled", True):
         logger.info("Building Relationships")
-<<<<<<< HEAD
         build_local_social_network(
             world.geography,
-            mean_connections_per_person=6,
+            mean_connections_per_person=4,
             clustering_level=0.8,
-        ) 
+            storage_key = 'social_contacts_local',
+        )
+        radius_km = 10
         build_bounded_distance_social_network(
             world.geography,
-            radius_km=10, # 10km radius
-            mean_connections_per_person=6, # mean of 6 contacts per person
+            radius_km=radius_km, # 10km radius
+            mean_connections_per_person=4, # mean of 6 contacts per person
             clustering_level=0.8,
-        )
-=======
-        #build_relationships(world, relationship_config)
-        build_local_social_network(
-            world,
-            mean_connections_per_person=6,
-            clustering_level=0.8,
-            storage_key="social_contacts_local",
-            store=True,
-            export=False,
+            storage_key = f'social_contacts_radius_km_{radius_km}',
         )
 
-        # Commented out: requires libpysal dependency
-        # radius = 10  # km
-        # build_bounded_distance_social_network(
-        #     geography=world.geography,
-        #     radius_km=radius,
-        #     mean_connections_per_person=6,
-        #     geo_unit_level=None,
-        #     clustering_level=0.8,
-        #     storage_key=f"social_contacts_radius_{radius}",
-        #     store=True,
-        #     method='libpysal',
-        # )
+        # Assign activity_map for social contacts.
+        # Must be run after household allocation as it maps to the contact's household. 
+        for person in world.population.people:
+            if 'social_contacts_local' in person.properties:
+                person.activity_map['social_contacts_local'] = {}
+                for contact_id in person.properties['social_contacts_local']:
+                    contact = world.population.people_by_id[contact_id]
+                    if 'residence' in contact.activity_map:
+                        person.activity_map['social_contacts_local'].update(contact.activity_map['residence'])
 
-    # ========================================
-    # POST-RELATIONSHIP PIPELINE
-    # ========================================
-    # Run distributors that depend on relationship data
-    post_rel_config = config.get("post_relationship_pipeline", {})
-
-    if post_rel_config.get("enabled", False):
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("POST-RELATIONSHIP PIPELINE")
-        logger.info("=" * 60)
-
-        post_rel_steps = post_rel_config.get("steps", [])
-
-        for step in post_rel_steps:
-            step_type = step.get("type")
-            step_config = step.get("config")
-
-            if step_type == "distributor":
-                logger.info("")
-                logger.info(f"[DISTRIBUTOR] {step_config}")
-                try:
-                    distributor = VenueDistributor.from_yaml(step_config)
-                    distributor.allocate(world)
-                except Exception as e:
-                    logger.error(f"Failed to run post-relationship distributor {step_config}: {e}")
-                    logger.exception(e)
-            else:
-                logger.warning(f"Unknown post-relationship pipeline step type: {step_type}")
+        for person in world.population.people:
+            if f'social_contacts_radius_km_{radius_km}' in person.properties:
+                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = []
+                for contact_id in person.properties[f'social_contacts_radius_km_{radius_km}']:
+                    contact = world.population.people_by_id[contact_id]
+                    if 'residence' in contact.activity_map:
+                        person.activity_map[f'social_contacts_radius_km_{radius_km}'].update(contact.activity_map['residence'])
 
 
->>>>>>> world_map
+    # # ========================================
+    # # POST-RELATIONSHIP PIPELINE
+    # # ========================================
+    # # Run distributors that depend on relationship data
+    # post_rel_config = config.get("post_relationship_pipeline", {})
+
+    # if post_rel_config.get("enabled", False):
+    #     logger.info("")
+    #     logger.info("=" * 60)
+    #     logger.info("POST-RELATIONSHIP PIPELINE")
+    #     logger.info("=" * 60)
+
+    #     post_rel_steps = post_rel_config.get("steps", [])
+
+    #     for step in post_rel_steps:
+    #         step_type = step.get("type")
+    #         step_config = step.get("config")
+
+    #         if step_type == "distributor":
+    #             logger.info("")
+    #             logger.info(f"[DISTRIBUTOR] {step_config}")
+    #             try:
+    #                 distributor = VenueDistributor.from_yaml(step_config)
+    #                 distributor.allocate(world)
+    #             except Exception as e:
+    #                 logger.error(f"Failed to run post-relationship distributor {step_config}: {e}")
+    #                 logger.exception(e)
+    #         else:
+    #             logger.warning(f"Unknown post-relationship pipeline step type: {step_type}")
+
 
     logger.info("")
     logger.info("=" * 60)
@@ -279,10 +275,15 @@ def main():
     logger.info(f"Geography: {len(world.geography.get_all_units())} units")
     logger.info(f"Venues: {len(world.venues.get_all_venues())} venues across {len(venues.get_venue_types())} types")
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
+
+    # Count people with residence allocation
+    all_people = world.population.get_all_people()
+    people_with_residence = sum(1 for person in all_people if 'residence' in person.activity_map)
+    logger.info(f"People with residence: {people_with_residence:,} ({100 * people_with_residence / len(all_people):.1f}%)")
     logger.info("=" * 60)
 
     # Export venue allocations
-    export_venue_allocations(world)
+    #export_venue_allocations(world)
 
     # Export people data
     export_people(world)

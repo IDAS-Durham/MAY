@@ -16,7 +16,10 @@ const state = {
     showPopulation: true,
     showVenues: false,
     mapConfig: null,
-    panelConfig: null  // Info panel configuration
+    panelConfig: null,  // Info panel configuration
+    // Zoom scaling state
+    zoomListenerAdded: false,
+    baseZoom: 6
 };
 
 // =============================================================================
@@ -72,6 +75,7 @@ async function loadPanelConfiguration() {
 }
 
 // Default panel configuration fallback
+// Uses same nested structure as info_panel_config.yaml for consistency
 function getDefaultPanelConfig() {
     return {
         geo_unit_panel: {
@@ -81,8 +85,16 @@ function getDefaultPanelConfig() {
         },
         marker_styles: {
             geo_unit: {
-                size: { method: 'sqrt', min_radius: 5, max_radius: 15, scale_factor: 0.5 },
-                fill_opacity: 0.7
+                size: { method: 'sqrt', min_radius: 5, max_radius: 15, scale: 0.5 },
+                border: { color: '#808080', width: 1, opacity: 1 },
+                fill_opacity: 0.7,
+                zoom_scaling: { enabled: true, base_zoom: 6, scale_exponent: 0.5, min_scale: 0.3, max_scale: 3.0 }
+            },
+            venue: {
+                size: { radius: 6 },
+                border: { color: '#ffffff', width: 1, opacity: 1 },
+                fill_opacity: 0.8,
+                zoom_scaling: { enabled: true, base_zoom: 6, scale_exponent: 0.5, min_scale: 0.3, max_scale: 3.0 }
             }
         }
     };
@@ -134,6 +146,77 @@ function initializeMap() {
 
         console.log('Map initialized with OpenStreetMap tiles');
     }
+
+    // Setup zoom listener for marker scaling
+    setupGeoUnitZoomListener();
+}
+
+// =============================================================================
+// ZOOM SCALING FOR GEO UNIT MARKERS
+// =============================================================================
+
+// Setup zoom listener to scale geo unit markers with zoom level
+function setupGeoUnitZoomListener() {
+    if (state.zoomListenerAdded || !state.map) return;
+
+    const zoomConfig = state.panelConfig?.marker_styles?.geo_unit?.zoom_scaling || {};
+
+    // Check if zoom scaling is enabled (default: true)
+    if (zoomConfig.enabled === false) {
+        console.log('Geo unit zoom scaling disabled in config');
+        return;
+    }
+
+    // Get base zoom from config or current map zoom
+    state.baseZoom = zoomConfig.base_zoom || state.map.getZoom() || 6;
+
+    state.map.on('zoomend', () => {
+        updateGeoUnitMarkerRadii();
+    });
+
+    state.zoomListenerAdded = true;
+    console.log('Zoom listener added for geo unit markers, base zoom:', state.baseZoom);
+}
+
+// Calculate zoom scale factor for geo unit markers
+function getGeoUnitZoomScaleFactor() {
+    if (!state.map) return 1;
+
+    const zoomConfig = state.panelConfig?.marker_styles?.geo_unit?.zoom_scaling || {};
+
+    // Check if zoom scaling is enabled
+    if (zoomConfig.enabled === false) return 1;
+
+    const currentZoom = state.map.getZoom();
+    const baseZoom = zoomConfig.base_zoom || state.baseZoom || 6;
+    const scaleExponent = zoomConfig.scale_exponent || 0.5;
+    const minScale = zoomConfig.min_scale || 0.3;
+    const maxScale = zoomConfig.max_scale || 3.0;
+
+    // Scale factor increases as you zoom in, decreases as you zoom out
+    const rawScale = Math.pow(2, (currentZoom - baseZoom) * scaleExponent);
+
+    // Clamp to min/max bounds
+    return Math.max(minScale, Math.min(maxScale, rawScale));
+}
+
+// Update all geo unit marker radii based on current zoom
+function updateGeoUnitMarkerRadii() {
+    const zoomConfig = state.panelConfig?.marker_styles?.geo_unit?.zoom_scaling || {};
+
+    // Check if zoom scaling is enabled
+    if (zoomConfig.enabled === false) return;
+
+    if (!state.layers.geography) return;
+
+    const scaleFactor = getGeoUnitZoomScaleFactor();
+
+    state.layers.geography.eachLayer((marker) => {
+        if (marker.options && marker.options.baseRadius) {
+            const newRadius = marker.options.baseRadius * scaleFactor;
+            marker.setRadius(newRadius);
+        }
+    });
 }
 
 // =============================================================================
@@ -301,13 +384,19 @@ async function loadGeographyLevel(level) {
         // Get marker style config
         const styleConfig = state.panelConfig?.marker_styles?.geo_unit || {};
 
+        // Get current zoom scale factor
+        const zoomScale = getGeoUnitZoomScaleFactor();
+
         state.layers.geography = L.geoJSON(geojson, {
             pointToLayer: (feature, latlng) => {
                 const props = feature.properties;
                 const population = props.population || 0;
 
-                // Calculate radius based on config
-                const radius = calculateMarkerRadius(population, styleConfig.size);
+                // Calculate base radius (before zoom scaling)
+                const baseRadius = calculateMarkerRadius(population, styleConfig.size);
+
+                // Apply zoom scale factor
+                const scaledRadius = baseRadius * zoomScale;
 
                 // Get color based on config
                 const fillColor = getPopulationColor(population, styleConfig.color);
@@ -315,10 +404,11 @@ async function loadGeographyLevel(level) {
                 const borderConfig = styleConfig.border || {};
 
                 return L.circleMarker(latlng, {
-                    radius: radius,
+                    radius: scaledRadius,
+                    baseRadius: baseRadius,  // Store for zoom updates
                     fillColor: fillColor,
                     color: borderConfig.color || '#fff',
-                    weight: borderConfig.weight || 1,
+                    weight: borderConfig.width || 1,  // Use 'width' for consistency with YAML
                     opacity: borderConfig.opacity || 1,
                     fillOpacity: styleConfig.fill_opacity || 0.7
                 });
@@ -349,6 +439,7 @@ async function loadGeographyLevel(level) {
 }
 
 // Calculate marker radius based on config
+// Uses same keywords as event_visualisation.yaml for consistency
 function calculateMarkerRadius(population, sizeConfig) {
     if (!sizeConfig) {
         return Math.max(5, Math.min(15, Math.sqrt(population) / 2));
@@ -357,7 +448,8 @@ function calculateMarkerRadius(population, sizeConfig) {
     const method = sizeConfig.method || 'sqrt';
     const minRadius = sizeConfig.min_radius || 5;
     const maxRadius = sizeConfig.max_radius || 15;
-    const scaleFactor = sizeConfig.scale_factor || 0.5;
+    // Support both 'scale' (new) and 'scale_factor' (legacy) for backwards compatibility
+    const scaleFactor = sizeConfig.scale || sizeConfig.scale_factor || 0.5;
 
     let rawRadius;
     switch (method) {

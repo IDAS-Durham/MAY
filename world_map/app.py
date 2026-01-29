@@ -38,7 +38,7 @@ def load_panel_config(config_path=None):
     global _panel_config
 
     if config_path is None:
-        config_path = Path(__file__).parent / 'config' / 'info_panel_config.yaml'
+        config_path = Path(__file__).parent / 'yaml' / 'info_panel_config.yaml'
 
     try:
         with open(config_path, 'r') as f:
@@ -76,7 +76,10 @@ def _convert_numpy_types(obj):
 
 
 def _get_default_panel_config():
-    """Return default panel configuration."""
+    """Return default panel configuration.
+
+    Uses same nested structure as info_panel_config.yaml for consistency with event_visualisation.yaml.
+    """
     return {
         'geo_unit_panel': {
             'title_field': 'name',
@@ -90,8 +93,16 @@ def _get_default_panel_config():
         },
         'marker_styles': {
             'geo_unit': {
-                'size': {'method': 'sqrt', 'min_radius': 5, 'max_radius': 15, 'scale_factor': 0.5},
-                'fill_opacity': 0.7
+                'size': {'method': 'sqrt', 'min_radius': 5, 'max_radius': 15, 'scale': 0.5},
+                'border': {'color': '#808080', 'width': 1, 'opacity': 1},
+                'fill_opacity': 0.7,
+                'zoom_scaling': {'enabled': True, 'base_zoom': 6, 'scale_exponent': 0.5, 'min_scale': 0.3, 'max_scale': 3.0}
+            },
+            'venue': {
+                'size': {'radius': 6},
+                'border': {'color': '#ffffff', 'width': 1, 'opacity': 1},
+                'fill_opacity': 0.8,
+                'zoom_scaling': {'enabled': True, 'base_zoom': 6, 'scale_exponent': 0.5, 'min_scale': 0.3, 'max_scale': 3.0}
             }
         }
     }
@@ -615,6 +626,235 @@ def get_world_statistics():
     except Exception as e:
         logger.error(f"Error getting world statistics: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# API: Events (Simulation Event Visualization)
+# ============================================================================
+
+# Global event loader instance
+_event_loader = None
+_event_config = None
+
+
+def load_event_config(config_path=None):
+    """Load event visualization configuration from YAML file."""
+    global _event_config
+
+    if config_path is None:
+        config_path = Path(__file__).parent / 'yaml' / 'event_visualisation.yaml'
+
+    try:
+        with open(config_path, 'r') as f:
+            _event_config = yaml.safe_load(f)
+        logger.info(f"Loaded event config from {config_path}")
+    except FileNotFoundError:
+        logger.warning(f"Event config not found at {config_path}, using defaults")
+        _event_config = _get_default_event_config()
+    except Exception as e:
+        logger.error(f"Error loading event config: {e}")
+        _event_config = _get_default_event_config()
+
+    return _event_config
+
+
+def _get_default_event_config():
+    """Return default event configuration.
+
+    Uses same nested structure as YAML config files for consistency with info_panel_config.yaml.
+    """
+    return {
+        'event_types': {
+            'infections': {
+                'label': 'Infections',
+                'default_visible': True,
+                'marker': {
+                    'color': '#e74c3c',
+                    'border': {'color': '#ffffff', 'width': 2, 'opacity': 0.8},
+                    'fill_opacity': 0.8,
+                    'size_scale': 1.0
+                },
+                'color_thresholds': [
+                    {'max_count': 5, 'color': '#fee5d9', 'label': 'Very Low'},
+                    {'max_count': 20, 'color': '#fcae91', 'label': 'Low'},
+                    {'max_count': 50, 'color': '#fb6a4a', 'label': 'Medium'},
+                    {'max_count': 100, 'color': '#de2d26', 'label': 'High'},
+                    {'max_count': None, 'color': '#a50f15', 'label': 'Very High'}
+                ],
+                'use_relative_scaling': False,
+                'gradient': {'low': '#fee5d9', 'medium': '#fcae91', 'high': '#fb6a4a', 'very_high': '#cb181d'}
+            },
+            'deaths': {
+                'label': 'Deaths',
+                'default_visible': True,
+                'marker': {
+                    'color': '#2c3e50',
+                    'border': {'color': '#ffffff', 'width': 2, 'opacity': 0.9},
+                    'fill_opacity': 0.9,
+                    'size_scale': 1.2
+                },
+                'color_thresholds': [
+                    {'max_count': 1, 'color': '#d9d9d9', 'label': 'Very Low'},
+                    {'max_count': 5, 'color': '#969696', 'label': 'Low'},
+                    {'max_count': 15, 'color': '#525252', 'label': 'Medium'},
+                    {'max_count': 30, 'color': '#252525', 'label': 'High'},
+                    {'max_count': None, 'color': '#000000', 'label': 'Very High'}
+                ],
+                'use_relative_scaling': False,
+                'gradient': {'low': '#d9d9d9', 'medium': '#969696', 'high': '#525252', 'very_high': '#252525'}
+            }
+        },
+        'time': {
+            'aggregation_window': 1.0,
+            'playback_interval_ms': 500,
+            'rolling_window_days': 1
+        },
+        'display': {
+            'default_mode': 'choropleth',
+            'choropleth': {
+                'size': {'method': 'sqrt', 'min_radius': 6, 'max_radius': 35, 'scale': 2.0},
+                'border': {'color': '#333333', 'width': 1, 'opacity': 0.8},
+                'fill_opacity': 0.7
+            },
+            'markers': {
+                'size': {'method': 'sqrt', 'min_radius': 5, 'max_radius': 40, 'scale': 1.5},
+                'border': {'color': '#ffffff', 'width': 2, 'opacity': 1},
+                'fill_opacity': 0.6
+            },
+            'zoom_scaling': {'enabled': True, 'base_zoom': 6, 'scale_exponent': 0.5, 'min_scale': 0.3, 'max_scale': 3.0}
+        },
+        'aggregation': {'method': 'count', 'cumulative': False},
+        'legend': {'position': 'bottomright', 'show_threshold_labels': True, 'show_totals': True, 'title': 'Event Counts'},
+        'popup': {'show_count': True, 'show_rate': True, 'show_geo_unit_name': True}
+    }
+
+
+def initialize_events(events_path, world=None):
+    """Initialize event loader with optional world instance for geo coordinates."""
+    global _event_loader
+
+    try:
+        from event_loader import load_events_with_world
+        _event_loader = load_events_with_world(events_path, world)
+        logger.info(f"Event loader initialized from {events_path}")
+    except Exception as e:
+        logger.error(f"Failed to initialize event loader: {e}")
+        _event_loader = None
+
+
+def get_event_loader():
+    """Get the event loader instance."""
+    return _event_loader
+
+
+@app.route('/api/events/config')
+def get_event_config():
+    """Get event visualization configuration."""
+    global _event_config
+    if _event_config is None:
+        load_event_config()
+    return jsonify(_event_config)
+
+
+@app.route('/api/events/summary')
+def get_events_summary():
+    """Get summary of available events."""
+    loader = get_event_loader()
+    if loader is None:
+        return jsonify({'error': 'Events not loaded'}), 404
+
+    return jsonify({
+        'available_types': loader.get_available_event_types(),
+        'counts': loader.get_event_summary(),
+        'time_range': loader.get_time_range()
+    })
+
+
+@app.route('/api/events/geojson/<event_type>')
+def get_events_geojson(event_type):
+    """Get events as GeoJSON for map display."""
+    loader = get_event_loader()
+    if loader is None:
+        return jsonify({'error': 'Events not loaded'}), 404
+
+    # Parse query parameters
+    time_start = request.args.get('time_start', type=float, default=0.0)
+    time_end = request.args.get('time_end', type=float, default=loader.time_max)
+    method = request.args.get('method', default='count')
+    cumulative = request.args.get('cumulative', default='false').lower() == 'true'
+
+    try:
+        geojson = loader.get_events_geojson(
+            event_type=event_type,
+            time_start=time_start,
+            time_end=time_end,
+            method=method,
+            cumulative=cumulative
+        )
+        return jsonify(geojson)
+    except Exception as e:
+        logger.error(f"Error getting events geojson: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/events/timeseries/<event_type>')
+def get_events_timeseries(event_type):
+    """Get daily event counts as timeseries."""
+    loader = get_event_loader()
+    if loader is None:
+        return jsonify({'error': 'Events not loaded'}), 404
+
+    try:
+        df = loader.get_daily_events_timeseries(event_type)
+        return jsonify({
+            'event_type': event_type,
+            'data': df.to_dict(orient='records')
+        })
+    except Exception as e:
+        logger.error(f"Error getting events timeseries: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/events/aggregated/<event_type>')
+def get_events_aggregated(event_type):
+    """Get aggregated events by geo_unit."""
+    loader = get_event_loader()
+    if loader is None:
+        return jsonify({'error': 'Events not loaded'}), 404
+
+    time_start = request.args.get('time_start', type=float, default=0.0)
+    time_end = request.args.get('time_end', type=float, default=loader.time_max)
+    method = request.args.get('method', default='count')
+
+    try:
+        aggregated = loader.aggregate_events_by_geo_unit(
+            event_type=event_type,
+            time_start=time_start,
+            time_end=time_end,
+            method=method
+        )
+
+        # Convert to serializable format
+        result = {}
+        for geo_unit_id, data in aggregated.items():
+            result[str(geo_unit_id)] = _convert_numpy_types(data)
+
+        return jsonify({
+            'event_type': event_type,
+            'time_start': time_start,
+            'time_end': time_end,
+            'method': method,
+            'data': result
+        })
+    except Exception as e:
+        logger.error(f"Error getting aggregated events: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/events')
+def events_page():
+    """Serve the events visualization page."""
+    return render_template('events_map.html')
 
 
 # ============================================================================

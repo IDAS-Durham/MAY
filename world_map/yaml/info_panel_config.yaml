@@ -172,53 +172,68 @@ venue_panel:
       format: "json"  # 'json', 'table', or 'list'
 
 # =============================================================================
-# MARKER STYLING
+# MARKER STYLES
 # =============================================================================
 # Controls how markers are rendered on the map
+# Uses same keywords as event_visualisation.yaml for consistency
 
 marker_styles:
 
-  # Geo unit circle markers
+  # Geo unit circle markers (population markers)
   geo_unit:
-    # Size based on population
+    # Size configuration
     size:
-      method: "sqrt"  # 'sqrt', 'log', 'linear'
-      min_radius: 5
-      max_radius: 15
-      scale_factor: 0.5
+      method: "sqrt"      # 'sqrt', 'log', 'linear'
+      min_radius: 3       # Minimum marker radius in pixels
+      max_radius: 7      # Maximum marker radius in pixels
+      scale: 0.5          # Scaling multiplier
 
     # Color based on population thresholds
     color:
       method: "threshold"  # 'threshold', 'gradient'
       thresholds:
         - value: 100
-          color: "#FFEDA0"
-        - value: 200
-          color: "#FED976"
+          color: "#FFFFFF"
         - value: 500
-          color: "#FEB24C"
+          color: "#FFFFF0"
         - value: 1000
-          color: "#FD8D3C"
-        - value: 2000
-          color: "#FC4E2A"
+          color: "#FFFFE0"
         - value: 5000
-          color: "#E31A1C"
+          color: "#FAFAD2"
         - value: 10000
-          color: "#BD0026"
-        - value: null  # Anything above
-          color: "#800026"
+          color: "#FFF5EE"
+        - value: null  # Anything above (null = no upper limit)
+          color: "#FFE4E1"
 
     # Border styling
     border:
-      color: "#ffffff"
-      weight: 1
+      color: "#808080"
+      width: 1
       opacity: 1
 
+    # Fill opacity
     fill_opacity: 0.7
+
+    # Zoom scaling (markers scale as map zooms in/out)
+    zoom_scaling:
+      enabled: true
+      # Reference zoom level where markers appear at their base size
+      base_zoom: 1
+      # Scaling exponent (higher = more aggressive scaling)
+      # 0.5 = moderate scaling, 1.0 = proportional to zoom
+      scale_exponent: 0.7
+      # Minimum scale factor (prevents markers from disappearing when zoomed out)
+      min_scale: 0.3
+      # Maximum scale factor (prevents markers from becoming too large when zoomed in)
+      max_scale: 1.0
 
   # Venue markers
   venue:
-    radius: 6
+    # Size configuration
+    size:
+      radius: 3           # Fixed radius for venue markers
+
+    # Fill opacity
     fill_opacity: 0.8
 
     # Color by venue type
@@ -233,10 +248,19 @@ marker_styles:
       market: "#FF6347"
       default: "#95a5a6"
 
+    # Border styling
     border:
       color: "#ffffff"
-      weight: 1
+      width: 1
       opacity: 1
+
+    # Zoom scaling for venue markers
+    zoom_scaling:
+      enabled: true
+      base_zoom: 6
+      scale_exponent: 0.5
+      min_scale: 0.3
+      max_scale: 3.0
 
 # =============================================================================
 # DISPLAY OPTIONS

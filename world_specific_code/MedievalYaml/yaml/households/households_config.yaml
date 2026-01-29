@@ -149,7 +149,7 @@ promotion:
   enabled: true
 
   # Maximum number of promotion attempts per household
-  max_attempts: 4
+  max_attempts: 8
 
   # Priority order for promotion (which category to promote first)
   # LOWER NUMBER = PROMOTE FIRST (to accommodate leftover people)
@@ -157,7 +157,7 @@ promotion:
   priority:
     Young Adults: 1   # Promote young adults first (often leftover)
     Adults: 2         # Then adults
-    Kids: 4           # Promote kids last (need supervision)
+    Kids: 3           # Promote kids last (need supervision)
 
   # Validation rules for promoted patterns (same format as demotion)
   validation_rules:
