@@ -79,7 +79,7 @@ profile_bottlenecks.txt
 simulation_profile.stats
 ATTRIBUTE_ASSIGNMENT_PLAN.md
 hardcoded_ethnicity_distributor.py
-
+2021_data/
 # pytest_cache
 .pytest_cache
 

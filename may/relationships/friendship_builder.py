@@ -418,19 +418,27 @@ class FriendshipBuilder:
                 # - "geographic_county", "geographic_country", etc. with level specified
                 level = source['pool'].get('level')
 
-                if level and level in self._geo_level_data:
-                    starts, ends, people_flat = self._geo_level_data[level]
-                    _process_all_groups_numba(
-                        starts, ends, people_flat,
-                        self._ages, self._person_subset,
-                        all_connections, current_counts, connection_counts,
-                        weight_fraction, age_range, False, True
-                    )
-                else:
-                    available_levels = list(self._geo_level_data.keys())
-                    logger.warning(f"    Unknown geographic level '{level}'. "
-                                   f"Available levels: {available_levels}. Skipping source.")
-                    continue
+                if level:
+                    # Look up level case-insensitively
+                    found_level = None
+                    for available_level in self._geo_level_data.keys():
+                        if available_level.upper() == level.upper():
+                            found_level = available_level
+                            break
+
+                    if found_level:
+                        starts, ends, people_flat = self._geo_level_data[found_level]
+                        _process_all_groups_numba(
+                            starts, ends, people_flat,
+                            self._ages, self._person_subset,
+                            all_connections, current_counts, connection_counts,
+                            weight_fraction, age_range, False, True
+                        )
+                    else:
+                        available_levels = list(self._geo_level_data.keys())
+                        logger.warning(f"    Unknown geographic level '{level}'. "
+                                       f"Available levels: {available_levels}. Skipping source.")
+                        continue
 
             # Show progress after each source
             connections_so_far = int(current_counts.sum())
