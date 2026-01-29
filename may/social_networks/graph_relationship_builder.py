@@ -37,7 +37,8 @@ class GraphRelationshipBuilder:
         people: list[Person],
         mean_connections_per_person: int = 6,
         clustering_level: float = 0.7,
-        storage_key: str = "social_contacts"
+        storage_key: str = "social_contacts",
+        **kwargs,
     ):
         """
         Initialize the graph relationship builder.
@@ -58,6 +59,7 @@ class GraphRelationshipBuilder:
         # Create mapping from index to person id
         self._idx_to_person_id = {i: person.id for i, person in enumerate(people)}
         self._person_id_to_idx = {person.id: i for i, person in enumerate(people)}
+        self.kwargs = kwargs
 
     def build_all(self, store: bool = True) -> dict[int, list[int]]:
         """
@@ -93,7 +95,8 @@ class GraphRelationshipBuilder:
         G = create_clustered_graph(
             n_nodes=self.n_people,
             k=min(self.mean_connections_per_person, self.n_people-1),
-            clustering_level=self.clustering_level
+            clustering_level=self.clustering_level,
+            **self.kwargs,
         )
 
         # Convert graph edges to relationships
@@ -110,7 +113,7 @@ class GraphRelationshipBuilder:
         if store:
             for person in self.people:
                 if self.storage_key in person.properties:
-                    person.properties.extend(relationships[person.id])
+                    person.properties[self.storage_key].extend(relationships[person.id])
                 else:
                     person.properties[self.storage_key] = relationships[person.id]
 
@@ -135,7 +138,8 @@ class GraphRelationshipBuilder:
         mean_connections_per_person: int = 6,
         clustering_level: float = 0.7,
         storage_key: str = "social_contacts",
-        store: bool = True
+        store: bool = True,
+        **kwargs,
     ) -> dict[int, list[int]]:
         """
         Convenience static method to build graph-based relationships.
@@ -164,7 +168,8 @@ class GraphRelationshipBuilder:
             people=people,
             mean_connections_per_person=mean_connections_per_person,
             clustering_level=clustering_level,
-            storage_key=storage_key
+            storage_key=storage_key,
+            **kwargs,
         )
         return builder.build_all(store=store)
 

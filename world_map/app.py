@@ -415,7 +415,7 @@ def get_population_statistics():
 
 @app.route('/api/population/person/<int:person_id>')
 def get_person_details(person_id):
-    """Get detailed information about a specific person."""
+    """Get detailed information about a specific person including activity_map."""
     try:
         world = get_world()
         if not world.population:
@@ -435,17 +435,109 @@ def get_person_details(person_id):
                 'coordinates': person.geographical_unit.coordinates
             }
 
+        # Build activity_map representation
+        activity_map_data = {}
+        if hasattr(person, 'activity_map') and person.activity_map:
+            for activity_type, venues_by_type in person.activity_map.items():
+                activity_map_data[activity_type] = {}
+                if isinstance(venues_by_type, dict):
+                    for venue_type, subsets in venues_by_type.items():
+                        subset_list = []
+                        if subsets:
+                            for subset in (subsets if isinstance(subsets, list) else [subsets]):
+                                if subset:
+                                    subset_info = {
+                                        'subset_name': getattr(subset, 'name', 'unknown'),
+                                        'venue_id': getattr(subset.venue, 'id', None) if hasattr(subset, 'venue') else None,
+                                        'venue_name': getattr(subset.venue, 'name', 'unknown') if hasattr(subset, 'venue') else 'unknown',
+                                        'venue_type': getattr(subset.venue, 'type', venue_type) if hasattr(subset, 'venue') else venue_type
+                                    }
+                                    subset_list.append(subset_info)
+                        activity_map_data[activity_type][venue_type] = subset_list
+
         return jsonify({
             'id': person.id,
             'age': person.age,
             'sex': person.sex,
             'activities': person.activities,
+            'activity_map': activity_map_data,
             'properties': person.properties,
             'geographical_unit': geo_info
         })
 
     except Exception as e:
         logger.error(f"Error getting person details for {person_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/geography/unit/<unit_name>/people')
+def get_unit_people(unit_name):
+    """Get list of people in a geographical unit with pagination."""
+    try:
+        world = get_world()
+        if not world.geography:
+            return jsonify({'error': 'No geography data'}), 404
+
+        unit = world.geography.get_unit(unit_name)
+        if not unit:
+            return jsonify({'error': f'Unit {unit_name} not found'}), 404
+
+        # Pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        per_page = min(per_page, 200)  # Cap at 200 per page
+
+        # Get all people from unit (and optionally descendants)
+        include_descendants = request.args.get('include_descendants', 'false').lower() == 'true'
+
+        if include_descendants:
+            all_people = unit.get_people()
+        else:
+            all_people = list(unit.people) if unit.people else []
+
+        total_count = len(all_people)
+
+        # Apply pagination
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_people = all_people[start_idx:end_idx]
+
+        # Build person summaries
+        people_data = []
+        for person in paginated_people:
+            # Get primary activity info
+            primary_activity = None
+            if hasattr(person, 'activity_map') and person.activity_map:
+                if 'primary_activity' in person.activity_map:
+                    for venue_type, subsets in person.activity_map['primary_activity'].items():
+                        if subsets:
+                            subset = subsets[0] if isinstance(subsets, list) else subsets
+                            if subset and hasattr(subset, 'venue'):
+                                primary_activity = {
+                                    'type': venue_type,
+                                    'venue_name': getattr(subset.venue, 'name', 'unknown')
+                                }
+                                break
+
+            people_data.append({
+                'id': person.id,
+                'age': person.age,
+                'sex': person.sex,
+                'activities': person.activities,
+                'primary_activity': primary_activity
+            })
+
+        return jsonify({
+            'unit_name': unit_name,
+            'total_count': total_count,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total_count + per_page - 1) // per_page,
+            'people': people_data
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting people for unit {unit_name}: {e}")
         return jsonify({'error': str(e)}), 500
 
 

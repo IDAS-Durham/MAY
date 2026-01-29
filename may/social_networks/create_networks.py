@@ -30,7 +30,7 @@ def _collate_people_in_geo_units(geography: "Geography", geo_unit_ids: set["Geog
     """
     people = set()
     for geo_unit_id in geo_unit_ids:
-        geo_unit = geography.get_units_by_id.get(geo_unit_id)
+        geo_unit = geography.get_unit_by_id(geo_unit_id)
         people.update(geo_unit.get_people())
     return people
 
@@ -42,6 +42,7 @@ def build_local_social_network(
         storage_key: str = f"social_contacts_local",
         store: bool = True,
         export:bool = False,
+        **kwargs,
 ) -> None:
     """
     Build a social network using a clustered graph.
@@ -79,7 +80,8 @@ def build_local_social_network(
             mean_connections_per_person=mean_connections_per_person,
             clustering_level=clustering_level,
             storage_key=storage_key,
-            store=store
+            store=store,
+            **kwargs,
         )
 
     if export:
@@ -92,11 +94,12 @@ def build_bounded_distance_social_network(
         geography: "Geography",
         radius_km: float,
         mean_connections_per_person: float,
-        clustering_level: float,        
+        clustering_level: float,
         geo_unit_level: str = None,
         storage_key: str=None,
         store: bool=True,
         method: str='libpysal',
+        **kwargs,
 ) -> None:
     """
     Build a network of contacts between people in geo_units within a specified radius.
@@ -139,7 +142,7 @@ def build_bounded_distance_social_network(
     geo_units = geography.get_units_by_level(geo_unit_level)
 
     # Get geo_unit neighbours
-    geo_unit_neighbours = find_neighbours(geo_units, radius_km = radius_km)
+    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km = radius_km, method=method)
 
     # Go through each geographical unit, collect people and make a network. 
     for geo_unit_id, connected_ids in geo_unit_neighbours.items():
@@ -150,4 +153,5 @@ def build_bounded_distance_social_network(
             clustering_level=clustering_level,
             storage_key=storage_key,
             store=store,
+            **kwargs,
         )

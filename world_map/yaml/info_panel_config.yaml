@@ -114,6 +114,63 @@ geo_unit_panel:
       exclude:
         - "internal_id"  # Properties to exclude from display
 
+    # People section - click to view list of people in this geo unit
+    - name: "people"
+      title: "People"
+      type: "people"
+      enabled: true
+      show_count: true
+      show_button: true
+      button_text: "View People List"
+
+# =============================================================================
+# PERSON INFO PANEL
+# =============================================================================
+# Displayed when clicking on a person in the people list
+
+person_panel:
+  title_field: "id"
+  title_prefix: "Person #"
+
+  # Fields to show in main info section
+  main_fields:
+    - name: "age"
+      label: "Age"
+      type: "attribute"
+    - name: "sex"
+      label: "Sex"
+      type: "attribute"
+
+  # Sections to display
+  sections:
+    - name: "location"
+      title: "Location"
+      type: "grid"
+      enabled: true
+      fields:
+        - name: "geographical_unit.name"
+          label: "Area"
+        - name: "geographical_unit.level"
+          label: "Level"
+
+    - name: "activities"
+      title: "Activities"
+      type: "tags"
+      enabled: true
+      source: "activities"
+
+    - name: "activity_map"
+      title: "Activity Map"
+      type: "activity_map"
+      enabled: true
+      source: "activity_map"
+
+    - name: "properties"
+      title: "Additional Properties"
+      type: "properties"
+      enabled: true
+      source: "properties"
+
 # =============================================================================
 # VENUE INFO PANEL
 # =============================================================================

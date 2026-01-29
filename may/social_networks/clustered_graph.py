@@ -53,7 +53,7 @@ def create_clustered_graph_watts_strogatz(n_nodes: int , k: int = 4, clustering_
     
     # Watts-Strogatz rewiring probability is inverse of clustering level
     p = 1.0 - clustering_level
-    return nx.watts_strogatz_graph(n_nodes, k, p, **kwargs)
+    return nx.watts_strogatz_graph(round(n_nodes), round(k), p, **kwargs)
 
 @register_graph_creator("connected_watts_strogatz")
 def create_clustered_graph_connected_watts_strogatz(n_nodes: int, k: int =4, clustering_level: float=0.5, **kwargs):

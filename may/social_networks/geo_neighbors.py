@@ -66,7 +66,7 @@ def _filter_units_with_valid_coords(geo_units: list['GeographicalUnit']) -> list
             units_with_coords.append(unit)
     return units_with_coords
 
-def _extract_coordinates(geo_units: list['GeographicalUnit']) -> npt.NDArray:
+def _extract_coordinates(geo_units: list['GeographicalUnit']) -> [npt.NDArray, list["GeographicalUnits"]]:
     """
     Extract coordinates from geographical units as a numpy array.
 
@@ -80,11 +80,11 @@ def _extract_coordinates(geo_units: list['GeographicalUnit']) -> npt.NDArray:
     units_with_coords = _filter_units_with_valid_coords(geo_units)
 
     if not units_with_coords:
-        return None
+        return None, None
     
     if len(units_with_coords) < 2:
         logger.warning("Need at least 2 units with coordinates")
-        return None
+        return None, None
 
     # Extract coordinates as (lon, lat) - note: libpysal expects (x, y) = (lon, lat)
     coordinates = np.array([
@@ -92,7 +92,7 @@ def _extract_coordinates(geo_units: list['GeographicalUnit']) -> npt.NDArray:
         for unit in units_with_coords
     ])
 
-    return coordinates
+    return coordinates, units_with_coords
 
 @register_neighbour_finder('libpysal')
 def _find_neighbours_libpysal(
@@ -116,7 +116,7 @@ def _find_neighbours_libpysal(
     from libpysal import weights
 
     # Extract coordinates in the right format
-    coordinates = _extract_coordinates(geo_units)
+    coordinates, units_with_coords = _extract_coordinates(geo_units)
 
     if coordinates is None:
         return {}

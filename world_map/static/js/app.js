@@ -863,7 +863,251 @@ function buildDefaultGeoUnitPanel(unit) {
         `;
     }
 
+    // People section with "View People" button
+    if (unit.population > 0) {
+        html += `
+            <h3>People</h3>
+            <p>${unit.population.toLocaleString()} people in this area</p>
+            <button class="action-button" onclick="showUnitPeople('${unit.name}')">
+                View People List
+            </button>
+        `;
+    }
+
     return html;
+}
+
+// =============================================================================
+// PEOPLE LIST AND PERSON DETAILS
+// =============================================================================
+
+// State for people pagination
+const peopleState = {
+    currentUnit: null,
+    currentPage: 1,
+    perPage: 50,
+    totalCount: 0,
+    totalPages: 0
+};
+
+// Show list of people in a geographical unit
+async function showUnitPeople(unitName, page = 1) {
+    try {
+        peopleState.currentUnit = unitName;
+        peopleState.currentPage = page;
+
+        const response = await fetch(
+            `/api/geography/unit/${encodeURIComponent(unitName)}/people?page=${page}&per_page=${peopleState.perPage}`
+        );
+        const data = await response.json();
+
+        if (data.error) {
+            console.error('Error loading people:', data.error);
+            return;
+        }
+
+        peopleState.totalCount = data.total_count;
+        peopleState.totalPages = data.total_pages;
+
+        const panel = document.getElementById('info-panel');
+        const content = document.getElementById('info-content');
+
+        let html = `
+            <h2>People in ${unitName}</h2>
+            <p class="people-count">${data.total_count.toLocaleString()} people total</p>
+
+            <button class="back-button" onclick="showUnitDetails('${unitName}')">
+                &larr; Back to Unit Details
+            </button>
+
+            <div class="people-list">
+                <table class="people-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Age</th>
+                            <th>Sex</th>
+                            <th>Primary Activity</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        for (const person of data.people) {
+            const primaryActivity = person.primary_activity
+                ? `${person.primary_activity.type}: ${person.primary_activity.venue_name}`
+                : '-';
+
+            html += `
+                <tr class="person-row" onclick="showPersonDetails(${person.id})">
+                    <td>${person.id}</td>
+                    <td>${person.age}</td>
+                    <td>${person.sex}</td>
+                    <td>${primaryActivity}</td>
+                    <td><span class="view-link">View &rarr;</span></td>
+                </tr>
+            `;
+        }
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        // Pagination controls
+        if (data.total_pages > 1) {
+            html += `
+                <div class="pagination">
+                    <button class="pagination-btn" ${page <= 1 ? 'disabled' : ''} onclick="showUnitPeople('${unitName}', ${page - 1})">
+                        &larr; Prev
+                    </button>
+                    <span class="pagination-info">Page ${page} of ${data.total_pages}</span>
+                    <button class="pagination-btn" ${page >= data.total_pages ? 'disabled' : ''} onclick="showUnitPeople('${unitName}', ${page + 1})">
+                        Next &rarr;
+                    </button>
+                </div>
+            `;
+        }
+
+        content.innerHTML = html;
+        panel.classList.remove('hidden');
+
+    } catch (error) {
+        console.error('Error loading people list:', error);
+    }
+}
+
+// Show detailed information about a specific person
+async function showPersonDetails(personId) {
+    try {
+        const response = await fetch(`/api/population/person/${personId}`);
+        const person = await response.json();
+
+        if (person.error) {
+            console.error('Error loading person:', person.error);
+            return;
+        }
+
+        const panel = document.getElementById('info-panel');
+        const content = document.getElementById('info-content');
+
+        let html = `
+            <h2>Person #${person.id}</h2>
+
+            <button class="back-button" onclick="showUnitPeople('${peopleState.currentUnit}', ${peopleState.currentPage})">
+                &larr; Back to People List
+            </button>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-item-label">Age</div>
+                    <div class="info-item-value">${person.age}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-item-label">Sex</div>
+                    <div class="info-item-value">${person.sex}</div>
+                </div>
+            </div>
+        `;
+
+        // Geographical Unit
+        if (person.geographical_unit) {
+            html += `
+                <h3>Location</h3>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-item-label">Area</div>
+                        <div class="info-item-value">${person.geographical_unit.name}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-item-label">Level</div>
+                        <div class="info-item-value">${person.geographical_unit.level}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Activities list
+        if (person.activities && person.activities.length > 0) {
+            html += `
+                <h3>Activities</h3>
+                <div class="activities-list">
+                    ${person.activities.map(activity => `
+                        <span class="activity-tag">${activity}</span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // Activity Map
+        if (person.activity_map && Object.keys(person.activity_map).length > 0) {
+            html += `<h3>Activity Map</h3>`;
+
+            for (const [activityType, venuesByType] of Object.entries(person.activity_map)) {
+                if (Object.keys(venuesByType).length === 0) continue;
+
+                html += `
+                    <div class="activity-map-section">
+                        <h4>${formatActivityType(activityType)}</h4>
+                        <div class="activity-venues">
+                `;
+
+                for (const [venueType, subsets] of Object.entries(venuesByType)) {
+                    if (!subsets || subsets.length === 0) continue;
+
+                    for (const subset of subsets) {
+                        html += `
+                            <div class="activity-venue-item">
+                                <span class="venue-type-badge">${venueType}</span>
+                                <span class="venue-name">${subset.venue_name}</span>
+                                ${subset.subset_name !== 'default' ? `<span class="subset-name">(${subset.subset_name})</span>` : ''}
+                            </div>
+                        `;
+                    }
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Additional Properties
+        if (person.properties && Object.keys(person.properties).length > 0) {
+            html += `
+                <h3>Additional Properties</h3>
+                <div class="properties-grid">
+            `;
+
+            for (const [key, value] of Object.entries(person.properties)) {
+                const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+                html += `
+                    <div class="property-item">
+                        <span class="property-key">${key}:</span>
+                        <span class="property-value">${displayValue}</span>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+        }
+
+        content.innerHTML = html;
+        panel.classList.remove('hidden');
+
+    } catch (error) {
+        console.error('Error loading person details:', error);
+    }
+}
+
+// Format activity type for display
+function formatActivityType(activityType) {
+    return activityType
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // =============================================================================
