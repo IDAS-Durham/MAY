@@ -61,12 +61,12 @@ def _filter_units_with_valid_coords(geo_units: list['GeographicalUnit']) -> list
     # Filter units with valid coordinates
     units_with_coords = []
     for unit in geo_units:
-        coords = getattr(unit, coordinate_attr, None)
+        coords = getattr(unit, 'coordinates', None)
         if coords is not None and not (np.isnan(coords[0]) or np.isnan(coords[1])):
             units_with_coords.append(unit)
     return units_with_coords
 
-def _extract_coordinates(geo_units: list['GeographicalUnit']) -> npt.NDArray:
+def _extract_coordinates(geo_units: list['GeographicalUnit']) -> [npt.NDArray, list["GeographicalUnits"]]:
     """
     Extract coordinates from geographical units as a numpy array.
 
@@ -78,24 +78,26 @@ def _extract_coordinates(geo_units: list['GeographicalUnit']) -> npt.NDArray:
             or empty dict if fewer than 2 units have valid coordinates.
     """
     units_with_coords = _filter_units_with_valid_coords(geo_units)
+
+    if not units_with_coords:
+        return None, None
     
     if len(units_with_coords) < 2:
         logger.warning("Need at least 2 units with coordinates")
-        return {}
+        return None, None
 
     # Extract coordinates as (lon, lat) - note: libpysal expects (x, y) = (lon, lat)
     coordinates = np.array([
-        [unit.coordinates[1], unit.coordinates[0]]  # (lon, lat)
+        [*getattr(unit, 'coordinates', None)]  # (lon, lat)
         for unit in units_with_coords
     ])
 
-    return coordinates
+    return coordinates, units_with_coords
 
 @register_neighbour_finder('libpysal')
 def _find_neighbours_libpysal(
     geo_units: list['GeographicalUnit'],
     radius_km: float,
-    coordinate_attr: str = "coordinates"
 ) -> dict[id, list[id]]:
     """
     Find neighbouring geographical units using libpysal DistanceBand.
@@ -107,7 +109,6 @@ def _find_neighbours_libpysal(
     Args:
         geo_units: List of GeographicalUnit objects with coordinates
         radius_km: Search radius in kilometers (converted to degrees approximately)
-        coordinate_attr: Attribute name for coordinates tuple (lat, lon)
 
     Returns:
         Dict mapping unit id -> list of neighbour unit ids.
@@ -115,11 +116,14 @@ def _find_neighbours_libpysal(
     from libpysal import weights
 
     # Extract coordinates in the right format
-    coordinates = _extract_coordinates(geo_units)
+    coordinates, units_with_coords = _extract_coordinates(geo_units)
+
+    if coordinates is None:
+        return {}
     
     # Approximate conversion: 1 degree ≈ 111 km at equator. 
     threshold_degrees = radius_km / 111.0
-
+    
     # Build distance band weights
     dist_weights = weights.DistanceBand.from_array(coordinates, threshold=threshold_degrees)
 

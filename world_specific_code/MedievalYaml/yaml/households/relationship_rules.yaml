@@ -1,7 +1,6 @@
 # Relationship Rules Configuration
 #
-# Pattern-based relationship rules.
-# Rules expressed as constraints between category indices and roles.
+# Pattern-based relationship rules for medieval households.
 
 enabled: true
 
@@ -33,129 +32,94 @@ track_statistics: true
 # =============================================
 
 rules:
-  # Rule 1: Age difference in families with adults and kids
-  - name: "Adults with children"
+  # =============================================
+  # MEDIEVAL NUCLEAR FAMILY
+  # =============================================
+  # Target: 1 Kid, 2 Adults
+  # Enforces:
+  # - 14-50 yr age gap between Parent and Child
+  # - Romantic couple matching for the two Adults
+  # =============================================
+  - name: "Nuclear Family"
     patterns:
-      - "Adults with children"
+      - ">=1 >=0 >=0"  # Assumption: 1 Kid, 0 YA, 2 Adults
 
     roles:
-      role_A:
+      child:
         categories: ["Kids"]
-        count: "any"
-
-      role_B:
+        count: 1
+      parents:
         categories: ["Adults"]
-        count: "any"
+        count: 2
 
     selection_order:
-      - role_A
-      - role_B
+      - child
+      - parents
 
     constraints:
-      # role_B must be appropriately older than role_A
+      # Parents must be 14-50 years older than the child
       - type: "numerical_attribute_difference"
         attribute: "age"
-        role_1: "role_B"
-        role_2: "role_A"
-        min_difference: 16
+        role_1: "parents"
+        role_2: "child"
+        min_difference: 14
         max_difference: 50
-        max_difference_by_categorical_attribute:
-          attribute: "sex"
-          values:
-            female: 50
-            male: 55
-        # Preferred distribution for realistic parent-child age differences
         preferred_distribution:
           type: "normal"
-          mean: 25          # Average parent age when child is born
-          std: 5            # Standard deviation (most parents within 32±12 years)
-          tolerance: 10      # Search window: ±9 years around sampled target (±2 std)
+          mean: 28
+          std: 6
+          tolerance: 10
 
-    #   # role_B (2 people) should be a compatible pair
-    #   - type: "pair_matching"
-    #     role: "role_B"
-    #     categorical_attribute:
-    #       attribute: "sex"
-    #       same_category_probability: 0.05
-    #     numerical_attribute:
-    #       attribute: "age"
-    #       mean_difference: 3.0
-    #       std_difference: 5.0
-    #       max_absolute_difference: 19
+      # The two parents must be a compatible couple
+      - type: "pair_matching"
+        role: "parents"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.00  # Mostly heterosexual for medieval context
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 2.0
+          std_difference: 4.0
+          max_absolute_difference: 15
+        creates_romantic_couple: true
 
-  # Rule 2: Adult household with no kids
-  - name: "Adults only"
+  # =============================================
+  # MEDIEVAL COUPLE (No kids)
+  # =============================================
+  - name: "Medieval Couple"
     patterns:
-      - "Adults only"
+      - "0 >=0 >=0"
 
     roles:
-      role_A:
-        categories: ["Kids"]
-        count: 0
-
-      role_B:
+      partners:
         categories: ["Adults"]
-        count: "any"
+        count: 2
 
     selection_order:
-      - role_A
-      - role_B
+      - partners
 
-    # constraints:
-    #   - type: "numerical_attribute_difference"
-    #     attribute: "age"
-    #     role_1: "role_B"
-    #     role_2: "role_A"
-    #     min_difference: 16
-    #     max_difference: 50
-    #     max_difference_by_categorical_attribute:
-    #       attribute: "sex"
-    #       values:
-    #         female: 50
-    #         male: 55
-    #     # Preferred distribution for realistic parent-child age differences
-    #     preferred_distribution:
-    #       type: "normal"
-    #       mean: 32          # Average parent age when child is born
-    #       std: 6            # Standard deviation (most parents within 32±12 years)
-    #       tolerance: 9      # Search window: ±9 years around sampled target (±1.5 std)
+    constraints:
+      - type: "pair_matching"
+        role: "partners"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.00
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 2.0
+          std_difference: 4.0
+          max_absolute_difference: 15
+        creates_romantic_couple: true
 
-
-# =============================================
-# CONSTRAINT TYPES
-# =============================================
-#
-# 1. numerical_attribute_difference
-#    Validates: (role_1[attribute] - role_2[attribute]) is within [min_difference, max_difference]
-#
-#    When selecting a person for role_1 with existing people in role_2:
-#      - Check against the MINIMUM value in role_2 for min_difference
-#      - Check against the MAXIMUM value in role_2 for max_difference
-#
-#    Parameters:
-#      - attribute: Name of the numerical attribute to compare (e.g., "age", "income")
-#      - role_1: First role name
-#      - role_2: Second role name
-#      - min_difference: Minimum value for (attribute_1 - attribute_2)
-#      - max_difference: Maximum value for (attribute_1 - attribute_2), default
-#      - max_difference_by_categorical_attribute: (optional) Override max based on a categorical attribute
-#          - attribute: Name of categorical attribute (e.g., "sex", "occupation")
-#          - values: Dict mapping category values to max_difference overrides
-#
-# 2. pair_matching
-#    Selects 2 people from a role to form a compatible pair based on attributes
-#    Can be used for: romantic partners, roommates, business partners, siblings, etc.
-#
-#    Parameters:
-#      - role: Role name
-#      - require_exact_count: Only apply if role has exactly N people (optional)
-#      - categorical_attribute: (optional) Constraints on a categorical attribute
-#          - attribute: Name of categorical attribute (e.g., "sex", "religion", "occupation")
-#          - same_category_probability: Probability of matching categories (0.0-1.0)
-#      - numerical_attribute: (optional) Constraints on a numerical attribute
-#          - attribute: Name of numerical attribute (e.g., "age", "income", "education_years")
-#          - mean_difference: Target mean difference
-#          - std_difference: Standard deviation of difference
-#          - max_absolute_difference: Hard limit on |value_1 - value_2|
-
-
+  # =============================================
+  # SINGLE ADULT
+  # =============================================
+  - name: "Single Adult"
+    patterns:
+      - "0 >=0 >=0"
+    roles:
+      solo:
+        categories: ["Adults"]
+        count: 1
+    selection_order:
+      - solo

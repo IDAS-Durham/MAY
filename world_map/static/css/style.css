@@ -279,6 +279,33 @@ header h1 {
     font-size: 0.8rem;
 }
 
+/* List Section (for configurable panels) */
+.list-section {
+    max-height: 300px;
+    overflow-y: auto;
+    margin: 10px 0;
+}
+
+.list-item {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #495057;
+    border-left: 3px solid #667eea;
+}
+
+.list-item:hover {
+    background: #e9ecef;
+}
+
+.list-more {
+    font-style: italic;
+    color: #6c757d;
+    border-left-color: #6c757d;
+}
+
 /* Leaflet Customization */
 .leaflet-popup-content {
     margin: 13px 15px;
@@ -350,6 +377,234 @@ header h1 {
 
 ::-webkit-scrollbar-thumb:hover {
     background: #555;
+}
+
+/* Action Buttons */
+.action-button {
+    display: inline-block;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+
+.action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.back-button {
+    display: inline-block;
+    padding: 8px 16px;
+    background: #f8f9fa;
+    color: #667eea;
+    border: 1px solid #667eea;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 15px;
+}
+
+.back-button:hover {
+    background: #667eea;
+    color: white;
+}
+
+/* People List */
+.people-count {
+    color: #6c757d;
+    margin-bottom: 15px;
+}
+
+.people-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 15px 0;
+}
+
+.people-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.people-table thead {
+    background: #f8f9fa;
+    position: sticky;
+    top: 0;
+}
+
+.people-table th {
+    padding: 10px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.people-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #e9ecef;
+    color: #495057;
+}
+
+.person-row {
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.person-row:hover {
+    background: #f8f9fa;
+}
+
+.view-link {
+    color: #667eea;
+    font-size: 0.8rem;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e9ecef;
+}
+
+.pagination-btn {
+    padding: 8px 16px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+    background: #764ba2;
+}
+
+.pagination-btn:disabled {
+    background: #dee2e6;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+.pagination-info {
+    color: #6c757d;
+    font-size: 0.9rem;
+}
+
+/* Person Details */
+.activities-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.activity-tag {
+    display: inline-block;
+    padding: 5px 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Activity Map */
+.activity-map-section {
+    margin-bottom: 15px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.activity-map-section h4 {
+    font-size: 0.95rem;
+    color: #667eea;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.activity-venues {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.activity-venue-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    background: white;
+    border-radius: 4px;
+    border-left: 3px solid #667eea;
+}
+
+.venue-type-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    background: #e9ecef;
+    color: #495057;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.venue-name {
+    color: #495057;
+    font-size: 0.9rem;
+}
+
+.subset-name {
+    color: #6c757d;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+/* Properties Grid */
+.properties-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 10px 0;
+}
+
+.property-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.property-key {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.property-value {
+    color: #495057;
+    font-weight: 600;
 }
 
 /* Responsive */

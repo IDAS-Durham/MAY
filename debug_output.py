@@ -162,30 +162,31 @@ def export_people(world, output_file="people.csv"):
             if activity_name == 'residence':
                 continue
 
+            row[f'{activity_name}'] = str(subsets)
             # Check if this is a multi-venue activity (dict) or single-venue (list)
-            if isinstance(subsets, dict):
-                # Multi-venue activity (e.g., leisure with multiple types)
-                # Store count of venues per type
-                for venue_type, venue_subsets in subsets.items():
-                    if venue_subsets and len(venue_subsets) > 0:
-                        # Store count of venues for this type
-                        row[f'{activity_name}_{venue_type}_count'] = len(venue_subsets)
-                        # Optionally store first venue name
-                        first_venue = venue_subsets[0].venue
-                        row[f'{activity_name}_{venue_type}_first'] = first_venue.name
-            elif subsets and len(subsets) > 0:
-                # Single-venue activity (traditional)
-                venue = subsets[0].venue
-                row[f'{activity_name}_venue_name'] = venue.name
-                row[f'{activity_name}_venue_type'] = venue.type
-                row[f'{activity_name}_venue_geo_unit'] = venue.geographical_unit.name if venue.geographical_unit else None
+            # if isinstance(subsets, dict):
+            #     # Multi-venue activity (e.g., leisure with multiple types)
+            #     # Store count of venues per type
+            #     for venue_type, venue_subsets in subsets.items():
+            #         if venue_subsets and len(venue_subsets) > 0:
+            #             # Store count of venues for this type
+            #             row[f'{activity_name}_{venue_type}_count'] = len(venue_subsets)
+            #             # Optionally store first venue name
+            #             row[f'{activity_name}_{venue_type}_first'] = venue_subsets
+            # elif subsets and len(subsets) > 0:
+            #     # Single-venue activity (traditional)
+            #     subset_list = subsets.values()
+            #     venue = subsets_list[0].venue
+            #     row[f'{activity_name}_venue_name'] = venue.name
+            #     row[f'{activity_name}_venue_type'] = venue.type
+            #     row[f'{activity_name}_venue_geo_unit'] = venue.geographical_unit.name if venue.geographical_unit else None
 
-                # Add parent venue information if it exists
-                if venue.parent:
-                    parent = venue.parent
-                    row[f'{activity_name}_parent_venue_name'] = parent.name
-                    row[f'{activity_name}_parent_venue_type'] = parent.type
-                    row[f'{activity_name}_parent_venue_geo_unit'] = parent.geographical_unit.name if parent.geographical_unit else None
+            #     # Add parent venue information if it exists
+            #     if venue.parent:
+            #         parent = venue.parent
+            #         row[f'{activity_name}_parent_venue_name'] = parent.name
+            #         row[f'{activity_name}_parent_venue_type'] = parent.type
+            #         row[f'{activity_name}_parent_venue_geo_unit'] = parent.geographical_unit.name if parent.geographical_unit else None
 
         person_data.append(row)
 
