@@ -32,18 +32,16 @@ class WorldSerializer:
         """
         self.config = SerializationConfig(config_file)
         self.compression_settings = self.config.get_compression_settings()
+        self.registries = {}  # Registry of string-to-int mappings
 
     def export(self, world, output_file):
         """
         Export world to HDF5 file.
-
-        Args:
-            world: World object to serialize
-            output_file: Output HDF5 filename
-
-        Returns:
-            Dict with export statistics
         """
+        # Internal state for export coordination
+        self._venue_to_global_id = {}
+        self._venue_type_id_map = {}
+        self._people_sorted = None
         logger.info("=" * 60)
         logger.info("Exporting World to HDF5")
         logger.info("=" * 60)
@@ -78,6 +76,10 @@ class WorldSerializer:
             # Write activity mappings
             logger.info("Serializing activity mappings...")
             self._write_activity_mappings(f, world)
+
+            # Write registries (Enum mappings for C++)
+            logger.info("Writing string registries...")
+            self._write_registries(f)
 
         logger.info("")
         logger.info("Export complete!")
@@ -137,8 +139,17 @@ class WorldSerializer:
 
         # Core attributes (always included)
         ids = np.array([unit.id for unit in units_list], dtype=np.int32)
+        
+        # OPTIMIZATION: Move geography names to metadata
         names = np.array([unit.name for unit in units_list], dtype=h5py.string_dtype())
-        levels = np.array([unit.level for unit in units_list], dtype=h5py.string_dtype())
+        metadata_group = f.require_group('metadata/names')
+        self._create_dataset(metadata_group, 'geography', names)
+
+        # OPTIMIZATION: Intern geography levels
+        unique_levels = sorted(list(set(unit.level for unit in units_list)))
+        level_to_id = {l: i for i, l in enumerate(unique_levels)}
+        levels = np.array([level_to_id[unit.level] for unit in units_list], dtype=np.uint8)
+        self.registries['geo_levels'] = level_to_id
 
         # Parent IDs (-1 for root units)
         parent_ids = np.array(
@@ -148,7 +159,6 @@ class WorldSerializer:
 
         # Write core datasets
         self._create_dataset(geo_group, 'ids', ids)
-        self._create_dataset(geo_group, 'names', names)
         self._create_dataset(geo_group, 'levels', levels)
         self._create_dataset(geo_group, 'parent_ids', parent_ids)
 
@@ -191,41 +201,56 @@ class WorldSerializer:
         # ============================================================
         # SORT BY GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
         # ============================================================
-        logger.info(f"    Sorting people by geo_unit_id for partitioning...")
+        # Sort people by their geographical unit ID using numpy argsort for speed
+        geo_unit_ids_raw = np.array([p.geographical_unit.id if p.geographical_unit else -1 for p in people], dtype=np.int32)
+        sort_idx = np.argsort(geo_unit_ids_raw, kind='stable')
+        people_sorted = [people[i] for i in sort_idx]
 
-        # Sort people by their geographical unit ID
-        people_sorted = sorted(people, key=lambda p: p.geographical_unit.id if p.geographical_unit else -1)
+        # Use the sorted geo_unit_ids directly
+        geo_unit_ids_sorted = geo_unit_ids_raw[sort_idx]
 
         # Store sorted people for activity mapping serialization
         self._people_sorted = people_sorted
 
         logger.info(f"    ✓ Sorted {num_people:,} people by geo_unit_id")
 
-        # Core attributes (always included)
-        ids = np.array([p.id for p in people_sorted], dtype=np.int32)
-        ages = np.array([p.age for p in people_sorted], dtype=np.float32)
-        sexes = np.array([p.sex for p in people_sorted], dtype=h5py.string_dtype())
-
-        # Geographical unit IDs (where person lives - SGU level)
-        geo_unit_ids = np.array(
-            [p.geographical_unit.id if p.geographical_unit else -1 for p in people_sorted],
-            dtype=np.int32
-        )
-
-        logger.info(f"    ✓ Built core attribute arrays")
-
         # ============================================================
         # CREATE PARTITION INDEX
         # ============================================================
         logger.info(f"    Building partition index...")
-        self._write_partition_index(pop_group, geo_unit_ids)
+        self._write_partition_index(pop_group, geo_unit_ids_sorted)
         logger.info(f"    ✓ Wrote partition index")
 
-        # Write core datasets
-        self._create_dataset(pop_group, 'ids', ids)
-        self._create_dataset(pop_group, 'ages', ages)
-        self._create_dataset(pop_group, 'sexes', sexes)
-        self._create_dataset(pop_group, 'geo_unit_ids', geo_unit_ids)
+        # ============================================================
+        # WRITE CORE ATTRIBUTES IN CHUNKS
+        # ============================================================
+        logger.info(f"    Writing core attributes in chunks...")
+        
+        chunk_size = 100000
+        sex_map = {"male": 0, "female": 1, "": 2, "unknown": 2}
+        
+        # Initialize datasets
+        ids_ds = self._create_empty_dataset(pop_group, 'ids', np.int32, (num_people,))
+        ages_ds = self._create_empty_dataset(pop_group, 'ages', np.float32, (num_people,))
+        sexes_ds = self._create_empty_dataset(pop_group, 'sexes', np.uint8, (num_people,))
+        geo_ds = self._create_empty_dataset(pop_group, 'geo_unit_ids', np.int32, (num_people,))
+
+        for i in range(0, num_people, chunk_size):
+            end = min(i + chunk_size, num_people)
+            chunk = people_sorted[i:end]
+            
+            ids_chunk = np.array([p.id for p in chunk], dtype=np.int32)
+            ages_chunk = np.array([p.age for p in chunk], dtype=np.float32)
+            sexes_chunk = np.array([sex_map.get(p.sex.lower(), 2) for p in chunk], dtype=np.uint8)
+            geo_chunk = geo_unit_ids_sorted[i:end]
+            
+            ids_ds[i:end] = ids_chunk
+            ages_ds[i:end] = ages_chunk
+            sexes_ds[i:end] = sexes_chunk
+            geo_ds[i:end] = geo_chunk
+            
+            if (i // chunk_size) % 5 == 0:
+                logger.info(f"      Processed {end:,}/{num_people:,} people...")
 
         logger.info(f"    ✓ Wrote core datasets to HDF5")
 
@@ -609,13 +634,10 @@ class WorldSerializer:
         # ============================================================
         # SORT BY GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
         # ============================================================
-        logger.info(f"    Sorting {num_venues:,} venues by geo_unit_id for partitioning...")
-
-        # Sort venues by their geographical unit ID
-        all_venues_sorted = sorted(
-            all_venues,
-            key=lambda v: v.geographical_unit.id if v.geographical_unit else -1
-        )
+        # Sort venues by their geographical unit ID using numpy argsort
+        geo_unit_ids_raw = np.array([v.geographical_unit.id if v.geographical_unit else -1 for v in all_venues], dtype=np.int32)
+        sort_idx = np.argsort(geo_unit_ids_raw, kind='stable')
+        all_venues_sorted = [all_venues[i] for i in sort_idx]
 
         logger.info(f"    ✓ Sorted {num_venues:,} venues by geo_unit_id")
 
@@ -636,8 +658,20 @@ class WorldSerializer:
 
         # Core attributes (always included)
         ids = global_ids  # Use GLOBAL IDs for C++
+        
+        # OPTIMIZATION: Move names to metadata to save memory in core simulation loop
         names = np.array([v.name for v in all_venues_sorted], dtype=h5py.string_dtype())
-        types = np.array([v.type for v in all_venues_sorted], dtype=h5py.string_dtype())
+        metadata_group = f.require_group('metadata/names')
+        self._create_dataset(metadata_group, 'venues', names)
+
+        # types = np.array([v.type for v in all_venues_sorted], dtype=h5py.string_dtype())
+        # OPTIMIZATION: Convert venue types to uint8 Enum
+        unique_types = sorted(list(set(v.type for v in all_venues_sorted)))
+        type_to_id = {t: i for i, t in enumerate(unique_types)}
+        types = np.array([type_to_id[v.type] for v in all_venues_sorted], dtype=np.uint8)
+
+        # Store the type mapping for C++ consumption
+        self._venue_type_id_map = type_to_id
 
         # Geographical unit IDs (where venue is located)
         geo_unit_ids = np.array(
@@ -654,8 +688,8 @@ class WorldSerializer:
 
         # Write core datasets
         self._create_dataset(venues_group, 'ids', ids)
-        self._create_dataset(venues_group, 'names', names)
         self._create_dataset(venues_group, 'types', types)
+        self._create_dataset(venues_group, 'ranks_in_type', type_scoped_ids) # Needed for lazy property loading
         self._create_dataset(venues_group, 'geo_unit_ids', geo_unit_ids)
         self._create_dataset(venues_group, 'parent_ids', parent_ids)
 
@@ -743,21 +777,27 @@ class WorldSerializer:
         # ============================================================
         # SORT BY VENUE'S GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
         # ============================================================
-        logger.info(f"    Sorting {num_subsets:,} subsets by venue's geo_unit_id for partitioning...")
-
-        # Sort subsets by their venue's geographical unit ID
-        all_subsets_sorted = sorted(
-            all_subsets,
-            key=lambda s: s.venue.geographical_unit.id if s.venue.geographical_unit else -1
-        )
+        # Sort subsets by their venue's geographical unit ID using numpy argsort
+        geo_unit_ids_raw = np.array([s.venue.geographical_unit.id if s.venue.geographical_unit else -1 for s in all_subsets], dtype=np.int32)
+        sort_idx = np.argsort(geo_unit_ids_raw, kind='stable')
+        all_subsets_sorted = [all_subsets[i] for i in sort_idx]
 
         logger.info(f"    ✓ Sorted {num_subsets:,} subsets by venue's geo_unit_id")
 
         # Core attributes
         # IMPORTANT: Use global venue IDs (not type-scoped IDs)
+        # venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets_sorted], dtype=np.int32)
         venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets_sorted], dtype=np.int32)
         subset_indices = np.array([s.subset_index for s in all_subsets_sorted], dtype=np.int32)
+        # subset_names = np.array([s.subset_name for s in all_subsets_sorted], dtype=h5py.string_dtype())
+        # OPTIMIZATION: Move subset names to metadata
         subset_names = np.array([s.subset_name for s in all_subsets_sorted], dtype=h5py.string_dtype())
+        metadata_group = venues_group.file.require_group('metadata/names')
+        self._create_dataset(metadata_group, 'subsets', subset_names)
+
+        # Populate subset_names registry for parallel consistency
+        unique_subset_names = sorted(list(set(s.subset_name for s in all_subsets_sorted)))
+        self.registries['subset_names'] = {name: i for i, name in enumerate(unique_subset_names)}
 
         # Member counts (useful for C++)
         member_counts = np.array([len(s.members) for s in all_subsets_sorted], dtype=np.int32)
@@ -772,7 +812,6 @@ class WorldSerializer:
         # Write datasets
         self._create_dataset(subsets_group, 'venue_ids', venue_ids)
         self._create_dataset(subsets_group, 'subset_indices', subset_indices)
-        self._create_dataset(subsets_group, 'subset_names', subset_names)
         self._create_dataset(subsets_group, 'member_counts', member_counts)
 
         # Write member lists (ragged array - need special handling)
@@ -782,39 +821,56 @@ class WorldSerializer:
 
     def _write_subset_members(self, subsets_group, all_subsets):
         """
-        Write subset member lists as ragged arrays with partition indexing.
-
-        Uses offset-based encoding:
-        - members_flat: Flattened array of all person IDs (sorted by venue's geo_unit_id)
-        - members_offsets: Start index for each subset
-        - partition_index: geo_unit-based index for efficient partitioned loading
+        Write subset member lists as ragged arrays with chunked processing.
         """
-        # Flatten all member lists
-        members_flat = []
-        members_offsets = [0]  # Start offset
+        num_subsets = len(all_subsets)
+        chunk_size = 200000
 
-        for subset in all_subsets:
-            member_ids = [p.id for p in subset.members]
-            members_flat.extend(member_ids)
-            members_offsets.append(len(members_flat))
+        # Pass 1: Count total members
+        logger.info(f"    Counting total subset members...")
+        total_members = sum(len(s.members) for s in all_subsets)
+        logger.info(f"    Total subset memberships to write: {total_members:,}")
 
-        # Convert to arrays
-        members_flat = np.array(members_flat, dtype=np.int32)
-        members_offsets = np.array(members_offsets[:-1], dtype=np.int32)  # Drop last offset
+        # Initialize datasets
+        members_ds = self._create_empty_dataset(subsets_group, 'members_flat', np.int32, (total_members,))
+        offsets_ds = self._create_empty_dataset(subsets_group, 'members_offsets', np.int32, (num_subsets,))
+
+        current_member_idx = 0
+        all_offsets = []
+
+        logger.info(f"    Writing subset memberships in chunks...")
+        for i in range(0, num_subsets, chunk_size):
+            end = min(i + chunk_size, num_subsets)
+            chunk = all_subsets[i:end]
+            
+            chunk_members = []
+            chunk_offsets = []
+            
+            for subset in chunk:
+                chunk_offsets.append(current_member_idx)
+                ids = [p.id for p in subset.members]
+                chunk_members.extend(ids)
+                current_member_idx += len(ids)
+            
+            # Write chunk to HDF5
+            if chunk_members:
+                members_ds[chunk_offsets[0]:current_member_idx] = np.array(chunk_members, dtype=np.int32)
+            
+            offsets_ds[i:end] = np.array(chunk_offsets, dtype=np.int32)
+            
+            if (i // chunk_size) % 5 == 0:
+                logger.info(f"      Processed {end:,}/{num_subsets:,} subsets...")
 
         # ============================================================
         # CREATE PARTITION INDEX FOR SUBSET MEMBERSHIPS
         # ============================================================
         logger.info(f"    Building subset members partition index...")
-        total_members = len(members_flat)
-        self._write_subset_members_partition_index(subsets_group, all_subsets, members_offsets, total_members)
+        # Get offsets back for partition index
+        offsets_full = offsets_ds[:]
+        self._write_subset_members_partition_index(subsets_group, all_subsets, offsets_full, total_members)
         logger.info(f"    ✓ Wrote subset members partition index")
 
-        # Write datasets
-        self._create_dataset(subsets_group, 'members_flat', members_flat)
-        self._create_dataset(subsets_group, 'members_offsets', members_offsets)
-
-        logger.info(f"    Total subset memberships: {len(members_flat):,}")
+        logger.info(f"    Total subset memberships: {total_members:,}")
 
     def _write_activity_mappings(self, f, world):
         """Write activity mapping data (activity_map, hierarchies)."""
@@ -828,24 +884,11 @@ class WorldSerializer:
 
     def _write_activity_map(self, rel_group, world, people_sorted):
         """
-        Write activity_map data.
-
-        For each person, stores which subsets they belong to for each activity.
-
-        Structure:
-        - activity_names: Unique activity names
-        - person_activity_flat: Flattened list of (person_id, activity_idx, venue_id, subset_idx)
-        - person_activity_offsets: Start index for each person
-        - partition_index: geo_unit-based index for efficient partitioned loading
-
-        Args:
-            rel_group: HDF5 activity mapping group
-            world: World object
-            people_sorted: People list sorted by geo_unit_id
+        Write activity_map data with chunked processing for memory efficiency.
         """
         activity_map_group = rel_group.create_group('activity_map')
 
-        # Collect all unique activity names
+        # Collect activity names (still needs a pass, but this is usually just string set)
         activity_names_set = set()
         for person in people_sorted:
             activity_names_set.update(person.activities)
@@ -857,130 +900,180 @@ class WorldSerializer:
         activity_names_array = np.array(activity_names, dtype=h5py.string_dtype())
         self._create_dataset(activity_map_group, 'activity_names', activity_names_array)
 
-        # Flatten activity_map for all people
-        # Format: (person_id, activity_idx, venue_id, subset_idx)
-        # Use separate lists for integer values to avoid list-of-lists overhead
-        p_ids = []
-        a_idxs = []
-        v_ids_list = []
-        s_idxs = []
-        activity_offsets = [0]
-
-        # Progress tracking
+        # Prepare for chunked processing
         num_people = len(people_sorted)
-        progress_interval = max(1, num_people // 10)  # Update every 10%
-
-        # Cache activity indices to avoid dict lookup in inner loop
-        activity_indices = {name: activity_to_idx[name] for name in activity_names}
+        chunk_size = 200000
         venue_to_id = self._venue_to_global_id
-
-        for person_idx, person in enumerate(people_sorted, 1):
-            person_id = person.id
-            activity_map = person.activity_map
-            
-            # Accessing activities directly to avoid repeated .items() calls if possible
-            # However, we need both name and types, so items() is generally okay if
-            # the dict is small. The real bottleneck is the intermediate list.
-            for name, types in activity_map.items():
+        
+        # We'll use a resizeable dataset if possible, or just two passes.
+        # Two passes: 1. Count total 2. Write.
+        
+        logger.info(f"    Counting activity mappings...")
+        mapping_counts = []
+        total_mappings = 0
+        for person in people_sorted:
+            count = 0
+            for name, types in person.activity_map.items():
                 if name in activity_to_idx:
-                    act_idx = activity_to_idx[name]
                     for subsets_list in types.values():
-                        for subset in subsets_list:
-                            v_id = id(subset.venue)
-                            if v_id in venue_to_id:
-                                p_ids.append(person_id)
-                                a_idxs.append(act_idx)
-                                v_ids_list.append(venue_to_id[v_id])
-                                s_idxs.append(subset.subset_index)
+                        count += len(subsets_list)
+            mapping_counts.append(count)
+            total_mappings += count
+        
+        logger.info(f"    Total activity mappings to write: {total_mappings:,}")
+        
+        # Initialize datasets
+        activity_ds = self._create_empty_dataset(activity_map_group, 'activity_data', np.int32, (total_mappings, 4))
+        offsets_ds = self._create_empty_dataset(activity_map_group, 'activity_offsets', np.int32, (num_people,))
+        
+        current_mapping_idx = 0
+        activity_offsets = []
 
-            activity_offsets.append(len(p_ids))
-
-            # Log progress
-            if person_idx % progress_interval == 0 or person_idx == num_people:
-                progress = (person_idx / num_people) * 100
-                logger.info(f"    Progress: {person_idx:,}/{num_people:,} people processed ({progress:.1f}%) - {len(p_ids):,} mappings")
-
-        # Convert to a single 2D array
-        if p_ids:
-            activity_data = np.empty((len(p_ids), 4), dtype=np.int32)
-            activity_data[:, 0] = p_ids
-            activity_data[:, 1] = a_idxs
-            activity_data[:, 2] = v_ids_list
-            activity_data[:, 3] = s_idxs
-        else:
-            activity_data = np.zeros((0, 4), dtype=np.int32)
-
-        activity_offsets = np.array(activity_offsets[:-1], dtype=np.int32)
+        logger.info(f"    Writing activity mappings in chunks...")
+        for i in range(0, num_people, chunk_size):
+            end = min(i + chunk_size, num_people)
+            chunk = people_sorted[i:end]
+            
+            chunk_p_ids = []
+            chunk_a_idxs = []
+            chunk_v_ids = []
+            chunk_s_idxs = []
+            chunk_offsets = []
+            
+            for person in chunk:
+                chunk_offsets.append(current_mapping_idx)
+                person_id = person.id
+                for name, types in person.activity_map.items():
+                    if name in activity_to_idx:
+                        act_idx = activity_to_idx[name]
+                        for subsets_list in types.values():
+                            for subset in subsets_list:
+                                v_id = id(subset.venue)
+                                if v_id in venue_to_id:
+                                    chunk_p_ids.append(person_id)
+                                    chunk_a_idxs.append(act_idx)
+                                    chunk_v_ids.append(venue_to_id[v_id])
+                                    chunk_s_idxs.append(subset.subset_index)
+                                    current_mapping_idx += 1
+            
+            # Write chunk to HDF5
+            if chunk_p_ids:
+                chunk_data = np.empty((len(chunk_p_ids), 4), dtype=np.int32)
+                chunk_data[:, 0] = chunk_p_ids
+                chunk_data[:, 1] = chunk_a_idxs
+                chunk_data[:, 2] = chunk_v_ids
+                chunk_data[:, 3] = chunk_s_idxs
+                
+                start_row = chunk_offsets[0]
+                activity_ds[start_row:current_mapping_idx] = chunk_data
+            
+            offsets_ds[i:end] = np.array(chunk_offsets, dtype=np.int32)
+            
+            if (i // chunk_size) % 5 == 0:
+                logger.info(f"      Processed {end:,}/{num_people:,} people...")
 
         # ============================================================
         # CREATE PARTITION INDEX FOR ACTIVITY MAPS
         # ============================================================
         logger.info(f"  Building activity mapping partition index...")
-        total_activity_mappings = len(activity_data)
-        self._write_activity_mapping_partition_index(activity_map_group, people_sorted, activity_offsets, total_activity_mappings)
+        # Re-fetch offsets for partitioning (or we could have kept geo boundaries in mind)
+        # For simplicity, we'll use the offsets we just wrote if we need them, but they are already in HDF5.
+        # Actually, self._write_activity_mapping_partition_index needs the array.
+        # I'll modify it to take the dataset or we'll have to read it back (slow) or keep it in memory (medium if 32-bit).
+        # A 60M int32 array is 240MB, which is fine.
+        offsets_full = offsets_ds[:] 
+        self._write_activity_mapping_partition_index(activity_map_group, people_sorted, offsets_full, total_mappings)
         logger.info(f"    ✓ Wrote activity mapping partition index")
-
-        # Write datasets
-        self._create_dataset(activity_map_group, 'activity_data', activity_data)
-        self._create_dataset(activity_map_group, 'activity_offsets', activity_offsets)
 
         logger.info(f"  Activity map: {len(activity_names)} unique activities:")
         for name in activity_names:
             logger.info(f"                                           - {name}")
-        logger.info(f"    Total activity mappings: {len(activity_data):,}")
+        logger.info(f"    Total activity mappings: {total_mappings:,}")
 
     def _write_property_array(self, group, prop_name, objects):
         """
-        Write a property array for a list of objects.
-
-        Handles different property types (int, float, str, bool, list, dict).
-
-        Args:
-            group: HDF5 group to write to
-            prop_name: Property name
-            objects: List of objects (Person, Venue, GeographicalUnit)
+        Write a property array for a list of objects in chunks.
+        Supports different property types (int, float, str, bool, list, dict).
         """
-        # Extract property values (Optimized list comprehension)
-        # Assuming all objects are of the same class or have 'properties'
-        values = [obj.properties.get(prop_name) for obj in objects]
-
-        # Determine type and convert to array
-        if not values or all(v is None for v in values):
-            # All None - skip
+        num_objects = len(objects)
+        chunk_size = 100000
+        
+        # Step 1: Infer type from first non-None value
+        sample_val = None
+        for i in range(0, num_objects, chunk_size):
+            chunk_slice = objects[i:min(i + chunk_size, num_objects)]
+            for obj in chunk_slice:
+                val = obj.properties.get(prop_name)
+                if val is not None:
+                    sample_val = val
+                    break
+            if sample_val is not None:
+                break
+        
+        if sample_val is None:
             logger.debug(f"Skipping property '{prop_name}' (all None)")
             return
 
-        # Infer type from first non-None value
-        sample_val = next((v for v in values if v is not None), None)
-
-        if sample_val is None:
-            return
-
+        # Step 2: Determine dtype and create dataset
+        dtype = None
+        fill_value = None
+        
         if isinstance(sample_val, bool):
-            # Boolean
-            arr = np.array([v if v is not None else False for v in values], dtype=np.bool_)
+            dtype = np.bool_
+            fill_value = False
         elif isinstance(sample_val, int):
-            # Integer
-            arr = np.array([v if v is not None else -1 for v in values], dtype=np.int32)
+            dtype = np.int32
+            fill_value = -1
         elif isinstance(sample_val, float):
-            # Float
-            arr = np.array([v if v is not None else np.nan for v in values], dtype=np.float32)
-        elif isinstance(sample_val, str):
-            # String
-            arr = np.array([v if v is not None else "" for v in values], dtype=h5py.string_dtype())
-        elif isinstance(sample_val, (list, dict)):
-            # Complex type - serialize as JSON string
-            import json
-            # Pre-allocate for performance if string length is predictable, but h5py.string_dtype is flexible
-            arr = np.array([json.dumps(v) if v is not None else "" for v in values],
-                          dtype=h5py.string_dtype())
+            dtype = np.float32
+            fill_value = np.nan
         else:
-            # Unknown type - try converting to string
-            logger.warning(f"Unknown property type for '{prop_name}': {type(sample_val)}")
-            arr = np.array([str(v) if v is not None else "" for v in values],
-                          dtype=h5py.string_dtype())
+            # Strings and complex types (JSON)
+            dtype = h5py.string_dtype()
+            fill_value = ""
 
-        self._create_dataset(group, prop_name, arr)
+        ds = self._create_empty_dataset(group, prop_name, dtype, (num_objects,))
+
+        # Step 3: Write in chunks
+        import json
+        for i in range(0, num_objects, chunk_size):
+            end = min(i + chunk_size, num_objects)
+            chunk = objects[i:end]
+            
+            # Optimized collection: get values once per object
+            chunk_vals = []
+            for obj in chunk:
+                val = obj.properties.get(prop_name)
+                if val is None:
+                    chunk_vals.append(fill_value)
+                elif isinstance(val, (list, dict)):
+                    chunk_vals.append(json.dumps(val))
+                else:
+                    chunk_vals.append(val)
+            
+            ds[i:end] = np.array(chunk_vals, dtype=dtype)
+
+    def _create_empty_dataset(self, group, name, dtype, shape):
+        """Create an empty HDF5 dataset with compression."""
+        compression = self.compression_settings['compression']
+        compression_level = self.compression_settings['compression_level']
+
+        # Determine chunks for HDF5 (not our processing chunks)
+        # Choosing a chunk size that is a multiple of typical access patterns
+        if shape and len(shape) > 0:
+            h5_chunks = (min(shape[0], 100000),) + shape[1:]
+        else:
+            h5_chunks = None
+
+        return group.create_dataset(
+            name,
+            shape=shape,
+            dtype=dtype,
+            compression=compression,
+            compression_opts=compression_level,
+            shuffle=True,
+            chunks=h5_chunks
+        )
 
     def _create_dataset(self, group, name, data):
         """
@@ -996,11 +1089,48 @@ class WorldSerializer:
 
         # Only compress if data is large enough
         if len(data) > 100:
+            # OPTIMIZATION: Enable shuffle=True for much better compression ratio on numeric data
             group.create_dataset(
                 name,
                 data=data,
                 compression=compression,
-                compression_opts=compression_level
+                compression_opts=compression_level,
+                shuffle=True
             )
         else:
             group.create_dataset(name, data=data)
+
+    def _write_registries(self, f):
+        """Write string-to-int registries for categorical data."""
+        registry_group = f.create_group('metadata/registries')
+        
+        # Add sex mapping (predefined)
+        sex_reg = registry_group.create_group('sex')
+        sex_reg.attrs['mapping'] = "male:0,female:1,unknown:2"
+        
+        # Add venue types mapping
+        if hasattr(self, '_venue_type_id_map'):
+            vtype_reg = registry_group.create_dataset('venue_types', 
+                                                     data=np.array(list(self._venue_type_id_map.keys()), dtype=h5py.string_dtype()))
+            
+        # Add geo levels mapping
+        if 'geo_levels' in self.registries:
+            mapping = self.registries['geo_levels']
+            sorted_strings = [k for k, v in sorted(mapping.items(), key=lambda item: item[1])]
+            registry_group.create_dataset('geo_levels', data=np.array(sorted_strings, dtype=h5py.string_dtype()))
+            
+        # Add subset names mapping
+        if 'subset_names' in self.registries:
+            mapping = self.registries['subset_names']
+            sorted_strings = [k for k, v in sorted(mapping.items(), key=lambda item: item[1])]
+            registry_group.create_dataset('subset_names', data=np.array(sorted_strings, dtype=h5py.string_dtype()))
+            
+        # Add property mappings
+        props_reg_group = registry_group.create_group('properties')
+        for reg_name, mapping in self.registries.items():
+            if reg_name in ['geo_levels', 'subset_names']:
+                continue
+            prop_name = reg_name.replace("prop_", "")
+            # Write unique strings in index order
+            sorted_strings = [k for k, v in sorted(mapping.items(), key=lambda item: item[1])]
+            props_reg_group.create_dataset(prop_name, data=np.array(sorted_strings, dtype=h5py.string_dtype()))

@@ -96,6 +96,7 @@ def build_bounded_distance_social_network(
         mean_connections_per_person: float,
         clustering_level: float,
         geo_unit_level: str = None,
+
         storage_key: str=None,
         store: bool=True,
         method: str='libpysal',

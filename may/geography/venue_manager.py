@@ -603,6 +603,10 @@ class VenueManager:
             df = df.sort_values(['venue_type', 'venue_id'])
 
         output_path = os.path.join(self.data_dir, output_file)
+        
+        # Ensure parent directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
         df.to_csv(output_path, index=False)
 
         logger.info(f"Exported {len(rows)} venues to {output_path}")
