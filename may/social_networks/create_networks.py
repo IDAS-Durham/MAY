@@ -77,7 +77,7 @@ def build_local_social_network(
         
         relationships = GraphRelationshipBuilder.build_graph_relationships(
             people,
-            avg_connections=mean_connections_per_person,
+            mean_connections_per_person=mean_connections_per_person,
             clustering_level=clustering_level,
             storage_key=storage_key,
             store=store
@@ -95,7 +95,7 @@ def build_bounded_distance_social_network(
         mean_connections_per_person: float,
         geo_unit_level: str = None,
         clustering_level: float=0.8,
-        storage_key: str=f"social_contacts_radius_km_{radius_km}",
+        storage_key: str=None,
         store: bool=True,
         method: str='libpysal',
 ) -> None:
@@ -130,6 +130,9 @@ def build_bounded_distance_social_network(
         ...     clustering_level=0.7
         ... )
     """
+    if storage_key is None:
+        storage_key = f"social_contacts_radius_km_{radius_km}"
+
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
 

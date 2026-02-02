@@ -82,10 +82,13 @@ class GraphRelationshipBuilder:
             logger.warning("Need at least 2 people to create relationships")
             return {}
         
+        k = self.mean_connections_per_person
+
         # Ensure k doesn't exceed what's possible for the graph
-        if self.mean_connections_per_person > (self.n_people - 1):
-            logger.warning(f'Average connections {self.mean_connections_per_person} exceeds the max possible for the graph n_people-1={self.n_people - 1}. Reducing to the max possible')
-            k = min(self.mean_connections_per_person, max_k)
+        if k > (self.n_people - 1):
+            max_k = self.n_people - 1
+            logger.warning(f'Average connections {k} exceeds the max possible for the graph n_people-1={max_k}. Reducing to the max possible')
+            k = max_k
 
         # Generate the clustered graph
         G = create_clustered_graph(
