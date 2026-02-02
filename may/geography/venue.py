@@ -151,6 +151,9 @@ class Venue:
             return False
         return True
 
+    def __hash__(self):
+        return hash(self.id)
+
     @property
     def num_members(self):
         total=0

@@ -90,6 +90,7 @@ hardcoded_ethnicity_distributor.py
 world_state.h5
 people.csv
 friendships.csv
+*.zip
 
 # Debug/Temp scripts
 debug_*.py

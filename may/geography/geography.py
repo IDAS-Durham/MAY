@@ -138,9 +138,7 @@ class Geography:
                         level=level,
                         coordinates=coordinates
                     )
-                    self.units[name] = unit
-                    self.units_by_id[unit_id] = unit
-                    self.units_by_level[level][name] = unit
+                    self.add_geo_unit(unit)                    
 
         logger.info(f"Created {len(self.units)} total units")
 
@@ -160,6 +158,15 @@ class Geography:
         logger.info("Built hierarchical relationships")
         self._log_summary()
 
+    def add_geo_unit(self, unit: "GeographicalUnit"):
+        self.units[unit.name] = unit
+        self.units_by_id[unit.id] = unit
+        self.units_by_level[unit.level][unit.name] = unit
+
+    def add_geo_units(self, units):
+        for unit in units:
+            self.add_geo_unit(unit)
+        
     def get_unit(self, name):
         """Get a unit by its name"""
         return self.units.get(name)

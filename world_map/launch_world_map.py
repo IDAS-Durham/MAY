@@ -61,7 +61,7 @@ def create_example_world():
     return world
 
 
-def load_world_from_file(filepath):
+def load_world_from_file(filepath, **kwargs):
     """
     Load a World instance from a saved file.
 
@@ -73,8 +73,20 @@ def load_world_from_file(filepath):
     """
     # TODO: Implement loading from your saved format
     # Example with joblib:
-    import joblib
-    return joblib.load(filepath)
+    file_path = Path(filepath)
+    extension = file_path.suffix
+    match extension:
+        case '.joblib':
+            import joblib
+            return joblib.load(filepath, **kwargs)
+        case '.h5':
+            from may.serialization.world_loader import load_world_from_hdf5
+            return load_world_from_hdf5(filepath, **kwargs)
+        case '.h5py':
+            from may.serialization.world_loader import load_world_from_hdf5
+            return load_world_from_hdf5(filepath, **kwargs)
+        case _:
+            raise NotImplementedError(f"No implemented loading function for this type of world file with extension {extension}")
 
     # raise NotImplementedError(
     #     "Implement this function to load your World instance from a file. "
@@ -172,6 +184,12 @@ Examples:
         '--map-attribution',
         type=str,
         help='Attribution text for custom map image'
+    )
+
+    parser.add_argument(
+        '--events-file',
+        type=str,
+        help='Path to simulation_events.h5 file for event visualization'
     )
 
     args = parser.parse_args()
@@ -294,6 +312,21 @@ Examples:
 
     # Initialize and run the Flask app
     app = initialize_app(world, map_config=map_config)
+
+    # Initialize events if provided
+    if args.events_file:
+        events_path = Path(args.events_file)
+        if events_path.exists():
+            print(f"\nLoading events from: {events_path}")
+            try:
+                from app import initialize_events, load_event_config
+                load_event_config()
+                initialize_events(str(events_path), world)
+                print("Events loaded successfully!")
+            except Exception as e:
+                print(f"WARNING: Failed to load events: {e}")
+        else:
+            print(f"\nWARNING: Events file not found: {events_path}")
 
     print("\n" + "=" * 60)
     print("🗺️  World Map Visualization")

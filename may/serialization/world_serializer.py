@@ -600,6 +600,8 @@ class WorldSerializer:
         all_venues = world.venues.get_all_venues_list()
         if not all_venues:
             logger.warning("No venues to serialize")
+            # Initialize empty mapping for activity map serialization
+            self._venue_to_global_id = {}
             return 0
 
         num_venues = len(all_venues)
@@ -922,7 +924,9 @@ class WorldSerializer:
         self._create_dataset(activity_map_group, 'activity_data', activity_data)
         self._create_dataset(activity_map_group, 'activity_offsets', activity_offsets)
 
-        logger.info(f"  Activity map: {len(activity_names)} unique activities")
+        logger.info(f"  Activity map: {len(activity_names)} unique activities:")
+        for name in activity_names:
+            logger.info(f"                                           - {name}")
         logger.info(f"    Total activity mappings: {len(activity_data):,}")
 
     def _write_property_array(self, group, prop_name, objects):

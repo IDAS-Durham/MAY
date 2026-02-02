@@ -222,8 +222,7 @@ class PopulationManager:
         for age, sex, unit, count in all_age_sex_geo:
             for _ in range(count):
                 person = Person(age=age, sex=sex, geographical_unit=unit, **kwargs)
-                self.people.append(person)
-                self.people_by_id[person.id] = person
+                self.add_person(person)
                 # Add person to their geographical unit's people list
                 unit.add_person(person)
                 total_people += 1
@@ -231,6 +230,14 @@ class PopulationManager:
         logger.info(f"Generated {total_people:,} people across {geo_units_with_data} {smallest_level}s")
         if geo_units_with_data > 0:
             logger.info(f"Average: {total_people / geo_units_with_data:.1f} people per {smallest_level}")
+
+    def add_person(self, person: Person):
+        self.people.append(person)
+        self.people_by_id[person.id] = person
+
+    def add_people(self, people: list[Person]):
+        for person in people:
+            self.add_person(person)
 
     def get_person(self, person_id):
         """
