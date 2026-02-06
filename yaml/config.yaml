@@ -183,6 +183,10 @@ timeline:
     - type: distributor
       config: "yaml/distributors/multi_venue_distributor.yaml"
 
+    # Care Home Visits (linked to residents)
+    - type: distributor
+      config: "yaml/distributors/care_home_visits_distributor.yaml"
+
 # ========================================
 # RELATIONSHIP PIPELINE - Build agent networks
 # ========================================
