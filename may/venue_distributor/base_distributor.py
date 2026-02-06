@@ -233,6 +233,8 @@ class BaseDistributor:
                 attr_metadata[attr] = {'parts': ['sex'], 'type': 'direct'}
             elif attr == 'residence.type':
                 attr_metadata[attr] = {'parts': ['residence_type'], 'type': 'property'}
+            elif attr == 'residence.id':
+                attr_metadata[attr] = {'parts': ['residence_id'], 'type': 'property'}
             else:
                 attr_metadata[attr] = {'parts': attr.split('.'), 'type': 'nested'}
 
@@ -263,6 +265,9 @@ class BaseDistributor:
                     self.population_arrays[attr] = np.array([mapping.get(p.sex, 0) for p in people], dtype=np.int32)
                 elif attr == 'residence.type':
                     self.population_arrays[attr] = np.array([mapping.get(p.residence_type, 0) for p in people], dtype=np.int32)
+                elif attr == 'residence.id':
+                    # Directly use residence.id if it's an integer, otherwise use mapping
+                    self.population_arrays[attr] = np.array([p.residence.id if p.residence else -1 for p in people], dtype=np.int32)
                 else:
                     # General nested path
                     self.population_arrays[attr] = np.array([

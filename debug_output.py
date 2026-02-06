@@ -376,3 +376,87 @@ def print_world_examples(world):
 
     logger.info("")
     logger.info("=" * 60)
+
+
+def export_resident_linked_connections(world, output_file="outputs/resident_linked_connections.csv"):
+    """
+    Debug only: Export resident-linked connections (e.g., care home visits) to CSV.
+    This helps verify that people are correctly linked to venues based on residents.
+
+    Args:
+        world: World object
+        output_file: Path to output CSV file
+    """
+    import os
+    
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    logger.info(f"DEBUG: Exporting resident-linked connections to {output_file}...")
+    
+    data = []
+    people = world.population.get_all_people()
+    
+    # We look for 'leisure' activity with 'care_home' venue type by default
+    activity_key = "leisure"
+    target_venue_type = "care_home"
+    
+    # Pre-build person lookup for efficiency if needed, but get_person is usually fast
+    
+    for person in people:
+        if activity_key not in person.activity_map:
+            continue
+            
+        links = person.activity_map[activity_key].get(target_venue_type, [])
+        for subset_link in links:
+            venue = subset_link.venue
+            subset_name = subset_link.subset_name
+            
+            # Extract resident_id from subset_name (e.g., "visitor_for_123")
+            resident_id = 'unknown'
+            resident_age = 'unknown'
+            resident_sex = 'unknown'
+            
+            if "_for_" in subset_name:
+                try:
+                    res_id_str = subset_name.split("_for_")[-1]
+                    resident_id = int(res_id_str)
+                    resident = world.population.get_person(resident_id)
+                    if resident:
+                        resident_age = resident.age
+                        resident_sex = resident.sex
+                except (ValueError, IndexError):
+                    pass
+            
+            # Get person details
+            residence = person.residence
+            household_id = residence.id if residence and residence.type == 'household' else 'none'
+            
+            data.append({
+                'person_id': person.id,
+                'age': person.age,
+                'sex': person.sex,
+                'household_id': household_id,
+                'geo_unit': person.geographical_unit.name if person.geographical_unit else 'none',
+                'linked_venue_id': venue.id,
+                'linked_venue_name': venue.name,
+                'visitor_to_resident_id': resident_id,
+                'resident_age': resident_age,
+                'resident_sex': resident_sex,
+                'linked_venue_geo': venue.geographical_unit.name if venue.geographical_unit else 'none'
+            })
+            
+    if not data:
+        logger.warning(f"DEBUG: No {target_venue_type} links found in {activity_key} map.")
+        return
+
+    # Write to CSV
+    with open(output_file, 'w', newline='') as f:
+        fieldnames = ['person_id', 'age', 'sex', 'household_id', 'geo_unit', 
+                     'linked_venue_id', 'linked_venue_name', 'visitor_to_resident_id', 
+                     'resident_age', 'resident_sex', 'linked_venue_geo']
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+        
+    logger.info(f"DEBUG: Successfully exported {len(data)} links to {output_file}.")

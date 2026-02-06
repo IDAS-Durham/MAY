@@ -230,7 +230,7 @@ steps:
     max_allocations: null
 
   # =============================================
-  # Step 8: Students to Dormitories (Venues)
+  # Step 9: Students to Dormitories (Venues)
   # =============================================
   - name: "Students to Dormitories"
     type: "venue"
@@ -255,7 +255,7 @@ steps:
     max_allocations: null
 
   # =============================================
-  # Step 9: Multi-Elderly  (Households)
+  # Step 10: Multi-Elderly  (Households)
   # =============================================
   - name: "Multi-elderly"
     type: "household"
@@ -269,7 +269,7 @@ steps:
     enable_demotion: null
 
   # =============================================
-  # Step 10: Add Excess Kids to Families (Household Excess)
+  # Step 11: Add Excess Kids to Families (Household Excess)
   # =============================================
   - name: "Add Excess kids to Family households"
     type: "household_excess"

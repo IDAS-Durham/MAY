@@ -295,6 +295,8 @@ def main():
     # Export venue allocations
     #export_venue_allocations(world)
 
+
+
     # Export people data
     #export_people(world)
 
