@@ -72,7 +72,7 @@ class BaseDistributor:
         return None
 
     def _haversine_distance(self, loc1: Tuple[float, float], loc2: Tuple[float, float]) -> float:
-        """Calculate distance between two lat/lon points in km (Optimized for scalars)."""
+        """Calculate distance between two lat/lon points in km."""
         lat1, lon1 = loc1
         lat2, lon2 = loc2
         
@@ -317,7 +317,7 @@ class BaseDistributor:
         return value
 
     def _create_path_getter(self, path: List[str]):
-        """Create an optimized getter function for a specific nested path."""
+        """Create a getter function for a specific nested path."""
         if not path:
             return lambda obj: obj
             
@@ -345,7 +345,7 @@ class BaseDistributor:
         """
         if not path: return obj
         
-        # Performance optimization: skip split/isinstance if we already have a list/tuple
+        # skip split/isinstance if we already have a list/tuple
         if isinstance(path, (list, tuple)):
             parts = path
         else:
@@ -356,7 +356,7 @@ class BaseDistributor:
             if value is None:
                 return None
 
-            # Optimization: Try dict access first if value is actually a dict
+            # Try dict access first if value is actually a dict
             # This is significantly faster than try/except getattr for dicts
             if type(value) is dict:
                 value = value.get(part)

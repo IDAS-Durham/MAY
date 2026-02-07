@@ -20,7 +20,7 @@ class FilteringManager:
         Apply global filters and exclusions to a list of people.
         Vectorized where possible if people list is large.
         """
-        # Optimized vectorized path
+        # vectorized path
         if (hasattr(self.distributor, 'population_arrays') and 
             self.distributor.population_arrays and 
             len(people) > 1000 and 
@@ -78,7 +78,7 @@ class FilteringManager:
         return eligible
 
     def person_matches_filters(self, person, filters: List[Dict]) -> bool:
-        """Check if person matches all filters in a group (Optimized)."""
+        """Check if person matches all filters in a group."""
         if not filters:
             return True
 

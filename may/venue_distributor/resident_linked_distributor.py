@@ -59,7 +59,7 @@ class ResidentLinkedDistributor(BaseDistributor):
 
     def allocate(self, world):
         """
-        Main allocation logic optimized for large-scale populations.
+        Main allocation logic for large-scale populations.
         """
         start_time = time.time()
         logger.info("=" * 60)
@@ -266,7 +266,7 @@ class ResidentLinkedDistributor(BaseDistributor):
         hh_ids = self.population_arrays['residence.id'][p_indices]
         
         # Dictionary approach is still fine for LGU-sized batches
-        # but we use hh_ids array for O(1) attribute access
+        # but we use hh_ids array for attribute access
         hh_to_members = {}
         for i, person in enumerate(people):
             hh_id = hh_ids[i]

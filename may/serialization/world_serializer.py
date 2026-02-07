@@ -140,12 +140,12 @@ class WorldSerializer:
         # Core attributes (always included)
         ids = np.array([unit.id for unit in units_list], dtype=np.int32)
         
-        # OPTIMIZATION: Move geography names to metadata
+        # Move geography names to metadata
         names = np.array([unit.name for unit in units_list], dtype=h5py.string_dtype())
         metadata_group = f.require_group('metadata/names')
         self._create_dataset(metadata_group, 'geography', names)
 
-        # OPTIMIZATION: Intern geography levels
+        # Intern geography levels
         unique_levels = sorted(list(set(unit.level for unit in units_list)))
         level_to_id = {l: i for i, l in enumerate(unique_levels)}
         levels = np.array([level_to_id[unit.level] for unit in units_list], dtype=np.uint8)
@@ -659,13 +659,13 @@ class WorldSerializer:
         # Core attributes (always included)
         ids = global_ids  # Use GLOBAL IDs for C++
         
-        # OPTIMIZATION: Move names to metadata to save memory in core simulation loop
+        # Move names to metadata to save memory in core simulation loop
         names = np.array([v.name for v in all_venues_sorted], dtype=h5py.string_dtype())
         metadata_group = f.require_group('metadata/names')
         self._create_dataset(metadata_group, 'venues', names)
 
         # types = np.array([v.type for v in all_venues_sorted], dtype=h5py.string_dtype())
-        # OPTIMIZATION: Convert venue types to uint8 Enum
+        # Convert venue types to uint8 Enum
         unique_types = sorted(list(set(v.type for v in all_venues_sorted)))
         type_to_id = {t: i for i, t in enumerate(unique_types)}
         types = np.array([type_to_id[v.type] for v in all_venues_sorted], dtype=np.uint8)
@@ -790,7 +790,7 @@ class WorldSerializer:
         venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets_sorted], dtype=np.int32)
         subset_indices = np.array([s.subset_index for s in all_subsets_sorted], dtype=np.int32)
         # subset_names = np.array([s.subset_name for s in all_subsets_sorted], dtype=h5py.string_dtype())
-        # OPTIMIZATION: Move subset names to metadata
+        # Move subset names to metadata
         subset_names = np.array([s.subset_name for s in all_subsets_sorted], dtype=h5py.string_dtype())
         metadata_group = venues_group.file.require_group('metadata/names')
         self._create_dataset(metadata_group, 'subsets', subset_names)
@@ -1040,7 +1040,7 @@ class WorldSerializer:
             end = min(i + chunk_size, num_objects)
             chunk = objects[i:end]
             
-            # Optimized collection: get values once per object
+            # get values once per object
             chunk_vals = []
             for obj in chunk:
                 val = obj.properties.get(prop_name)
@@ -1089,7 +1089,7 @@ class WorldSerializer:
 
         # Only compress if data is large enough
         if len(data) > 100:
-            # OPTIMIZATION: Enable shuffle=True for much better compression ratio on numeric data
+            # Enable shuffle=True for much better compression ratio on numeric data
             group.create_dataset(
                 name,
                 data=data,

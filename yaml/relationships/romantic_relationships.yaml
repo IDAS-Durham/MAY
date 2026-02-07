@@ -8,8 +8,8 @@
 name: "romantic_relationships"
 
 # General Constraints
-min_age: 18
-max_age: 75
+min_age: 16
+max_age: 120
 
 # Sexual Orientation Configuration
 sexual_orientations:

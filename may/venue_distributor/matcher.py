@@ -25,7 +25,7 @@ class VenueMatcher:
 
     def build_attribute_index(self, venues: List):
         """
-        Pre-process venue attributes for fast filtering (Optimized).
+        Pre-process venue attributes for fast filtering.
         """
         eligibility = self.config.get('eligibility', {})
         attributes = eligibility.get('attributes', [])
@@ -200,14 +200,14 @@ class VenueMatcher:
         return eligible_venues
 
     def venue_accepts_person(self, person, venue, attribute_rules: List[Dict], person_attrs: Optional[Dict] = None) -> bool:
-        """Check if venue accepts person based on attribute rules using pre-computed arrays (Optimized)."""
+        """Check if venue accepts person based on attribute rules using pre-computed arrays."""
         v_id = id(venue)
         v_idx = self.venue_id_to_idx.get(v_id)
         
         if v_idx is None:
             return self.venue_accepts_person_slow(person, venue, attribute_rules)
 
-        # Optimization: Separate loops and pre-defined lists avoid dictionary lookups on 'rule'
+        # Separate loops and pre-defined lists avoid dictionary lookups on 'rule'
         for rule in self.numerical_match_rules:
             attr_name = rule['name']
             if attr_name in self.num_constraints:
@@ -288,7 +288,7 @@ class VenueMatcher:
             valid_venues = [v for v in venues if v.coordinates]
             if not valid_venues: return venues[0]
             
-            # Optimization: Use scalar math for small sets, vectorized for large sets
+            # Use scalar math for small sets, vectorized for large sets
             if len(valid_venues) < 50:
                 return min(valid_venues, key=lambda v: self.distributor._haversine_distance(person_location, v.coordinates))
             else:
@@ -299,7 +299,7 @@ class VenueMatcher:
             valid = [v for v in venues if v.coordinates]
             if not valid: return venues[0]
             
-            # Optimization: Use scalar math for small sets, vectorized for large sets
+            # Use scalar math for small sets, vectorized for large sets
             if len(valid) < 50:
                 dists = [self.distributor._haversine_distance(person_location, v.coordinates) for v in valid]
             else:

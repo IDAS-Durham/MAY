@@ -116,7 +116,7 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
     logger.info(f"  Allocating {people_to_allocate} people...")
 
-    # Pre-group eligible people by geographical unit to avoid O(n) filtering per venue
+    # Pre-group eligible people by geographical unit
     people_by_geo_unit = {}
     for person in eligible_people:
         geo_unit = person.geographical_unit
@@ -139,7 +139,7 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
         if capacity == 0:
             continue
 
-        # Get pre-grouped people for this venue's geographical unit (O(1) lookup)
+        # Get pre-grouped people for this venue's geographical unit
         venue_geo_unit = venue.geographical_unit
         venue_eligible = people_by_geo_unit.get(venue_geo_unit, deque())
 
@@ -511,7 +511,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     for attr_slot in people_by_attributes:
         people_by_attributes[attr_slot] = _apply_strategy(people_by_attributes[attr_slot], strategy)
 
-    # Pre-group people by geographical unit AND attribute slot to avoid O(n) filtering per venue
+    # Pre-group people by geographical unit AND attribute slot
     # Structure: {(column_name, geo_unit): deque([person, ...])}
     people_by_attr_and_geo = {}
     for column_name, people_list in people_by_attributes.items():
@@ -525,7 +525,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     allocated_people = []
     allocation_stats = {}  # Track allocations per attribute slot
 
-    # Use a set to track allocated person IDs for O(1) lookup instead of O(n) list.remove()
+    # Use a set to track allocated person IDs
     allocated_person_ids = set()
 
     # Progress tracking setup
@@ -546,7 +546,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
             capacity = int(capacity)
 
-            # Get pre-grouped people for this attribute slot and geo unit (O(1) lookup)
+            # Get pre-grouped people for this attribute slot and geo unit
             venue_geo_unit = venue.geographical_unit
             key = (column_name, venue_geo_unit)
             geo_filtered_people = people_by_attr_and_geo.get(key, deque())
@@ -577,7 +577,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                 if person is None:
                     break
 
-                # Add to allocated set (O(1) instead of O(n) list.remove())
+                # Add to allocated set
                 allocated_person_ids.add(person.id)
 
                 venue_residents.append(person)

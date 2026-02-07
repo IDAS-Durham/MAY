@@ -139,7 +139,8 @@ class RomanticDistributor:
                 # Check for inconsistencies
                 if is_same_sex and o == 'heterosexual':
                     inconsistent_count += 1
-                    logger.error(f"INCONSISTENCY: P_{p.id}({p.sex}) in same-sex couple has orientation {o}")
+                    logger.error(f"INCONSISTENCY: P_{p1.id}({p1.sex}, age={p1.age}) with partner P_{p2.id}({p2.sex}, age={p2.age}) "
+                                   f"in same-sex couple has orientation {o}")
                 elif not is_same_sex and o == 'homosexual':
                     inconsistent_count += 1
                     logger.error(f"INCONSISTENCY: P_{p.id}({p.sex}) in diff-sex couple has orientation {o}")
@@ -256,13 +257,40 @@ class RomanticDistributor:
                             else:
                                 logger.warning(f"Partner P_{partner_id} for person P_{person_id} not found in eligible people list")
 
+                                if partner_sex_name not in compat_sexes:
+                                    probs[i] = 0.0
+                        
                         prob_sum = probs.sum()
                         if prob_sum > 0: 
                             probs = probs / prob_sum
                         else:
                             # Fallback if filtered to zero (should not happen with sensible config)
-                            probs = np.zeros(len(self.orientation_names))
-                            probs[0] = 1.0
+                            # If they have a partner, we MUST find a compatible orientation
+                            # even if the base probability for their age group is 0
+                            if partner_id >= 0 and partner_sex_code is not None:
+                                partner_sex_name = 'male' if partner_sex_code == SEX_MALE else 'female'
+                                is_same_sex = (s_code == partner_sex_code)
+                                
+                                # Find all compatible orientations from config
+                                valid_indices = []
+                                for i, orient_name in enumerate(self.orientation_names):
+                                    compat_sexes = compatibility.get(orient_name, {}).get(s_name, [])
+                                    if partner_sex_name in compat_sexes:
+                                        valid_indices.append(i)
+                                
+                                if valid_indices:
+                                    logger.warning(f"FORCE-MAPPING: P_{person_id}({s_name}) with partner P_{partner_id}({partner_sex_name}) "
+                                                   f"had 0.0 total probability. Forcing one of indices {valid_indices}")
+                                    probs = np.zeros(len(self.orientation_names))
+                                    # Default to the first compatible one found
+                                    probs[valid_indices[0]] = 1.0
+                                else:
+                                    # Extreme fallback if even compatibility map yields nothing
+                                    probs = np.zeros(len(self.orientation_names))
+                                    probs[0] = 1.0
+                            else:
+                                probs = np.zeros(len(self.orientation_names))
+                                probs[0] = 1.0
 
                         orientations[idx] = np.random.choice(
                             np.arange(len(self.orientation_names), dtype=np.int8),

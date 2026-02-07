@@ -51,7 +51,7 @@ class AllocationEngine:
         clean_limits = []
         for l in search_limits:
             if l is None: continue
-            clean_limits.append(min(l, 100)) # Absolute cap at 100 venues for performance
+            clean_limits.append(min(l, 100)) # Absolute cap at 100 venues
         if not clean_limits: clean_limits = [20]
         
         search_attempts = sorted(set(clean_limits))
@@ -183,7 +183,7 @@ class AllocationEngine:
                     self._log_progress(processed, total, interval, allocated, prefix="  ")
                     continue
 
-                # 2. Optimization: Efficient capacity iteration
+                # 2. Efficient capacity iteration
                 
                 # Local available pool for this attribute group in this SGU
                 if respect_capacity:

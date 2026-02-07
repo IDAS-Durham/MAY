@@ -204,7 +204,7 @@ class HouseholdDistributor:
         logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
 
     def _categorize_person(self, person: Person) -> int:
-        """Get the category index for a person based on their attributes. (Optimized)"""
+        """Get the category index for a person based on their attributes."""
         p_props = person.properties
         for idx, cat in enumerate(self.categories):
             # Inline expansion of matches() logic for speed in hot path
@@ -262,7 +262,7 @@ class HouseholdDistributor:
             if not people:
                 continue
 
-            # Initialize category pools as dictionaries for O(1) removals
+            # Initialize category pools as dictionaries
             # We shuffle the list of people first to maintain randomness in the dictionary order
             # (which is preserved in Python 3.7+)
             category_pools = [{} for _ in self.categories]
@@ -385,7 +385,7 @@ class HouseholdDistributor:
         if not all_selected:
             return (None, None)
 
-        # Remove selected people from pools (O(1) dictionary removal)
+        # Remove selected people from pools
         selected_ids = {p.id for p in all_selected}
         self.allocated_people.update(selected_ids)
         
@@ -689,6 +689,7 @@ class HouseholdDistributor:
             # Track selected people by role
             selected_by_role: Dict[str, List[Person]] = {role_name: [] for role_name in rule.roles.keys()}
             failed_at_role_index = None
+            couples_to_flag = []  # Defer property assignment until success
 
             # Select people for each role in order
             for role_index, role_name in enumerate(rule.selection_order):
@@ -739,7 +740,7 @@ class HouseholdDistributor:
                             already_selected = sum(len(people) for people in selected_by_role.values())
                             logger.debug(f"  Constraints: Must validate against {already_selected} already-selected people")
 
-                    # OPTIMIZATION: Pre-group candidates by categorical attribute
+                    # Pre-group candidates by categorical attribute
                     cat_attr = pair_constraint.get('categorical_attribute', {}).get('attribute', 'sex')
                     cat_getter = self.relationship_rules._get_attribute_getter(cat_attr)
                     candidates_by_cat = defaultdict(list)
@@ -769,10 +770,7 @@ class HouseholdDistributor:
 
                     # Check if this pair should be flagged as a romantic couple
                     if pair_constraint.get('creates_romantic_couple', False):
-                        pair[0].properties['cohabiting_couple'] = [pair[1].id]
-                        pair[1].properties['cohabiting_couple'] = [pair[0].id]
-                        if show_detailed_logs:
-                            logger.debug(f"  ✓ Flagged as cohabiting couple for romantic relationship distribution")
+                        couples_to_flag.append(pair)
 
                 elif role_count == "any":
                     # Determine count from pattern
@@ -851,6 +849,11 @@ class HouseholdDistributor:
             # Role selection succeeded! Create household
             if backtrack_attempt > 0 and log_backtracks:
                 logger.debug(f"  ✓ SUCCESS after {backtrack_attempt} backtrack(s)")
+
+            # Now that success is certain, apply relationship flagging
+            for p0, p1 in couples_to_flag:
+                p0.properties['cohabiting_couple'] = [p1.id]
+                p1.properties['cohabiting_couple'] = [p0.id]
 
             break  # Exit backtracking while loop
 

@@ -270,7 +270,7 @@ class VenueDistributor(BaseDistributor):
         return unassigned
 
     def _has_required_attributes(self, person, required_attrs: List[str]) -> bool:
-        """Check if person has all required attributes (Optimized)."""
+        """Check if person has all required attributes."""
         # Fast path for common case
         for attr in required_attrs:
             val = getattr(person, attr, None)

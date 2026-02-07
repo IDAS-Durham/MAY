@@ -132,7 +132,7 @@ class MultiVenueDistributor(BaseDistributor):
             row_filters = filter_config.get('row_filters', [])
             prob_config = filter_config.get('probability_column', {})
 
-            # Build lookup index for fast O(1) access
+            # Build lookup index
             # Index structure: {(filter_val1, filter_val2, ...): {sex: prob}}
             lookup_index = {}
 
