@@ -1,12 +1,13 @@
 import logging
 import random
 import numpy as np
+import time
 from typing import Dict, List, Optional, Any
 from .base_distributor import BaseDistributor
 from .filtering import FilteringManager
 from .reporting import ReportingManager
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("resident_linked_distributor")
 
 class ResidentLinkedDistributor(BaseDistributor):
     """
@@ -60,15 +61,21 @@ class ResidentLinkedDistributor(BaseDistributor):
         """
         Main allocation logic optimized for large-scale populations.
         """
-        logger.info(f"Starting ResidentLinkedDistributor allocation for {self.target_venue_type}")
+        start_time = time.time()
+        logger.info("=" * 60)
+        logger.info(f"Starting ResidentLinkedDistributor: {self.target_venue_type}")
+        logger.info("=" * 60)
+        
         venues = world.venues_by_type(self.target_venue_type)
         if not venues:
             return {"total_links": 0}
 
         # 1. Prepare vectorized population data
+        logger.info(f"  Preparing population data...")
         self._prepare_vectorized_data(world)
 
         # 2. Setup filtering manager
+        logger.info(f"  Setting up filtering manager...")
         from may.venue_distributor.filtering import FilteringManager
         self.filtering_manager = FilteringManager(self)
 
@@ -76,10 +83,23 @@ class ResidentLinkedDistributor(BaseDistributor):
         geo_level = self.config.get('geography_level', self.batch_geo_level)
         geo_units = list(world.geography.get_units_by_level(geo_level).values())
         
+        logger.info(f"  Building '{self.target_venue_type}' links for {len(geo_units)} {geo_level}s")
+        
+        # Calculate total residents for summary stats
+        total_residents = 0
+        for venue in venues:
+            res_subset = venue.subsets.get(self.resident_subset)
+            if res_subset:
+                total_residents += len(res_subset.members)
+        
+        logger.info(f"  Found {len(venues)} target venues with {total_residents:,} total residents")
+        
         total_links = 0
         total_venues_processed = 0
+        unit_count = len(geo_units)
+        report_interval = max(1, unit_count // 10)
         
-        for geo_unit in geo_units:
+        for i, geo_unit in enumerate(geo_units):
             people_in_unit = list(geo_unit.get_people())
             if not people_in_unit:
                 continue
@@ -105,7 +125,14 @@ class ResidentLinkedDistributor(BaseDistributor):
             total_links += links_created
             total_venues_processed += len(unit_venues)
 
-        logger.info(f"Linked {total_links} {self.link_level}s to {self.target_venue_type} residents.")
+            # Progress reporting
+            if (i + 1) % report_interval == 0 or (i + 1) == unit_count:
+                percent = ((i + 1) / unit_count) * 100
+                logger.info(f"    Progress: {i+1:,}/{unit_count:,} {geo_level}s processed ({percent:.1f}%)")
+
+        elapsed = time.time() - start_time
+        avg_links = total_links / total_residents if total_residents > 0 else 0
+        logger.info(f"Built {total_links:,} total links (avg {avg_links:.1f} per resident) in {elapsed:.2f}s")
         return {"total_links": total_links}
 
     def _prepare_vectorized_data(self, world):
@@ -126,7 +153,6 @@ class ResidentLinkedDistributor(BaseDistributor):
         """
         Fast pairing logic for a batch of venues and visitors.
         """
-        print(f"DEBUG: _allocate_batch_optimized with {len(visitor_units)} visitor units and {len(venues)} venues")
         link_data = [] # List of (visitor_unit, venue)
         
         # 1. Flatten residents from all venues in batch
@@ -141,14 +167,14 @@ class ResidentLinkedDistributor(BaseDistributor):
             
             venue_capacities.append((venue, num_residents))
             
-        logger.info(f"      Batch matching: {len(visitor_units)} visitor units, {len(venue_capacities)} eligible venues")
+        logger.debug(f"      Batch matching: {len(visitor_units)} visitor units, {len(venue_capacities)} eligible venues")
         if not venue_capacities: return 0
 
         # 2. Match with visitor units using multiplier
         multiplier = self.multiplier
         v_idx = 0
         
-        logger.info(f"      Multiplier: {multiplier}")
+        logger.debug(f"      Multiplier: {multiplier}")
         
         for venue, num_residents in venue_capacities:
             # For each resident, we link 'multiplier' units

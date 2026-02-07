@@ -398,10 +398,10 @@ class AttributeAssigner:
 
         # Check if strategy supports batch assignment
         if hasattr(strategy, 'assign_batch') and callable(getattr(strategy, 'assign_batch')):
-            logger.info("Using BATCH assignment mode for better performance...")
+            logger.info("Using batch assignment...")
             self._assign_all_people_batch(eligible_people, strategy)
         else:
-            logger.info("Using standard assignment mode...")
+            logger.info("Using standard assignment...")
             self._assign_all_people_sequential(eligible_people, strategy)
 
         logger.info(f"✓ Processed {len(all_people)} people")

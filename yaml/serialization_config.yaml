@@ -18,7 +18,8 @@ population:
 
     # Romantic relationships (serialized as JSON strings for dicts)
     - sexual_orientation  # "heterosexual", "homosexual", "bisexual"
-    - romantic_partners   # {exclusive: [ids], non_exclusive: [ids]}
+    - cohabiting_couple   # [partner_id] (stable/permanent)
+    - romantic_partners   # {exclusive: [ids], non_exclusive: [ids]} (for legacy/shipped states)
     - relationship_status # {type: "exclusive"|"non_exclusive"|"no_partner", consensual: bool}
 
 # =============================================
