@@ -38,6 +38,17 @@ sexual_orientations:
       homosexual: 0.7
       bisexual: 0.5
 
+  compatibility:
+    heterosexual:
+      male: [female]
+      female: [male]
+    homosexual:
+      male: [male]
+      female: [female]
+    bisexual:
+      male: [male, female]
+      female: [male, female]
+
 # Storage Configuration
 storage:
   orientation_key: "sexual_orientation"

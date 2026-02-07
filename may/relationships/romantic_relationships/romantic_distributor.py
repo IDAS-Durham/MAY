@@ -47,8 +47,8 @@ class RomanticDistributor:
                 self.age_groups.append({'name': group_str, 'start': start, 'end': 200})
         
         # Default age group if none defined in adjustments
-        if not self.age_groups:
-            self.age_groups = [{'name': 'all', 'start': 0, 'end': 200}]
+        # We ALWAYS add a 0-200 group to ensure people not in adjustments are covered
+        self.age_groups.append({'name': 'all_ages_default', 'start': 0, 'end': 200})
 
         self.age_groups.sort(key=lambda x: x['start'])
 
@@ -92,8 +92,72 @@ class RomanticDistributor:
         # Step 3: Write results back to person objects
         self._write_results(eligible_people, arrays, orientations)
 
+        # Step 4: Diagnostic Summary (Verification Evidence)
+        self._log_compatibility_diagnostic(eligible_people)
+
         total_time = time.time() - total_start
         logger.info(f"Relationship processing complete in {total_time:.2f}s")
+
+    def _log_compatibility_diagnostic(self, adults: List):
+        """Log evidence of orientation compatibility for cohabiting couples."""
+        logger.info("-" * 40)
+        logger.info("ORIENTATION COMPATIBILITY DIAGNOSTIC")
+        logger.info("-" * 40)
+
+        couples = []
+        seen = set()
+        # Map ALL people in the simulation to their sex/ID for robust diagnostic
+        full_population = self.world.population.people
+        id_to_person = {p.id: p for p in full_population}
+
+        for p in adults:
+            if p.id in seen: continue
+            cc = p.properties.get('cohabiting_couple')
+            if cc and isinstance(cc, list) and len(cc) > 0:
+                partner_id = cc[0]
+                if partner_id in id_to_person:
+                    couples.append((p, id_to_person[partner_id]))
+                    seen.add(p.id)
+                    seen.add(partner_id)
+
+        stats = {
+            'same_sex': {'count': 0, 'orientations': {}},
+            'diff_sex': {'count': 0, 'orientations': {}}
+        }
+
+        inconsistent_count = 0
+
+        for p1, p2 in couples:
+            is_same_sex = p1.sex == p2.sex
+            key = 'same_sex' if is_same_sex else 'diff_sex'
+            stats[key]['count'] += 1
+            
+            for p in [p1, p2]:
+                o = p.properties.get(self.orientation_key)
+                stats[key]['orientations'][o] = stats[key]['orientations'].get(o, 0) + 1
+                
+                # Check for inconsistencies
+                if is_same_sex and o == 'heterosexual':
+                    inconsistent_count += 1
+                    logger.error(f"INCONSISTENCY: P_{p.id}({p.sex}) in same-sex couple has orientation {o}")
+                elif not is_same_sex and o == 'homosexual':
+                    inconsistent_count += 1
+                    logger.error(f"INCONSISTENCY: P_{p.id}({p.sex}) in diff-sex couple has orientation {o}")
+
+        logger.info(f"Total Cohabiting Couples Found: {len(couples)}")
+        logger.info(f"  Same-sex Couples: {stats['same_sex']['count']}")
+        for o, count in stats['same_sex']['orientations'].items():
+            logger.info(f"    - {o}: {count}")
+        
+        logger.info(f"  Different-sex Couples: {stats['diff_sex']['count']}")
+        for o, count in stats['diff_sex']['orientations'].items():
+            logger.info(f"    - {o}: {count}")
+
+        if inconsistent_count == 0:
+            logger.info("✓ ALL cohabiting couples have orientations.")
+        else:
+            logger.error(f"✗ FOUND {inconsistent_count} inconsistencies in orientation assignment!")
+        logger.info("-" * 40)
 
     def _build_attribute_arrays(self, adults: List) -> Dict[str, np.ndarray]:
         n = len(adults)
@@ -123,6 +187,7 @@ class RomanticDistributor:
         orientations = np.zeros(n, dtype=np.int8)
         orientation_config = self.config.get('sexual_orientations', {})
         age_adjustments = orientation_config.get('age_adjustments', {})
+        compatibility = orientation_config.get('compatibility', {})
 
         probs_by_sex = {}
         for s_name in ['male', 'female']:
@@ -134,30 +199,75 @@ class RomanticDistributor:
 
         sex = arrays['sex']
         age = arrays['age']
+        cohabiting_couple = arrays['cohabiting_couple']
+        ids = arrays['ids']
+
+        # Map ALL people in the simulation to their sex for robust partner lookup
+        id_to_sex = {p.id: (SEX_MALE if p.sex.lower().startswith('m') else SEX_FEMALE) 
+                     for p in self.world.population.people}
 
         for s_code in [SEX_MALE, SEX_FEMALE]:
+            s_name = 'male' if s_code == SEX_MALE else 'female'
             base_probs = probs_by_sex[s_code]
+            
             for group in self.age_groups:
                 mask = (sex == s_code) & (age >= group['start']) & (age <= group['end'])
                 indices = np.where(mask)[0]
                 if len(indices) == 0: continue
 
                 adj = age_adjustments.get(group['name'], {})
-                probs = base_probs.copy()
+                group_base_probs = base_probs.copy()
                 for i, name in enumerate(self.orientation_names):
-                    if name in adj: probs[i] *= adj[name]
+                    if name in adj: group_base_probs[i] *= adj[name]
 
-                prob_sum = probs.sum()
-                if prob_sum > 0: probs = probs / prob_sum
+                # If no cohabiting couples in this masked group, we can sample all at once (legacy path)
+                group_cohabiting = cohabiting_couple[indices]
+                
+                if np.all(group_cohabiting < 0):
+                    prob_sum = group_base_probs.sum()
+                    if prob_sum > 0: probs = group_base_probs / prob_sum
+                    else:
+                        probs = np.zeros(len(self.orientation_names))
+                        probs[0] = 1.0
+
+                    orientations[indices] = np.random.choice(
+                        np.arange(len(self.orientation_names), dtype=np.int8),
+                        size=len(indices),
+                        p=probs
+                    )
                 else:
-                    probs = np.zeros(len(self.orientation_names))
-                    probs[0] = 1.0
+                    # Individual processing for cohabiting couples to enforce compatibility
+                    for idx in indices:
+                        person_id = ids[idx]
+                        partner_id = cohabiting_couple[idx]
+                        probs = group_base_probs.copy()
+                        
+                        if partner_id >= 0:
+                            partner_sex_code = id_to_sex.get(partner_id)
+                            
+                            if partner_sex_code is not None:
+                                partner_sex_name = 'male' if partner_sex_code == SEX_MALE else 'female'
+                                
+                                # Filter orientations by compatibility with partner's sex
+                                for i, orient_name in enumerate(self.orientation_names):
+                                    compat_sexes = compatibility.get(orient_name, {}).get(s_name, [])
+                                    if partner_sex_name not in compat_sexes:
+                                        probs[i] = 0.0
+                            else:
+                                logger.warning(f"Partner P_{partner_id} for person P_{person_id} not found in eligible people list")
 
-                orientations[indices] = np.random.choice(
-                    np.arange(len(self.orientation_names), dtype=np.int8),
-                    size=len(indices),
-                    p=probs
-                )
+                        prob_sum = probs.sum()
+                        if prob_sum > 0: 
+                            probs = probs / prob_sum
+                        else:
+                            # Fallback if filtered to zero (should not happen with sensible config)
+                            probs = np.zeros(len(self.orientation_names))
+                            probs[0] = 1.0
+
+                        orientations[idx] = np.random.choice(
+                            np.arange(len(self.orientation_names), dtype=np.int8),
+                            p=probs
+                        )
 
         return orientations
 
