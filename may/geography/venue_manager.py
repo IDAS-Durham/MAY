@@ -263,6 +263,7 @@ class VenueManager:
                 geo_unit=geo_unit,
                 properties=properties
             )
+            venues_created += 1
 
             # Override name if provided
             if name and pd.notna(name):
