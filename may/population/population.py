@@ -170,17 +170,6 @@ class PopulationManager:
     def load_explicit_from_csv(self, filename: str, column_mapping: Dict[str, str], static_geo_unit: Optional[GeographicalUnit] = None):
         """
         Load individual-level population data from a CSV file.
-
-        This method expects a CSV file where each row represents a person.
-        It uses the column_mapping to identify core attributes (age, sex, geo_unit)
-        and stores any other columns as person properties.
-
-        Args:
-            filename: Name of the CSV file in the data directory
-            column_mapping: Dictionary mapping CSV column names to target attributes
-                           Target attributes: 'age', 'sex', 'geo_unit'
-            static_geo_unit: Optional GeographicalUnit to assign to all people if 'geo_unit' 
-                             is not in column_mapping or mapping fails
         """
         path = os.path.join(self.data_dir, filename)
         if not os.path.exists(path):
@@ -189,7 +178,12 @@ class PopulationManager:
 
         logger.info(f"Loading explicit population from {path}")
         df = pd.read_csv(path)
-        
+        self.load_explicit_from_df(df, column_mapping, static_geo_unit)
+
+    def load_explicit_from_df(self, df: pd.DataFrame, column_mapping: Dict[str, str], static_geo_unit: Optional[GeographicalUnit] = None):
+        """
+        Internal method to load population from a DataFrame.
+        """
         target_to_csv = column_mapping
         
         people_count = 0
@@ -201,7 +195,14 @@ class PopulationManager:
             properties = {}
             age = 0
             sex = "unknown"
-            geo_unit = static_geo_unit
+            
+            # 1. Determine geographical unit
+            geo_unit = None
+            if 'SGU' in row:
+                geo_unit = self.geography.get_unit(row['SGU'])
+            
+            if not geo_unit:
+                geo_unit = static_geo_unit
 
             # Extract known attributes
             for target, csv_col in target_to_csv.items():
@@ -432,3 +433,33 @@ class PopulationManager:
             'sex_distribution': sex_counts,
             'activity_counts': activity_counts
         }
+    def load_batch_explicit_from_csv(self, data_dir: str, column_mapping: Dict[str, str]):
+        """
+        Load individual-level population data from multiple MGU-level CSV files.
+        """
+        # 1. Identify all MGUs in the current geography
+        mgu_units = self.geography.get_units_by_level("MGU")
+        mgu_names = set(mgu_units.keys())
+        
+        # 2. Identify all loaded SGUs for internal filtering
+        loaded_sgus = set(self.geography.get_units_by_level("SGU").keys())
+        
+        logger.info(f"Starting batch explicit population load for {len(mgu_names)} MGUs")
+        
+        total_files = 0
+        for mgu_name in mgu_names:
+            filename = f"{mgu_name}_pop.csv"
+            path = os.path.join(data_dir, filename)
+            if not os.path.exists(path):
+                 continue
+            
+            df = pd.read_csv(path)
+            total_files += 1
+            
+            # Filter rows by SGU to only keep what is in our geography
+            if 'SGU' in df.columns:
+                df = df[df['SGU'].isin(loaded_sgus)]
+            
+            self.load_explicit_from_df(df, column_mapping)
+            
+        logger.info(f"Batch load complete. Processed {total_files} files.")

@@ -234,6 +234,9 @@ class VenueManager:
             if 'geo_unit' in venue_df.columns:
                 geo_unit_name = row.geo_unit
                 geo_unit = self.geography.get_unit(geo_unit_name)
+            elif 'SGU' in venue_df.columns:
+                geo_unit_name = row.SGU
+                geo_unit = self.geography.get_unit(geo_unit_name)
             
             if not geo_unit:
                 geo_unit = static_geo_unit
@@ -461,14 +464,28 @@ class VenueManager:
             type_config = self.venue_configs.get(venue_type, {})
             filter_column = type_config.get('filter_column')
             filter_values = type_config.get('filter_values')
+            batch_mode = type_config.get('batch_mode', False)
             
-            self.load_venue_type_from_csv(
-                venue_type, 
-                filename, 
-                static_geo_unit=static_geo_unit,
-                filter_column=filter_column,
-                filter_values=filter_values
-            )
+            if batch_mode:
+                # 1. Identify all MGUs in current geography
+                mgu_units = self.geography.get_units_by_level("MGU")
+                for mgu_name in mgu_units.keys():
+                    mgu_filename = f"{mgu_name}_loc.csv"
+                    self.load_venue_type_from_csv(
+                        venue_type, 
+                        mgu_filename, 
+                        static_geo_unit=static_geo_unit,
+                        filter_column=filter_column,
+                        filter_values=filter_values
+                    )
+            else:
+                self.load_venue_type_from_csv(
+                    venue_type, 
+                    filename, 
+                    static_geo_unit=static_geo_unit,
+                    filter_column=filter_column,
+                    filter_values=filter_values
+                )
 
         logger.info(f"Total venues created: {len(self.venues)}")
         self._log_summary()

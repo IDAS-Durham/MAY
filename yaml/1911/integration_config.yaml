@@ -1,17 +1,15 @@
 geography:
   data_dir: "1911_data/geography"
-  levels: [MGU, SGU]
+  levels: [SGU, MGU]
 
 venues:
-  data_dir: "1911_data"
+  data_dir: "1911_data/venues"
   config_file: "yaml/1911/households_config.yaml"
   static_geo_unit: "SHERBURN_1"
 
 population:
-  type: "explicit"
-  data_dir: "1911_data"
-  filename: "Sherburn_pop.csv"
-  static_geo_unit: "SHERBURN_1"
+  type: "explicit_batch"
+  data_dir: "1911_data/population"
   column_mapping:
     age: Age
     sex: Sex
@@ -24,9 +22,6 @@ timeline:
 
 households:
   enabled: false
-  #Don't try to generate or assign random households; 
-  #I have already provided the explicit locations and the rules 
-  #for who lives where
 
 serialization:
   enabled: true

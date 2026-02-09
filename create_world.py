@@ -110,21 +110,28 @@ def main():
     )
 
     pop_type = pop_config.get("type", "matrix")
-    if pop_type == "explicit":
-        filename = pop_config.get("filename")
-        if not filename:
-            logger.error("Population type 'explicit' required a 'filename' in configuration")
-            sys.exit(1)
-            
+    if pop_type == "explicit" or pop_type == "explicit_batch":
         column_mapping = pop_config.get("column_mapping", {})
-        static_geo_unit_name = pop_config.get("static_geo_unit")
-        static_geo_unit = geo.get_unit(static_geo_unit_name) if static_geo_unit_name else None
         
-        population.load_explicit_from_csv(
-            filename=filename,
-            column_mapping=column_mapping,
-            static_geo_unit=static_geo_unit
-        )
+        if pop_type == "explicit_batch":
+            population.load_batch_explicit_from_csv(
+                data_dir=pop_config.get("data_dir", "1911_data/population"),
+                column_mapping=column_mapping
+            )
+        else:
+            filename = pop_config.get("filename")
+            if not filename:
+                logger.error("Population type 'explicit' required a 'filename' in configuration")
+                sys.exit(1)
+                
+            static_geo_unit_name = pop_config.get("static_geo_unit")
+            static_geo_unit = geo.get_unit(static_geo_unit_name) if static_geo_unit_name else None
+            
+            population.load_explicit_from_csv(
+                filename=filename,
+                column_mapping=column_mapping,
+                static_geo_unit=static_geo_unit
+            )
     else:
         # Load demographic data (matrix style)
         male_file = pop_config.get("demographics_male_file", "demographics_male.csv")

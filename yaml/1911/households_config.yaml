@@ -1,32 +1,28 @@
 venue_types:
   household:
     enabled: true
-    filename: Sherburn_loc.csv
+    batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["C", "X"] # C is household, X is no entry (often household)
+    filter_values: ["C", "X"]
     
   pub:
     enabled: true
-    filename: Sherburn_loc.csv
-    is_residence: true # People reside here in 1911
+    batch_mode: true
+    is_residence: true
     filter_column: "BTCode"
     filter_values: ["O", "PP", "PH", "K", "PH", "PI", "PO", "PU"]
-    #O: Public Houses
-    #PP: Pub
-    #PH: Hotel
-    #K: Inn
-    #PH, PI, PO, PU: Other variants 
+    
   farm:
     enabled: true
-    filename: Sherburn_loc.csv
+    batch_mode: true
     is_residence: true
     filter_column: "BTCode"
     filter_values: ["H"]
     
   business:
     enabled: true
-    filename: Sherburn_loc.csv
+    batch_mode: true
     is_residence: true
     filter_column: "BTCode"
     filter_values: ["R", "S"]
