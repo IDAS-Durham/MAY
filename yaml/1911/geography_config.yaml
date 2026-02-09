@@ -1,0 +1,6 @@
+levels: [MGU, SGU]
+hierarchy: "1911_data/geography/hierarchy.csv"
+names: "1911_data/geography/1911 Census Codes.csv"
+column_mappings:
+  MGU: ADMINCOUNTY
+  SGU: LABEL

@@ -186,13 +186,17 @@ class VenueManager:
 
         return parent, children       
 
-    def load_venue_type_from_df(self, venue_type, venue_df):
+    def load_venue_type_from_df(self, venue_type, venue_df, static_geo_unit=None, filter_column=None, filter_values=None):
         """ Creates venues from a given dataframe """
-        # Required columns
-        required_cols = ['geo_unit']
-        for col in required_cols:
-            if col not in venue_df.columns:
-                raise ValueError(f"Missing required column '{col}' in file for {venue_type}")
+        if filter_column and filter_values:
+            original_count = len(venue_df)
+            # Ensure filtering works regardless of type (strip and stringify)
+            venue_df = venue_df[venue_df[filter_column].astype(str).str.strip().isin([str(v).strip() for v in filter_values])]
+            logger.info(f"Filtered {venue_type} venues by {filter_column}: {len(venue_df)} rows kept (from {original_count})")
+
+        # Required columns - geo_unit is optional if static_geo_unit is provided
+        if 'geo_unit' not in venue_df.columns and static_geo_unit is None:
+            raise ValueError(f"Missing required column 'geo_unit' in file for {venue_type} and no static_geo_unit provided")
 
         # Optional coordinate columns (check both lowercase and capitalized)
         lat_col = None
@@ -210,11 +214,10 @@ class VenueManager:
         # Get additional property columns
         reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
         property_cols = [col for col in venue_df.columns if col.lower() not in reserved_cols]
-        properties={}
 
         # Filter DataFrame upfront if geography filtering is enabled
         venues_skipped = 0
-        if self.filter_by_geography:
+        if self.filter_by_geography and 'geo_unit' in venue_df.columns:
             original_count = len(venue_df)
             venue_df = venue_df[venue_df['geo_unit'].isin(self._loaded_geo_units)]
             venues_skipped = original_count - len(venue_df)
@@ -226,12 +229,17 @@ class VenueManager:
             name = getattr(row, 'name', None) if hasattr(row, 'name') else None
             if name is None or pd.isna(name):
                 name = str(row.Index)
-            geo_unit_name = row.geo_unit
-
-            # Get geographical unit
-            geo_unit = self.geography.get_unit(geo_unit_name)
+            
+            geo_unit = None
+            if 'geo_unit' in venue_df.columns:
+                geo_unit_name = row.geo_unit
+                geo_unit = self.geography.get_unit(geo_unit_name)
+            
             if not geo_unit:
-                logger.warning(f"Geographical unit '{geo_unit_name}' not found for venue '{name}'. Skipping.")
+                geo_unit = static_geo_unit
+
+            if not geo_unit:
+                logger.warning(f"Geographical unit not found for venue '{name}'. Skipping.")
                 continue
 
             # Get coordinates if provided
@@ -264,12 +272,10 @@ class VenueManager:
             if coordinates:
                 venue.coordinates = coordinates
 
-            venues_created += 1
-
         logger.info(f"Created {venues_created} {venue_type} venues")
         
 
-    def load_venue_type_from_csv(self, venue_type, filename=None):
+    def load_venue_type_from_csv(self, venue_type, filename=None, static_geo_unit=None, filter_column=None, filter_values=None):
         """
         Load venues of a specific type from a CSV file.
 
@@ -299,7 +305,13 @@ class VenueManager:
         venue_df = pd.read_csv(venue_path)
         logger.info(f"Loading {venue_type} venues from {venue_path}")
 
-        self.load_venue_type_from_df(venue_type, venue_df)
+        self.load_venue_type_from_df(
+            venue_type, 
+            venue_df, 
+            static_geo_unit=static_geo_unit,
+            filter_column=filter_column,
+            filter_values=filter_values
+        )
 
 
     def load_from_csv(self, venue_types=None):
@@ -358,7 +370,7 @@ class VenueManager:
         logger.info(f"Total venues created: {len(self.venues)}")
         self._log_summary()
 
-    def load_from_yaml_config(self, config_file="venues_config.yaml"):
+    def load_from_yaml_config(self, config_file="venues_config.yaml", static_geo_unit=None):
         """
         Load venues from a YAML configuration file.
 
@@ -445,7 +457,17 @@ class VenueManager:
 
         # Load each enabled venue type
         for venue_type, filename in enabled_types:
-            self.load_venue_type_from_csv(venue_type, filename)
+            type_config = self.venue_configs.get(venue_type, {})
+            filter_column = type_config.get('filter_column')
+            filter_values = type_config.get('filter_values')
+            
+            self.load_venue_type_from_csv(
+                venue_type, 
+                filename, 
+                static_geo_unit=static_geo_unit,
+                filter_column=filter_column,
+                filter_values=filter_values
+            )
 
         logger.info(f"Total venues created: {len(self.venues)}")
         self._log_summary()

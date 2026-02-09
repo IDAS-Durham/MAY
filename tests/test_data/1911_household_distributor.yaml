@@ -1,0 +1,10 @@
+distributor_type: "property_matching"
+target_venue_type: "household"
+mapping_key: "HID"
+venue_property: "HID"
+subset_key: "resident"
+activity_name: "residence"
+activity_type: "household"
+priority: 1
+ search_limits:
+  max_distance: 0

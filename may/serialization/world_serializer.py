@@ -1060,7 +1060,7 @@ class WorldSerializer:
 
         # Determine chunks for HDF5 (not our processing chunks)
         # Choosing a chunk size that is a multiple of typical access patterns
-        if shape and len(shape) > 0:
+        if shape and len(shape) > 0 and shape[0] > 0:
             h5_chunks = (min(shape[0], 100000),) + shape[1:]
         else:
             h5_chunks = None

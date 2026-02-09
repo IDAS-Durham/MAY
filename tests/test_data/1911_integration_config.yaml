@@ -1,0 +1,34 @@
+geography:
+  data_dir: "1911_data/geography"
+  levels: ["SGU", "MSOA", "LAD"]
+  load_all: true
+
+venues:
+  data_dir: "yaml/venues"
+  config_file: "venues_config.yaml"
+
+population:
+  type: "explicit"
+  data_dir: "1911_data"
+  filename: "Sherburn_pop.csv"
+  column_mapping:
+    age: "Age"
+    sex: "Sex"
+    HID: "HID"
+
+households:
+  enabled: false # We will handle households in the timeline
+  data_dir: "yaml/households"
+  config_file: "households_config.yaml"
+
+attributes:
+  enabled: false
+
+venue_pipeline:
+  enabled: false
+
+timeline:
+  enabled: true
+  steps:
+    - type: "distributor"
+      config: "tests/test_data/1911_household_distributor.yaml"

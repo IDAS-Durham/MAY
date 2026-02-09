@@ -81,10 +81,24 @@ def main():
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir="data/venues")
     venue_config = config.get("venues", {})
+    venues = VenueManager(
+        geography=geo, 
+        data_dir=venue_config.get("data_dir", "data/venues")
+    )
+    
+    # Handle static geo unit for venues (useful for 1911)
+    static_geo_unit = None
+    static_geo_name = venue_config.get("static_geo_unit")
+    if static_geo_name:
+        static_geo_unit = geo.get_unit(static_geo_name)
+        if static_geo_unit:
+            logger.info(f"Using static geographical unit for venues: {static_geo_name}")
+        else:
+            logger.warning(f"Static geographical unit '{static_geo_name}' not found")
+
     yaml_config_file = venue_config.get("config_file", "venues_config.yaml")
-    venues.load_from_yaml_config(yaml_config_file)
+    venues.load_from_yaml_config(yaml_config_file, static_geo_unit=static_geo_unit)
 
     # Load population
     logger.info("")
@@ -95,16 +109,35 @@ def main():
         data_dir=pop_config.get("data_dir", "data/population")
     )
 
-    # Load demographic data
-    male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
-    female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
-    population.load_demographics_from_csv(male_file, female_file)
+    pop_type = pop_config.get("type", "matrix")
+    if pop_type == "explicit":
+        filename = pop_config.get("filename")
+        if not filename:
+            logger.error("Population type 'explicit' required a 'filename' in configuration")
+            sys.exit(1)
+            
+        column_mapping = pop_config.get("column_mapping", {})
+        static_geo_unit_name = pop_config.get("static_geo_unit")
+        static_geo_unit = geo.get_unit(static_geo_unit_name) if static_geo_unit_name else None
+        
+        population.load_explicit_from_csv(
+            filename=filename,
+            column_mapping=column_mapping,
+            static_geo_unit=static_geo_unit
+        )
+    else:
+        # Load demographic data (matrix style)
+        male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
+        female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
+        population.load_demographics_from_csv(male_file, female_file)
 
-    # Generate population
-    population.generate_population()
+        # Generate population
+        population.generate_population()
 
     # Setup and distribute households
-    household_distributor = setup_households(geo, population, venues, config)
+    household_distributor = None
+    if config.get("households", {}).get("enabled", True):
+        household_distributor = setup_households(geo, population, venues, config)
 
     # Create World object
     logger.info("")
@@ -304,8 +337,18 @@ def main():
     #print_world_examples(world)
 
     # Export world to HDF5 for C++ simulation
-    # Uncomment to enable HDF5 export:
-    world.export_to_hdf5("world_state.h5")
+    serial_config = config.get("serialization", {})
+    if serial_config.get("enabled", True):
+        logger.info("")
+        logger.info("Exporting world to HDF5...")
+        output_dir = serial_config.get("output_dir", ".")
+        filename = serial_config.get("filename", "world_state.h5")
+        
+        if output_dir != ".":
+            os.makedirs(output_dir, exist_ok=True)
+            
+        export_path = os.path.join(output_dir, filename)
+        world.export_to_hdf5(export_path)
 
     return world
 

@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Population manager for June Zero.
 
@@ -9,6 +10,11 @@ import logging
 import numpy as np
 import pandas as pd
 from collections import defaultdict
+from typing import Dict, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from may.geography import GeographicalUnit
+
 from .person import Person
 
 logger = logging.getLogger("population")
@@ -160,6 +166,84 @@ class PopulationManager:
 
         logger.info(f"Loaded precise demographics for {len(self.precise_demographics)} geographical units")
         logger.info(f"Total people in demographics: {total_people:,}")
+
+    def load_explicit_from_csv(self, filename: str, column_mapping: Dict[str, str], static_geo_unit: Optional[GeographicalUnit] = None):
+        """
+        Load individual-level population data from a CSV file.
+
+        This method expects a CSV file where each row represents a person.
+        It uses the column_mapping to identify core attributes (age, sex, geo_unit)
+        and stores any other columns as person properties.
+
+        Args:
+            filename: Name of the CSV file in the data directory
+            column_mapping: Dictionary mapping CSV column names to target attributes
+                           Target attributes: 'age', 'sex', 'geo_unit'
+            static_geo_unit: Optional GeographicalUnit to assign to all people if 'geo_unit' 
+                             is not in column_mapping or mapping fails
+        """
+        path = os.path.join(self.data_dir, filename)
+        if not os.path.exists(path):
+            logger.error(f"Explicit population file not found: {path}")
+            return
+
+        logger.info(f"Loading explicit population from {path}")
+        df = pd.read_csv(path)
+        
+        target_to_csv = column_mapping
+        
+        people_count = 0
+        
+        # Reset ID counter for consistency
+        Person.reset_counter()
+
+        for _, row in df.iterrows():
+            properties = {}
+            age = 0
+            sex = "unknown"
+            geo_unit = static_geo_unit
+
+            # Extract known attributes
+            for target, csv_col in target_to_csv.items():
+                if csv_col not in row:
+                    continue
+                
+                val = row[csv_col]
+                if target == 'age':
+                    try:
+                        age = int(float(val))
+                    except (ValueError, TypeError):
+                        age = 0
+                elif target == 'sex':
+                    sex = str(val).lower().strip() if pd.notna(val) else "unknown"
+                    # Normalize common sex strings
+                    if sex in ['m', '1', 'male']: sex = 'male'
+                    elif sex in ['f', '2', 'female']: sex = 'female'
+                elif target == 'geo_unit':
+                    unit_name = str(val).strip()
+                    found_unit = self.geography.get_unit(unit_name)
+                    if found_unit:
+                        geo_unit = found_unit
+                else:
+                    # Treat as a generic property
+                    properties[target] = val
+
+            # Add all other columns not in mapping to properties
+            mapped_csv_cols = set(target_to_csv.values())
+            for col in df.columns:
+                if col not in mapped_csv_cols:
+                    properties[col] = row[col]
+
+            # Create and add person
+            person = Person(age=age, sex=sex, geographical_unit=geo_unit, properties=properties)
+            self.add_person(person)
+            
+            if geo_unit:
+                geo_unit.add_person(person)
+            
+            people_count += 1
+
+        logger.info(f"Successfully loaded {people_count:,} people from explicit data.")
 
     def generate_population(self, **kwargs):
         """

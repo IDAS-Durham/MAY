@@ -1,0 +1,6 @@
+distributor_type: property_matching
+target_venue_type: [household, pub, farm, business]
+mapping_key: HID
+venue_property: HID
+activity_name: residence
+subset_key: resident
