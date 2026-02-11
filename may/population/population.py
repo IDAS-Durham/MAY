@@ -178,6 +178,10 @@ class PopulationManager:
 
         logger.info(f"Loading explicit population from {path}")
         df = pd.read_csv(path)
+        
+        # Reset ID counter for consistency (at the entry point)
+        Person.reset_counter()
+        
         self.load_explicit_from_df(df, column_mapping, static_geo_unit)
 
     def load_explicit_from_df(self, df: pd.DataFrame, column_mapping: Dict[str, str], static_geo_unit: Optional[GeographicalUnit] = None):
@@ -188,28 +192,26 @@ class PopulationManager:
         
         people_count = 0
         
-        # Reset ID counter for consistency
-        Person.reset_counter()
-
-        for _, row in df.iterrows():
+        for row in df.itertuples(index=False):
+            row_dict = row._asdict()
             properties = {}
             age = 0
             sex = "unknown"
             
             # 1. Determine geographical unit
             geo_unit = None
-            if 'SGU' in row:
-                geo_unit = self.geography.get_unit(row['SGU'])
+            if 'SGU' in row_dict:
+                geo_unit = self.geography.get_unit(row_dict['SGU'])
             
             if not geo_unit:
                 geo_unit = static_geo_unit
 
             # Extract known attributes
             for target, csv_col in target_to_csv.items():
-                if csv_col not in row:
+                if csv_col not in row_dict:
                     continue
                 
-                val = row[csv_col]
+                val = row_dict[csv_col]
                 if target == 'age':
                     try:
                         age = int(float(val))
@@ -231,9 +233,9 @@ class PopulationManager:
 
             # Add all other columns not in mapping to properties
             mapped_csv_cols = set(target_to_csv.values())
-            for col in df.columns:
+            for col, val in row_dict.items():
                 if col not in mapped_csv_cols:
-                    properties[col] = row[col]
+                    properties[col] = val
 
             # Create and add person
             person = Person(age=age, sex=sex, geographical_unit=geo_unit, properties=properties)
@@ -443,6 +445,9 @@ class PopulationManager:
         
         # 2. Identify all loaded SGUs for internal filtering
         loaded_sgus = set(self.geography.get_units_by_level("SGU").keys())
+        
+        # Reset ID counter once for the whole batch
+        Person.reset_counter()
         
         logger.info(f"Starting batch explicit population load for {len(mgu_names)} MGUs")
         

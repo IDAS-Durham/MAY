@@ -332,17 +332,6 @@ def main():
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
     logger.info("=" * 60)
 
-    # Export venue allocations
-    #export_venue_allocations(world)
-
-
-
-    # Export people data
-    #export_people(world)
-
-    # Show examples of what was created
-    #print_world_examples(world)
-
     # Export world to HDF5 for C++ simulation
     serial_config = config.get("serialization", {})
     if serial_config.get("enabled", True):

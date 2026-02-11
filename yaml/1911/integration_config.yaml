@@ -17,7 +17,7 @@ population:
 timeline:
   enabled: true
   steps:
-    - type: "distributor"
+    - type: "distributor" #Household distribution
       config: "yaml/1911/distribution_config.yaml"
 
 households:
