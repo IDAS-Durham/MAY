@@ -881,7 +881,12 @@ class WorldSerializer:
         """
         Write activity_map data with chunked processing for memory efficiency.
         """
+        if not people_sorted:
+            logger.warning("No people to serialize activity map for")
+            return
+
         activity_map_group = rel_group.create_group('activity_map')
+
 
         # Collect activity names
         activity_names_set = set()

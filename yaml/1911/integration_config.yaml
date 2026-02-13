@@ -1,11 +1,13 @@
 geography:
   data_dir: "1911_data/geography"
   levels: [SGU, MGU]
+  filter:
+    level: MGU
+    codes: ["DURHAM"]
 
 venues:
   data_dir: "1911_data/venues"
   config_file: "yaml/1911/households_config.yaml"
-  static_geo_unit: "SHERBURN_1"
 
 population:
   type: "explicit_batch"
@@ -18,13 +20,14 @@ timeline:
   enabled: true
   steps:
     - type: "distributor" #Household distribution
-      config: "yaml/1911/distribution_config.yaml"
+      config: "yaml/1911/residence_distribution_config.yaml"
 
 households:
   enabled: false
 
 serialization:
   enabled: true
+  config_file: "yaml/1911/serialization_config.yaml"
   output_dir: "output/1911"
-  filename: "1911_world.h5"
+  filename: "1911_durham_world.h5"
   compression: "gzip"

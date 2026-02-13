@@ -167,7 +167,7 @@ class PopulationManager:
         logger.info(f"Loaded precise demographics for {len(self.precise_demographics)} geographical units")
         logger.info(f"Total people in demographics: {total_people:,}")
 
-    def load_explicit_from_csv(self, filename: str, column_mapping: Dict[str, str], static_geo_unit: Optional[GeographicalUnit] = None):
+    def load_explicit_from_csv(self, filename: str, column_mapping: Dict[str, str]):
         """
         Load individual-level population data from a CSV file.
         """
@@ -182,9 +182,9 @@ class PopulationManager:
         # Reset ID counter for consistency (at the entry point)
         Person.reset_counter()
         
-        self.load_explicit_from_df(df, column_mapping, static_geo_unit)
+        self.load_explicit_from_df(df, column_mapping)
 
-    def load_explicit_from_df(self, df: pd.DataFrame, column_mapping: Dict[str, str], static_geo_unit: Optional[GeographicalUnit] = None):
+    def load_explicit_from_df(self, df: pd.DataFrame, column_mapping: Dict[str, str]):
         """
         Internal method to load population from a DataFrame.
         """
@@ -204,7 +204,8 @@ class PopulationManager:
                 geo_unit = self.geography.get_unit(row_dict['SGU'])
             
             if not geo_unit:
-                geo_unit = static_geo_unit
+                logger.warning(f"No geographical unit (SGU) found for person in row. Skipping.")
+                continue
 
             # Extract known attributes
             for target, csv_col in target_to_csv.items():

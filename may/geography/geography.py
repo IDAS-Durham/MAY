@@ -127,7 +127,8 @@ class Geography:
             unique_names = hierarchy_df[col_name].unique()
 
             for name in unique_names:
-                if name not in self.units:
+                # Check if unit already exists AT THIS LEVEL to allow same names across levels
+                if name not in self.units_by_level[level]:
                     # Get coordinates as tuple (lat, lon) or None
                     coordinates = coords[level].get(name, None)
                     # Generate unique ID
@@ -146,11 +147,15 @@ class Geography:
         for _, row in hierarchy_df.iterrows():
             # Link each level to its parent
             for i in range(len(hierarchy_cols) - 1):
+                child_level = self.levels[i]
+                parent_level = self.levels[i+1]
+                
                 child_name = row[hierarchy_cols[i]]
                 parent_name = row[hierarchy_cols[i + 1]]
 
-                child = self.units.get(child_name)
-                parent = self.units.get(parent_name)
+                # Get units from their specific levels
+                child = self.units_by_level[child_level].get(child_name)
+                parent = self.units_by_level[parent_level].get(parent_name)
 
                 if child and parent and child.parent is None:
                     parent.add_child(child)

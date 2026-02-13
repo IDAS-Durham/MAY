@@ -1,7 +1,7 @@
 #RESIDENCE MATCHING
 
 distributor_type: property_matching
-target_venue_type: [household, pub, farm, business]
+target_venue_type: [household, pub, farm, business, hotel_inn, school, church, barrack, medical, prison]
 mapping_key: HID
 venue_property: HID
 activity_name: residence

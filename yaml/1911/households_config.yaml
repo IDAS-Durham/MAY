@@ -4,25 +4,67 @@ venue_types:
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["C", "X"]
+    filter_values: ["C", "CG", "CH", "CR", "CS", "D", "L", "M", "V", "X"]
     
   pub:
     enabled: true
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["O", "PP", "PH", "K", "PH", "PI", "PO", "PU"]
+    filter_values: ["O", "OS", "PP", "PH", "F", "FR", "FS"]
     
   farm:
     enabled: true
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["H"]
+    filter_values: ["H", "HJ", "HK", "HR", "HS"]
     
   business:
     enabled: true
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["R", "S"]
+    filter_values: ["R", "RS", "S", "G", "GS"]
+
+  hotel_inn:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["J", "JS", "K", "KR", "PI"]
+
+  school:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["Q", "PQ"]
+
+  church:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["P"]
+
+  barrack:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["E"]
+
+  medical:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["I", "HO", "HH", "HI", "HD", "HC", "HU"]
+
+  prison:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["N"]

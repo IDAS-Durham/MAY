@@ -87,18 +87,8 @@ def main():
         data_dir=venue_config.get("data_dir", "data/venues")
     )
     
-    # Handle static geo unit for venues (useful for 1911)
-    static_geo_unit = None
-    static_geo_name = venue_config.get("static_geo_unit")
-    if static_geo_name:
-        static_geo_unit = geo.get_unit(static_geo_name)
-        if static_geo_unit:
-            logger.info(f"Using static geographical unit for venues: {static_geo_name}")
-        else:
-            logger.warning(f"Static geographical unit '{static_geo_name}' not found")
-
     yaml_config_file = venue_config.get("config_file", "venues_config.yaml")
-    venues.load_from_yaml_config(yaml_config_file, static_geo_unit=static_geo_unit)
+    venues.load_from_yaml_config(yaml_config_file)
 
     # Load population
     logger.info("")
@@ -124,13 +114,9 @@ def main():
                 logger.error("Population type 'explicit' required a 'filename' in configuration")
                 sys.exit(1)
                 
-            static_geo_unit_name = pop_config.get("static_geo_unit")
-            static_geo_unit = geo.get_unit(static_geo_unit_name) if static_geo_unit_name else None
-            
             population.load_explicit_from_csv(
                 filename=filename,
-                column_mapping=column_mapping,
-                static_geo_unit=static_geo_unit
+                column_mapping=column_mapping
             )
     else:
         # Load demographic data (matrix style)
@@ -344,7 +330,11 @@ def main():
             os.makedirs(output_dir, exist_ok=True)
             
         export_path = os.path.join(output_dir, filename)
-        world.export_to_hdf5(export_path)
+        config_file = serial_config.get("config_file")
+        if config_file:
+            world.export_to_hdf5(export_path, config_file=config_file)
+        else:
+            world.export_to_hdf5(export_path)
 
     return world
 

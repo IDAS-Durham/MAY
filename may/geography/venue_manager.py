@@ -186,7 +186,7 @@ class VenueManager:
 
         return parent, children       
 
-    def load_venue_type_from_df(self, venue_type, venue_df, static_geo_unit=None, filter_column=None, filter_values=None):
+    def load_venue_type_from_df(self, venue_type, venue_df, filter_column=None, filter_values=None):
         """ Creates venues from a given dataframe """
         if filter_column and filter_values:
             original_count = len(venue_df)
@@ -194,9 +194,13 @@ class VenueManager:
             venue_df = venue_df[venue_df[filter_column].astype(str).str.strip().isin([str(v).strip() for v in filter_values])]
             logger.info(f"Filtered {venue_type} venues by {filter_column}: {len(venue_df)} rows kept (from {original_count})")
 
-        # Required columns - geo_unit is optional if static_geo_unit is provided
-        if 'geo_unit' not in venue_df.columns and static_geo_unit is None:
-            raise ValueError(f"Missing required column 'geo_unit' in file for {venue_type} and no static_geo_unit provided")
+        # Required columns - we support SGU, MGU or any levels defined in geography
+        geo_levels = set(self.geography.levels)
+        geo_cols = {'geo_unit', 'SGU', 'MGU'}.union(geo_levels)
+        actual_geo_col = next((col for col in venue_df.columns if col in geo_cols), None)
+
+        if actual_geo_col is None:
+            raise ValueError(f"Missing required geographical column (e.g., 'geo_unit', 'SGU', 'MGU') in file for {venue_type}")
 
         # Optional coordinate columns (check both lowercase and capitalized)
         lat_col = None
@@ -212,8 +216,8 @@ class VenueManager:
         has_coords = lat_col is not None and lon_col is not None
 
         # Get additional property columns
-        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}
-        property_cols = [col for col in venue_df.columns if col.lower() not in reserved_cols]
+        reserved_cols = {'name', 'geo_unit', 'latitude', 'longitude'}.union(geo_cols)
+        property_cols = [col for col in venue_df.columns if col.lower() not in reserved_cols and col not in reserved_cols]
 
         # Filter DataFrame upfront if geography filtering is enabled
         venues_skipped = 0
@@ -231,16 +235,10 @@ class VenueManager:
                 name = str(row.Index)
             
             geo_unit = None
-            if 'geo_unit' in venue_df.columns:
-                geo_unit_name = row.geo_unit
-                geo_unit = self.geography.get_unit(geo_unit_name)
-            elif 'SGU' in venue_df.columns:
-                geo_unit_name = row.SGU
+            if actual_geo_col:
+                geo_unit_name = getattr(row, actual_geo_col)
                 geo_unit = self.geography.get_unit(geo_unit_name)
             
-            if not geo_unit:
-                geo_unit = static_geo_unit
-
             if not geo_unit:
                 logger.warning(f"Geographical unit not found for venue '{name}'. Skipping.")
                 continue
@@ -279,7 +277,7 @@ class VenueManager:
         logger.info(f"Created {venues_created} {venue_type} venues")
         
 
-    def load_venue_type_from_csv(self, venue_type, filename=None, static_geo_unit=None, filter_column=None, filter_values=None):
+    def load_venue_type_from_csv(self, venue_type, filename=None, filter_column=None, filter_values=None):
         """
         Load venues of a specific type from a CSV file.
 
@@ -312,7 +310,6 @@ class VenueManager:
         self.load_venue_type_from_df(
             venue_type, 
             venue_df, 
-            static_geo_unit=static_geo_unit,
             filter_column=filter_column,
             filter_values=filter_values
         )
@@ -374,7 +371,7 @@ class VenueManager:
         logger.info(f"Total venues created: {len(self.venues)}")
         self._log_summary()
 
-    def load_from_yaml_config(self, config_file="venues_config.yaml", static_geo_unit=None):
+    def load_from_yaml_config(self, config_file="venues_config.yaml"):
         """
         Load venues from a YAML configuration file.
 
@@ -474,7 +471,6 @@ class VenueManager:
                     self.load_venue_type_from_csv(
                         venue_type, 
                         mgu_filename, 
-                        static_geo_unit=static_geo_unit,
                         filter_column=filter_column,
                         filter_values=filter_values
                     )
@@ -482,7 +478,6 @@ class VenueManager:
                 self.load_venue_type_from_csv(
                     venue_type, 
                     filename, 
-                    static_geo_unit=static_geo_unit,
                     filter_column=filter_column,
                     filter_values=filter_values
                 )
