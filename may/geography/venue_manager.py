@@ -75,10 +75,16 @@ class VenueManager:
         # Prepare properties, adding is_residence from config if available
         venue_properties = properties or {}
 
-        # Add is_residence from venue_configs if available
+        # Add properties from venue_configs if available
         if venue_type in self.venue_configs:
-            is_residence = self.venue_configs[venue_type].get('is_residence', False)
-            venue_properties['is_residence'] = is_residence
+            config = self.venue_configs[venue_type]
+            venue_properties['is_residence'] = config.get('is_residence', False)
+            
+            # Explicitly copy subset configuration
+            if 'subset_categories' in config:
+                venue_properties['subset_categories'] = config['subset_categories']
+            if 'subset_key' in config:
+                venue_properties['subset_key'] = config['subset_key']
 
         venue = Venue(
             name=f"{venue_type}_{venue_id}",
@@ -190,8 +196,9 @@ class VenueManager:
         """ Creates venues from a given dataframe """
         if filter_column and filter_values:
             original_count = len(venue_df)
-            # Ensure filtering works regardless of type (strip and stringify)
-            venue_df = venue_df[venue_df[filter_column].astype(str).str.strip().isin([str(v).strip() for v in filter_values])]
+            # Ensure filtering works regardless of type (strip and stringify, and uppercase for consistency)
+            target_values = [str(v).strip().upper() for v in filter_values]
+            venue_df = venue_df[venue_df[filter_column].astype(str).str.strip().str.upper().isin(target_values)]
             logger.info(f"Filtered {venue_type} venues by {filter_column}: {len(venue_df)} rows kept (from {original_count})")
 
         # Required columns - we support SGU, MGU or any levels defined in geography
@@ -221,11 +228,11 @@ class VenueManager:
 
         # Filter DataFrame upfront if geography filtering is enabled
         venues_skipped = 0
-        if self.filter_by_geography and 'geo_unit' in venue_df.columns:
+        if self.filter_by_geography and actual_geo_col in venue_df.columns:
             original_count = len(venue_df)
-            venue_df = venue_df[venue_df['geo_unit'].isin(self._loaded_geo_units)]
+            venue_df = venue_df[venue_df[actual_geo_col].isin(self._loaded_geo_units)]
             venues_skipped = original_count - len(venue_df)
-            logger.info(f"Pre-filtered {venue_type} venues: {len(venue_df)} venues in loaded geography ({venues_skipped} filtered out)")
+            logger.info(f"Pre-filtered {venue_type} venues: {len(venue_df)} venues in loaded geography ({venues_skipped} filtered out using {actual_geo_col})")
 
         # Create venues
         venues_created = 0

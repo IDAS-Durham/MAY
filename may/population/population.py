@@ -190,6 +190,22 @@ class PopulationManager:
         """
         target_to_csv = column_mapping
         
+        # Identify geographical column
+        # Priority: 1. mapped 'geo_unit', 2. literal 'geo_unit', 3. literal 'SGU', 4. literal 'MGU'
+        geo_levels = set(self.geography.levels)
+        geo_cols = {'geo_unit', 'SGU', 'MGU'}.union(geo_levels)
+        
+        mapped_geo_col = target_to_csv.get('geo_unit')
+        actual_geo_col = None
+        
+        if mapped_geo_col in df.columns:
+            actual_geo_col = mapped_geo_col
+        else:
+            actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
+            
+        if actual_geo_col is None:
+             raise ValueError(f"Missing required geographical column (e.g., 'geo_unit', 'SGU', 'MGU') in population data")
+
         people_count = 0
         
         for row in df.itertuples(index=False):
@@ -199,12 +215,11 @@ class PopulationManager:
             sex = "unknown"
             
             # 1. Determine geographical unit
-            geo_unit = None
-            if 'SGU' in row_dict:
-                geo_unit = self.geography.get_unit(row_dict['SGU'])
+            geo_unit_name = row_dict.get(actual_geo_col)
+            geo_unit = self.geography.get_unit(geo_unit_name) if geo_unit_name else None
             
             if not geo_unit:
-                logger.warning(f"No geographical unit (SGU) found for person in row. Skipping.")
+                logger.warning(f"No geographical unit found for person in row (col: {actual_geo_col}, val: {geo_unit_name}). Skipping.")
                 continue
 
             # Extract known attributes
@@ -462,9 +477,16 @@ class PopulationManager:
             df = pd.read_csv(path)
             total_files += 1
             
-            # Filter rows by SGU to only keep what is in our geography
-            if 'SGU' in df.columns:
-                df = df[df['SGU'].isin(loaded_sgus)]
+            # Filter rows by geographical unit to only keep what is in our geography
+            # Check for any valid geo level column (SGU, MGU, or custom levels)
+            geo_levels = set(self.geography.levels)
+            geo_cols = {'SGU', 'MGU', 'geo_unit'}.union(geo_levels)
+            actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
+
+            if actual_geo_col and actual_geo_col in df.columns:
+                # We filter by whatever geographical units are currently loaded in the geography
+                loaded_units = set(self.geography.get_all_units().keys())
+                df = df[df[actual_geo_col].isin(loaded_units)]
             
             self.load_explicit_from_df(df, column_mapping)
             

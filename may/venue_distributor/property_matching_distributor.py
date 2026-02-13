@@ -79,16 +79,24 @@ class PropertyMatchingDistributor(BaseDistributor):
             if val is not None:
                 venue = venue_map.get(str(val).strip())
                 if venue:
-                    # Use override or venue's own type
-                    actual_activity_type = self.activity_type_override or venue.type
+                    # Determine subset key (dynamic or static)
+                    subset_key = self._get_subset_key(venue, person)
                     
-                    venue.add_to_subset(
-                        person, 
-                        subset_key=self.subset_key, 
-                        activity_name=self.activity_name,
-                        activity_type=actual_activity_type
-                    )
-                    matched_count += 1
+                    if subset_key:
+                        # Use override or venue's own type
+                        actual_activity_type = self.activity_type_override or venue.type
+                        
+                        venue.add_to_subset(
+                            person, 
+                            subset_key=subset_key, 
+                            activity_name=self.activity_name,
+                            activity_type=actual_activity_type
+                        )
+                        matched_count += 1
+                    else:
+                        # Should rarely happen given fallback logic, but good for safety
+                        logger.warning(f"Could not determine subset for person {person.id} in venue {venue.id}")
+                        missed_count += 1
                 else:
                     missed_count += 1
             
@@ -97,3 +105,53 @@ class PropertyMatchingDistributor(BaseDistributor):
             logger.warning(f"  Failed to find a venue for {missed_count:,} people with a mapping key")
             
         return {"matched_count": matched_count, "missed_count": missed_count}
+
+    def _get_subset_key(self, venue, person):
+        """
+        Determine the subset key for a person in a venue.
+        
+        Priority:
+        1. 'subset_categories' in venue properties (Dynamic, attribute-based)
+        2. 'subset_key' in venue properties (Static override)
+        3. self.subset_key from distributor config (Static default / Backward compat)
+        """
+        
+        # 1. Check for dynamic categories (e.g., age-based for households)
+        categories = venue.properties.get('subset_categories')
+        
+        if categories:
+            for cat in categories:
+                # Check attributes
+                attr_name = cat.get('attribute')
+                if attr_name:
+                    val = getattr(person, attr_name, None)
+                    if val is None: 
+                        val = person.properties.get(attr_name)
+                    
+                    if val is not None:
+                        # Numerical check
+                        if cat.get('type') == 'numerical':
+                            limits = cat.get('numerical', {})
+                            min_val = limits.get('min')
+                            max_val = limits.get('max')
+                            
+                            if min_val is not None and val < min_val:
+                                continue
+                            if max_val is not None and val > max_val:
+                                continue
+                                
+                            return cat['name']
+                            
+                        # Categorical check (if needed in future)
+                        # elif cat.get('type') == 'categorical': ...
+            
+            # If categories exist but no match found, fallback or return None?
+            # For now, fallback to static key if available, else None
+            pass
+
+        # 2. Check venue-specific static key
+        if 'subset_key' in venue.properties:
+            return venue.properties['subset_key']
+
+        # 3. Fallback to distributor config (backward compatibility)
+        return self.subset_key
