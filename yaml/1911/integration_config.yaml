@@ -7,7 +7,7 @@ geography:
 
 venues:
   data_dir: "1911_data/venues"
-  config_file: "yaml/1911/households_config.yaml"
+  config_file: "yaml/1911/venues_config.yaml"
 
 population:
   type: "explicit_batch"
@@ -21,6 +21,10 @@ timeline:
   steps:
     - type: "distributor" #Household distribution
       config: "yaml/1911/residence_distribution_config.yaml"
+    - type: "attribute"
+      config: "yaml/1911/age_imputation.yaml"
+    - type: "distributor"
+      config: "yaml/1911/school_distributor_1911.yaml"
 
 households:
   enabled: false

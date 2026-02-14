@@ -70,6 +70,19 @@ class BaseDistributor:
             return tuple(geo.coordinates)
         
         return None
+    
+    def _get_venue_location(self, venue) -> Optional[Tuple[float, float]]:
+        """Get venue's coordinates with fallback to geographical unit."""
+        if hasattr(venue, 'coordinates') and venue.coordinates:
+            if len(venue.coordinates) == 2:
+                return tuple(venue.coordinates)
+        
+        # Fallback to geographical unit coordinates
+        geo = getattr(venue, 'geographical_unit', None)
+        if geo and hasattr(geo, 'coordinates') and geo.coordinates:
+            return tuple(geo.coordinates)
+        
+        return None
 
     def _haversine_distance(self, loc1: Tuple[float, float], loc2: Tuple[float, float]) -> float:
         """Calculate distance between two lat/lon points in km."""
@@ -142,8 +155,10 @@ class BaseDistributor:
             coords = []
             valid_venues = []
             for v in venues:
-                if v.coordinates and len(v.coordinates) == 2:
-                    coords.append(v.coordinates)
+                v_coords = self._get_venue_location(v)
+                
+                if v_coords:
+                    coords.append(v_coords)
                     valid_venues.append(v)
             
             if coords:

@@ -144,12 +144,20 @@ class ProbabilisticStrategy(AssignmentStrategy):
         Returns:
             Sampled attribute value
         """
-        # Get geo unit from household
-        if not household or not household.geographical_unit:
-            logger.warning("No geographical unit found for household")
-            return None
+        # 1. Try to get geo unit from residence venue (household/CE)
+        geo_unit = None
+        if household and household.geographical_unit:
+            geo_unit = household.geographical_unit.name
+            logger.debug(f"  Geographical unit for person {person.id} sourced from venue: {geo_unit}")
+        
+        # 2. Fall back to person's own geo unit (useful for individuals not yet distributed or CE residents)
+        if not geo_unit and person.geographical_unit:
+            geo_unit = person.geographical_unit.name
+            logger.debug(f"  Geographical unit for person {person.id} sourced from person: {geo_unit}")
 
-        geo_unit = household.geographical_unit.name
+        if not geo_unit:
+            logger.warning(f"No geographical unit found for person {person.id} (no residence venue and no person-level geo unit)")
+            return None
 
         # Get probability distribution from data source
         probs = self.data_manager.lookup(self.data_source_name, geo_unit)

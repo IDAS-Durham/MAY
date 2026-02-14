@@ -429,7 +429,7 @@ class AttributeAssigner:
 
         # Prepare batch data
         logger.info(f"  Preparing batch data for {total:,} people...")
-        households = [self._get_person_household(p) for p in eligible_people]
+        households = [self._get_person_residence_venue(p) for p in eligible_people]
         contexts = [{'attribute_name': self.attribute_name} for _ in eligible_people]
 
         # Call batch assignment
@@ -495,7 +495,7 @@ class AttributeAssigner:
                 logger.debug(f"    Existing attributes: {list(person.properties.keys())}")
 
             # Pass strategy directly instead of looking it up again
-            household = self._get_person_household(person)
+            household = self._get_person_residence_venue(person)
             context = {'attribute_name': self.attribute_name, 'debug': is_sample}
 
             try:
@@ -830,11 +830,15 @@ class AttributeAssigner:
 
 
 
-    def _get_person_household(self, person):
-        """Get household venue for a person, if any."""
-        # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
-        if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
-            return person.activity_map["residence"]["household"][0].venue
+    def _get_person_residence_venue(self, person):
+        """Get residence venue for a person (e.g., household, pub, care home)."""
+        # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
+        if "residence" in person.activity_map:
+            for venue_type, subsets in person.activity_map["residence"].items():
+                if subsets:
+                    venue = subsets[0].venue
+                    logger.debug(f"  Person {person.id} residence found: {venue_type} (ID={venue.id})")
+                    return venue
         return None
 
     def _check_required_attributes(self, people):

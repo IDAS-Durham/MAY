@@ -4,7 +4,7 @@ venue_types:
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["C", "CG", "CH", "CR", "CS", "D", "L", "M", "V", "X"]
+    filter_values: ["C", "CG", "CH", "CR", "CS", "D", "L", "V", "X"]
     subset_categories:
       - name: "Kids"
         attribute: "age"
@@ -36,7 +36,15 @@ venue_types:
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["O", "OS", "PP", "PH", "F", "FR", "FS"]
+    filter_values: ["O", "OS", "PP", "F", "FR", "FS", "PO"]
+    subset_key: "resident"
+
+  municipal_building:
+    enabled: true
+    batch_mode: true
+    is_residence: false
+    filter_column: "BTCode"
+    filter_values: ["M"]
     subset_key: "resident"
     
   farm:
@@ -55,12 +63,20 @@ venue_types:
     filter_values: ["R", "RS", "S", "G", "GS"]
     subset_key: "resident"
 
+  workings:
+    enabled: true
+    batch_mode: true
+    is_residence: false
+    filter_column: "BTCode"
+    filter_values: ["W"]
+    subset_key: "resident"
+
   hotel_inn:
     enabled: true
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["J", "JS", "K", "KR", "PI"]
+    filter_values: ["J", "JS", "K", "KR", "PI", "PH"]
     subset_key: "resident"
 
   school:
@@ -68,7 +84,7 @@ venue_types:
     batch_mode: true
     is_residence: true
     filter_column: "BTCode"
-    filter_values: ["Q", "PQ"]
+    filter_values: ["Q", "PQ", "SE", "SP", "SS", "SU", "SO"]
     subset_key: "resident"
 
   church:

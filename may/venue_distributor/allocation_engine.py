@@ -86,14 +86,14 @@ class AllocationEngine:
                 )
 
                 if eligible_venues:
-                    pool = eligible_venues[:target_count]
                     for person in people_group:
                         venue = None
-                        with_cap = self.distributor._filter_venues_by_capacity(pool)
+                        with_cap = self.distributor._filter_venues_by_capacity(eligible_venues)
                         if with_cap:
+                            # Selection strategy (e.g., closest) will pick from available venues
                             venue = self.distributor.matcher.select_venue(person, with_cap, (lat, lon))
                         elif allow_overflow:
-                            venue = self.distributor.matcher.select_venue(person, pool, (lat, lon))
+                            venue = self.distributor.matcher.select_venue(person, eligible_venues, (lat, lon))
                         
                         if venue:
                             venue.add_to_subset(person, subset_key=self.distributor.subset_key, 
@@ -221,7 +221,7 @@ class AllocationEngine:
                             unallocated.append(person)
                             
                 elif strategy == 'closest' and lat is not None:
-                    available_venues.sort(key=lambda v: self.distributor._haversine_distance((lat, lon), v.coordinates))
+                    available_venues.sort(key=lambda v: self.distributor._haversine_distance((lat, lon), self.distributor._get_venue_location(v)))
                     venue_ptr = 0
                     
                     for person in group:

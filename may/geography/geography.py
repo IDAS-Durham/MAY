@@ -170,7 +170,8 @@ class Geography:
         self._log_summary()
 
     def add_geo_unit(self, unit: "GeographicalUnit"):
-        self.units[unit.name] = unit
+        if unit.name not in self.units:
+            self.units[unit.name] = unit
         self.units_by_id[unit.id] = unit
         self.units_by_level[unit.level][unit.name] = unit
 
