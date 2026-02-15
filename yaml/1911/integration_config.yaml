@@ -1,0 +1,38 @@
+geography:
+  data_dir: "1911_data/geography"
+  levels: [SGU, MGU]
+  filter:
+    level: MGU
+    codes: ["DURHAM"]
+
+venues:
+  data_dir: "1911_data/venues"
+  config_file: "yaml/1911/venues_config.yaml"
+
+population:
+  type: "explicit_batch"
+  data_dir: "1911_data/population"
+  column_mapping:
+    age: Age
+    sex: Sex
+    Occode: Occode
+
+timeline:
+  enabled: true
+  steps:
+    - type: "distributor" #Household distribution
+      config: "yaml/1911/residence_distribution_config.yaml"
+    - type: "attribute"
+      config: "yaml/1911/age_imputation.yaml"
+    - type: "distributor"
+      config: "yaml/1911/school_distributor_1911.yaml"
+
+households:
+  enabled: false
+
+serialization:
+  enabled: true
+  config_file: "yaml/1911/serialization_config.yaml"
+  output_dir: "output/1911"
+  filename: "1911_durham_world.h5"
+  compression: "gzip"

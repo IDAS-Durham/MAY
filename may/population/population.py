@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Population manager for June Zero.
 
@@ -9,6 +10,11 @@ import logging
 import numpy as np
 import pandas as pd
 from collections import defaultdict
+from typing import Dict, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from may.geography import GeographicalUnit
+
 from .person import Person
 
 logger = logging.getLogger("population")
@@ -160,6 +166,103 @@ class PopulationManager:
 
         logger.info(f"Loaded precise demographics for {len(self.precise_demographics)} geographical units")
         logger.info(f"Total people in demographics: {total_people:,}")
+
+    def load_explicit_from_csv(self, filename: str, column_mapping: Dict[str, str]):
+        """
+        Load individual-level population data from a CSV file.
+        """
+        path = os.path.join(self.data_dir, filename)
+        if not os.path.exists(path):
+            logger.error(f"Explicit population file not found: {path}")
+            return
+
+        logger.info(f"Loading explicit population from {path}")
+        df = pd.read_csv(path)
+        
+        # Reset ID counter for consistency (at the entry point)
+        Person.reset_counter()
+        
+        self.load_explicit_from_df(df, column_mapping)
+
+    def load_explicit_from_df(self, df: pd.DataFrame, column_mapping: Dict[str, str]):
+        """
+        Internal method to load population from a DataFrame.
+        """
+        target_to_csv = column_mapping
+        
+        # Identify geographical column
+        # Priority: 1. mapped 'geo_unit', 2. literal 'geo_unit', 3. literal 'SGU', 4. literal 'MGU'
+        geo_levels = set(self.geography.levels)
+        geo_cols = {'geo_unit', 'SGU', 'MGU'}.union(geo_levels)
+        
+        mapped_geo_col = target_to_csv.get('geo_unit')
+        actual_geo_col = None
+        
+        if mapped_geo_col in df.columns:
+            actual_geo_col = mapped_geo_col
+        else:
+            actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
+            
+        if actual_geo_col is None:
+             raise ValueError(f"Missing required geographical column (e.g., 'geo_unit', 'SGU', 'MGU') in population data")
+
+        people_count = 0
+        
+        for row in df.itertuples(index=False):
+            row_dict = row._asdict()
+            properties = {}
+            age = 0
+            sex = "unknown"
+            
+            # 1. Determine geographical unit
+            geo_unit_name = row_dict.get(actual_geo_col)
+            geo_unit = self.geography.get_unit(geo_unit_name) if geo_unit_name else None
+            
+            if not geo_unit:
+                logger.warning(f"No geographical unit found for person in row (col: {actual_geo_col}, val: {geo_unit_name}). Skipping.")
+                continue
+
+            # Extract known attributes
+            for target, csv_col in target_to_csv.items():
+                if csv_col not in row_dict:
+                    continue
+                
+                val = row_dict[csv_col]
+                if target == 'age':
+                    try:
+                        age = int(float(val))
+                    except (ValueError, TypeError):
+                        age = 0
+                elif target == 'sex':
+                    sex = str(val).lower().strip() if pd.notna(val) else "unknown"
+                    # Normalize common sex strings
+                    if sex in ['m', '1', 'male']: sex = 'male'
+                    elif sex in ['f', '2', 'female']: sex = 'female'
+                elif target == 'geo_unit':
+                    unit_name = str(val).strip()
+                    found_unit = self.geography.get_unit(unit_name)
+                    if found_unit:
+                        geo_unit = found_unit
+                else:
+                    # Treat as a generic property
+                    properties[target] = val
+
+            # Add all other columns not in mapping to properties
+            mapped_csv_cols = set(target_to_csv.values())
+            for col, val in row_dict.items():
+                if col not in mapped_csv_cols:
+                    properties[col] = val
+
+            # Create and add person
+            person = Person(age=age, sex=sex, geographical_unit=geo_unit, properties=properties)
+            self.add_person(person)
+            
+            if geo_unit:
+                geo_unit.add_person(person)
+            
+            people_count += 1
+
+        logger.info(f"Successfully loaded {people_count:,} people from explicit data.")
 
     def generate_population(self, **kwargs):
         """
@@ -348,3 +451,43 @@ class PopulationManager:
             'sex_distribution': sex_counts,
             'activity_counts': activity_counts
         }
+    def load_batch_explicit_from_csv(self, data_dir: str, column_mapping: Dict[str, str]):
+        """
+        Load individual-level population data from multiple MGU-level CSV files.
+        """
+        # 1. Identify all MGUs in the current geography
+        mgu_units = self.geography.get_units_by_level("MGU")
+        mgu_names = set(mgu_units.keys())
+        
+        # 2. Identify all loaded SGUs for internal filtering
+        loaded_sgus = set(self.geography.get_units_by_level("SGU").keys())
+        
+        # Reset ID counter once for the whole batch
+        Person.reset_counter()
+        
+        logger.info(f"Starting batch explicit population load for {len(mgu_names)} MGUs")
+        
+        total_files = 0
+        for mgu_name in mgu_names:
+            filename = f"{mgu_name}_pop.csv"
+            path = os.path.join(data_dir, filename)
+            if not os.path.exists(path):
+                 continue
+            
+            df = pd.read_csv(path)
+            total_files += 1
+            
+            # Filter rows by geographical unit to only keep what is in our geography
+            # Check for any valid geo level column (SGU, MGU, or custom levels)
+            geo_levels = set(self.geography.levels)
+            geo_cols = {'SGU', 'MGU', 'geo_unit'}.union(geo_levels)
+            actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
+
+            if actual_geo_col and actual_geo_col in df.columns:
+                # We filter by whatever geographical units are currently loaded in the geography
+                loaded_units = set(self.geography.get_all_units().keys())
+                df = df[df[actual_geo_col].isin(loaded_units)]
+            
+            self.load_explicit_from_df(df, column_mapping)
+            
+        logger.info(f"Batch load complete. Processed {total_files} files.")

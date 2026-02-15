@@ -80,15 +80,23 @@ class Geography:
 
         logger.info(f"Loaded hierarchy with {len(hierarchy_df)} entries")
 
+        # Verify that all configured levels exist in the CSV
+        missing_levels = [lvl for lvl in self.levels if lvl not in hierarchy_df.columns]
+        if missing_levels:
+            logger.error(f"Hierarchy file is missing columns for configured levels: {missing_levels}")
+            logger.info(f"Available columns: {hierarchy_df.columns.tolist()}")
+            raise ValueError(f"Missing columns {missing_levels} in {hierarchy_path}")
+
         # 2. Apply filters if specified
         if self.filters and self.filters.get('codes'):
             filter_level = self.filters['level']
             filter_names = set(self.filters['codes'])  # 'codes' key for backward compat
 
-            # Get the column name for this level from hierarchy
-            hierarchy_cols = hierarchy_df.columns.tolist()
-            level_index = self.levels.index(filter_level)
-            filter_col = hierarchy_cols[level_index]
+            if filter_level not in hierarchy_df.columns:
+                logger.error(f"Filter level '{filter_level}' not found in hierarchy columns.")
+                raise ValueError(f"Invalid filter level: {filter_level}")
+            
+            filter_col = filter_level
 
             # Filter the hierarchy to only include rows with these names
             original_size = len(hierarchy_df)
@@ -119,15 +127,13 @@ class Geography:
                 logger.warning(f"No coordinate file found for {level}")
 
         # 4. Create all units from hierarchy
-        # Hierarchy columns: SGU, MGU, LGU (or custom level names)
-        hierarchy_cols = hierarchy_df.columns.tolist()
-
-        # Create units for each level
-        for level, col_name in zip(self.levels, hierarchy_cols):
-            unique_names = hierarchy_df[col_name].unique()
+        # Create units for each level independently of column order
+        for level in self.levels:
+            unique_names = hierarchy_df[level].unique()
 
             for name in unique_names:
-                if name not in self.units:
+                # Check if unit already exists AT THIS LEVEL to allow same names across levels
+                if name not in self.units_by_level[level]:
                     # Get coordinates as tuple (lat, lon) or None
                     coordinates = coords[level].get(name, None)
                     # Generate unique ID
@@ -143,14 +149,19 @@ class Geography:
         logger.info(f"Created {len(self.units)} total units")
 
         # 5. Build parent-child relationships from hierarchy
+        # Use explicit level pairs instead of column offsets
         for _, row in hierarchy_df.iterrows():
             # Link each level to its parent
-            for i in range(len(hierarchy_cols) - 1):
-                child_name = row[hierarchy_cols[i]]
-                parent_name = row[hierarchy_cols[i + 1]]
+            for i in range(len(self.levels) - 1):
+                child_level = self.levels[i]
+                parent_level = self.levels[i+1]
+                
+                child_name = row[child_level]
+                parent_name = row[parent_level]
 
-                child = self.units.get(child_name)
-                parent = self.units.get(parent_name)
+                # Get units from their specific levels
+                child = self.units_by_level[child_level].get(child_name)
+                parent = self.units_by_level[parent_level].get(parent_name)
 
                 if child and parent and child.parent is None:
                     parent.add_child(child)
@@ -159,7 +170,8 @@ class Geography:
         self._log_summary()
 
     def add_geo_unit(self, unit: "GeographicalUnit"):
-        self.units[unit.name] = unit
+        if unit.name not in self.units:
+            self.units[unit.name] = unit
         self.units_by_id[unit.id] = unit
         self.units_by_level[unit.level][unit.name] = unit
 

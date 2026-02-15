@@ -106,7 +106,7 @@ class VenueMatcher:
                     allowed = rule['rules'].get(v_val)
                     if allowed:
                         for p_val in allowed:
-                            index_key = (attr_name, p_val)
+                            index_key = (attr_name, self.distributor._normalize_value(p_val))
                             if index_key not in self.categorical_index:
                                 self.categorical_index[index_key] = set()
                             self.categorical_index[index_key].add(v_id)
@@ -260,9 +260,20 @@ class VenueMatcher:
                 attr_name = rule.get('name')
                 val = self._get_person_attr(person, attr_name, person_attrs)
                 if val is not None:
-                    if not rule.get('case_sensitive', False):
-                        val = str(val).lower() if val else ''
-                    categorical_filters.append((attr_name, val))
+                    # Normalize and handle case sensitivity for pre-filtering
+                    norm_val = self.distributor._normalize_value(val)
+                    
+                    # Search for the rule to check case sensitivity
+                    is_case_sensitive = True
+                    for rule in attributes:
+                        if rule.get('name') == attr_name:
+                            is_case_sensitive = rule.get('case_sensitive', False)
+                            break
+                    
+                    if not is_case_sensitive:
+                        norm_val = norm_val.lower()
+                        
+                    categorical_filters.append((attr_name, norm_val))
 
         if not categorical_filters:
             return venues
@@ -370,7 +381,12 @@ class VenueMatcher:
         v_val = venue.properties.get(col, rule.get('assume_if_missing', 'Mixed'))
         matching = rule.get('matching_rules', {})
         if not rule.get('case_sensitive', False):
-            v_val = str(v_val).lower()
-            val = str(val).lower()
-            matching = {k.lower(): [v.lower() for v in vals] for k, vals in matching.items()}
+            v_val = self.distributor._normalize_value(v_val).lower()
+            val = self.distributor._normalize_value(val).lower()
+            matching = {k.lower(): [self.distributor._normalize_value(v).lower() for v in vals] for k, vals in matching.items()}
+        else:
+            v_val = self.distributor._normalize_value(v_val)
+            val = self.distributor._normalize_value(val)
+            matching = {k: [self.distributor._normalize_value(v) for v in vals] for k, vals in matching.items()}
+        
         return val in matching.get(v_val, []) if v_val in matching else True

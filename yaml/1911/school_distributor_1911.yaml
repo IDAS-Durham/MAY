@@ -1,0 +1,90 @@
+# ============================================================================
+# Educational Venue Distributor for Durham 1911
+# ============================================================================
+
+venue_type: "school"
+activity_map_key: "primary_activity"
+subset_key: "resident"
+activity_type: "education"
+
+settings:
+  verbose: true
+  use_spatial_index: true
+
+# Source for person/household location
+venue_selection:
+  person_location_source: "geographical_unit.coordinates" # Uses SGU centroids
+  venue_geo_level: "SGU"
+  batch_geo_level: "SGU"
+  consider_by: "count"
+  count: 173 # Search all schools to ensure we find ones with capacity
+  search_limits: [10, 50, 173]
+  strategy: "closest"
+
+eligibility:
+  # Everyone with Occode 780-787 is eligible for a school
+  # Added age cap to prevent elderly "scholars" from being allocated
+  global_filters:
+    - attribute: "Occode"
+      type: "numerical"
+      min: 780
+      max: 787
+    - attribute: "age"
+      type: "numerical"
+      max: 24
+
+  # Specific matching between student profile and venue BTCode
+  attributes:
+    - name: "Occode"
+      type: "categorical"
+      venue_column: "BTCode"
+      matching_rules:
+        # Venue BTCode: [Allowed Occodes]
+        "SE": ["787"]                                      # Primary
+        "SS": ["787", "785"]                                # Secondary
+        "SO": ["780", "781", "782", "783", "784", "786"]    # Higher/Other
+        "SP": ["787", "785"]                                # Private
+        "Q":  ["787"]                                       # School buildings
+        "PQ": ["780", "781", "782", "783", "784", "785", "787"] # Mixed
+
+allocation:
+  track_capacity: true
+  when_full: "exclude"
+  # Target capacity to accommodate 163k population across 173 schools
+  # Average required is ~950. 1500 allows for uneven distribution.
+  fixed_capacity: 1500
+  strategy: "closest"
+
+# Priority groups for allocation order
+priority_allocation:
+  enabled: true
+  groups:
+    - name: "mandatory_age_scholars"
+      filters:
+        - attribute: "age"
+          type: "numerical"
+          min: 5
+          max: 14
+        - attribute: "Occode"
+          type: "numerical"
+          min: 787
+          max: 787
+      priority: 1
+    
+    - name: "older_students"
+      filters:
+        - attribute: "age"
+          type: "numerical"
+          min: 15
+          max: 24
+        - attribute: "Occode"
+          type: "numerical"
+          min: 780
+          max: 787
+      priority: 2
+
+fallbacks:
+  enabled: true
+  strategies:
+    - name: "increase_search_radius"
+      max_distance_km: 100 # Ensure even isolated students find a school if capacity exists

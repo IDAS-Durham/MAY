@@ -241,15 +241,20 @@ class VenueDistributor(BaseDistributor):
     def _prepare_vectorized_data(self, people: List):
         """Build population arrays for all attributes used in filters."""
         attrs = set()
+        numerical_attrs = set()
         configs = [
             self.config.get('eligibility', {}).get('global_filters', []),
             *[g.get('filters', []) for g in self.config.get('eligibility', {}).get('priority_allocation', {}).get('groups', [])]
         ]
         for filter_list in configs:
             for f in filter_list:
-                if 'attribute' in f: attrs.add(f['attribute'])
+                attr = f.get('attribute')
+                if attr:
+                    attrs.add(attr)
+                    if f.get('type') == 'numerical':
+                        numerical_attrs.add(attr)
         
-        self._build_population_arrays(people, attributes=list(attrs))
+        self._build_population_arrays(people, attributes=list(attrs), numerical_attributes=list(numerical_attrs))
 
     def _get_unassigned_people(self, world) -> List:
         """Get people for allocation based on require_unassigned setting."""

@@ -29,7 +29,7 @@ sexual_orientations:
       bisexual: 0.10
 
   age_adjustments:
-    "18-25":
+    "16-25":
       bisexual: 1.3
     "65-74":
       homosexual: 0.7

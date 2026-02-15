@@ -81,8 +81,12 @@ def main():
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir="data/venues")
     venue_config = config.get("venues", {})
+    venues = VenueManager(
+        geography=geo, 
+        data_dir=venue_config.get("data_dir", "data/venues")
+    )
+    
     yaml_config_file = venue_config.get("config_file", "venues_config.yaml")
     venues.load_from_yaml_config(yaml_config_file)
 
@@ -95,16 +99,38 @@ def main():
         data_dir=pop_config.get("data_dir", "data/population")
     )
 
-    # Load demographic data
-    male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
-    female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
-    population.load_demographics_from_csv(male_file, female_file)
+    pop_type = pop_config.get("type", "matrix")
+    if pop_type == "explicit" or pop_type == "explicit_batch":
+        column_mapping = pop_config.get("column_mapping", {})
+        
+        if pop_type == "explicit_batch":
+            population.load_batch_explicit_from_csv(
+                data_dir=pop_config.get("data_dir", "1911_data/population"),
+                column_mapping=column_mapping
+            )
+        else:
+            filename = pop_config.get("filename")
+            if not filename:
+                logger.error("Population type 'explicit' required a 'filename' in configuration")
+                sys.exit(1)
+                
+            population.load_explicit_from_csv(
+                filename=filename,
+                column_mapping=column_mapping
+            )
+    else:
+        # Load demographic data (matrix style)
+        male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
+        female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
+        population.load_demographics_from_csv(male_file, female_file)
 
-    # Generate population
-    population.generate_population()
+        # Generate population
+        population.generate_population()
 
     # Setup and distribute households
-    household_distributor = setup_households(geo, population, venues, config)
+    household_distributor = None
+    if config.get("households", {}).get("enabled", True):
+        household_distributor = setup_households(geo, population, venues, config)
 
     # Create World object
     logger.info("")
@@ -292,20 +318,23 @@ def main():
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
     logger.info("=" * 60)
 
-    # Export venue allocations
-    #export_venue_allocations(world)
-
-
-
-    # Export people data
-    #export_people(world)
-
-    # Show examples of what was created
-    #print_world_examples(world)
-
     # Export world to HDF5 for C++ simulation
-    # Uncomment to enable HDF5 export:
-    world.export_to_hdf5("world_state.h5")
+    serial_config = config.get("serialization", {})
+    if serial_config.get("enabled", True):
+        logger.info("")
+        logger.info("Exporting world to HDF5...")
+        output_dir = serial_config.get("output_dir", ".")
+        filename = serial_config.get("filename", "world_state.h5")
+        
+        if output_dir != ".":
+            os.makedirs(output_dir, exist_ok=True)
+            
+        export_path = os.path.join(output_dir, filename)
+        config_file = serial_config.get("config_file")
+        if config_file:
+            world.export_to_hdf5(export_path, config_file=config_file)
+        else:
+            world.export_to_hdf5(export_path)
 
     return world
 
