@@ -21,16 +21,11 @@ class AllocationEngine:
         
         self.attr_getters = []
         for name in self.attribute_names:
-            if name == 'age':
-                self.attr_getters.append(lambda p: p.age)
-            elif name == 'sex':
-                self.attr_getters.append(lambda p: p.sex)
-            elif name == 'residence.type':
-                self.attr_getters.append(lambda p: p.residence_type)
-            else:
-                # General nested path
-                parts = name.split('.')
-                self.attr_getters.append(self.distributor._create_path_getter(parts))
+            # Use a closure to capture the current name
+            def make_getter(attr_name):
+                return lambda p: self.distributor._get_person_attribute(attr_name, p)
+            
+            self.attr_getters.append(make_getter(name))
 
     def allocate_group(self, people: List, venues: List, allow_overflow: bool = False, group_search_limits=None) -> int:
         """Allocate a specific group of people with geo-unit level caching and attribute batching."""
@@ -187,7 +182,7 @@ class AllocationEngine:
                 
                 # Local available pool for this attribute group in this SGU
                 if respect_capacity:
-                    available_venues = [v for v in p_venues if self.distributor._get_venue_capacity(v) > 0]
+                    available_venues = [v for v in p_venues if self.distributor._get_remaining_capacity(v) > 0]
                 else:
                     available_venues = list(p_venues)
 
@@ -205,13 +200,13 @@ class AllocationEngine:
                         assigned = False
                         while venue_ptr < len(available_venues):
                             v = available_venues[venue_ptr]
-                            if not respect_capacity or self.distributor._get_venue_capacity(v) > 0:
+                            if not respect_capacity or self.distributor._get_remaining_capacity(v) > 0:
                                 v.add_to_subset(person, subset_key=self.distributor.subset_key, 
                                               activity_name=self.distributor.activity_map_key, activity_type=self.distributor.activity_type)
                                 self.distributor._increment_venue_count(v)
                                 allocated += 1
                                 assigned = True
-                                if respect_capacity and self.distributor._get_venue_capacity(v) <= 0:
+                                if respect_capacity and self.distributor._get_remaining_capacity(v) <= 0:
                                     venue_ptr += 1
                                 break
                             else:
@@ -228,13 +223,13 @@ class AllocationEngine:
                         assigned = False
                         while venue_ptr < len(available_venues):
                             v = available_venues[venue_ptr]
-                            if not respect_capacity or self.distributor._get_venue_capacity(v) > 0:
+                            if not respect_capacity or self.distributor._get_remaining_capacity(v) > 0:
                                 v.add_to_subset(person, subset_key=self.distributor.subset_key, 
                                               activity_name=self.distributor.activity_map_key, activity_type=self.distributor.activity_type)
                                 self.distributor._increment_venue_count(v)
                                 allocated += 1
                                 assigned = True
-                                if respect_capacity and self.distributor._get_venue_capacity(v) <= 0:
+                                if respect_capacity and self.distributor._get_remaining_capacity(v) <= 0:
                                     venue_ptr += 1
                                 break
                             else:
@@ -244,7 +239,7 @@ class AllocationEngine:
                 else:
                     # Fallback for complex strategies or missing coordinates
                     for person in group:
-                        with_cap = [v for v in available_venues if not respect_capacity or self.distributor._get_venue_capacity(v) > 0]
+                        with_cap = [v for v in available_venues if not respect_capacity or self.distributor._get_remaining_capacity(v) > 0]
                         if with_cap:
                             venue = self.distributor.matcher.select_venue(person, with_cap, (lat, lon) if lat is not None else None)
                             if venue:

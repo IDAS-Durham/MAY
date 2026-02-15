@@ -71,7 +71,7 @@ venue_selection:
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to companies near their WORK location, not home
   # Note: workplace_sgu is the SGU code, stored in person.properties
-  person_location_attribute: "properties.workplace_sgu"
+  person_location_source: "properties.workplace_sgu"
 
   # Batch at SGU level (workplace) for better performance
   # Even though companies are at MGU level, we batch people by their specific workplace SGU

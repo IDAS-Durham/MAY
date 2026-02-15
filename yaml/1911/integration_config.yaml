@@ -15,6 +15,7 @@ population:
   column_mapping:
     age: Age
     sex: Sex
+    Occode: Occode
 
 timeline:
   enabled: true

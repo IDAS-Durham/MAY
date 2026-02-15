@@ -17,17 +17,21 @@ venue_selection:
   venue_geo_level: "SGU"
   batch_geo_level: "SGU"
   consider_by: "count"
-  count: 5
-  search_limits: [5, 20, 50]
+  count: 173 # Search all schools to ensure we find ones with capacity
+  search_limits: [10, 50, 173]
   strategy: "closest"
 
 eligibility:
   # Everyone with Occode 780-787 is eligible for a school
+  # Added age cap to prevent elderly "scholars" from being allocated
   global_filters:
     - attribute: "Occode"
       type: "numerical"
       min: 780
       max: 787
+    - attribute: "age"
+      type: "numerical"
+      max: 24
 
   # Specific matching between student profile and venue BTCode
   attributes:
@@ -46,11 +50,12 @@ eligibility:
 allocation:
   track_capacity: true
   when_full: "exclude"
-  # Increase capacity to accommodate 1.3M students across ~150 schools
-  fixed_capacity: 10000
+  # Target capacity to accommodate 163k population across 173 schools
+  # Average required is ~950. 1500 allows for uneven distribution.
+  fixed_capacity: 1500
   strategy: "closest"
 
-# Priority groups for allocation order (optional but good for consistency)
+# Priority groups for allocation order
 priority_allocation:
   enabled: true
   groups:
@@ -71,6 +76,7 @@ priority_allocation:
         - attribute: "age"
           type: "numerical"
           min: 15
+          max: 24
         - attribute: "Occode"
           type: "numerical"
           min: 780
@@ -81,4 +87,4 @@ fallbacks:
   enabled: true
   strategies:
     - name: "increase_search_radius"
-      max_distance_km: 25
+      max_distance_km: 100 # Ensure even isolated students find a school if capacity exists
