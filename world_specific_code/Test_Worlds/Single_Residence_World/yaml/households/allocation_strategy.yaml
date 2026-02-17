@@ -1,0 +1,14 @@
+# Single Residence World - Allocation Strategy
+# One household containing all 1,000,000 people
+
+enabled: true
+
+steps:
+  - name: "Single Residence"
+    type: "household"
+    description: "Put everyone into one household"
+    patterns:
+      - "1000000"
+    max_households: null
+    refresh_pools: true
+    enable_demotion: true
