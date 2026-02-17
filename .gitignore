@@ -66,19 +66,9 @@ cw.txt
 debug_scripts/
 
 /data
-# Generated allocation files
-data/households/household_allocations.csv
-data/venues/venue_allocations.csv
-data/venues/care_homes_ew.csv
-data/households/household_composition_ew.csv
-data/population/sampled_single_year_female_ew.csv
-data/population/sampled_single_year_male_ew.csv
-stuff_for_carehomes
 profile_analyzer.py
 profile_bottlenecks.txt
 simulation_profile.stats
-ATTRIBUTE_ASSIGNMENT_PLAN.md
-hardcoded_ethnicity_distributor.py
 2021_data/
 # pytest_cache
 .pytest_cache
@@ -92,6 +82,7 @@ people.csv
 friendships.csv
 1911_data/
 *.zip
+june_analysis/
 
 # Debug/Temp scripts
 debug_*.py

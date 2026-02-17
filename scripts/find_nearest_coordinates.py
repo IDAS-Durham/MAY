@@ -70,12 +70,12 @@ def find_nearest_indices(
     """
     distances = haversine_distances(target_lat, target_lon, lats, lons)
 
-    # Use argpartition for O(n) selection of k smallest, then sort those k
+    # Use argpartition for selection of k smallest, then sort those k
     n = min(n, len(distances))
     if n == len(distances):
         indices = np.argsort(distances)
     else:
-        # argpartition is O(n), then we only sort the k smallest
+        # then we only sort the k smallest
         partition_indices = np.argpartition(distances, n)[:n]
         sorted_order = np.argsort(distances[partition_indices])
         indices = partition_indices[sorted_order]

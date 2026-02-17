@@ -174,7 +174,7 @@ class MatchingRule:
             # For now, return empty string
             return ''
 
-        # Build category name → index mapping for O(1) lookups (avoids nested loop)
+        # Build category name → index mapping
         category_indices = {cat.name: i for i, cat in enumerate(age_categories)}
 
         # Count members in each category
@@ -187,7 +187,6 @@ class MatchingRule:
             if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
                 subset_name = person.activity_map["residence"]["household"][0].subset_name
 
-                # O(1) lookup instead of O(n) iteration through categories
                 if subset_name in category_indices:
                     counts[category_indices[subset_name]] += 1
 
@@ -345,10 +344,10 @@ class AttributeAssignmentConfig:
         self.venue_assignment_rules = self._parse_venue_assignment_rules()
         self.settings = self._parse_settings()
 
-        # Cache valid roles per structure for O(1) lookups (avoids rebuilding set for every person)
+        # Cache valid roles per structure
         self._valid_roles_cache = {}
 
-        # Cache category lookups for O(1) instead of O(n) (8.8M calls in profiling!)
+        # Cache category lookups
         self._category_lookup_cache = {}
         self._build_category_lookup_structures()
 
@@ -615,7 +614,7 @@ class AttributeAssignmentConfig:
                 logger.debug(f"      Testing role '{role_name}':")
 
             # Check if person's subset matches this role
-            # OPTIMIZATION: Use pre-calculated category if valid
+            # Use pre-calculated category if valid
             matched = False
             if person_category and person_category != "unknown":
                 if person_category in role.subsets:
@@ -703,7 +702,7 @@ class AttributeAssignmentConfig:
 
     def _build_category_lookup_structures(self):
         """
-        Build optimized lookup structures for categories.
+        Build lookup structures for categories.
         Called once during __init__ to avoid repeated iterations.
         """
         # Group categories by attribute name for faster filtering
@@ -726,7 +725,7 @@ class AttributeAssignmentConfig:
 
     def get_category_for_value(self, value: Any, attribute_name: str = "age") -> Optional[Dict[str, Any]]:
         """
-        Find which category a value falls into (optimized with caching).
+        Find which category a value falls into.
 
         Args:
             value: The value to categorize (e.g., age=25)

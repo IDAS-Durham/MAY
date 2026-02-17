@@ -1,0 +1,120 @@
+venue_types:
+  household:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["C", "CG", "CH", "CR", "CS", "D", "L", "V", "X"]
+    subset_categories:
+      - name: "Kids"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 0
+          max: 17
+      - name: "Young Adults"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 18
+          max: 24
+      - name: "Adults"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 25
+          max: 64
+      - name: "Old Adults"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 65
+          max: null
+    
+  pub:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["O", "OS", "PP", "F", "FR", "FS", "PO"]
+    subset_key: "resident"
+
+  municipal_building:
+    enabled: true
+    batch_mode: true
+    is_residence: false
+    filter_column: "BTCode"
+    filter_values: ["M"]
+    subset_key: "resident"
+    
+  farm:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["H", "HJ", "HK", "HR", "HS"]
+    subset_key: "resident"
+    
+  business:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["R", "RS", "S", "G", "GS"]
+    subset_key: "resident"
+
+  workings:
+    enabled: true
+    batch_mode: true
+    is_residence: false
+    filter_column: "BTCode"
+    filter_values: ["W"]
+    subset_key: "resident"
+
+  hotel_inn:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["J", "JS", "K", "KR", "PI", "PH"]
+    subset_key: "resident"
+
+  school:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["Q", "PQ", "SE", "SP", "SS", "SU", "SO"]
+    subset_key: "resident"
+
+  church:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["P"]
+    subset_key: "resident"
+
+  barrack:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["E"]
+    subset_key: "resident"
+
+  medical:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["I", "HO", "HH", "HI", "HD", "HC", "HU"]
+    subset_key: "resident"
+
+  prison:
+    enabled: true
+    batch_mode: true
+    is_residence: true
+    filter_column: "BTCode"
+    filter_values: ["N"]
+    subset_key: "resident"

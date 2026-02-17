@@ -266,7 +266,7 @@ class RelationshipRulesValidator:
         # Get attribute values
         person1_value = getter(person1)
 
-        # Use cached min/max values if provided (performance optimization)
+        # Use cached min/max values if provided
         if cached_values and attribute in cached_values:
             max_value = cached_values[attribute]['max']
             min_value = cached_values[attribute]['min']
@@ -445,7 +445,7 @@ class RelationshipRulesValidator:
 
                     tolerance = pref_dist.get('tolerance', std * 1.5 if dist_type == 'normal' else 10)
                     
-                    # Optimized prioritized_candidates filter
+                    # Prioritized_candidates filter
                     new_prioritized = []
                     for p in prioritized_candidates:
                         p_val = getter(p)
@@ -643,7 +643,7 @@ class RelationshipRulesValidator:
             # Since we only do this once per select_pair, we can just call cat_getter on first_person
             candidate_cat_values = None
 
-        # Pre-compute min/max values for each constraint (performance optimization)
+        # Pre-compute min/max values for each constraint
         constraint_people_cache = {}
         constraint_value_cache = {}
         for rel_constraint in relevant_constraints:

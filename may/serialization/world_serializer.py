@@ -140,12 +140,12 @@ class WorldSerializer:
         # Core attributes (always included)
         ids = np.array([unit.id for unit in units_list], dtype=np.int32)
         
-        # OPTIMIZATION: Move geography names to metadata
+        # Move geography names to metadata
         names = np.array([unit.name for unit in units_list], dtype=h5py.string_dtype())
         metadata_group = f.require_group('metadata/names')
         self._create_dataset(metadata_group, 'geography', names)
 
-        # OPTIMIZATION: Intern geography levels
+        # Intern geography levels
         unique_levels = sorted(list(set(unit.level for unit in units_list)))
         level_to_id = {l: i for i, l in enumerate(unique_levels)}
         levels = np.array([level_to_id[unit.level] for unit in units_list], dtype=np.uint8)
@@ -641,9 +641,7 @@ class WorldSerializer:
 
         logger.info(f"    ✓ Sorted {num_venues:,} venues by geo_unit_id")
 
-        # CRITICAL: Venue IDs in Python are TYPE-SCOPED (each type has its own ID counter starting at 0)
-        # This causes collisions: hospital_0, school_0, office_0 all have id=0
-        # For C++, we need GLOBAL unique IDs. Assign sequential global IDs here.
+        # Assign sequential global IDs here.
 
         # Assign global IDs (0, 1, 2, ..., N-1) to SORTED venues
         global_ids = np.arange(num_venues, dtype=np.int32)
@@ -659,13 +657,12 @@ class WorldSerializer:
         # Core attributes (always included)
         ids = global_ids  # Use GLOBAL IDs for C++
         
-        # OPTIMIZATION: Move names to metadata to save memory in core simulation loop
+        # Move names to metadata to save memory in core simulation loop
         names = np.array([v.name for v in all_venues_sorted], dtype=h5py.string_dtype())
         metadata_group = f.require_group('metadata/names')
         self._create_dataset(metadata_group, 'venues', names)
 
-        # types = np.array([v.type for v in all_venues_sorted], dtype=h5py.string_dtype())
-        # OPTIMIZATION: Convert venue types to uint8 Enum
+        # Convert venue types to uint8 Enum
         unique_types = sorted(list(set(v.type for v in all_venues_sorted)))
         type_to_id = {t: i for i, t in enumerate(unique_types)}
         types = np.array([type_to_id[v.type] for v in all_venues_sorted], dtype=np.uint8)
@@ -786,11 +783,9 @@ class WorldSerializer:
 
         # Core attributes
         # IMPORTANT: Use global venue IDs (not type-scoped IDs)
-        # venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets_sorted], dtype=np.int32)
         venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets_sorted], dtype=np.int32)
         subset_indices = np.array([s.subset_index for s in all_subsets_sorted], dtype=np.int32)
-        # subset_names = np.array([s.subset_name for s in all_subsets_sorted], dtype=h5py.string_dtype())
-        # OPTIMIZATION: Move subset names to metadata
+        # Move subset names to metadata
         subset_names = np.array([s.subset_name for s in all_subsets_sorted], dtype=h5py.string_dtype())
         metadata_group = venues_group.file.require_group('metadata/names')
         self._create_dataset(metadata_group, 'subsets', subset_names)
@@ -886,9 +881,14 @@ class WorldSerializer:
         """
         Write activity_map data with chunked processing for memory efficiency.
         """
+        if not people_sorted:
+            logger.warning("No people to serialize activity map for")
+            return
+
         activity_map_group = rel_group.create_group('activity_map')
 
-        # Collect activity names (still needs a pass, but this is usually just string set)
+
+        # Collect activity names
         activity_names_set = set()
         for person in people_sorted:
             activity_names_set.update(person.activities)
@@ -905,7 +905,6 @@ class WorldSerializer:
         chunk_size = 200000
         venue_to_id = self._venue_to_global_id
         
-        # We'll use a resizeable dataset if possible, or just two passes.
         # Two passes: 1. Count total 2. Write.
         
         logger.info(f"    Counting activity mappings...")
@@ -976,11 +975,7 @@ class WorldSerializer:
         # CREATE PARTITION INDEX FOR ACTIVITY MAPS
         # ============================================================
         logger.info(f"  Building activity mapping partition index...")
-        # Re-fetch offsets for partitioning (or we could have kept geo boundaries in mind)
-        # For simplicity, we'll use the offsets we just wrote if we need them, but they are already in HDF5.
-        # Actually, self._write_activity_mapping_partition_index needs the array.
-        # I'll modify it to take the dataset or we'll have to read it back (slow) or keep it in memory (medium if 32-bit).
-        # A 60M int32 array is 240MB, which is fine.
+
         offsets_full = offsets_ds[:] 
         self._write_activity_mapping_partition_index(activity_map_group, people_sorted, offsets_full, total_mappings)
         logger.info(f"    ✓ Wrote activity mapping partition index")
@@ -1040,7 +1035,7 @@ class WorldSerializer:
             end = min(i + chunk_size, num_objects)
             chunk = objects[i:end]
             
-            # Optimized collection: get values once per object
+            # get values once per object
             chunk_vals = []
             for obj in chunk:
                 val = obj.properties.get(prop_name)
@@ -1060,7 +1055,7 @@ class WorldSerializer:
 
         # Determine chunks for HDF5 (not our processing chunks)
         # Choosing a chunk size that is a multiple of typical access patterns
-        if shape and len(shape) > 0:
+        if shape and len(shape) > 0 and shape[0] > 0:
             h5_chunks = (min(shape[0], 100000),) + shape[1:]
         else:
             h5_chunks = None
@@ -1089,7 +1084,7 @@ class WorldSerializer:
 
         # Only compress if data is large enough
         if len(data) > 100:
-            # OPTIMIZATION: Enable shuffle=True for much better compression ratio on numeric data
+            # Enable shuffle=True for much better compression ratio on numeric data
             group.create_dataset(
                 name,
                 data=data,

@@ -702,21 +702,21 @@ class EnhancedSimulationAnalyzer:
                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 
     def plot_incubation_period(self, ax):
-        """Plot distribution of time from infection to symptom onset - OPTIMIZED for 59M agents"""
+        """Plot distribution of time from infection to symptom onset"""
         if len(self.infections) == 0 or len(self.symptom_changes) == 0:
             ax.text(0.5, 0.5, 'No infection or symptom data available', ha='center', va='center',
                    transform=ax.transAxes, fontsize=12)
             ax.set_title('Incubation Period Distribution', fontsize=14, fontweight='bold')
             return
 
-        # FULLY VECTORIZED APPROACH for large-scale data (59M agents)
+        # FULLY VECTORIZED APPROACH for large-scale data 
         # Use pandas for efficient groupby - much faster than numpy loops
         symptoms_df = pd.DataFrame({
             'person_id': self.symptom_changes['person_id'],
             'time': self.symptom_changes['time']
         })
 
-        # Get first symptom time per person using pandas groupby (highly optimized)
+        # Get first symptom time per person using pandas groupby
         first_symptoms = symptoms_df.groupby('person_id')['time'].min()
 
         # Create infections dataframe

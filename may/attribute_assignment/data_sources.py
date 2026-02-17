@@ -516,7 +516,7 @@ class MultiKeyLookupSource(DataSource):
         if debug:
             logger.debug(f"    [LOOKUP] Key: {lookup_key}")
 
-        # O(1) dictionary lookup
+        # dictionary lookup
         result = self._lookup_dict.get(lookup_key)
 
         if result is None:

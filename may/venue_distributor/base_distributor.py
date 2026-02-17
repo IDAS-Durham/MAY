@@ -70,9 +70,22 @@ class BaseDistributor:
             return tuple(geo.coordinates)
         
         return None
+    
+    def _get_venue_location(self, venue) -> Optional[Tuple[float, float]]:
+        """Get venue's coordinates with fallback to geographical unit."""
+        if hasattr(venue, 'coordinates') and venue.coordinates:
+            if len(venue.coordinates) == 2:
+                return tuple(venue.coordinates)
+        
+        # Fallback to geographical unit coordinates
+        geo = getattr(venue, 'geographical_unit', None)
+        if geo and hasattr(geo, 'coordinates') and geo.coordinates:
+            return tuple(geo.coordinates)
+        
+        return None
 
     def _haversine_distance(self, loc1: Tuple[float, float], loc2: Tuple[float, float]) -> float:
-        """Calculate distance between two lat/lon points in km (Optimized for scalars)."""
+        """Calculate distance between two lat/lon points in km."""
         lat1, lon1 = loc1
         lat2, lon2 = loc2
         
@@ -142,8 +155,10 @@ class BaseDistributor:
             coords = []
             valid_venues = []
             for v in venues:
-                if v.coordinates and len(v.coordinates) == 2:
-                    coords.append(v.coordinates)
+                v_coords = self._get_venue_location(v)
+                
+                if v_coords:
+                    coords.append(v_coords)
                     valid_venues.append(v)
             
             if coords:
@@ -200,7 +215,7 @@ class BaseDistributor:
 
         return closest_venues
 
-    def _build_population_arrays(self, people: List, attributes: Optional[List[str]] = None):
+    def _build_population_arrays(self, people: List, attributes: Optional[List[str]] = None, **kwargs):
         """
         Extract key attributes into NumPy arrays for vectorized filtering.
         Dynamically builds mappings for categorical attributes.
@@ -226,25 +241,33 @@ class BaseDistributor:
 
         # Pre-calculate path parts to avoid repeated splitting
         attr_metadata = {}
+        numerical_attrs = set(kwargs.get('numerical_attributes', []))
+        
         for attr in attrs_to_vectorize:
             if attr == 'age':
-                attr_metadata[attr] = {'parts': ['age'], 'type': 'direct'}
+                attr_metadata[attr] = {'parts': ['age'], 'type': 'direct', 'is_numerical': True}
             elif attr == 'sex':
-                attr_metadata[attr] = {'parts': ['sex'], 'type': 'direct'}
+                attr_metadata[attr] = {'parts': ['sex'], 'type': 'direct', 'is_numerical': False}
             elif attr == 'residence.type':
-                attr_metadata[attr] = {'parts': ['residence_type'], 'type': 'property'}
+                attr_metadata[attr] = {'parts': ['residence_type'], 'type': 'property', 'is_numerical': False}
+            elif attr == 'residence.id':
+                attr_metadata[attr] = {'parts': ['residence_id'], 'type': 'property', 'is_numerical': True}
             else:
-                attr_metadata[attr] = {'parts': attr.split('.'), 'type': 'nested'}
+                attr_metadata[attr] = {
+                    'parts': attr.split('.'), 
+                    'type': 'nested', 
+                    'is_numerical': attr in numerical_attrs
+                }
 
         # First pass: Identify all unique values for categorical attributes to build mappings
         categorical_vals = defaultdict(set)
         
         for person in people:
             for attr, meta in attr_metadata.items():
-                if attr == 'age': continue
+                if meta['is_numerical']: continue
                 
-                val = self._get_person_attribute_for_vectorization(person, attr, meta['parts'])
-                if val is not None:
+                val = self._get_person_attribute(attr, person)
+                if val is not None and not (isinstance(val, (float, np.floating)) and np.isnan(val)):
                     categorical_vals[attr].add(val)
 
         # Build mappings: val -> index (starting from 1, 0 is reserved for 'missing/other')
@@ -253,8 +276,16 @@ class BaseDistributor:
 
         # Second pass: Fill arrays
         for attr, meta in attr_metadata.items():
-            if attr == 'age':
-                self.population_arrays['age'] = np.array([getattr(p, 'age', 0) for p in people], dtype=np.int32)
+            if meta['is_numerical']:
+                if attr == 'age':
+                    self.population_arrays['age'] = np.array([getattr(p, 'age', 0) for p in people], dtype=np.int32)
+                elif attr == 'residence.id':
+                    self.population_arrays[attr] = np.array([p.residence.id if p.residence else -1 for p in people], dtype=np.int32)
+                else:
+                    self.population_arrays[attr] = np.array([
+                        self._safe_int(self._get_person_attribute(attr, p))
+                        for p in people
+                    ], dtype=np.int32)
             else:
                 mapping = self.attribute_mappings.get(attr, {})
                 parts = meta['parts']
@@ -263,24 +294,15 @@ class BaseDistributor:
                     self.population_arrays[attr] = np.array([mapping.get(p.sex, 0) for p in people], dtype=np.int32)
                 elif attr == 'residence.type':
                     self.population_arrays[attr] = np.array([mapping.get(p.residence_type, 0) for p in people], dtype=np.int32)
+                elif attr == 'residence.id':
+                    # Directly use residence.id if it's an integer, otherwise use mapping
+                    self.population_arrays[attr] = np.array([p.residence.id if p.residence else -1 for p in people], dtype=np.int32)
                 else:
                     # General nested path
                     self.population_arrays[attr] = np.array([
                         mapping.get(self._get_nested_value_with_dict_support(p, parts), 0) 
                         for p in people
                     ], dtype=np.int32)
-
-    def _get_person_attribute_for_vectorization(self, person, attr_path: str, parts: Optional[List[str]] = None) -> Any:
-        """Helper to get attribute value from person including nested/residence paths."""
-        # Fast-path for most common attributes
-        if attr_path == 'age':
-            return person.age
-        if attr_path == 'sex':
-            return person.sex
-        if attr_path == 'residence.type':
-            return person.residence_type
-            
-        return self._get_nested_value_with_dict_support(person, parts or attr_path)
 
     def _get_person_attribute(self, path: str, person: Any):
         """
@@ -295,6 +317,10 @@ class BaseDistributor:
                 return None
             attr_path = path.replace('residence.', '')
             return self._get_nested_value_with_dict_support(residence, attr_path)
+
+        # Check properties first for common attributes not in slots
+        if hasattr(person, 'properties') and path in person.properties:
+            return person.properties[path]
 
         return self._get_nested_value_with_dict_support(person, path)
 
@@ -312,7 +338,7 @@ class BaseDistributor:
         return value
 
     def _create_path_getter(self, path: List[str]):
-        """Create an optimized getter function for a specific nested path."""
+        """Create a getter function for a specific nested path."""
         if not path:
             return lambda obj: obj
             
@@ -334,13 +360,47 @@ class BaseDistributor:
             return val
         return nested_getter
 
+    def _normalize_value(self, val: Any) -> str:
+        """
+        Normalize value to a clean string for matching.
+        Handles float-to-string conversion issues (e.g., 787.0 -> "787").
+        """
+        if val is None or val == '':
+            return ""
+        
+        # If it's a float that's actually an integer, convert to int string
+        if isinstance(val, (float, np.floating)):
+            if val.is_integer():
+                return str(int(val))
+            return str(val)
+        
+        # If it's already a string that looks like a whole number float, clean it
+        s_val = str(val).strip()
+        if s_val.endswith('.0'):
+            return s_val[:-2]
+            
+        return s_val
+
+    def _safe_int(self, val: Any) -> int:
+        """Safe conversion to integer, handling None, empty strings, and NaN."""
+        if val is None or val == '':
+            return 0
+        try:
+            # Handle numpy types and floats (including NaN)
+            f_val = float(val)
+            if np.isnan(f_val):
+                return 0
+            return int(f_val)
+        except (ValueError, TypeError, OverflowError):
+            return 0
+
     def _get_nested_value_with_dict_support(self, obj, path: Any):
         """
         Get value from nested path supporting both object attributes and dictionaries.
         """
         if not path: return obj
         
-        # Performance optimization: skip split/isinstance if we already have a list/tuple
+        # skip split/isinstance if we already have a list/tuple
         if isinstance(path, (list, tuple)):
             parts = path
         else:
@@ -351,7 +411,7 @@ class BaseDistributor:
             if value is None:
                 return None
 
-            # Optimization: Try dict access first if value is actually a dict
+            # Try dict access first if value is actually a dict
             # This is significantly faster than try/except getattr for dicts
             if type(value) is dict:
                 value = value.get(part)
@@ -384,7 +444,8 @@ class BaseDistributor:
 
             current_vals = self.population_arrays[attr][indices]
             
-            if attr == 'age':
+            filter_type = rule.get('type', 'numerical')
+            if filter_type == 'numerical':
                 min_val, max_val = rule.get('min'), rule.get('max')
                 if min_val is not None: mask &= (current_vals >= min_val)
                 if max_val is not None: mask &= (current_vals <= max_val)
@@ -395,20 +456,42 @@ class BaseDistributor:
                 # Single value filter
                 val = rule.get('value')
                 if val is not None:
-                    target_code = mapping.get(val, -1) # -1 will never match if missing
-                    mask &= (current_vals == target_code)
+                    # Try direct lookup, then normalized lookup
+                    target_code = mapping.get(val)
+                    if target_code is None:
+                        # Normalize both search value and mapping keys if needed
+                        norm_val = self._normalize_value(val)
+                        for m_val, m_code in mapping.items():
+                            if self._normalize_value(m_val) == norm_val:
+                                target_code = m_code
+                                break
+                    
+                    if target_code is not None:
+                        mask &= (current_vals == target_code)
+                    else:
+                        mask &= False
                 
                 # Multi-value filter
                 vals = rule.get('values', [])
                 if vals:
-                    allowed_codes = [mapping[v] for v in vals if v in mapping]
+                    allowed_codes = []
+                    for v in vals:
+                        code = mapping.get(v)
+                        if code is None:
+                            norm_v = self._normalize_value(v)
+                            for m_val, m_code in mapping.items():
+                                if self._normalize_value(m_val) == norm_v:
+                                    code = m_code
+                                    break
+                        if code is not None:
+                            allowed_codes.append(code)
+                            
                     if allowed_codes:
                         val_mask = np.zeros(len(indices), dtype=bool)
                         for code in allowed_codes:
                             val_mask |= (current_vals == code)
                         mask &= val_mask
                     else:
-                        # None of the requested values exist in the population
                         mask &= False
                         
         return indices[mask]
@@ -440,12 +523,16 @@ class BaseDistributor:
         
         # Default heuristics for common venue types if no specific col found
         if capacity is None:
-            for attr in ["SchoolCapacity", "number_staff", "capacity", "max_capacity"]:
+            for attr in ["SchoolCapacity", "Noofroomscode", "number_staff", "capacity", "max_capacity"]:
                 if hasattr(venue, attr):
                     capacity = getattr(venue, attr)
-                    break
                 elif hasattr(venue, 'properties') and attr in venue.properties:
                     capacity = venue.properties[attr]
+                
+                if capacity is not None and not pd.isna(capacity):
+                    # Heuristic: if it's rooms, multiply by a reasonable factor
+                    if attr == "Noofroomscode":
+                        capacity = int(float(capacity)) * 30 
                     break
 
         # Handle missing capacity based on config
@@ -467,6 +554,13 @@ class BaseDistributor:
 
         return int(capacity)
 
+    def _get_remaining_capacity(self, venue) -> int:
+        """Get the remaining capacity of a venue."""
+        v_id = id(venue)
+        current = self.venue_capacity_tracker.get(v_id, 0) if hasattr(self, 'venue_capacity_tracker') else 0
+        capacity = self._get_venue_capacity(venue)
+        return max(0, capacity - current)
+
     def _filter_venues_by_capacity(self, venues: List) -> List:
         """Filter venues that still have remaining capacity."""
         allocation_config = self.config.get('allocation', {})
@@ -481,9 +575,6 @@ class BaseDistributor:
 
         available = []
         for v in venues:
-            # Use venue's id() as key in capacity tracker
-            current = self.venue_capacity_tracker.get(id(v), 0) if hasattr(self, 'venue_capacity_tracker') else 0
-            capacity = self._get_venue_capacity(v)
-            if current < capacity:
+            if self._get_remaining_capacity(v) > 0:
                 available.append(v)
         return available

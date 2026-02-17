@@ -26,7 +26,7 @@ geography:
     level: LGU
 
     # Codes to filter (for small lists, comma-separated)
-    codes: ["County Durham", "Darlington"]
+    codes: ["Gateshead", "Newcastle upon Tyne", "Northumberland"]
 
     # Or specify a file path with codes (for large lists)
     # File should have one code per line
@@ -182,6 +182,10 @@ timeline:
     # Leisure (multi-venue)
     - type: distributor
       config: "yaml/distributors/multi_venue_distributor.yaml"
+
+    # Care Home Visits (linked to residents)
+    - type: distributor
+      config: "yaml/distributors/care_home_visits_distributor.yaml"
 
 # ========================================
 # RELATIONSHIP PIPELINE - Build agent networks

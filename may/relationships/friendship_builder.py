@@ -179,8 +179,7 @@ class FriendshipBuilder:
     """
     Builds configurable relationship networks between people.
 
-    All relationship types, criteria, and sources are defined in YAML.
-    Optimized for large populations (60M+) using Numba JIT compilation.
+    All relationship types, criteria, and sources are defined in YAML using Numba JIT compilation.
     """
 
     def __init__(self, world, config: dict | str):

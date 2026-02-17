@@ -25,7 +25,7 @@ class VenueMatcher:
 
     def build_attribute_index(self, venues: List):
         """
-        Pre-process venue attributes for fast filtering (Optimized).
+        Pre-process venue attributes for fast filtering.
         """
         eligibility = self.config.get('eligibility', {})
         attributes = eligibility.get('attributes', [])
@@ -106,7 +106,7 @@ class VenueMatcher:
                     allowed = rule['rules'].get(v_val)
                     if allowed:
                         for p_val in allowed:
-                            index_key = (attr_name, p_val)
+                            index_key = (attr_name, self.distributor._normalize_value(p_val))
                             if index_key not in self.categorical_index:
                                 self.categorical_index[index_key] = set()
                             self.categorical_index[index_key].add(v_id)
@@ -200,14 +200,14 @@ class VenueMatcher:
         return eligible_venues
 
     def venue_accepts_person(self, person, venue, attribute_rules: List[Dict], person_attrs: Optional[Dict] = None) -> bool:
-        """Check if venue accepts person based on attribute rules using pre-computed arrays (Optimized)."""
+        """Check if venue accepts person based on attribute rules using pre-computed arrays."""
         v_id = id(venue)
         v_idx = self.venue_id_to_idx.get(v_id)
         
         if v_idx is None:
             return self.venue_accepts_person_slow(person, venue, attribute_rules)
 
-        # Optimization: Separate loops and pre-defined lists avoid dictionary lookups on 'rule'
+        # Separate loops and pre-defined lists avoid dictionary lookups on 'rule'
         for rule in self.numerical_match_rules:
             attr_name = rule['name']
             if attr_name in self.num_constraints:
@@ -260,9 +260,20 @@ class VenueMatcher:
                 attr_name = rule.get('name')
                 val = self._get_person_attr(person, attr_name, person_attrs)
                 if val is not None:
-                    if not rule.get('case_sensitive', False):
-                        val = str(val).lower() if val else ''
-                    categorical_filters.append((attr_name, val))
+                    # Normalize and handle case sensitivity for pre-filtering
+                    norm_val = self.distributor._normalize_value(val)
+                    
+                    # Search for the rule to check case sensitivity
+                    is_case_sensitive = True
+                    for rule in attributes:
+                        if rule.get('name') == attr_name:
+                            is_case_sensitive = rule.get('case_sensitive', False)
+                            break
+                    
+                    if not is_case_sensitive:
+                        norm_val = norm_val.lower()
+                        
+                    categorical_filters.append((attr_name, norm_val))
 
         if not categorical_filters:
             return venues
@@ -288,7 +299,7 @@ class VenueMatcher:
             valid_venues = [v for v in venues if v.coordinates]
             if not valid_venues: return venues[0]
             
-            # Optimization: Use scalar math for small sets, vectorized for large sets
+            # Use scalar math for small sets, vectorized for large sets
             if len(valid_venues) < 50:
                 return min(valid_venues, key=lambda v: self.distributor._haversine_distance(person_location, v.coordinates))
             else:
@@ -299,7 +310,7 @@ class VenueMatcher:
             valid = [v for v in venues if v.coordinates]
             if not valid: return venues[0]
             
-            # Optimization: Use scalar math for small sets, vectorized for large sets
+            # Use scalar math for small sets, vectorized for large sets
             if len(valid) < 50:
                 dists = [self.distributor._haversine_distance(person_location, v.coordinates) for v in valid]
             else:
@@ -370,7 +381,12 @@ class VenueMatcher:
         v_val = venue.properties.get(col, rule.get('assume_if_missing', 'Mixed'))
         matching = rule.get('matching_rules', {})
         if not rule.get('case_sensitive', False):
-            v_val = str(v_val).lower()
-            val = str(val).lower()
-            matching = {k.lower(): [v.lower() for v in vals] for k, vals in matching.items()}
+            v_val = self.distributor._normalize_value(v_val).lower()
+            val = self.distributor._normalize_value(val).lower()
+            matching = {k.lower(): [self.distributor._normalize_value(v).lower() for v in vals] for k, vals in matching.items()}
+        else:
+            v_val = self.distributor._normalize_value(v_val)
+            val = self.distributor._normalize_value(val)
+            matching = {k: [self.distributor._normalize_value(v) for v in vals] for k, vals in matching.items()}
+        
         return val in matching.get(v_val, []) if v_val in matching else True

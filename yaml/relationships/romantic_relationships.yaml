@@ -1,33 +1,23 @@
 # ============================================================================
-# Romantic/Sexual Relationship Configuration
+# Romantic/Sexual Relationship Configuration (Simplified)
 # ============================================================================
-# This configuration defines how romantic and sexual relationships are
-# distributed in the population.
+# This configuration only defines sexual orientations and storage keys.
+# actual matching is handled by pre-existing cohabiting couple status.
 # ============================================================================
 
 name: "romantic_relationships"
 
-# ============================================================================
 # General Constraints
-# ============================================================================
-# Age limits for romantic relationships
-min_age: 18
-max_age: 75
+min_age: 16
+max_age: 120
 
-
-# ============================================================================
 # Sexual Orientation Configuration
-# ============================================================================
-# Define the probabilities of different sexual orientations by demographic.
-
 sexual_orientations:
-  # Orientation types (fully configurable - add/remove as needed)
   types:
     - heterosexual
     - homosexual
     - bisexual
 
-  # Base probabilities by sex (must sum to 1.0 for each sex)
   probabilities:
     male:
       heterosexual: 0.90
@@ -38,10 +28,9 @@ sexual_orientations:
       homosexual: 0.05
       bisexual: 0.10
 
-  # Optional: Age-based adjustments (multipliers applied to base probabilities)
   age_adjustments:
-    "18-25":
-      bisexual: 1.3       # Younger cohorts more likely to identify as bisexual
+    "16-25":
+      bisexual: 1.3
     "65-74":
       homosexual: 0.7
       bisexual: 0.5
@@ -49,127 +38,18 @@ sexual_orientations:
       homosexual: 0.7
       bisexual: 0.5
 
-# ============================================================================
-# Compatibility Rules
-# ============================================================================
-# Define which orientations are compatible with which sexes.
-# This is the ONLY place where orientation logic is defined.
+  compatibility:
+    heterosexual:
+      male: [female]
+      female: [male]
+    homosexual:
+      male: [male]
+      female: [female]
+    bisexual:
+      male: [male, female]
+      female: [male, female]
 
-compatibility_rules:
-  heterosexual:
-    male: [female]
-    female: [male]
-
-  homosexual:
-    male: [male]
-    female: [female]
-
-  bisexual:
-    male: [male, female]
-    female: [male, female]
-
-# ============================================================================
-# Relationship Types
-# ============================================================================
-# Define different types of romantic relationships and their probabilities.
-
-relationship_types:
-  # Base probabilities for adults (must sum to 1.0)
-  base_probabilities:
-    no_partner: 0.30
-    exclusive: 0.60
-    non_exclusive: 0.10
-
-
-
-# ============================================================================
-# Cheating/Infidelity Configuration
-# ============================================================================
-# Probability that someone in an exclusive relationship will cheat.
-
-cheating:
-  # Base probability (applied to people in exclusive relationships)
-  base_probability: 0.1
-
-
-# ============================================================================
-# Age Difference Constraints
-# ============================================================================
-# Acceptable age differences between romantic partners by age group.
-
-age_differences:
-  # For each age group, define min/max acceptable difference
-  # and preferred distribution parameters
-
-  "18-25":
-    min: 0          # Minimum age difference
-    max: 5          # Maximum age difference
-    preferred_mean: 2.5   # Mean of preferred distribution
-    preferred_std: 2.0    # Std of preferred distribution
-
-  "26-35":
-    min: 0
-    max: 8
-    preferred_mean: 3.5
-    preferred_std: 3.0
-
-  "36-50":
-    min: 0
-    max: 12
-    preferred_mean: 5.0
-    preferred_std: 4.0
-
-  "51-64":
-    min: 0
-    max: 15
-    preferred_mean: 7.0
-    preferred_std: 5.0
-
-  "65-74":
-    min: 0
-    max: 15
-    preferred_mean: 8.0
-    preferred_std: 6.0
-  "75-99":
-    min: 0
-    max: 5
-    preferred_mean: 2.0
-    preferred_std: 2.0
-
-# ============================================================================
-# Attribute-Based Matching
-# ============================================================================
-# Uses empirical partnership probabilities to weight matching based on a specific attribute.
-
-attribute_matching:
-  enabled: true
-  attribute: "ethnicity"         # Person attribute to check (e.g., ethnicity, social_class)
-  data_file: "data/population/ethnicity/ethnicity_partnership_probabilities.csv"
-  # Mapping from CSV codes to system codes
-  # CSV has M/O combined, system has M and O separate
-  code_mapping:
-    "M/O": ["M", "O"]  # Both M and O use M/O probabilities from CSV
-
-# ============================================================================
 # Storage Configuration
-# ============================================================================
-# Keys for storing relationship data in person.properties.
-
 storage:
   orientation_key: "sexual_orientation"
-  partners_key: "romantic_partners"
   status_key: "relationship_status"
-
-# Storage format:
-#
-# person.properties['sexual_orientation'] = "heterosexual" | "homosexual" | "bisexual"
-#
-# person.properties['romantic_partners'] = {
-#   "exclusive": [partner_id],
-#   "non_exclusive": [partner_id_1, partner_id_2]
-# }
-#
-# person.properties['relationship_status'] = {
-#   "type": "exclusive" | "non_exclusive" | "no_partner",
-#   "consensual": true | false
-# }

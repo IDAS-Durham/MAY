@@ -65,7 +65,7 @@ class AttributeAssigner:
         # Cache strategy objects to avoid repeated creation
         self._strategy_cache = {}  # Maps strategy config hash to strategy instance
 
-        # Pre-compute filter configuration (called 35M times in profiling!)
+        # Pre-compute filter configuration
         self._has_filters = hasattr(config, 'filters') and config.filters
         self._optimized_filters = []
         if self._has_filters:
@@ -286,7 +286,7 @@ class AttributeAssigner:
 
     def _passes_filters(self, person):
         """
-        Check if person passes all configured filters (optimized - called 35M times!).
+        Check if person passes all configured filters.
 
         Args:
             person: Person object
@@ -329,11 +329,11 @@ class AttributeAssigner:
 
         # 2. Activity filters (Fast set intersection check)
         if self._include_activities or self._exclude_activities:
-            # Optimize: use direct attribute access for activities (it's a slot)
+            # use direct attribute access for activities (it's a slot)
             person_activities = person.activities
             
             if self._include_activities:
-                # Optimize: simple loop is faster than generator for small lists
+                # simple loop is faster than generator for small lists
                 has_activity = False
                 for a in self._include_activities:
                     if a in person_activities:
@@ -398,10 +398,10 @@ class AttributeAssigner:
 
         # Check if strategy supports batch assignment
         if hasattr(strategy, 'assign_batch') and callable(getattr(strategy, 'assign_batch')):
-            logger.info("Using BATCH assignment mode for better performance...")
+            logger.info("Using batch assignment...")
             self._assign_all_people_batch(eligible_people, strategy)
         else:
-            logger.info("Using standard assignment mode...")
+            logger.info("Using standard assignment...")
             self._assign_all_people_sequential(eligible_people, strategy)
 
         logger.info(f"✓ Processed {len(all_people)} people")
@@ -429,7 +429,7 @@ class AttributeAssigner:
 
         # Prepare batch data
         logger.info(f"  Preparing batch data for {total:,} people...")
-        households = [self._get_person_household(p) for p in eligible_people]
+        households = [self._get_person_residence_venue(p) for p in eligible_people]
         contexts = [{'attribute_name': self.attribute_name} for _ in eligible_people]
 
         # Call batch assignment
@@ -495,7 +495,7 @@ class AttributeAssigner:
                 logger.debug(f"    Existing attributes: {list(person.properties.keys())}")
 
             # Pass strategy directly instead of looking it up again
-            household = self._get_person_household(person)
+            household = self._get_person_residence_venue(person)
             context = {'attribute_name': self.attribute_name, 'debug': is_sample}
 
             try:
@@ -564,7 +564,7 @@ class AttributeAssigner:
             logger.debug(f"  Original pattern: {household.properties.get('original_pattern', 'N/A')}")
             logger.debug(f"  Actual pattern: {household.properties.get('actual_pattern', 'N/A')}")
 
-        # OPTIMIZATION: Pre-calculate person categories (subsets) to avoid repeated lookups
+        # Pre-calculate person categories (subsets) to avoid repeated lookups
         # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
         person_categories = {}
         for person in members:
@@ -577,7 +577,6 @@ class AttributeAssigner:
 
         # 1. Classify household structure
         # Pass pre-calculated categories if possible, but get_household_structure currently uses internal logic
-        # For now, just optimize the call itself
         structure = self.config.get_household_structure(household, verbose=self.verbose)
         if not structure:
             if self.verbose:
@@ -617,7 +616,7 @@ class AttributeAssigner:
                 logger.debug(f"\n  Assigning {person} (category={category}):")
 
             # 3a. Determine role
-            # OPTIMIZATION: Pass pre-calculated category
+            # Pass pre-calculated category
             role = self.config.get_person_role(
                 person, structure, assigned_roles, verbose=self.verbose,
                 person_category=category
@@ -639,7 +638,7 @@ class AttributeAssigner:
             context[person_key] = person
 
             # 3b. Get assignment rule
-            # OPTIMIZATION: get_assignment_rule is already fairly fast, but could be memoized in config
+            # get_assignment_rule is already fairly fast, but could be memoized in config
             rule = self.config.get_assignment_rule(structure, role, verbose=self.verbose)
 
             if not rule:
@@ -831,11 +830,15 @@ class AttributeAssigner:
 
 
 
-    def _get_person_household(self, person):
-        """Get household venue for a person, if any."""
-        # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
-        if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
-            return person.activity_map["residence"]["household"][0].venue
+    def _get_person_residence_venue(self, person):
+        """Get residence venue for a person (e.g., household, pub, care home)."""
+        # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
+        if "residence" in person.activity_map:
+            for venue_type, subsets in person.activity_map["residence"].items():
+                if subsets:
+                    venue = subsets[0].venue
+                    logger.debug(f"  Person {person.id} residence found: {venue_type} (ID={venue.id})")
+                    return venue
         return None
 
     def _check_required_attributes(self, people):
