@@ -10,6 +10,9 @@ from .geo_neighbors import find_neighbours
 
 from debug_output import export_relationships
 
+import random
+import numpy as np
+
 if TYPE_CHECKING:
     from may.geography import Geography, GeographicalUnit
     from may.world import World
@@ -89,6 +92,46 @@ def build_local_social_network(
         #storage_key = builder.config.get('storage', {}).get('key', builder.name)
         export_relationships(world, 'social_contacts_local', f"social_contacts_local.csv")
 
+def allocate_random_bounded_distance_contacts(
+        geography: "Geography",
+        radius_km: float,
+        mean_connections_per_person: float,
+        geo_unit_level = None,
+        storage_key: str=None,
+        store: bool=True,
+        method: str='libpysal',
+        **kwargs,
+        ):
+    """
+    Allocates contacts randomly to people within a specified radius.
+
+    Faster than build_bounded_distance_social_network, as it does not make a graph for everyone. Only creating connections with those outside the area. Simply gathers all people from within the set radius, and sets random contacts. No filters applied. Need to add capacity to filter. 
+    """
+    if storage_key is None:
+        storage_key = f'social_contacts_radius_{radius_km}'
+    if geo_unit_level is None:
+        geo_unit_level = geography.levels[0]
+
+    # Create the geo_units_distance_network
+    geo_units = geography.get_units_by_level(geo_unit_level)
+
+    # Get geo_unit neighbours
+    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km = radius_km)    
+
+    # Go through each geographical unit, collect people and randomly assign contacts.
+    if store:
+        rng_generator = np.random.default_rng()
+        for geo_unit_id, connected_ids in geo_unit_neighbours.items():
+            people_to_connect_to = list(_collate_people_in_geo_units(geography, connected_ids))
+            people_to_connect_from = geography.units_by_id[geo_unit_id].get_people()
+            if people_to_connect_to and people_to_connect_from:
+                for person in people_to_connect_from:
+                    if storage_key in person.properties:
+                        person.properties[storage_key].extend(random.sample(people_to_connect_to,
+                            k=rng_generator.poisson(lam=mean_connections_per_person)))
+                    else:
+                        person.properties[storage_key] = random.sample(people_to_connect_to,
+                            k=rng_generator.poisson(lam=mean_connections_per_person))
 
 def build_bounded_distance_social_network(
         geography: "Geography",

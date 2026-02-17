@@ -206,20 +206,11 @@ def main():
         logger.info("Building Relationships")
         build_local_social_network(
             world.geography,
-            mean_connections_per_person=8,
-            clustering_level=0.0,
+            mean_connections_per_person=6,
+            clustering_level=0.6,
             storage_key = 'social_contacts_local',
-            algorithm = 'connected_watts_strogatz',
+            algorithm = 'watts_strogatz',
         )
-        radius_km = 10
-        build_bounded_distance_social_network(
-            world.geography,
-            radius_km=radius_km, # 10km radius
-            mean_connections_per_person=4, # mean of 6 contacts per person
-            clustering_level=0.2,
-            storage_key = f'social_contacts_radius_km_{radius_km}',
-        )
-
         # Assign activity_map for social contacts.
         # Must be run after household allocation as it maps to the contact's household. 
         for person in world.population.people:
@@ -231,16 +222,43 @@ def main():
                     if 'residence' in contact.activity_map:
                         person.activity_map['social_contacts_local'].update(contact.activity_map['residence'])
 
+        radius_km = 15
+        build_bounded_distance_social_network(
+            world.geography,
+            radius_km=radius_km, # 10km radius
+            mean_connections_per_person=6, # mean of 6 contacts per person
+            clustering_level=0.6,
+            storage_key = f'social_contacts_radius_km_{radius_km}',
+        )
         for person in world.population.people:
             if f'social_contacts_radius_km_{radius_km}' in person.properties:
                 person.activities.add(f'social_contacts_radius_km_{radius_km}')                
-                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = []
+                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = {}
                 for contact_id in person.properties[f'social_contacts_radius_km_{radius_km}']:
                     contact = world.population.people_by_id[contact_id]
                     if 'residence' in contact.activity_map:
                         person.activity_map[f'social_contacts_radius_km_{radius_km}'].update(contact.activity_map['residence'])
 
 
+
+        radius_km = 30
+        build_bounded_distance_social_network(
+            world.geography,
+            radius_km=radius_km, # 10km radius
+            mean_connections_per_person=6, # mean of 6 contacts per person
+            clustering_level=0.6,
+            storage_key = f'social_contacts_radius_km_{radius_km}',
+        )
+        for person in world.population.people:
+            if f'social_contacts_radius_km_{radius_km}' in person.properties:
+                person.activities.add(f'social_contacts_radius_km_{radius_km}')                
+                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = {}
+                for contact_id in person.properties[f'social_contacts_radius_km_{radius_km}']:
+                    contact = world.population.people_by_id[contact_id]
+                    if 'residence' in contact.activity_map:
+                        person.activity_map[f'social_contacts_radius_km_{radius_km}'].update(contact.activity_map['residence'])
+
+                        
     # # ========================================
     # # POST-RELATIONSHIP PIPELINE
     # # ========================================

@@ -1,9 +1,7 @@
 """
 Find neighboring geographical units within a specified radius.
 
-Two approaches provided:
-1. Using scipy BallTree with haversine distance (accurate for lat/lon)
-2. Using libpysal DistanceBand (fast, requires projected coordinates for accuracy)
+Using libpysal DistanceBand (fast, requires projected coordinates for accuracy)
 """
 
 import numpy as np
@@ -16,6 +14,37 @@ logger = logging.getLogger("geo_neighbors")
 
 # Earth's radius in kilometers
 EARTH_RADIUS_KM = 6371.0
+
+# Approximate km per degree of latitude (constant)
+KM_PER_DEGREE_LAT = 111.0
+
+
+def _km_to_degrees_adjusted(radius_km: float, coordinates: np.ndarray) -> float:
+    """
+    Convert km to degrees, adjusted for latitude.
+
+    At latitude φ:
+    - 1° latitude ≈ 111 km (constant)
+    - 1° longitude ≈ 111 * cos(φ) km
+
+    We use the geometric mean to balance both directions, providing
+    a more accurate threshold for distance-based queries.
+
+    Args:
+        radius_km: Radius in kilometers
+        coordinates: Array of (lon, lat) pairs in degrees
+
+    Returns:
+        Radius in degrees, adjusted for mean latitude
+    """
+    mean_lat = np.mean(coordinates[:, 1])  # (lon, lat) format
+    lat_rad = np.radians(mean_lat)
+
+    # Geometric mean of lat and lon degree sizes
+    # lat: 111 km/deg, lon: 111 * cos(lat) km/deg
+    km_per_degree = KM_PER_DEGREE_LAT * np.sqrt(np.cos(lat_rad))
+
+    return radius_km / km_per_degree
 
 from typing import Callable, Any
 from functools import wraps
@@ -102,13 +131,13 @@ def _find_neighbours_libpysal(
     """
     Find neighbouring geographical units using libpysal DistanceBand.
 
-    Note: This uses Euclidean distance. For lat/lon coordinates, consider
-    projecting to a local CRS first, or use find_neighbours_balltree for
-    accurate great-circle distances.
+    Uses Euclidean distance with latitude-adjusted degree conversion for
+    improved accuracy. The km-to-degrees conversion accounts for longitude
+    compression at higher latitudes using the geometric mean.
 
     Args:
         geo_units: List of GeographicalUnit objects with coordinates
-        radius_km: Search radius in kilometers (converted to degrees approximately)
+        radius_km: Search radius in kilometers
 
     Returns:
         Dict mapping unit id -> list of neighbour unit ids.
@@ -120,10 +149,10 @@ def _find_neighbours_libpysal(
 
     if coordinates is None:
         return {}
-    
-    # Approximate conversion: 1 degree ≈ 111 km at equator. 
-    threshold_degrees = radius_km / 111.0
-    
+
+    # Convert km to degrees, adjusted for latitude
+    threshold_degrees = _km_to_degrees_adjusted(radius_km, coordinates)
+
     # Build distance band weights
     dist_weights = weights.DistanceBand.from_array(coordinates, threshold=threshold_degrees)
 
@@ -164,8 +193,7 @@ def find_neighbours(*args, method='libpysal', **kwargs) -> dict[id, list[id]]:
     find_neighbours_method = neighbour_finders[method]
     if find_neighbours_method is None:
         raise ValueError(f"Unknown method: {method}")
-    return find_neighbours_method(*args, **kwargs)
-
+    return find_neighbours_method(*args, **kwargs)        
 
 def build_neighbour_network(
         neighbours: dict[str, list[str]]
