@@ -339,7 +339,9 @@ Examples:
         app.run(
             host=args.host,
             port=args.port,
-            debug=args.debug
+            debug=args.debug,
+            use_reloader=False  # Prevents Werkzeug's reloader from spawning a second
+                                # process that re-executes the script (and re-loads the world)
         )
     except KeyboardInterrupt:
         print("\n\nServer stopped by user\n")

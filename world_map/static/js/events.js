@@ -13,7 +13,9 @@ const eventState = {
     playing: false,
     playInterval: null,
     visibleEventTypes: {},
-    layers: {},
+    layers: {},            // {event_type: L.layerGroup} — persisted between ticks
+    markerCache: {},       // {event_type: {geo_unit_id: L.circleMarker}} — reused in-place
+    isUpdating: false,     // guard against overlapping async updates
     mode: 'choropleth',  // 'choropleth' or 'markers'
     cumulative: false,
     // Zoom scaling state
@@ -102,15 +104,14 @@ function updateEventMarkerRadii() {
 
     const scaleFactor = getZoomScaleFactor();
 
-    for (const [eventType, layer] of Object.entries(eventState.layers)) {
-        if (!layer) continue;
-
-        layer.eachLayer((marker) => {
-            if (marker.options && marker.options.baseRadius) {
-                const newRadius = marker.options.baseRadius * scaleFactor;
-                marker.setRadius(newRadius);
+    // Iterate the marker cache directly — covers all cached markers regardless of
+    // whether they are currently visible, so zoom stays consistent.
+    for (const cache of Object.values(eventState.markerCache)) {
+        for (const marker of Object.values(cache)) {
+            if (marker.options?.baseRadius !== undefined) {
+                marker.setRadius(marker.options.baseRadius * scaleFactor);
             }
-        });
+        }
     }
 }
 
@@ -474,49 +475,158 @@ function resetTime() {
 // =============================================================================
 
 async function updateEventLayers() {
-    // Clear existing event layers
-    clearEventLayers();
+    // Guard: skip this tick if a previous update is still in flight.
+    // This prevents queued-up overlapping requests during fast playback.
+    if (eventState.isUpdating) return;
+    eventState.isUpdating = true;
 
-    // Get visible event types
-    const visibleTypes = Object.entries(eventState.visibleEventTypes)
-        .filter(([_, visible]) => visible)
-        .map(([type, _]) => type);
+    try {
+        // Get visible event types
+        const visibleTypes = Object.entries(eventState.visibleEventTypes)
+            .filter(([_, visible]) => visible)
+            .map(([type, _]) => type);
 
-    if (visibleTypes.length === 0) {
-        updateEventStats({});
+        if (visibleTypes.length === 0) {
+            _hideAllMarkers();
+            updateEventStats({});
+            updateEventLegend();
+            return;
+        }
+
+        // Calculate time window
+        const rollingWindow = eventState.config?.time?.rolling_window_days || 1;
+        const timeEnd   = eventState.currentTime;
+        const timeStart = eventState.cumulative ? eventState.timeMin : timeEnd - rollingWindow;
+
+        // Single batch request for all visible event types at once
+        const params = new URLSearchParams({
+            time_start: timeStart,
+            time_end:   timeEnd,
+            cumulative: eventState.cumulative
+        });
+        visibleTypes.forEach(t => params.append('types', t));
+
+        const response = await fetch(`/api/events/geojson/batch?${params}`);
+        const allGeojson = await response.json();
+
+        // Hide all existing markers so that geo_units absent from this
+        // frame's data are invisible (they are not removed — just transparent).
+        _hideAllMarkers();
+
+        const allStats = {};
+        for (const [eventType, geojson] of Object.entries(allGeojson)) {
+            const typeConfig = eventState.config?.event_types?.[eventType] || {};
+            if (geojson.features && geojson.features.length > 0) {
+                _updateOrCreateLayer(eventType, geojson, typeConfig);
+            }
+            allStats[eventType] = geojson.properties?.total_count || 0;
+        }
+
+        updateEventStats(allStats);
         updateEventLegend();
+
+    } catch (error) {
+        console.error('Error updating event layers:', error);
+    } finally {
+        eventState.isUpdating = false;
+    }
+}
+
+// Hide all cached markers by setting opacity to 0 (keeps DOM nodes alive for reuse).
+function _hideAllMarkers() {
+    for (const cache of Object.values(eventState.markerCache)) {
+        for (const marker of Object.values(cache)) {
+            marker.setStyle({ opacity: 0, fillOpacity: 0 });
+        }
+    }
+}
+
+// Update existing circleMarkers in-place or create new ones for unseen geo_units.
+// Only operates in choropleth mode; marker mode falls back to displayEventLayer().
+function _updateOrCreateLayer(eventType, geojson, typeConfig) {
+    if (eventState.mode !== 'choropleth') {
+        // For marker mode, fall back to the original full-recreate approach.
+        displayEventLayer(eventType, geojson);
         return;
     }
 
-    // Calculate time window
-    const window = eventState.config?.time?.rolling_window_days || 1;
-    const timeEnd = eventState.currentTime;
-    const timeStart = eventState.cumulative ? eventState.timeMin : timeEnd - window;
+    const displayConfig    = eventState.config?.display?.choropleth || {};
+    const sizeConfig       = displayConfig.size || {};
+    const minRadius        = sizeConfig.min_radius || 6;
+    const maxRadius        = sizeConfig.max_radius || 35;
+    const radiusMethod     = sizeConfig.method || 'sqrt';
+    const radiusScale      = sizeConfig.scale || 2.0;
+    const borderConfig     = displayConfig.border || {};
+    const borderColor      = borderConfig.color || '#333';
+    const borderWidth      = borderConfig.width || 1;
+    const borderOpacity    = borderConfig.opacity || 0.8;
+    const fillOpacity      = displayConfig.fill_opacity || 0.7;
+    const colorThresholds  = typeConfig.color_thresholds || [];
+    const gradient         = typeConfig.gradient || {};
+    const useRelativeScaling = typeConfig.use_relative_scaling || false;
+    const popupConfig      = eventState.config?.popup || {};
 
-    // Fetch and display each event type
-    const allStats = {};
+    const counts   = geojson.features.map(f => f.properties.count);
+    const maxCount = Math.max(...counts, 1);
+    const zoomScale = getZoomScaleFactor();
 
-    for (const eventType of visibleTypes) {
-        try {
-            const response = await fetch(
-                `/api/events/geojson/${eventType}?` +
-                `time_start=${timeStart}&time_end=${timeEnd}` +
-                `&cumulative=${eventState.cumulative}`
-            );
-            const geojson = await response.json();
-
-            if (geojson.features && geojson.features.length > 0) {
-                displayEventLayer(eventType, geojson);
-            }
-
-            allStats[eventType] = geojson.properties?.total_count || 0;
-        } catch (error) {
-            console.error(`Error loading ${eventType} events:`, error);
-        }
+    // Ensure a persistent L.layerGroup exists for this event type
+    if (!eventState.layers[eventType]) {
+        eventState.layers[eventType] = L.layerGroup();
+        if (state.map) eventState.layers[eventType].addTo(state.map);
+    }
+    if (!eventState.markerCache[eventType]) {
+        eventState.markerCache[eventType] = {};
     }
 
-    updateEventStats(allStats);
-    updateEventLegend();
+    const cache      = eventState.markerCache[eventType];
+    const layerGroup = eventState.layers[eventType];
+
+    for (const feature of geojson.features) {
+        const geoId    = feature.properties.geo_unit_id;
+        const count    = feature.properties.count;
+        const [lon, lat] = feature.geometry.coordinates;
+
+        const fillColor  = getColorForCount(count, maxCount, colorThresholds, gradient, useRelativeScaling);
+        const baseRadius = calculateEventRadius(count, maxCount, minRadius, maxRadius, radiusMethod, radiusScale);
+        const scaledRadius = baseRadius * zoomScale;
+
+        if (cache[geoId]) {
+            // Marker already exists — update its style and radius in-place.
+            // This avoids DOM node creation/destruction on every tick.
+            cache[geoId].setStyle({
+                fillColor:   fillColor,
+                color:       borderColor,
+                weight:      borderWidth,
+                opacity:     borderOpacity,
+                fillOpacity: fillOpacity
+            });
+            cache[geoId].setRadius(scaledRadius);
+            cache[geoId].options.baseRadius = baseRadius;
+        } else {
+            // First time we see this geo_unit — create a new marker and cache it.
+            let popupHtml = `<div class="popup-title">Geo Unit ${geoId}</div>`;
+            if (popupConfig.show_count !== false) {
+                popupHtml += `<div class="popup-info"><strong>Count:</strong> ${count.toLocaleString()}</div>`;
+            }
+            if (popupConfig.show_rate !== false && feature.properties.rate) {
+                popupHtml += `<div class="popup-info"><strong>Rate:</strong> ${feature.properties.rate.toFixed(1)} per 100k</div>`;
+            }
+
+            const marker = L.circleMarker([lat, lon], {
+                radius:      scaledRadius,
+                baseRadius:  baseRadius,
+                fillColor:   fillColor,
+                color:       borderColor,
+                weight:      borderWidth,
+                opacity:     borderOpacity,
+                fillOpacity: fillOpacity
+            });
+            marker.bindPopup(popupHtml);
+            cache[geoId] = marker;
+            layerGroup.addLayer(marker);
+        }
+    }
 }
 
 function displayEventLayer(eventType, geojson) {
@@ -737,6 +847,8 @@ function clearEventLayers() {
         }
     }
     eventState.layers = {};
+    // Discard cached markers so they are recreated fresh on next enable
+    eventState.markerCache = {};
 }
 
 function updateEventStats(stats) {

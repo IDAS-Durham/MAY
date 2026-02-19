@@ -862,6 +862,46 @@ def get_events_summary():
     })
 
 
+@app.route('/api/events/geojson/batch')
+def get_events_geojson_batch():
+    """Get GeoJSON for multiple event types in a single request.
+
+    Query params:
+        types:      repeated param — e.g. ?types=infections&types=deaths
+        time_start: float
+        time_end:   float
+        method:     'count' | 'rate'
+        cumulative: 'true' | 'false'
+
+    Returns:
+        JSON object mapping event_type -> GeoJSON FeatureCollection
+    """
+    loader = get_event_loader()
+    if loader is None:
+        return jsonify({'error': 'Events not loaded'}), 404
+
+    time_start  = request.args.get('time_start', type=float, default=0.0)
+    time_end    = request.args.get('time_end',   type=float, default=loader.time_max)
+    method      = request.args.get('method', default='count')
+    cumulative  = request.args.get('cumulative', default='false').lower() == 'true'
+    event_types = request.args.getlist('types')
+
+    try:
+        results = {}
+        for event_type in event_types:
+            results[event_type] = loader.get_events_geojson(
+                event_type=event_type,
+                time_start=time_start,
+                time_end=time_end,
+                method=method,
+                cumulative=cumulative
+            )
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in batch geojson: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/events/geojson/<event_type>')
 def get_events_geojson(event_type):
     """Get events as GeoJSON for map display."""

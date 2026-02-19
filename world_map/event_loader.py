@@ -16,6 +16,76 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Optional Numba JIT compilation for the inner aggregation loop.
+# Falls back to pure Python if numba is not installed.
+# ---------------------------------------------------------------------------
+try:
+    from numba import njit
+    _NUMBA_AVAILABLE = True
+except ImportError:
+    _NUMBA_AVAILABLE = False
+    # No-op decorator so the functions below are still importable
+    def njit(*args, **kwargs):
+        def decorator(f):
+            return f
+        return decorator if (args and callable(args[0])) else decorator
+
+
+@njit(cache=True)
+def _count_venue_and_person(venue_ids, person_ids, venue_geo, person_geo, n_geo):
+    """
+    JIT-compiled aggregation: count events per geo_unit.
+
+    Uses venue_id as the primary location, person_id as fallback.
+
+    Args:
+        venue_ids:  int32 array of venue IDs for each event
+        person_ids: int32 array of person IDs for each event
+        venue_geo:  int32 array mapping venue_id -> geo_unit_id (-1 = unknown)
+        person_geo: int32 array mapping person_id -> geo_unit_id (-1 = unknown)
+        n_geo:      size of the output counts array
+
+    Returns:
+        int32 array of length n_geo; counts[i] = events in geo_unit i
+    """
+    counts = np.zeros(n_geo, dtype=np.int32)
+    for i in range(len(venue_ids)):
+        geo_id = np.int32(-1)
+        vid = venue_ids[i]
+        if 0 <= vid < len(venue_geo):
+            geo_id = venue_geo[vid]
+        if geo_id < 0:
+            pid = person_ids[i]
+            if 0 <= pid < len(person_geo):
+                geo_id = person_geo[pid]
+        if 0 <= geo_id < n_geo:
+            counts[geo_id] += 1
+    return counts
+
+
+@njit(cache=True)
+def _count_person_only(person_ids, person_geo, n_geo):
+    """
+    JIT-compiled aggregation: count events per geo_unit using only person_id.
+
+    Args:
+        person_ids: int32 array of person IDs for each event
+        person_geo: int32 array mapping person_id -> geo_unit_id (-1 = unknown)
+        n_geo:      size of the output counts array
+
+    Returns:
+        int32 array of length n_geo; counts[i] = events in geo_unit i
+    """
+    counts = np.zeros(n_geo, dtype=np.int32)
+    for i in range(len(person_ids)):
+        pid = person_ids[i]
+        if 0 <= pid < len(person_geo):
+            geo_id = person_geo[pid]
+            if 0 <= geo_id < n_geo:
+                counts[geo_id] += 1
+    return counts
+
 
 class EventLoader:
     """
@@ -52,9 +122,35 @@ class EventLoader:
         self.time_min = 0.0
         self.time_max = 0.0
 
+        # --- Fast-path structures (built after load) ---
+        # Events sorted by time for binary-search window filtering
+        self.events_sorted = {}   # {event_type: structured array sorted by time}
+        self.events_times = {}    # {event_type: float32 times array (sorted)}
+
+        # Dense numpy arrays for O(1) venue/person → geo_unit lookup
+        self.venue_geo_array = None   # int32[venue_id]  = geo_unit_id (-1 = missing)
+        self.person_geo_array = None  # int32[person_id] = geo_unit_id (-1 = missing)
+        self._n_geo = 1               # length of per-tick counts array
+
+        # Simple result cache keyed by (event_type, time_start, time_end, method)
+        self._result_cache: Dict = {}
+
         # Load data
         self._load_events()
         self._load_lookups()
+
+        # Build fast-path structures
+        self._preprocess_events()
+        self._build_lookup_arrays()
+
+        if _NUMBA_AVAILABLE:
+            logger.info("Numba JIT available — event aggregation will use compiled kernels")
+        else:
+            logger.warning("Numba not available — falling back to Python loop for aggregation")
+
+    # ------------------------------------------------------------------
+    # Loading
+    # ------------------------------------------------------------------
 
     def _load_events(self):
         """Load all event types from HDF5 file."""
@@ -129,6 +225,61 @@ class EventLoader:
                     geo_counts[int(person['geo_unit_id'])] += 1
                 self.geo_unit_population = dict(geo_counts)
 
+    # ------------------------------------------------------------------
+    # Fast-path preprocessing (called once after load)
+    # ------------------------------------------------------------------
+
+    def _preprocess_events(self):
+        """
+        Sort each event array by time so that time-window queries can use
+        binary search (O(log n)) instead of a full boolean mask (O(n)).
+        """
+        for event_type, events in self.events.items():
+            if len(events) == 0:
+                self.events_sorted[event_type] = events
+                self.events_times[event_type] = np.array([], dtype=np.float32)
+                continue
+
+            sort_idx = np.argsort(events['time'], kind='stable')
+            sorted_arr = events[sort_idx]
+            self.events_sorted[event_type] = sorted_arr
+            self.events_times[event_type] = sorted_arr['time'].astype(np.float32)
+
+        logger.info("  Events pre-sorted by time for fast window queries")
+
+    def _build_lookup_arrays(self):
+        """
+        Convert venue/person → geo_unit dicts into dense numpy arrays.
+        Indexed directly by ID, giving O(1) vectorised lookup vs. O(1) per-item
+        Python dict lookup (with lower constant factor and JIT-friendly memory layout).
+        """
+        _MAX_ID = 50_000_000  # Safety cap (~200 MB for int32 array)
+
+        if self.venue_to_geo_unit:
+            vids  = np.array(list(self.venue_to_geo_unit.keys()),   dtype=np.int32)
+            vgeos = np.array(list(self.venue_to_geo_unit.values()), dtype=np.int32)
+            max_vid = int(vids.max())
+            if max_vid < _MAX_ID:
+                self.venue_geo_array = np.full(max_vid + 1, -1, dtype=np.int32)
+                self.venue_geo_array[vids] = vgeos
+                logger.info(f"  Built venue lookup array (size {max_vid + 1:,})")
+
+        if self.person_to_geo_unit:
+            pids  = np.array(list(self.person_to_geo_unit.keys()),   dtype=np.int32)
+            pgeos = np.array(list(self.person_to_geo_unit.values()), dtype=np.int32)
+            max_pid = int(pids.max())
+            if max_pid < _MAX_ID:
+                self.person_geo_array = np.full(max_pid + 1, -1, dtype=np.int32)
+                self.person_geo_array[pids] = pgeos
+                logger.info(f"  Built person lookup array (size {max_pid + 1:,})")
+
+        all_geos: set = set(self.venue_to_geo_unit.values()) | set(self.person_to_geo_unit.values())
+        self._n_geo = int(max(all_geos)) + 1 if all_geos else 1
+
+    # ------------------------------------------------------------------
+    # Public interface
+    # ------------------------------------------------------------------
+
     def set_geo_unit_coords(self, coords: Dict[int, Tuple[float, float]]):
         """Set geo unit coordinates for map display."""
         self.geo_unit_coords = coords
@@ -159,6 +310,9 @@ class EventLoader:
         """
         Aggregate events by geographical unit within a time window.
 
+        Uses binary search for O(log n) time filtering and Numba-JIT compiled
+        kernels for the inner counting loop.
+
         Args:
             event_type: Type of event ('infections', 'deaths', etc.)
             time_start: Start of time window (inclusive)
@@ -178,64 +332,121 @@ class EventLoader:
         if event_type not in self.events:
             return {}
 
-        events = self.events[event_type]
-        if len(events) == 0:
+        # --- Cache check ---
+        cache_key = (event_type, round(time_start, 3), round(time_end, 3), method)
+        if cache_key in self._result_cache:
+            return self._result_cache[cache_key]
+
+        # --- O(log n) time filtering via binary search on pre-sorted array ---
+        times      = self.events_times.get(event_type)
+        sorted_arr = self.events_sorted.get(event_type)
+
+        if times is None or sorted_arr is None or len(times) == 0:
             return {}
 
-        # Filter by time window
-        time_mask = (events['time'] >= time_start) & (events['time'] <= time_end)
-        filtered_events = events[time_mask]
+        start_idx = int(np.searchsorted(times, time_start, side='left'))
+        end_idx   = int(np.searchsorted(times, time_end,   side='right'))
 
-        if len(filtered_events) == 0:
+        if start_idx >= end_idx:
             return {}
 
-        # Get geo_unit_id for each event
-        geo_unit_counts = defaultdict(int)
+        filtered = sorted_arr[start_idx:end_idx]  # numpy view — O(1)
 
-        # Determine which field to use for venue/location
-        if 'venue_id' in filtered_events.dtype.names:
+        # --- Determine which field holds the venue/location ID ---
+        if 'venue_id' in filtered.dtype.names:
             venue_field = 'venue_id'
-        elif 'hospital_id' in filtered_events.dtype.names:
+        elif 'hospital_id' in filtered.dtype.names:
             venue_field = 'hospital_id'
         else:
             venue_field = None
 
-        for event in filtered_events:
-            geo_unit_id = None
+        # --- Count events per geo_unit (JIT path or Python fallback) ---
+        counts_arr = None
 
-            # Try to get geo_unit from venue
-            if venue_field:
-                venue_id = int(event[venue_field])
-                geo_unit_id = self.venue_to_geo_unit.get(venue_id)
+        if (venue_field is not None
+                and self.venue_geo_array is not None
+                and 'person_id' in filtered.dtype.names
+                and self.person_geo_array is not None):
+            # Primary path: venue with person fallback
+            venue_ids  = np.ascontiguousarray(filtered[venue_field],  dtype=np.int32)
+            person_ids = np.ascontiguousarray(filtered['person_id'], dtype=np.int32)
+            counts_arr = _count_venue_and_person(
+                venue_ids, person_ids,
+                self.venue_geo_array, self.person_geo_array,
+                self._n_geo)
 
-            # Fallback to person's geo_unit
-            if geo_unit_id is None and 'person_id' in event.dtype.names:
-                person_id = int(event['person_id'])
-                geo_unit_id = self.person_to_geo_unit.get(person_id)
+        elif ('person_id' in filtered.dtype.names
+              and self.person_geo_array is not None):
+            # Person-only path
+            person_ids = np.ascontiguousarray(filtered['person_id'], dtype=np.int32)
+            counts_arr = _count_person_only(
+                person_ids, self.person_geo_array, self._n_geo)
 
-            if geo_unit_id is not None:
-                geo_unit_counts[geo_unit_id] += 1
+        else:
+            # Fallback: original Python loop (when lookup arrays are unavailable)
+            geo_unit_counts: Dict[int, int] = defaultdict(int)
+            for event in filtered:
+                geo_unit_id = None
+                if venue_field:
+                    vid = int(event[venue_field])
+                    geo_unit_id = self.venue_to_geo_unit.get(vid)
+                if geo_unit_id is None and 'person_id' in event.dtype.names:
+                    pid = int(event['person_id'])
+                    geo_unit_id = self.person_to_geo_unit.get(pid)
+                if geo_unit_id is not None:
+                    geo_unit_counts[geo_unit_id] += 1
 
-        # Build result
+            result = self._build_result_from_dict(geo_unit_counts, method)
+            self._cache(cache_key, result)
+            return result
+
+        # --- Build result dict from counts array ---
+        result = self._build_result_from_array(counts_arr, method)
+        self._cache(cache_key, result)
+        return result
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _build_result_from_array(self, counts_arr: np.ndarray, method: str) -> Dict:
+        """Convert a dense counts array (indexed by geo_unit_id) to a result dict."""
+        nonzero_geos = np.nonzero(counts_arr)[0]
+        result = {}
+        for geo_id_np in nonzero_geos:
+            geo_id = int(geo_id_np)
+            count  = int(counts_arr[geo_id])
+            entry: Dict[str, Any] = {'count': count}
+            if method == 'rate':
+                pop = self.geo_unit_population.get(geo_id, 0)
+                entry['rate'] = (count / pop) * 100_000 if pop > 0 else 0.0
+            if geo_id in self.geo_unit_coords:
+                entry['coords'] = self.geo_unit_coords[geo_id]
+            result[geo_id] = entry
+        return result
+
+    def _build_result_from_dict(self, geo_unit_counts: Dict[int, int], method: str) -> Dict:
+        """Convert a {geo_unit_id: count} dict to a result dict."""
         result = {}
         for geo_unit_id, count in geo_unit_counts.items():
-            entry = {'count': count}
-
-            # Calculate rate if requested
+            entry: Dict[str, Any] = {'count': count}
             if method == 'rate':
-                population = self.geo_unit_population.get(geo_unit_id, 0)
-                if population > 0:
-                    entry['rate'] = (count / population) * 100000
-                else:
-                    entry['rate'] = 0.0
-
-            # Add coordinates if available
+                pop = self.geo_unit_population.get(geo_unit_id, 0)
+                entry['rate'] = (count / pop) * 100_000 if pop > 0 else 0.0
             if geo_unit_id in self.geo_unit_coords:
                 entry['coords'] = self.geo_unit_coords[geo_unit_id]
-
             result[geo_unit_id] = entry
-
         return result
+
+    def _cache(self, key: tuple, result: Dict):
+        """Store result in cache, evicting the oldest entry if full."""
+        if len(self._result_cache) >= 256:
+            self._result_cache.pop(next(iter(self._result_cache)))
+        self._result_cache[key] = result
+
+    # ------------------------------------------------------------------
+    # Remaining public API (unchanged logic)
+    # ------------------------------------------------------------------
 
     def get_cumulative_events_by_geo_unit(
         self,
