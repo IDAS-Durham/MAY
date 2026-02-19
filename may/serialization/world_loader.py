@@ -72,19 +72,41 @@ def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml
         logger.info(f"  People: {num_people:,}")
         logger.info(f"  Venues: {num_venues:,}")
 
+        # Pre-load names and registries from metadata group (new format)
+        geo_names = None
+        level_registry = None
+        venue_names = None
+        type_registry = None
+        subset_names_arr = None
+
+        if 'metadata' in f:
+            meta = f['metadata']
+            if 'names' in meta:
+                if 'geography' in meta['names']:
+                    geo_names = meta['names']['geography'][:].astype(str)
+                if 'venues' in meta['names']:
+                    venue_names = meta['names']['venues'][:].astype(str)
+                if 'subsets' in meta['names']:
+                    subset_names_arr = meta['names']['subsets'][:].astype(str)
+            if 'registries' in meta:
+                if 'geo_levels' in meta['registries']:
+                    level_registry = meta['registries']['geo_levels'][:].astype(str)
+                if 'venue_types' in meta['registries']:
+                    type_registry = meta['registries']['venue_types'][:].astype(str)
+
         # Load Geography
         geography = None
         if 'geography' in f:
             logger.info("Loading geography...")
             try:
-                geography = _load_geography(f['geography'], config)
+                geography = _load_geography(f['geography'], config, geo_names, level_registry)
             except Exception as e:
                 logger.error(f"Failed to load geography: {e}")
                 raise
         else:
             logger.error("No geography data found in HDF5 file")
             raise OSError
-        
+
         # Load Population
         laptime = time.perf_counter()
         population = None
@@ -104,7 +126,7 @@ def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml
         if 'venues' in f:
             logger.info("Loading venues...")
             try:
-                venue_manager = _load_venues(f['venues'], geography, config)
+                venue_manager = _load_venues(f['venues'], geography, config, venue_names, type_registry, subset_names_arr)
             except Exception as e:
                 logger.warning(f"Failed to load venues: {e}")
                 logger.warning("World will be created without venues")
@@ -113,17 +135,19 @@ def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml
             logger.warning("World will be created without venues")
 
         # Load Relationships (activity_map)
-        if 'relationships' in f and config.should_include_activity_map():
+        # Group was renamed from 'relationships' to 'activity_mappings' in new format
+        activity_group_name = 'activity_mappings' if 'activity_mappings' in f else 'relationships'
+        if activity_group_name in f and config.should_include_activity_map():
             logger.info("Loading relationships...")
             try:
                 if population and venue_manager:
-                    _load_relationships(f['relationships'], population, venue_manager)
+                    _load_relationships(f[activity_group_name], population, venue_manager)
                 else:
                     logger.warning("Cannot load relationships: population or venues missing")
             except Exception as e:
                 logger.warning(f"Failed to load relationships: {e}")
                 logger.warning("World will be created without relationships")
-        elif 'relationships' not in f:
+        elif activity_group_name not in f:
             logger.info("No relationship data found in HDF5 file")
 
     # Create World object
@@ -137,14 +161,26 @@ def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml
     return world
 
 
-def _load_geography(geo_group, config):
+def _load_geography(geo_group, config, geo_names=None, level_registry=None):
     """Reconstruct Geography hierarchy from HDF5."""
     from may.geography import Geography, GeographicalUnit
 
     # Read core datasets
     ids = geo_group['ids'][:]
-    names = geo_group['names'][:].astype(str)
-    levels = geo_group['levels'][:].astype(str)
+
+    # Names: new format stores in metadata/names/geography; old format stores inline
+    if geo_names is not None:
+        names = geo_names
+    else:
+        names = geo_group['names'][:].astype(str)
+
+    # Levels: new format stores as uint8 integers with a registry lookup; old format stores as strings
+    if level_registry is not None:
+        levels_raw = geo_group['levels'][:]
+        levels = np.array([level_registry[int(v)] for v in levels_raw])
+    else:
+        levels = geo_group['levels'][:].astype(str)
+
     # Convert numpy strings to Python strings for levels
     unique_levels = list(dict.fromkeys(str(lvl) for lvl in levels))
     parent_ids = geo_group['parent_ids'][:]
@@ -214,7 +250,13 @@ def _load_population(pop_group, geography, config):
     # Read core datasets
     ids = pop_group['ids'][:]
     ages = pop_group['ages'][:]
-    sexes = pop_group['sexes'][:].astype(str)
+    # Sexes: new format stores as uint8 (0=male, 1=female, 2=unknown); old format stores as strings
+    _SEX_DECODE = {0: "male", 1: "female", 2: "unknown"}
+    sex_raw = pop_group['sexes'][:]
+    if sex_raw.dtype.kind in ('u', 'i'):
+        sexes = np.array([_SEX_DECODE.get(int(v), "unknown") for v in sex_raw])
+    else:
+        sexes = sex_raw.astype(str)
     geo_unit_ids = pop_group['geo_unit_ids'][:]
 
     # Read properties if present
@@ -270,14 +312,26 @@ def _load_population(pop_group, geography, config):
     return population
 
 
-def _load_venues(venues_group, geography, config):
+def _load_venues(venues_group, geography, config, venue_names=None, type_registry=None, subset_names_arr=None):
     """Reconstruct VenueManager with Venue and Subset objects from HDF5."""
     from may.geography import VenueManager, Venue
 
     # Read core venue datasets
     ids = venues_group['ids'][:]
-    names = venues_group['names'][:].astype(str)
-    types = venues_group['types'][:].astype(str)
+
+    # Names: new format stores in metadata/names/venues; old format stores inline
+    if venue_names is not None:
+        names = venue_names
+    else:
+        names = venues_group['names'][:].astype(str)
+
+    # Types: new format stores as uint8 integers with a registry lookup; old format stores as strings
+    if type_registry is not None:
+        types_raw = venues_group['types'][:]
+        types = np.array([type_registry[int(v)] for v in types_raw])
+    else:
+        types = venues_group['types'][:].astype(str)
+
     geo_unit_ids = venues_group['geo_unit_ids'][:]
     parent_ids = venues_group['parent_ids'][:]
 
@@ -365,7 +419,7 @@ def _load_venues(venues_group, geography, config):
     # Load subsets
     subsets_by_venue_and_index = {}
     if 'subsets' in venues_group:
-        subsets_by_venue_and_index = _load_subsets(venues_group['subsets'], venues_by_global_id)
+        subsets_by_venue_and_index = _load_subsets(venues_group['subsets'], venues_by_global_id, subset_names_arr)
 
     # Store mapping for relationship loading
     venue_manager._subsets_by_venue_and_index = subsets_by_venue_and_index
@@ -374,14 +428,18 @@ def _load_venues(venues_group, geography, config):
     return venue_manager
 
 
-def _load_subsets(subsets_group, venues_by_global_id):
+def _load_subsets(subsets_group, venues_by_global_id, subset_names_arr=None):
     """Load Subset objects and assign to venues."""
     from may.population.subset import Subset
 
     # Read subset metadata
     venue_ids = subsets_group['venue_ids'][:]
     subset_indices = subsets_group['subset_indices'][:]
-    subset_names = subsets_group['subset_names'][:].astype(str)
+    # Names: new format stores in metadata/names/subsets; old format stores inline
+    if subset_names_arr is not None:
+        subset_names = subset_names_arr
+    else:
+        subset_names = subsets_group['subset_names'][:].astype(str)
     member_counts = subsets_group['member_counts'][:]
 
     # Read member lists (ragged array)
