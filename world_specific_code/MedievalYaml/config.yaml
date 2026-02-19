@@ -13,7 +13,7 @@ geography:
   levels: ["MBD_Temp_ID", "County", "Country"]
 
   # Load all geographical units (ignores all filters below if true)
-  load_all: false
+  load_all: true
 
   # ========================================
   # FILTER - Specify which geographical units to load
@@ -205,7 +205,7 @@ relationship_pipeline:
 # to derive new activities.
 
 post_relationship_pipeline:
-  enabled: true
+  enabled: false
 
   steps:
     # Assign visit_social_contact activity based on social contacts' residences
