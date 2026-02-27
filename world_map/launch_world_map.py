@@ -81,10 +81,10 @@ def load_world_from_file(filepath, **kwargs):
             return joblib.load(filepath, **kwargs)
         case '.h5':
             from may.serialization.world_loader import load_world_from_hdf5
-            return load_world_from_hdf5(filepath, **kwargs)
+            return load_world_from_hdf5(filepath, slim=True, **kwargs)
         case '.h5py':
             from may.serialization.world_loader import load_world_from_hdf5
-            return load_world_from_hdf5(filepath, **kwargs)
+            return load_world_from_hdf5(filepath, slim=True, **kwargs)
         case _:
             raise NotImplementedError(f"No implemented loading function for this type of world file with extension {extension}")
 

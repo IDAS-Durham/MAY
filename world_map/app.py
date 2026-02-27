@@ -145,7 +145,9 @@ def initialize_app(world, map_config=None, panel_config_path=None):
     load_panel_config(panel_config_path)
 
     logger.info(f"Initialized world map with: {world}")
-    logger.info(f"Map configuration: {_map_config}")
+    log_cfg = {k: (v[:60] + '…' if isinstance(v, str) and len(v) > 60 else v)
+               for k, v in _map_config.items()}
+    logger.info(f"Map configuration: {log_cfg}")
     return app
 
 
@@ -174,7 +176,9 @@ def index():
 @app.route('/api/map/config')
 def get_map_config():
     """Get map configuration including background type and bounds."""
-    return jsonify(_map_config)
+    config = dict(_map_config)
+    config['slim_mode'] = hasattr(get_world(), '_unit_statistics')
+    return jsonify(config)
 
 
 @app.route('/api/panel/config')
@@ -288,7 +292,8 @@ def get_geography_level(level):
 def get_unit_details(unit_name):
     """Get detailed information about a specific geographical unit.
 
-    For units with children, aggregates statistics from all descendants.
+    In slim mode, returns pre-computed statistics (no venue list, no people list).
+    In full mode, aggregates statistics from all descendants.
     """
     try:
         world = get_world()
@@ -299,48 +304,74 @@ def get_unit_details(unit_name):
         if not unit:
             return jsonify({'error': f'Unit {unit_name} not found'}), 404
 
-        # Use get_people() to recursively get all people from unit and descendants
+        # Parent and children info (needed in both modes)
+        parent_info = None
+        if unit.parent:
+            parent_info = {
+                'id': unit.parent.id,
+                'name': unit.parent.name,
+                'level': unit.parent.level
+            }
+
+        # ---- Slim mode: serve pre-computed stats ----------------------------
+        unit_statistics = getattr(world, '_unit_statistics', None)
+        if unit_statistics is not None:
+            pre = unit_statistics.get(unit_name, {})
+            children_info = []
+            if unit.children:
+                for child in unit.children:
+                    child_pre = unit_statistics.get(child.name, {})
+                    children_info.append({
+                        'id': child.id,
+                        'name': child.name,
+                        'level': child.level,
+                        'population': child_pre.get('population', 0),
+                    })
+            venues_count = sum(pre.get('venue_types', {}).values())
+            return jsonify(_convert_numpy_types({
+                'id': unit.id,
+                'name': unit.name,
+                'level': unit.level,
+                'coordinates': unit.coordinates,
+                'population': pre.get('population', 0),
+                'age_distribution': pre.get('age_distribution', {}),
+                'sex_distribution': pre.get('sex_distribution', {}),
+                'venues_count': venues_count,
+                'venue_types': pre.get('venue_types', {}),
+                'activity_counts': pre.get('activity_counts', {}),
+                'parent': parent_info,
+                'children': children_info,
+                'properties': unit.properties,
+                'slim_mode': True,
+            }))
+
+        # ---- Full mode: compute on the fly ----------------------------------
         all_people = unit.get_people()
 
-        # Collect detailed statistics from all people
         age_groups = {
             '0-15': 0, '16-24': 0, '25-34': 0,
             '35-49': 0, '50-64': 0, '65+': 0
         }
-
         sex_distribution = defaultdict(int)
-
         for person in all_people:
-            # Age groups
-            if person.age <= 15:
-                age_groups['0-15'] += 1
-            elif person.age <= 24:
-                age_groups['16-24'] += 1
-            elif person.age <= 34:
-                age_groups['25-34'] += 1
-            elif person.age <= 49:
-                age_groups['35-49'] += 1
-            elif person.age <= 64:
-                age_groups['50-64'] += 1
-            else:
-                age_groups['65+'] += 1
-
-            # Sex distribution
+            if person.age <= 15:    age_groups['0-15'] += 1
+            elif person.age <= 24:  age_groups['16-24'] += 1
+            elif person.age <= 34:  age_groups['25-34'] += 1
+            elif person.age <= 49:  age_groups['35-49'] += 1
+            elif person.age <= 64:  age_groups['50-64'] += 1
+            else:                   age_groups['65+'] += 1
             sex_distribution[person.sex] += 1
 
-        # Aggregate venues from unit and all descendants
         all_venues = list(unit.venues) if unit.venues else []
         if unit.children:
             for descendant in unit.get_descendants():
                 if descendant.venues:
                     all_venues.extend(descendant.venues)
 
-        # Venue breakdown from all aggregated venues
         venue_details = []
         venue_types = defaultdict(int)
         for venue in all_venues:
             venue_types[venue.type] += 1
-            # Only include details for first 50 venues
             if len(venue_details) < 50:
                 venue_details.append({
                     'id': venue.id,
@@ -350,25 +381,14 @@ def get_unit_details(unit_name):
                     'properties': venue.properties
                 })
 
-        # Parent and children info
-        parent_info = None
-        if unit.parent:
-            parent_info = {
-                'id': unit.parent.id,
-                'name': unit.parent.name,
-                'level': unit.parent.level
-            }
-
         children_info = []
         if unit.children:
             for child in unit.children:
-                # Use get_people() for children too to show aggregated population
-                child_population = len(child.get_people())
                 children_info.append({
                     'id': child.id,
                     'name': child.name,
                     'level': child.level,
-                    'population': child_population
+                    'population': len(child.get_people()),
                 })
 
         return jsonify({
@@ -384,7 +404,8 @@ def get_unit_details(unit_name):
             'venue_details': venue_details,
             'parent': parent_info,
             'children': children_info,
-            'properties': unit.properties
+            'properties': unit.properties,
+            'slim_mode': False,
         })
 
     except Exception as e:
@@ -722,6 +743,10 @@ def get_world_statistics():
     try:
         world = get_world()
         stats = world.get_statistics()
+        # Merge in slim-mode aggregate statistics if available
+        slim_stats = getattr(world, '_slim_statistics', None)
+        if slim_stats:
+            stats['slim_statistics'] = slim_stats
         # Convert numpy types to Python native types for JSON serialization
         stats = _convert_numpy_types(stats)
         return jsonify(stats)

@@ -85,13 +85,13 @@ def _safe_json(data) -> str:
 # Data collection
 # ---------------------------------------------------------------------------
 
-def _collect_data(flask_app, world, geography_units_all, venue_ids_all,
+def _collect_data(flask_app, world, geography_units_all,
                   max_size_bytes: int) -> dict:
     """Use the Flask test client to pre-generate all API responses.
 
     Returns a dict keyed by logical name whose values are the parsed JSON
-    responses.  Heavy detail data (per-unit, per-venue) is dropped once the
-    running size estimate exceeds *max_size_bytes*.
+    responses.  Heavy detail data (per-unit) is dropped once the running
+    size estimate exceeds *max_size_bytes*.
     """
     client = flask_app.test_client()
 
@@ -109,7 +109,6 @@ def _collect_data(flask_app, world, geography_units_all, venue_ids_all,
         ('panel_config',     '/api/panel/config'),
         ('world_statistics', '/api/world/statistics'),
         ('geography_levels', '/api/geography/levels'),
-        ('venue_types',      '/api/venues/types'),
         ('events_config',    '/api/events/config'),
     ]
     for key, path in core_endpoints:
@@ -131,20 +130,12 @@ def _collect_data(flask_app, world, geography_units_all, venue_ids_all,
         print(f" {n_feat} features, {sz // 1024} KB")
     data['geography_by_level'] = geography_by_level
 
-    # ---- Venue GeoJSON per type ----------------------------------------------
-    print("  Fetching venue GeoJSON ...")
-    venues_by_type: dict = {}
-    for venue_type in (data['venue_types'].get('types') or {}).keys():
-        print(f"    Type {venue_type} ...", end='', flush=True)
-        geojson = get_json(f'/api/venues/{venue_type}')
-        venues_by_type[venue_type] = geojson
-        sz = _json_size(geojson)
-        total_bytes += sz
-        n_feat = len(geojson.get('features', []))
-        print(f" {n_feat} features, {sz // 1024} KB")
-    data['venues_by_type'] = venues_by_type
-
     print(f"\n  Core data collected: {total_bytes / (1024 * 1024):.1f} MB")
+
+    # Slim mode: unit details contain pre-computed stats; no people lists needed
+    slim_mode: bool = bool(data.get('map_config', {}).get('slim_mode', False))
+    if slim_mode:
+        print("  Slim mode detected — per-unit people lists will not be embedded.")
 
     # ---- Per-unit details (click popups) ------------------------------------
     geography_units: dict = {}
@@ -159,12 +150,14 @@ def _collect_data(flask_app, world, geography_units_all, venue_ids_all,
                 geography_units[unit_name] = detail
                 total_bytes += _json_size(detail)
 
-            people = get_json(
-                f'/api/geography/unit/{unit_name}/people?page=1&per_page=50'
-            )
-            if people and 'error' not in people:
-                geography_units_people[unit_name] = people
-                total_bytes += _json_size(people)
+            # Skip people lists in slim mode (replaced by pre-computed stats)
+            if not slim_mode:
+                people = get_json(
+                    f'/api/geography/unit/{unit_name}/people?page=1&per_page=50'
+                )
+                if people and 'error' not in people:
+                    geography_units_people[unit_name] = people
+                    total_bytes += _json_size(people)
 
             if (i + 1) % 100 == 0 or (i + 1) == n:
                 pct = int(100 * (i + 1) / n)
@@ -194,46 +187,6 @@ def _collect_data(flask_app, world, geography_units_all, venue_ids_all,
 
     data['geography_units'] = geography_units
     data['geography_units_people'] = geography_units_people
-
-    # ---- Per-venue details (click popups) ------------------------------------
-    venue_details: dict = {}
-
-    if total_bytes < max_size_bytes and venue_ids_all:
-        n = len(venue_ids_all)
-        print(f"  Fetching details for {n} venues ...")
-        for i, venue_id in enumerate(venue_ids_all):
-            detail = get_json(f'/api/venues/venue/{venue_id}')
-            if detail and 'error' not in detail:
-                venue_details[str(venue_id)] = detail
-                total_bytes += _json_size(detail)
-
-            if (i + 1) % 500 == 0 or (i + 1) == n:
-                pct = int(100 * (i + 1) / n)
-                print(
-                    f"    {i + 1}/{n} ({pct}%)"
-                    f" — {total_bytes / (1024 * 1024):.1f} MB so far"
-                )
-
-            if total_bytes > max_size_bytes:
-                remaining = n - (i + 1)
-                print(
-                    f"  Size limit reached after {i + 1} venues. "
-                    f"{remaining} venues will lack detail popups."
-                )
-                break
-
-        print(
-            f"  Venue details: {len(venue_details)} / {n} venues embedded"
-        )
-    else:
-        reason = (
-            f"size limit already reached ({total_bytes / (1024 * 1024):.1f} MB)"
-            if total_bytes >= max_size_bytes
-            else "world has no venues"
-        )
-        print(f"  Skipping venue details ({reason}).")
-
-    data['venue_details'] = venue_details
 
     print(f"\n  Total embedded data: {total_bytes / (1024 * 1024):.1f} MB")
     return data
@@ -289,7 +242,6 @@ _FETCH_INTERCEPTOR = r"""(function () {
         if (pu === '/api/panel/config')         return okResponse(d.panel_config);
         if (pu === '/api/world/statistics')     return okResponse(d.world_statistics);
         if (pu === '/api/geography/levels')     return okResponse(d.geography_levels);
-        if (pu === '/api/venues/types')         return okResponse(d.venue_types);
         if (pu === '/api/events/config')        return okResponse(d.events_config);
         if (pu === '/api/events/summary')       return notFound('Events not available in static export.');
         if (pu === '/api/events/geojson/batch') return notFound('Events not available in static export.');
@@ -318,22 +270,6 @@ _FETCH_INTERCEPTOR = r"""(function () {
             var uname2 = dec(m[1]);
             var ud = d.geography_units[uname2];
             return ud ? okResponse(ud) : notFound('Unit "' + uname2 + '" not found.');
-        }
-
-        // ---- /api/venues/venue/<id>  (must check before venue type) --------
-        m = pu.match(/^\/api\/venues\/venue\/(\d+)$/);
-        if (m) {
-            var vid = m[1];
-            var vd = d.venue_details[vid];
-            return vd ? okResponse(vd) : notFound('Venue detail not available in static export.');
-        }
-
-        // ---- /api/venues/<type>  (not /api/venues/types) -------------------
-        m = pu.match(/^\/api\/venues\/([^\/]+)$/);
-        if (m && m[1] !== 'types') {
-            var vtype = dec(m[1]);
-            var vbt = d.venues_by_type[vtype];
-            return vbt ? okResponse(vbt) : notFound('Venue type "' + vtype + '" not found.');
         }
 
         // ---- Individual person detail (too large to embed) -----------------
@@ -406,19 +342,11 @@ def _build_html(
                 <div id="geography-levels"></div>
             </div>
             <div class="sidebar-section">
-                <h3>Venue Types</h3>
-                <div id="venue-types"></div>
-            </div>
-            <div class="sidebar-section">
                 <h3>Layers</h3>
                 <div id="layer-controls">
                     <label>
                         <input type="checkbox" id="show-population" checked>
                         Population Markers
-                    </label>
-                    <label>
-                        <input type="checkbox" id="show-venues">
-                        Venue Markers
                     </label>
                 </div>
             </div>
@@ -482,7 +410,7 @@ def load_world_from_file(filepath: str):
         return joblib.load(path)
     elif suffix in ('.h5', '.h5py', '.hdf5'):
         from may.serialization.world_loader import load_world_from_hdf5
-        return load_world_from_hdf5(str(path))
+        return load_world_from_hdf5(str(path), slim=True)
     else:
         raise ValueError(
             f"Unsupported file format '{suffix}'. "
@@ -633,25 +561,12 @@ def main() -> None:
             units = world.geography.get_units_by_level(level)
             geography_units_all.extend(units.keys())
 
-    # Collect venue IDs (deduplicated)
-    venue_ids_all: list[int] = []
-    if world.venues:
-        seen: set[int] = set()
-        for vtype in world.venues.get_venue_types():
-            for v in world.venues.get_venues_by_type(vtype):
-                if v.id not in seen:
-                    venue_ids_all.append(v.id)
-                    seen.add(v.id)
-
-    print(
-        f'  Geography units: {len(geography_units_all)} | '
-        f'Venues: {len(venue_ids_all)}'
-    )
+    print(f'  Geography units: {len(geography_units_all)}')
 
     max_size_bytes = int(args.max_size_mb * 1024 * 1024)
     data = _collect_data(
         flask_app, world,
-        geography_units_all, venue_ids_all,
+        geography_units_all,
         max_size_bytes,
     )
 
