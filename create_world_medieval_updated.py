@@ -15,7 +15,7 @@ from may.venue_child_creator import VenueChildCreator
 from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
 
-# Legacy/Gavin social network version
+# Gavin social network version
 from may.social_networks import allocate_random_bounded_distance_contacts, build_local_social_network
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -53,6 +53,7 @@ set_random_seed(0)
 def main():
     """
     Main entry point for world creation.
+
     """
 
     logger.info("=" * 60)
@@ -218,7 +219,9 @@ def main():
         logger.info("=" * 60)
         logger.info("RELATIONSHIP PIPELINE (Gavin Version)")
         logger.info("=" * 60)
-        
+
+        # Builds a local network based on a particular clustering algorithm.
+        # This creates realistic closed graphs. 
         build_local_social_network(
             world.geography,
             mean_connections_per_person=6,

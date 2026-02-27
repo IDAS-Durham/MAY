@@ -16,11 +16,15 @@ import numpy as np
 if TYPE_CHECKING:
     from may.geography import Geography, GeographicalUnit
     from may.world import World
+    from may.population import Person
 
 logger = logging.getLogger("create networks")
 
 
-def _collate_people_in_geo_units(geography: "Geography", geo_unit_ids: set["GeographicalUnit"]):
+def _collate_people_in_geo_units(
+        geography: "Geography",
+        geo_unit_ids: set["GeographicalUnit"]
+) -> set[Person]:
     """
     Collect all people from a set of geographical units.
 
@@ -101,11 +105,15 @@ def allocate_random_bounded_distance_contacts(
         store: bool=True,
         method: str='libpysal',
         **kwargs,
-        ):
+        ) -> None:
     """
     Allocates contacts randomly to people within a specified radius.
 
-    Faster than build_bounded_distance_social_network, as it does not make a graph for everyone. Only creating connections with those outside the area. Simply gathers all people from within the set radius, and sets random contacts. No filters applied. Need to add capacity to filter. 
+    Faster than build_bounded_distance_social_network, as it does not make a graph for everyone. Only creating connections with those outside the area. Simply gathers all people from within the set radius, and sets random contacts. No filters applied. Need to add capacity to filter.
+
+    geography (Geography): Geography object. Contains all the geo_units.
+    radius_km (float): The cut-off radius within which to assign contacts.
+    mean_connections_per_person (float): The mean number of contacts to assign each person.
     """
     if storage_key is None:
         storage_key = f'social_contacts_radius_{radius_km}'

@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 # Global world instance - set via initialize_app()
 _world_instance = None
 
+# Flat {venue.id: venue} lookup built at startup (venue IDs are Python memory
+# addresses so they are unique within a session but VenueManager has no global
+# lookup method — we build one here instead of modifying VenueManager)
+_venue_index: dict = {}
+
 # Global map configuration
 _map_config = {
     'background_type': 'osm',  # 'osm' or 'image'
@@ -70,7 +75,7 @@ def _convert_numpy_types(obj):
         return str(obj)
     if isinstance(obj, dict):
         return {str(k): _convert_numpy_types(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple, set)):
         return [_convert_numpy_types(item) for item in obj]
     return obj
 
@@ -124,11 +129,17 @@ def initialize_app(world, map_config=None, panel_config_path=None):
     Returns:
         Flask app instance
     """
-    global _world_instance, _map_config
+    global _world_instance, _map_config, _venue_index
     _world_instance = world
 
     if map_config:
         _map_config.update(map_config)
+
+    # Build a flat venue index keyed by venue.id (Python memory address)
+    _venue_index = {}
+    if world.venues:
+        for venue in world.venues.get_all_venues().values():
+            _venue_index[venue.id] = venue
 
     # Load panel configuration
     load_panel_config(panel_config_path)
@@ -455,7 +466,7 @@ def get_person_details(person_id):
                                     subset_list.append(subset_info)
                         activity_map_data[activity_type][venue_type] = subset_list
 
-        return jsonify({
+        return jsonify(_convert_numpy_types({
             'id': person.id,
             'age': person.age,
             'sex': person.sex,
@@ -463,7 +474,7 @@ def get_person_details(person_id):
             'activity_map': activity_map_data,
             'properties': person.properties,
             'geographical_unit': geo_info
-        })
+        }))
 
     except Exception as e:
         logger.error(f"Error getting person details for {person_id}: {e}")
@@ -523,7 +534,7 @@ def get_unit_people(unit_name):
                 'id': person.id,
                 'age': person.age,
                 'sex': person.sex,
-                'activities': person.activities,
+                'activities': list(person.activities) if isinstance(person.activities, set) else person.activities,
                 'primary_activity': primary_activity
             })
 
@@ -628,7 +639,7 @@ def get_venue_details(venue_id):
         if not world.venues:
             return jsonify({'error': 'No venues data'}), 404
 
-        venue = world.venues.get_venue_by_id(venue_id)
+        venue = _venue_index.get(venue_id)
         if not venue:
             return jsonify({'error': f'Venue {venue_id} not found'}), 404
 

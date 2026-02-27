@@ -1,0 +1,1 @@
+python export_static.py --world-file ../world_state_medieval_updated.h5 --map-background image --map-image ./image1.png --map-bounds "56.0,2.0,49.0,-7.0" --map-attribution "Topological Map" --max-size-mb 300 --title "1348 England" --output medieval_map.html 2>&1 | tee log.txt

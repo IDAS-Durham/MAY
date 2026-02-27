@@ -1,7 +1,7 @@
 """
 Find neighboring geographical units within a specified radius.
 
-Using libpysal DistanceBand (fast, requires projected coordinates for accuracy)
+Using libpysal DistanceBand (fast, requires projected coordinates for accuracy).
 """
 
 import numpy as np
