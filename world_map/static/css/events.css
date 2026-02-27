@@ -16,11 +16,22 @@
     margin-bottom: 15px;
 }
 
+.event-type-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.event-type-row .event-type-toggle {
+    flex: 1;
+    margin-bottom: 0;
+}
+
 .event-type-toggle {
     display: flex;
     align-items: center;
     padding: 6px 10px;
-    margin-bottom: 4px;
     background: white;
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -34,6 +45,37 @@
 
 .event-type-toggle input {
     margin-right: 8px;
+}
+
+.event-cumul-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    font-size: 0.78rem;
+    color: #6c757d;
+    white-space: nowrap;
+    cursor: pointer;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.event-cumul-label:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.event-cumul-label input {
+    margin: 0;
+    cursor: pointer;
+}
+
+.event-cumul-label:has(input:checked) {
+    background: #e8eaff;
+    border-color: #667eea;
+    color: #495057;
 }
 
 .event-color-dot {
@@ -132,23 +174,11 @@
 /* Aggregation Options */
 #aggregation-options {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     padding: 10px 0;
     border-bottom: 1px solid #e9ecef;
     margin-bottom: 10px;
-}
-
-#aggregation-options label {
-    display: flex;
-    align-items: center;
-    font-size: 0.9rem;
-    padding: 0;
-    margin: 0;
-}
-
-#aggregation-options input {
-    margin-right: 6px;
 }
 
 #display-mode {

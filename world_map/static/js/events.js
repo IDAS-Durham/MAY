@@ -17,7 +17,7 @@ const eventState = {
     markerCache: {},       // {event_type: {geo_unit_id: L.circleMarker}} — reused in-place
     isUpdating: false,     // guard against overlapping async updates
     mode: 'choropleth',  // 'choropleth' or 'markers'
-    cumulative: false,
+    cumulativeByType: {},  // {event_type: bool} — per-type cumulative flag
     // Zoom scaling state
     baseZoom: 6,           // Reference zoom level for base radius
     zoomListenerAdded: false
@@ -141,10 +141,11 @@ async function checkEventsAvailable() {
         eventState.timeMax = summary.time_range[1];
         eventState.currentTime = eventState.timeMin;
 
-        // Initialize visibility from config defaults
+        // Initialize visibility and cumulative from config defaults
         const eventTypes = eventState.config?.event_types || {};
         for (const [type, config] of Object.entries(eventTypes)) {
             eventState.visibleEventTypes[type] = config.default_visible || false;
+            eventState.cumulativeByType[type] = false;
         }
 
         console.log('Events available:', summary);
@@ -295,10 +296,6 @@ function setupEventControls() {
                 </div>
             </div>
             <div id="aggregation-options">
-                <label>
-                    <input type="checkbox" id="cumulative-toggle">
-                    Cumulative
-                </label>
                 <select id="display-mode">
                     <option value="choropleth">Choropleth</option>
                     <option value="markers">Markers</option>
@@ -332,14 +329,21 @@ function populateEventTypeToggles() {
 
     for (const [type, config] of Object.entries(eventTypes)) {
         const checked = eventState.visibleEventTypes[type] ? 'checked' : '';
+        const cumulChecked = eventState.cumulativeByType[type] ? 'checked' : '';
         const color = config.color || '#666';
 
         html += `
-            <label class="event-type-toggle">
-                <input type="checkbox" data-event-type="${type}" ${checked}>
-                <span class="event-color-dot" style="background-color: ${color}"></span>
-                ${config.label || type}
-            </label>
+            <div class="event-type-row">
+                <label class="event-type-toggle">
+                    <input type="checkbox" data-event-type="${type}" ${checked}>
+                    <span class="event-color-dot" style="background-color: ${color}"></span>
+                    ${config.label || type}
+                </label>
+                <label class="event-cumul-label" title="Show cumulative total from start">
+                    <input type="checkbox" class="event-cumul-toggle" data-event-type="${type}" ${cumulChecked}>
+                    Cumul.
+                </label>
+            </div>
         `;
     }
 
@@ -396,10 +400,13 @@ function setupEventListeners() {
     document.getElementById('step-forward-btn')?.addEventListener('click', () => stepTime(1));
     document.getElementById('reset-btn')?.addEventListener('click', resetTime);
 
-    // Cumulative toggle
-    document.getElementById('cumulative-toggle')?.addEventListener('change', (e) => {
-        eventState.cumulative = e.target.checked;
-        updateEventLayers();
+    // Per-type cumulative toggles
+    document.querySelectorAll('.event-cumul-toggle').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const type = e.target.dataset.eventType;
+            eventState.cumulativeByType[type] = e.target.checked;
+            updateEventLayers();
+        });
     });
 
     // Display mode
@@ -495,19 +502,37 @@ async function updateEventLayers() {
 
         // Calculate time window
         const rollingWindow = eventState.config?.time?.rolling_window_days || 1;
-        const timeEnd   = eventState.currentTime;
-        const timeStart = eventState.cumulative ? eventState.timeMin : timeEnd - rollingWindow;
+        const timeEnd = eventState.currentTime;
 
-        // Single batch request for all visible event types at once
-        const params = new URLSearchParams({
-            time_start: timeStart,
-            time_end:   timeEnd,
-            cumulative: eventState.cumulative
-        });
-        visibleTypes.forEach(t => params.append('types', t));
+        // Group visible types by their per-type cumulative setting
+        const cumulTypes  = visibleTypes.filter(t =>  eventState.cumulativeByType[t]);
+        const rollingTypes = visibleTypes.filter(t => !eventState.cumulativeByType[t]);
 
-        const response = await fetch(`/api/events/geojson/batch?${params}`);
-        const allGeojson = await response.json();
+        const allGeojson = {};
+
+        // Fetch cumulative types (time_start = timeMin)
+        if (cumulTypes.length > 0) {
+            const params = new URLSearchParams({
+                time_start: eventState.timeMin,
+                time_end:   timeEnd,
+                cumulative: 'true'
+            });
+            cumulTypes.forEach(t => params.append('types', t));
+            const resp = await fetch(`/api/events/geojson/batch?${params}`);
+            Object.assign(allGeojson, await resp.json());
+        }
+
+        // Fetch rolling (non-cumulative) types (time_start = timeEnd - rollingWindow)
+        if (rollingTypes.length > 0) {
+            const params = new URLSearchParams({
+                time_start: timeEnd - rollingWindow,
+                time_end:   timeEnd,
+                cumulative: 'false'
+            });
+            rollingTypes.forEach(t => params.append('types', t));
+            const resp = await fetch(`/api/events/geojson/batch?${params}`);
+            Object.assign(allGeojson, await resp.json());
+        }
 
         // Hide all existing markers so that geo_units absent from this
         // frame's data are invisible (they are not removed — just transparent).
