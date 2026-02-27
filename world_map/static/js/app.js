@@ -709,13 +709,28 @@ function buildDistributionSection(section, data) {
         return '';
     }
 
-    const total = Object.values(distribution).reduce((a, b) => a + b, 0);
-    if (total === 0) return '';
+    // Denominator: explicit field (e.g. population) or sum of values
+    let denominator;
+    if (section.denominator_field) {
+        denominator = getFieldValue(data, section.denominator_field) || 0;
+    } else {
+        denominator = Object.values(distribution).reduce((a, b) => a + b, 0);
+    }
+    if (denominator === 0) return '';
+
+    // Optional sort by count descending
+    let entries = Object.entries(distribution);
+    if (section.sort_by === 'count') {
+        entries = entries.slice().sort((a, b) => b[1] - a[1]);
+    }
 
     let html = '<div class="bar-chart">';
 
-    for (const [group, count] of Object.entries(distribution)) {
-        const percentage = (count / total * 100).toFixed(1);
+    for (const [group, count] of entries) {
+        const percentage = (count / denominator * 100).toFixed(1);
+        const valueText = section.show_percentage
+            ? `${count.toLocaleString()} (${percentage}%)`
+            : count.toLocaleString();
 
         html += `
             <div class="bar-item">
@@ -723,7 +738,7 @@ function buildDistributionSection(section, data) {
                 <div class="bar-wrapper">
                     <div class="bar-fill" style="width: ${percentage}%"></div>
                 </div>
-                <div class="bar-value">${count.toLocaleString()}</div>
+                <div class="bar-value">${valueText}</div>
             </div>
         `;
     }

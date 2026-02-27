@@ -71,7 +71,6 @@ geo_unit_panel:
       type: "distribution"
       enabled: true
       source: "age_distribution"
-      chart_type: "bar"
       show_percentage: true
 
     # Sex Distribution Chart
@@ -80,7 +79,16 @@ geo_unit_panel:
       type: "distribution"
       enabled: true
       source: "sex_distribution"
-      chart_type: "bar"
+      show_percentage: true
+
+    # Activity Breakdown
+    - name: "activity_breakdown"
+      title: "Activity Breakdown"
+      type: "distribution"
+      enabled: true
+      source: "activity_counts"
+      denominator_field: "population"
+      sort_by: "count"
       show_percentage: true
 
     # Venue Types Breakdown
@@ -97,7 +105,7 @@ geo_unit_panel:
     - name: "venue_list"
       title: "Venues"
       type: "list"
-      enabled: true
+      enabled: false
       source: "venue_details"
       max_items: 50
       fields:
