@@ -29,6 +29,14 @@ Usage:
 
     # Allow a larger file (default max embedded data: 80 MB)
     python world_map/export_static.py --world-file world.h5 --output map.html --max-size-mb 200
+
+    # Embed event visualisation data (simulation_events.h5)
+    python world_map/export_static.py --world-file world.h5 --output map.html \\
+        --events-file simulation_events.h5
+
+    # Events with a custom size cap (default: 50 MB)
+    python world_map/export_static.py --world-file world.h5 --output map.html \\
+        --events-file simulation_events.h5 --events-max-size-mb 100
 """
 
 import sys
@@ -193,6 +201,120 @@ def _collect_data(flask_app, world, geography_units_all,
 
 
 # ---------------------------------------------------------------------------
+# Events data collection
+# ---------------------------------------------------------------------------
+
+def _collect_events_data(events_path: str, world, event_config: dict,
+                         max_events_bytes: int) -> dict:
+    """Pre-bake all event rolling counts for every time step.
+
+    Returns a dict with keys:
+        events_available   bool
+        events_summary     {available_types, counts, time_range}
+        events_timeseries  {time_min, time_max, step, rolling_window, types}
+        geo_unit_lookup    {str(geo_unit_id): {c: [lat,lon], p: population}}
+    """
+    import sys as _sys
+    import os as _os
+    # event_loader lives in the world_map/ dir which is already on sys.path
+    from event_loader import load_events_with_world
+
+    print(f"  Loading events from {events_path} ...", flush=True)
+    loader = load_events_with_world(events_path, world)
+
+    time_min, time_max = loader.get_time_range()
+    available_types = loader.get_available_event_types()
+
+    if not available_types:
+        print("  No events found in file.")
+        return {'events_available': False}
+
+    print(f"  Available types: {available_types}")
+    print(f"  Time range: {time_min:.1f} – {time_max:.1f}")
+
+    time_cfg = event_config.get('time', {})
+    step = float(time_cfg.get('aggregation_window', 1.0))
+    rolling_window = float(time_cfg.get('rolling_window_days', 1.0))
+
+    # Build list of step midpoints
+    steps: list[float] = []
+    t = time_min
+    while t <= time_max + step * 0.01:
+        steps.append(round(t, 6))
+        t += step
+    print(f"  Steps: {len(steps)} (step={step}, rolling_window={rolling_window})")
+
+    events_types_data: dict = {}
+    total_bytes: int = 0
+
+    for etype in available_types:
+        print(f"  Baking '{etype}' ({len(steps)} steps)...", end='', flush=True)
+        rolling_steps: list[dict] = []
+
+        for step_time in steps:
+            t_start = step_time - rolling_window
+            t_end = step_time
+            aggregated = loader.aggregate_events_by_geo_unit(etype, t_start, t_end, 'count')
+            # Sparse dict: only geo_units with >0 events
+            step_dict = {
+                str(gid): int(info['count'])
+                for gid, info in aggregated.items()
+                if info.get('count', 0) > 0
+            }
+            rolling_steps.append(step_dict)
+
+        df = loader.get_daily_events_timeseries(etype)
+        daily = df.to_dict(orient='records')
+
+        events_types_data[etype] = {
+            'rolling': rolling_steps,
+            'daily': daily,
+        }
+        sz = _json_size(events_types_data[etype])
+        total_bytes += sz
+        print(f" {sz // 1024} KB")
+
+        if total_bytes > max_events_bytes:
+            print(
+                f"  Warning: events data exceeds limit "
+                f"({total_bytes // (1024 * 1024)} MB). "
+                f"Stopping after '{etype}'."
+            )
+            break
+
+    # Build geo_unit_lookup: {str(geo_unit_id): {c: [lat,lon], p: population}}
+    geo_unit_lookup: dict = {}
+    for gid, coords in loader.geo_unit_coords.items():
+        entry: dict = {'c': list(coords)}
+        if gid in loader.geo_unit_population:
+            entry['p'] = int(loader.geo_unit_population[gid])
+        geo_unit_lookup[str(gid)] = entry
+
+    events_summary = {
+        'available_types': available_types,
+        'counts': {k: int(v) for k, v in loader.get_event_summary().items()},
+        'time_range': [time_min, time_max],  # array — JS uses [0] and [1]
+    }
+
+    events_timeseries = {
+        'time_min': time_min,
+        'time_max': time_max,
+        'step': step,
+        'rolling_window': rolling_window,
+        'types': events_types_data,
+    }
+
+    print(f"  Total events data: {total_bytes / (1024 * 1024):.1f} MB")
+
+    return {
+        'events_available': True,
+        'events_summary': events_summary,
+        'events_timeseries': events_timeseries,
+        'geo_unit_lookup': geo_unit_lookup,
+    }
+
+
+# ---------------------------------------------------------------------------
 # HTML assembly
 # ---------------------------------------------------------------------------
 
@@ -243,8 +365,6 @@ _FETCH_INTERCEPTOR = r"""(function () {
         if (pu === '/api/world/statistics')     return okResponse(d.world_statistics);
         if (pu === '/api/geography/levels')     return okResponse(d.geography_levels);
         if (pu === '/api/events/config')        return okResponse(d.events_config);
-        if (pu === '/api/events/summary')       return notFound('Events not available in static export.');
-        if (pu === '/api/events/geojson/batch') return notFound('Events not available in static export.');
 
         // ---- /api/geography/<level>  (not /api/geography/levels) -----------
         m = pu.match(/^\/api\/geography\/([^\/]+)$/);
@@ -277,9 +397,69 @@ _FETCH_INTERCEPTOR = r"""(function () {
             return notFound('Individual person details are not available in static export.');
         }
 
-        // ---- Event endpoints (require live server) -------------------------
+        // ---- Event endpoints -----------------------------------------------
         if (pu.startsWith('/api/events/')) {
-            return notFound('Event data requires a live server. Not available in static export.');
+            if (!d.events_available) {
+                return notFound('Event data not available in this static export.');
+            }
+            if (pu === '/api/events/summary') {
+                return okResponse(d.events_summary);
+            }
+            // /api/events/timeseries/<type>
+            m = pu.match(/^\/api\/events\/timeseries\/(.+)$/);
+            if (m) {
+                var tsType = dec(m[1]);
+                var tsData = d.events_timeseries.types[tsType];
+                if (!tsData) return notFound('Event type "' + tsType + '" not found.');
+                return okResponse({ event_type: tsType, data: tsData.daily || [] });
+            }
+            // /api/events/geojson/batch
+            if (pu === '/api/events/geojson/batch') {
+                var ts = d.events_timeseries;
+                var glu = d.geo_unit_lookup;
+                var qstr = (qi >= 0) ? url.slice(qi + 1) : '';
+                var qpBatch = new URLSearchParams(qstr);
+                var batchTypes = qpBatch.getAll('types');
+                var batchTimeEnd = parseFloat(qpBatch.get('time_end') || String(ts.time_max));
+                var batchMethod = qpBatch.get('method') || 'count';
+                var batchCumul = (qpBatch.get('cumulative') || 'false').toLowerCase() === 'true';
+                var batchStepIdx = Math.round((batchTimeEnd - ts.time_min) / ts.step);
+                var batchResults = {};
+                for (var bi = 0; bi < batchTypes.length; bi++) {
+                    var bType = batchTypes[bi];
+                    var bData = ts.types[bType];
+                    if (!bData || !bData.rolling || !bData.rolling.length) {
+                        batchResults[bType] = { type: 'FeatureCollection', features: [], properties: { event_type: bType, total_count: 0, time_start: batchTimeEnd - ts.rolling_window, time_end: batchTimeEnd, method: batchMethod, cumulative: batchCumul } };
+                        continue;
+                    }
+                    var bMaxIdx = bData.rolling.length - 1;
+                    var bIdx = Math.max(0, Math.min(bMaxIdx, batchStepIdx));
+                    var bCounts = {};
+                    if (batchCumul) {
+                        // Sum rolling[0..bIdx] on the fly for cumulative display
+                        for (var bsi = 0; bsi <= bIdx; bsi++) {
+                            var bStep = bData.rolling[bsi];
+                            for (var bgid in bStep) { bCounts[bgid] = (bCounts[bgid] || 0) + bStep[bgid]; }
+                        }
+                    } else {
+                        bCounts = bData.rolling[bIdx] || {};
+                    }
+                    var bFeats = [];
+                    var bTotal = 0;
+                    for (var bgid2 in bCounts) {
+                        var bCount = bCounts[bgid2];
+                        if (!bCount) continue;
+                        var bLu = glu[bgid2];
+                        if (!bLu) continue;
+                        var bRate = (batchMethod === 'rate' && bLu.p) ? (bCount / bLu.p) * 100000 : 0;
+                        bFeats.push({ type: 'Feature', properties: { geo_unit_id: parseInt(bgid2), count: bCount, rate: bRate }, geometry: { type: 'Point', coordinates: [bLu.c[1], bLu.c[0]] } });
+                        bTotal += bCount;
+                    }
+                    batchResults[bType] = { type: 'FeatureCollection', features: bFeats, properties: { event_type: bType, time_start: batchTimeEnd - ts.rolling_window, time_end: batchTimeEnd, method: batchMethod, cumulative: batchCumul, total_count: bTotal } };
+                }
+                return okResponse(batchResults);
+            }
+            return notFound('Event endpoint "' + pu + '" not available in static export.');
         }
 
         // ---- Fall through to real fetch (e.g. CDN resources) ---------------
@@ -481,6 +661,22 @@ def main() -> None:
         '--title', default='World Map Visualization',
         help='HTML page title (default: "World Map Visualization")',
     )
+    parser.add_argument(
+        '--events-file',
+        metavar='EVENTS_H5',
+        help=(
+            'Path to a simulation_events.h5 file. '
+            'When provided, event visualisation data is pre-baked into the HTML.'
+        ),
+    )
+    parser.add_argument(
+        '--events-max-size-mb', type=float, default=50.0,
+        metavar='MB',
+        help=(
+            'Maximum size of embedded events JSON data in MB (default: 50). '
+            'Event types are dropped once the limit is reached.'
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -547,7 +743,8 @@ def main() -> None:
         }
 
     # ---- [2] Collect API data ------------------------------------------------
-    print(f'\n[2/5] Collecting world data (max {args.max_size_mb:.0f} MB) ...')
+    n_steps = '6' if args.events_file else '5'
+    print(f'\n[2/{n_steps}] Collecting world data (max {args.max_size_mb:.0f} MB) ...')
 
     from app import initialize_app  # noqa: E402 — must be after sys.path setup
 
@@ -569,6 +766,21 @@ def main() -> None:
         geography_units_all,
         max_size_bytes,
     )
+
+    # ---- [2b] Collect events data (optional) ---------------------------------
+    if args.events_file:
+        print(f'\n[2b/5] Collecting events data from {args.events_file} ...')
+        events_cfg = data.get('events_config', {})
+        max_events_bytes = int(args.events_max_size_mb * 1024 * 1024)
+        events_data = _collect_events_data(
+            args.events_file, world, events_cfg, max_events_bytes
+        )
+        # Merge into the main data dict (overrides events_available=False set earlier)
+        data.update(events_data)
+        if events_data.get('events_available'):
+            print(f"  Events embedded successfully.")
+        else:
+            print(f"  No usable events found — map will show 'Events not available'.")
 
     # ---- [3] Read static files -----------------------------------------------
     print('\n[3/5] Reading static files ...')

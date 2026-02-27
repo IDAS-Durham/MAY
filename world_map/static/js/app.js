@@ -346,38 +346,6 @@ function buildSlimStatsHtml(slim) {
         html += `</div>`;
     }
 
-    // Person property distributions
-    if (slim.person_properties) {
-        const props = slim.person_properties;
-        for (const [propName, propStats] of Object.entries(props)) {
-            if (!propStats || propStats.type === 'error') continue;
-            html += `<div class="stat-item" style="flex-direction:column;align-items:flex-start;gap:3px;padding-bottom:8px;">
-                <span class="stat-label" style="font-weight:600;color:#495057;margin-bottom:3px;">${propName.charAt(0).toUpperCase() + propName.slice(1)}</span>`;
-            if (propStats.type === 'numeric') {
-                html += `<div style="display:flex;justify-content:space-between;width:100%;font-size:0.8rem;">
-                    <span class="stat-label">Mean / Median</span>
-                    <span class="stat-value">${propStats.mean} / ${propStats.median}</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;width:100%;font-size:0.8rem;">
-                    <span class="stat-label">Range</span>
-                    <span class="stat-value">${propStats.min} – ${propStats.max}</span>
-                </div>`;
-            } else if (propStats.type === 'categorical' && propStats.top_values) {
-                const entries = Object.entries(propStats.top_values).sort((a, b) => b[1].count - a[1].count).slice(0, 6);
-                for (const [val, info] of entries) {
-                    html += `<div style="display:flex;justify-content:space-between;width:100%;font-size:0.8rem;">
-                        <span class="stat-label">${val}</span>
-                        <span class="stat-value">${info.pct}%</span>
-                    </div>`;
-                }
-                if (propStats.unique_count > 6) {
-                    html += `<div style="font-size:0.75rem;color:#6c757d;">(${propStats.unique_count} unique values)</div>`;
-                }
-            }
-            html += `</div>`;
-        }
-    }
-
     return html;
 }
 
