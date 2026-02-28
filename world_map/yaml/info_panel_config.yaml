@@ -126,7 +126,7 @@ geo_unit_panel:
     - name: "people"
       title: "People"
       type: "people"
-      enabled: true
+      enabled: false
       show_count: true
       show_button: true
       button_text: "View People List"

@@ -14,6 +14,7 @@ const state = {
     showPopulation: true,
     mapConfig: null,
     panelConfig: null,  // Info panel configuration
+    geoUnitNameToId: {},  // {unit_name: integer_geo_unit_id} — for event correlation
     // Zoom scaling state
     zoomListenerAdded: false,
     baseZoom: 6
@@ -220,8 +221,8 @@ function setupEventListeners() {
         document.getElementById('info-panel').classList.add('hidden');
     });
 
-    // Layer controls
-    document.getElementById('show-population').addEventListener('change', (e) => {
+    // Layer controls (checkbox removed from UI; geo units always visible)
+    document.getElementById('show-population')?.addEventListener('change', (e) => {
         state.showPopulation = e.target.checked;
         if (state.selectedLevel) {
             loadGeographyLevel(state.selectedLevel);
@@ -457,6 +458,14 @@ async function loadGeographyLevel(level) {
             }
         }).addTo(state.map);
 
+        // Build name → integer id lookup so event data can be correlated on click
+        state.geoUnitNameToId = {};
+        geojson.features.forEach(f => {
+            if (f.properties.id !== undefined) {
+                state.geoUnitNameToId[f.properties.name] = f.properties.id;
+            }
+        });
+
         // Fit map to bounds
         if (geojson.features.length > 0) {
             state.map.fitBounds(state.layers.geography.getBounds());
@@ -578,7 +587,15 @@ async function showUnitDetails(unitName) {
         const content = document.getElementById('info-content');
 
         // Build panel from config
-        const html = buildDetailPanel(unit, 'geo_unit_panel');
+        let html = buildDetailPanel(unit, 'geo_unit_panel');
+
+        // Append event stats card if events visualisation is active
+        if (typeof getEventStatsHtmlForUnit === 'function') {
+            const geoUnitId = state.geoUnitNameToId[unitName] ?? unit.id;
+            if (geoUnitId !== undefined) {
+                html += await getEventStatsHtmlForUnit(geoUnitId);
+            }
+        }
 
         content.innerHTML = html;
         panel.classList.remove('hidden');

@@ -301,6 +301,75 @@
     color: #667eea;
 }
 
+/* Event stats card shown inside the geo-unit info panel */
+.evt-stats-panel {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 2px solid #667eea;
+}
+
+.evt-stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #495057;
+    margin-bottom: 6px;
+}
+
+.evt-stats-day {
+    font-size: 0.8rem;
+    font-weight: normal;
+    color: #667eea;
+}
+
+.evt-stats-col-labels {
+    display: grid;
+    grid-template-columns: 16px 1fr auto auto;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: #6c757d;
+    text-align: right;
+    margin-bottom: 3px;
+    padding: 0 2px;
+}
+
+.evt-stat-row {
+    display: grid;
+    grid-template-columns: 16px 1fr auto auto;
+    gap: 6px;
+    align-items: center;
+    padding: 5px 2px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.88rem;
+}
+
+.evt-stat-row:last-child {
+    border-bottom: none;
+}
+
+.evt-stat-label {
+    color: #495057;
+}
+
+.evt-stat-val {
+    text-align: right;
+    font-weight: 600;
+    color: #343a40;
+    white-space: nowrap;
+}
+
+.evt-stat-cumul {
+    color: #667eea;
+}
+
+.evt-stat-unit {
+    font-weight: normal;
+    font-size: 0.75em;
+    color: #6c757d;
+}
+
 /* Animation for updates */
 @keyframes pulse {
     0% { opacity: 0.6; }

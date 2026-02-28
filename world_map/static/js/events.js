@@ -629,15 +629,8 @@ function _updateOrCreateLayer(eventType, geojson, typeConfig) {
             cache[geoId].setRadius(scaledRadius);
             cache[geoId].options.baseRadius = baseRadius;
         } else {
-            // First time we see this geo_unit — create a new marker and cache it.
-            let popupHtml = `<div class="popup-title">Geo Unit ${geoId}</div>`;
-            if (popupConfig.show_count !== false) {
-                popupHtml += `<div class="popup-info"><strong>Count:</strong> ${count.toLocaleString()}</div>`;
-            }
-            if (popupConfig.show_rate !== false && feature.properties.rate) {
-                popupHtml += `<div class="popup-info"><strong>Rate:</strong> ${feature.properties.rate.toFixed(1)} per 100k</div>`;
-            }
-
+            // First time we see this geo_unit — create a non-interactive marker.
+            // interactive: false lets clicks pass through to the geo_unit marker below.
             const marker = L.circleMarker([lat, lon], {
                 radius:      scaledRadius,
                 baseRadius:  baseRadius,
@@ -645,9 +638,9 @@ function _updateOrCreateLayer(eventType, geojson, typeConfig) {
                 color:       borderColor,
                 weight:      borderWidth,
                 opacity:     borderOpacity,
-                fillOpacity: fillOpacity
+                fillOpacity: fillOpacity,
+                interactive: false
             });
-            marker.bindPopup(popupHtml);
             cache[geoId] = marker;
             layerGroup.addLayer(marker);
         }
@@ -723,23 +716,9 @@ function createChoroplethLayer(geojson, typeConfig) {
                 color: borderColor,
                 weight: borderWidth,
                 opacity: 0.8,
-                fillOpacity: fillOpacity
+                fillOpacity: fillOpacity,
+                interactive: false  // clicks pass through to geo_unit marker
             });
-        },
-        onEachFeature: (feature, layer) => {
-            const props = feature.properties;
-            const popupConfig = eventState.config?.popup || {};
-
-            let popupHtml = `<div class="popup-title">Geo Unit ${props.geo_unit_id}</div>`;
-
-            if (popupConfig.show_count !== false) {
-                popupHtml += `<div class="popup-info"><strong>Count:</strong> ${props.count.toLocaleString()}</div>`;
-            }
-            if (popupConfig.show_rate !== false && props.rate) {
-                popupHtml += `<div class="popup-info"><strong>Rate:</strong> ${props.rate.toFixed(1)} per 100k</div>`;
-            }
-
-            layer.bindPopup(popupHtml);
         }
     });
 }
@@ -844,23 +823,9 @@ function createMarkerLayer(geojson, typeConfig) {
                 color: borderColor,
                 weight: borderWidth,
                 opacity: borderOpacity,
-                fillOpacity: fillOpacity
+                fillOpacity: fillOpacity,
+                interactive: false  // clicks pass through to geo_unit marker
             });
-        },
-        onEachFeature: (feature, layer) => {
-            const props = feature.properties;
-            const popupConfig = eventState.config?.popup || {};
-
-            let popupHtml = `<div class="popup-title">Geo Unit ${props.geo_unit_id}</div>`;
-
-            if (popupConfig.show_count !== false) {
-                popupHtml += `<div class="popup-info"><strong>Count:</strong> ${props.count.toLocaleString()}</div>`;
-            }
-            if (popupConfig.show_rate !== false && props.rate) {
-                popupHtml += `<div class="popup-info"><strong>Rate:</strong> ${props.rate.toFixed(1)} per 100k</div>`;
-            }
-
-            layer.bindPopup(popupHtml);
         }
     });
 }
@@ -975,6 +940,98 @@ function updateEventLegend() {
     };
 
     legend.addTo(state.map);
+}
+
+// =============================================================================
+// EVENT STATS FOR A SPECIFIC GEO UNIT
+// =============================================================================
+
+/**
+ * Returns an HTML card showing rolling and cumulative event counts for a given
+ * geo_unit_id, or '' if events are not active / no visible types.
+ * Called by app.js when the user clicks a geo unit marker.
+ */
+async function getEventStatsHtmlForUnit(geoUnitId) {
+    // Guard: only show when events are enabled and the checkbox is checked
+    if (!eventState.enabled) return '';
+    const enableToggle = document.getElementById('enable-events');
+    if (!enableToggle?.checked) return '';
+
+    const visibleTypes = Object.entries(eventState.visibleEventTypes)
+        .filter(([_, visible]) => visible)
+        .map(([type]) => type);
+    if (visibleTypes.length === 0) return '';
+
+    const timeEnd = eventState.currentTime;
+    const rollingWindow = eventState.config?.time?.rolling_window_days || 1;
+    const windowLabel = rollingWindow === 1 ? 'day' : `${rollingWindow} days`;
+
+    try {
+        // Two concurrent batch requests: rolling window and cumulative total
+        const rollingParams = new URLSearchParams({
+            time_start: timeEnd - rollingWindow,
+            time_end:   timeEnd,
+            cumulative: 'false'
+        });
+        visibleTypes.forEach(t => rollingParams.append('types', t));
+
+        const cumulParams = new URLSearchParams({
+            time_start: eventState.timeMin,
+            time_end:   timeEnd,
+            cumulative: 'true'
+        });
+        visibleTypes.forEach(t => cumulParams.append('types', t));
+
+        const [rollingResp, cumulResp] = await Promise.all([
+            fetch(`/api/events/geojson/batch?${rollingParams}`),
+            fetch(`/api/events/geojson/batch?${cumulParams}`)
+        ]);
+
+        const rollingData = await rollingResp.json();
+        const cumulData   = await cumulResp.json();
+        const geoIdInt    = parseInt(geoUnitId);
+
+        let rows = '';
+        for (const type of visibleTypes) {
+            const typeConfig   = eventState.config?.event_types?.[type] || {};
+            const label        = typeConfig.label || type;
+            const color        = typeConfig.color || typeConfig.marker?.color || '#666';
+
+            const rollingCount = rollingData[type]?.features
+                ?.find(f => f.properties.geo_unit_id === geoIdInt)
+                ?.properties?.count ?? 0;
+
+            const cumulCount = cumulData[type]?.features
+                ?.find(f => f.properties.geo_unit_id === geoIdInt)
+                ?.properties?.count ?? 0;
+
+            rows += `
+                <div class="evt-stat-row">
+                    <span class="event-color-dot" style="background-color:${color}"></span>
+                    <span class="evt-stat-label">${label}</span>
+                    <span class="evt-stat-val" title="Events in current ${windowLabel} window">${rollingCount.toLocaleString()}<span class="evt-stat-unit">/${windowLabel}</span></span>
+                    <span class="evt-stat-val evt-stat-cumul" title="Cumulative total from simulation start">${cumulCount.toLocaleString()}<span class="evt-stat-unit"> total</span></span>
+                </div>`;
+        }
+
+        return `
+            <div class="evt-stats-panel">
+                <div class="evt-stats-header">
+                    <span>Events</span>
+                    <span class="evt-stats-day">Day ${timeEnd.toFixed(1)}</span>
+                </div>
+                <div class="evt-stats-col-labels">
+                    <span></span><span></span>
+                    <span title="Current ${windowLabel} window">/${windowLabel}</span>
+                    <span title="From simulation start">total</span>
+                </div>
+                ${rows}
+            </div>`;
+
+    } catch (err) {
+        console.error('Error fetching event stats for unit:', err);
+        return '';
+    }
 }
 
 // =============================================================================

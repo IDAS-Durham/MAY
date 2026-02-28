@@ -522,15 +522,6 @@ def _build_html(
                 <div id="geography-levels"></div>
             </div>
             <div class="sidebar-section">
-                <h3>Layers</h3>
-                <div id="layer-controls">
-                    <label>
-                        <input type="checkbox" id="show-population" checked>
-                        Population Markers
-                    </label>
-                </div>
-            </div>
-            <div class="sidebar-section">
                 <h3>Statistics</h3>
                 <div id="world-stats"></div>
             </div>
