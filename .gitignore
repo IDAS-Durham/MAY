@@ -83,6 +83,7 @@ friendships.csv
 1911_data/
 *.zip
 june_analysis/
+*.html
 
 # Debug/Temp scripts
 debug_*.py
