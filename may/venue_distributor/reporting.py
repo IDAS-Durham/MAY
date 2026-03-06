@@ -63,9 +63,10 @@ class ReportingManager:
         
         with open(output_path, 'w', newline='') as f:
             writer = csv.writer(f)
+            subset_label = self.distributor.subset_key or 'person'
             writer.writerow([
-                'venue_id', 'venue_name', 'geo_unit', 'latitude', 'longitude',
-                'student_count', 'avg_age', 'min_age', 'max_age',
+                'venue_id', 'venue_name', 'BTCode', 'geo_unit', 'latitude', 'longitude',
+                f'{subset_label}_count', 'avg_age', 'min_age', 'max_age',
                 'capacity', 'remaining_capacity'
             ])
             
@@ -96,16 +97,19 @@ class ReportingManager:
                 capacity = self.distributor._get_venue_capacity(venue)
                 remaining = self.distributor._get_remaining_capacity(venue)
                 
+                btcode = venue.properties.get('BTCode', '') if hasattr(venue, 'properties') else ''
+                
                 writer.writerow([
-                    venue.id, venue.name, geo_name, lat, lon,
+                    venue.id, venue.name, btcode, geo_name, lat, lon,
                     count, avg_age, min_age, max_age,
                     capacity, remaining
                 ])
         
+        subset_label = self.distributor.subset_key or 'person'
         logger.info(f"Exported venue summary to {output_path}")
-        logger.info(f"  - Venues with students: {len(venues) - empty_venues}")
+        logger.info(f"  - Venues with {subset_label}s: {len(venues) - empty_venues}")
         logger.info(f"  - Empty venues: {empty_venues}")
-        logger.info(f"  - Total students allocated: {total_allocated}")
+        logger.info(f"  - Total {subset_label}s allocated: {total_allocated}")
         
         # Diagnostic: compare counting methods
         people_with_activity = 0

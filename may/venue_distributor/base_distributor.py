@@ -298,9 +298,10 @@ class BaseDistributor:
                     # Directly use residence.id if it's an integer, otherwise use mapping
                     self.population_arrays[attr] = np.array([p.residence.id if p.residence else -1 for p in people], dtype=np.int32)
                 else:
-                    # General nested path
+                    # General path (properties, nested, etc.)
+                    # Must use _get_person_attribute to check person.properties
                     self.population_arrays[attr] = np.array([
-                        mapping.get(self._get_nested_value_with_dict_support(p, parts), 0) 
+                        mapping.get(self._get_person_attribute(attr, p), 0) 
                         for p in people
                     ], dtype=np.int32)
 

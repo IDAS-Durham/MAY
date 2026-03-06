@@ -101,3 +101,4 @@ class FallbackManager:
         logger.info(f"  Fallback (assign_closest): {allocated_count}/{len(people)} placed")
         
         return [p for p in people if self.distributor._get_person_location(p) is None]
+

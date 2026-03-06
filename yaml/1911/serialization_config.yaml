@@ -31,21 +31,25 @@ venues:
       properties: ["BTCode", "HID"]
     pub:
       properties: ["BTCode", "HID"]
-    farm:
-      properties: ["BTCode", "HID"]
-    business:
-      properties: ["BTCode", "HID"]
-    hotel_inn:
-      properties: ["BTCode", "HID"]
     school:
       properties: ["BTCode", "HID"]
     church:
       properties: ["BTCode", "HID"]
-    barrack:
+    army_building:
       properties: ["BTCode", "HID"]
     medical:
       properties: ["BTCode", "HID"]
     prison:
+      properties: ["BTCode", "HID"]
+    workplace_sales:
+      properties: ["BTCode", "HID"]
+    workplace_service:
+      properties: ["BTCode", "HID"]
+    workplace_production:
+      properties: ["BTCode", "HID"]
+    workplace_education:
+      properties: ["BTCode", "HID"]
+    workplace_mine:
       properties: ["BTCode", "HID"]
 
 # =============================================

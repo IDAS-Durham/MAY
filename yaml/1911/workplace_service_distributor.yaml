@@ -1,0 +1,34 @@
+# Workplace Distributor — Service (Occode 3 → BTCode 3)
+# 3,652 venues, 51,334 eligible workers (~14.0 per venue)
+venue_type: "workplace_service"
+activity_map_key: "primary_activity"
+subset_key: "worker"
+
+settings:
+  verbose: true
+  use_spatial_index: false
+
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "MGU"
+  batch_geo_level: "SGU"
+  consider_by: "geo_unit"
+
+eligibility:
+  global_filters:
+    - attribute: "Occode"
+      type: "categorical"
+      values: [3]
+
+allocation:
+  track_capacity: true
+  when_full: "exclude"
+  fixed_capacity: 15           # 51,276 workers ÷ 3,652 venues ≈ 14.0
+  strategy: "closest_balanced"
+
+fallback:
+  strategy: "skip"
+
+exports:
+  venue_summary: "output/1911/workplace_service_venue_summary.csv"
+  unallocated_report: "output/1911/workplace_service_unallocated.csv"

@@ -1,0 +1,34 @@
+# Workplace Distributor — Production (Occode 5 → BTCode 5)
+# 8,172 venues, 216,042 eligible workers (~26.4 per venue)
+venue_type: "workplace_production"
+activity_map_key: "primary_activity"
+subset_key: "worker"
+
+settings:
+  verbose: true
+  use_spatial_index: false
+
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "MGU"
+  batch_geo_level: "SGU"
+  consider_by: "geo_unit"
+
+eligibility:
+  global_filters:
+    - attribute: "Occode"
+      type: "categorical"
+      values: [5]
+
+allocation:
+  track_capacity: true
+  when_full: "exclude"
+  fixed_capacity: 27           # 215,968 workers ÷ 8,172 venues ≈ 26.4
+  strategy: "closest_balanced"
+
+fallback:
+  strategy: "skip"
+
+exports:
+  venue_summary: "output/1911/workplace_production_venue_summary.csv"
+  unallocated_report: "output/1911/workplace_production_unallocated.csv"

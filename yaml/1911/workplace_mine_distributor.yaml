@@ -1,0 +1,33 @@
+# Workplace Distributor — Mines (Occode 50 → BTCode 50)
+# 283 venues, 154,237 eligible workers (~545 per venue)
+venue_type: "workplace_mine"
+activity_map_key: "primary_activity"
+subset_key: "worker"
+
+settings:
+  verbose: true
+  use_spatial_index: true
+
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "SGU"
+  batch_geo_level: "SGU"
+  consider_by: "count"
+  count: 50
+
+eligibility:
+  global_filters:
+    - attribute: "Occode"
+      type: "categorical"
+      values: [50]
+
+allocation:
+  track_capacity: false
+  strategy: "closest_balanced"
+
+fallback:
+  strategy: "skip"
+
+exports:
+  venue_summary: "output/1911/workplace_mine_venue_summary.csv"
+  unallocated_report: "output/1911/workplace_mine_unallocated.csv"

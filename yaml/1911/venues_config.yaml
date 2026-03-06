@@ -74,3 +74,37 @@ venue_types:
     filter_values: ["N"]
     is_residence: true
     subset_key: "resident"
+
+  # Workplace subtypes — each gets its own spatial index for efficient nearest-venue search
+  # BTCode 1 (Professional): 1,579 venues, 0 people → excluded
+  # BTCode 4 (Agricultural): 0 venues → excluded
+  workplace_sales:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["2"]
+
+  workplace_service:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["3"]
+
+  workplace_production:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["5"]
+
+  workplace_education:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["12"]
+
+  workplace_mine:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["50"]
+

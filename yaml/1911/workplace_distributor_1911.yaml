@@ -1,24 +1,12 @@
-# ============================================================================
-# Educational Venue Distributor for Durham 1911
-# ============================================================================
-# This file configures how eligible people are assigned to school venues.
-# The allocation flows through 5 phases in order:
-#   1. Special cases (e.g., boarding school students)
-#   2. Eligibility filtering (global_filters below)
-#   3. Normal allocation (allocate_by_geo_unit using the strategy below)
-#   4. Fallback for anyone still unallocated
-#   5. Exports (CSV reports)
-# ============================================================================
-
 # --- IDENTITY ---
 # These link the distributor to venue objects and person activity maps.
 #   venue_type:       Which venue type from the world to distribute to.
 #   activity_map_key: The top-level key added to person.activity_map (e.g., "primary_activity").
 #   subset_key:       The subset name within the venue (e.g., venue.subsets["student"]).
 #   activity_type:    The nested key under activity_map_key (e.g., person.activity_map["primary_activity"]["education"]).
-venue_type: "school"
+venue_type: "workplace"
 activity_map_key: "primary_activity"
-subset_key: "student"
+subset_key: "worker"
 
 # --- SETTINGS ---
 #   verbose:           If true, logs detailed per-SGU allocation stats.
@@ -62,14 +50,30 @@ venue_selection:
 #       type:      "numerical" (min/max range) or "categorical" (value/values match)
 #       min/max:   Inclusive bounds for numerical filters.
 #       value:     Single match for categorical. values: list of matches.
-#
-#   Current filter: Occode 12-13 (scholars in 1911 census).
-#   People with NaN/missing Occode are correctly excluded.
+
 eligibility:
   global_filters:
     - attribute: "Occode"
       type: "categorical"
-      values: [13]
+      values: [2, 3, 5, 12, 50]
+      # Excluded: Occode 1 (Professional) — 0 people in data
+      # Excluded: Occode 4 (Agricultural) — 0 venues with BTCode 4
+
+  # --- ATTRIBUTE MATCHING ---
+  # Match person's Occode to venue's BTCode so workers go to the right type of workplace.
+  # Keys = venue BTCode → Values = list of person Occode values that are allowed there.
+  attributes:
+    - name: "Occode"
+      type: "categorical"
+      venue_column: "BTCode"
+      case_sensitive: false
+      matching_rules:
+        "2": ["2"]        # BTCode 2 venues ← Sales workers
+        "3": ["3"]        # BTCode 3 venues ← Service workers
+        "5": ["5"]        # BTCode 5 venues ← Production workers
+        "12": ["12"]      # BTCode 12 venues ← Education (Other)
+        "50": ["50"]      # BTCode 50 venues ← Miners
+
 
 # --- ALLOCATION ---
 # Controls HOW people are assigned to venues from their candidate pool.
@@ -89,30 +93,23 @@ eligibility:
 #       "proportional"     → Like closest_balanced but without capacity weighting (distance only).
 #       "largest_capacity" → Picks the venue with the most total capacity.
 allocation:
-  track_capacity: true
-  when_full: "exclude"
-  fixed_capacity: 500
+  track_capacity: false              # Disabled — venues accept unlimited workers
   strategy: "closest_balanced"
 
 # --- FALLBACK ---
-# Triggered AFTER normal allocation, only for people who remain unallocated.
-# Typically these are people in SGUs with no nearby schools or all nearby schools full.
-#
-#   strategy: The fallback approach. Options:
-#       "skip"             → Do nothing, leave them unallocated (default if section missing).
-#       "relax_distance"   → Retry with progressively larger search radius.
-#           relax_params.distance_multiplier: Factor to expand search each iteration (default: 2.0).
-#           relax_params.max_iterations: How many expansion rounds (default: 3).
-#       "relax_capacity"   → Retry while ignoring capacity limits entirely.
-#       "assign_closest"   → Assign each person to their absolute closest venue,
-#                            ignoring capacity AND eligibility. Last resort.
+# Progressively expand search radius to find matching BTCode venues for workers
+# in areas without nearby mines/factories. Multiplies count by 3 each iteration.
+# Iteration search counts: 150 → 450 → 1350 → 4050 → 12150
 fallback:
-  strategy: "assign_closest"
+  strategy: "relax_distance"
+  relax_params:
+    distance_multiplier: 3.0
+    max_iterations: 5
 
 # --- EXPORTS ---
 # CSV reports generated after allocation completes.
-#   venue_summary:      Per-school stats (student count, avg/min/max age, capacity, remaining).
+#   venue_summary:      Per-workplace stats (workers count, avg/min/max age, capacity, remaining).
 #   unallocated_report: Details of eligible people who were NOT allocated (geo unit, age, Occode).
 exports:
-  venue_summary: "output/1911/school_venue_summary.csv"
-  unallocated_report: "output/1911/school_unallocated.csv"
+  venue_summary: "output/1911/workplace_venue_summary.csv"
+  unallocated_report: "output/1911/workplace_unallocated.csv"

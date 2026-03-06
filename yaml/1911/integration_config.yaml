@@ -24,6 +24,16 @@ timeline:
       config: "yaml/1911/residence_distribution_config.yaml"
     - type: "distributor"
       config: "yaml/1911/school_distributor_1911.yaml"
+    - type: "distributor"
+      config: "yaml/1911/workplace_sales_distributor.yaml"
+    - type: "distributor"
+      config: "yaml/1911/workplace_service_distributor.yaml"
+    - type: "distributor"
+      config: "yaml/1911/workplace_production_distributor.yaml"
+    - type: "distributor"
+      config: "yaml/1911/workplace_education_distributor.yaml"
+    - type: "distributor"
+      config: "yaml/1911/workplace_mine_distributor.yaml"
 
 households:
   enabled: false

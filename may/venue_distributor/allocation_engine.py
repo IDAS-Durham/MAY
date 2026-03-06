@@ -251,13 +251,18 @@ class AllocationEngine:
                     geo_name = geo_unit.name if hasattr(geo_unit, 'name') else str(geo_unit)
                     group_allocated = 0
                     
+                    # Pre-compute remaining capacity ONCE (not per person!)
+                    remaining_caps = np.array([
+                        self.distributor._get_remaining_capacity(v) if respect_capacity else 1
+                        for v in available_venues
+                    ], dtype=np.float64)
+                    
+                    total_cap = self.distributor._get_venue_capacity(available_venues[0]) if available_venues else 1
+                    
+                    # Pre-compute distance weights (constant for this SGU batch)
+                    dist_weights = 1.0 / (venue_dists + 0.1)
+                    
                     for person in group:
-                        # Compute remaining capacity for each venue
-                        remaining_caps = np.array([
-                            self.distributor._get_remaining_capacity(v) if respect_capacity else 1
-                            for v in available_venues
-                        ], dtype=np.float64)
-                        
                         # Filter to only venues with remaining capacity
                         valid_mask = remaining_caps > 0
                         if not valid_mask.any():
@@ -265,19 +270,13 @@ class AllocationEngine:
                             continue
                         
                         valid_indices = np.where(valid_mask)[0]
-                        valid_dists = venue_dists[valid_indices]
                         valid_caps = remaining_caps[valid_indices]
                         
-                        # Weight = (1 / distance) * remaining_capacity_fraction
-                        # Distance weight: closer venues are strongly preferred
-                        dist_weights = 1.0 / (valid_dists + 0.1)
-                        
                         # Capacity weight: venues with more remaining capacity are preferred
-                        total_cap = self.distributor._get_venue_capacity(available_venues[0])
                         cap_weights = valid_caps / max(total_cap, 1)
                         
-                        # Combined weight
-                        weights = dist_weights * cap_weights
+                        # Combined weight = distance * capacity
+                        weights = dist_weights[valid_indices] * cap_weights
                         weight_sum = weights.sum()
                         
                         if weight_sum <= 0:
@@ -293,6 +292,10 @@ class AllocationEngine:
                         self.distributor._increment_venue_count(v)
                         allocated += 1
                         group_allocated += 1
+                        
+                        # Update capacity array incrementally (avoid rebuilding)
+                        if respect_capacity:
+                            remaining_caps[chosen_idx] -= 1
                     
                     # Log per-SGU summary for this group
                     if self.verbose and geo_name not in self._cb_logged_geo:
