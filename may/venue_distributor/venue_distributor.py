@@ -238,6 +238,13 @@ class VenueDistributor(BaseDistributor):
         self.reporting.log_allocation_summary(world, eligible_count=len(eligible))
         # self.reporting.check_priority_coverage(world) # Temporarily disabled for performance (slow 630k scan)
 
+        # Phase 5: Exports
+        exports_config = self.config.get('exports', {})
+        if exports_config.get('venue_summary'):
+            self.reporting.export_venue_summary(world, exports_config['venue_summary'])
+        if exports_config.get('unallocated_report'):
+            self.reporting.export_unallocated_report(world, exports_config['unallocated_report'])
+
     def _prepare_vectorized_data(self, people: List):
         """Build population arrays for all attributes used in filters."""
         attrs = set()

@@ -22,8 +22,6 @@ timeline:
   steps:
     - type: "distributor" #Household distribution
       config: "yaml/1911/residence_distribution_config.yaml"
-    - type: "attribute"
-      config: "yaml/1911/age_imputation.yaml"
     - type: "distributor"
       config: "yaml/1911/school_distributor_1911.yaml"
 

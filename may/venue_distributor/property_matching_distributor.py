@@ -1,5 +1,7 @@
 import logging
 import random
+import os
+import pandas as pd
 import numpy as np
 from typing import Dict, List, Optional, Any
 from .base_distributor import BaseDistributor
@@ -26,10 +28,17 @@ class PropertyMatchingDistributor(BaseDistributor):
         else:
             self.target_venue_types = list(target_type)
             
-        self.mapping_key = self.config.get('mapping_key', 'HID') # Person property name
-        self.venue_property = self.config.get('venue_property', 'HID') # Venue property name
+        # Required configuration (no fallbacks)
+        required_keys = ['mapping_key', 'venue_property', 'activity_name']
+        missing_keys = [key for key in required_keys if key not in self.config]
+        if missing_keys:
+            raise ValueError(f"PropertyMatchingDistributor missing required config keys: {missing_keys}")
+
+        self.mapping_key = self.config['mapping_key']
+        self.venue_property = self.config['venue_property']
+        self.activity_name = self.config['activity_name']
         
-        self.activity_name = self.config.get('activity_name', 'residence')
+        # Optional configuration
         self.subset_key = self.config.get('subset_key', 'resident')
         self.activity_type_override = self.config.get('activity_type', None)
         
@@ -58,26 +67,38 @@ class PropertyMatchingDistributor(BaseDistributor):
             logger.warning(f"No venues of types {self.target_venue_types} found")
             return {"matched_count": 0}
 
+        # Helper to normalize numeric strings (e.g. '123.0' -> '123')
+        def normalize_key(val):
+            if val is None:
+                return None
+            s = str(val).strip()
+            if s.endswith('.0'):
+                s = s[:-2]
+            return s
+
         # 1. Create a lookup map for venues: property_value -> venue
         venue_map = {}
         for venue in all_venues:
             val = venue.properties.get(self.venue_property)
-            if val is not None:
-                # Store as string for robust matching
-                venue_map[str(val).strip()] = venue
+            norm_val = normalize_key(val)
+            if norm_val is not None:
+                venue_map[norm_val] = venue
         
         logger.info(f"  Created lookup map for {len(venue_map)} venues using property '{self.venue_property}'")
 
         # 2. Iterate through population and match
         matched_count = 0
         missed_count = 0
+        missed_keys = set()
+        unassigned_people = []
         
         people = world.population.people
         
         for person in people:
             val = person.properties.get(self.mapping_key)
-            if val is not None:
-                venue = venue_map.get(str(val).strip())
+            norm_val = normalize_key(val)
+            if norm_val is not None:
+                venue = venue_map.get(norm_val)
                 if venue:
                     # Determine subset key (dynamic or static)
                     subset_key = self._get_subset_key(venue, person)
@@ -99,10 +120,30 @@ class PropertyMatchingDistributor(BaseDistributor):
                         missed_count += 1
                 else:
                     missed_count += 1
+                    missed_keys.add(norm_val)
+                    unassigned_people.append({
+                        "person_id": person.id,
+                        "mapping_key": norm_val
+                    })
             
-        logger.info(f"  Explicitly matched {matched_count:,} people to venues using {self.mapping_key}")
         if missed_count > 0:
             logger.warning(f"  Failed to find a venue for {missed_count:,} people with a mapping key")
+            sample_keys = list(missed_keys)[:10]
+            logger.warning(f"  Sample of missing keys ({len(missed_keys)} unique): {sample_keys}")
+
+            # Export unassigned people to CSV
+            try:
+                # Try to infer output directory
+                output_dir = "output/1911"
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir, exist_ok=True)
+                
+                export_file = os.path.join(output_dir, "unassigned_residences.csv")
+                df = pd.DataFrame(unassigned_people)
+                df.to_csv(export_file, index=False)
+                logger.info(f"  Exported {len(unassigned_people)} unassigned people to {export_file}")
+            except Exception as e:
+                logger.error(f"  Failed to export unassigned people: {e}")
             
         return {"matched_count": matched_count, "missed_count": missed_count}
 

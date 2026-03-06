@@ -13,7 +13,7 @@ from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.relationships import FriendshipBuilder
-from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
+from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships, export_residence_venues
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -166,6 +166,13 @@ def main():
                 try:
                     distributor = VenueDistributor.from_yaml(step_config)
                     distributor.allocate(world)
+                    
+                    # If this is the residence distributor, export detailed allocations
+                    if getattr(distributor, 'activity_name', None) == "residence":
+                        serial_config = config.get("serialization", {})
+                        output_dir = serial_config.get("output_dir", ".")
+                        res_export_file = os.path.join(output_dir, "residence_venues.csv")
+                        export_residence_venues(world, res_export_file)
                 except Exception as e:
                     logger.error(f"Failed to run distributor {step_config}: {e}")
                     logger.exception(e)

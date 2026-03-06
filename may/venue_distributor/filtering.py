@@ -115,6 +115,14 @@ class FilteringManager:
         if attr == 'age': return person.age
         if attr == 'sex': return person.sex
         
+        # Check person.properties first (where custom attributes like Occode are stored)
+        if hasattr(person, 'properties') and attr in person.properties:
+            val = person.properties[attr]
+            # NaN values should be treated as missing (None)
+            if isinstance(val, float) and val != val:  # fast NaN check
+                return None
+            return val
+        
         return self.distributor._get_nested_value_with_dict_support(person, filter_rule['path_parts'])
 
     def _get_person_value_raw(self, person, attr_name: str) -> Any:
