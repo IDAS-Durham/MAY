@@ -83,6 +83,7 @@ friendships.csv
 1911_data/
 *.zip
 june_analysis/
+*.html
 
 # Debug/Temp scripts
 debug_*.py
@@ -91,7 +92,7 @@ debug_scripts/
 
 # Dummy log files
 log.txt
-
 output/
 june_analysis/
 mgu_codes.txt
+world_map/medieval_map.html

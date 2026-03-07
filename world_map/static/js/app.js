@@ -9,14 +9,12 @@ const state = {
     imageBounds: null,
     layers: {
         geography: null,
-        venues: {}
     },
     selectedLevel: null,
-    selectedVenueType: null,
     showPopulation: true,
-    showVenues: false,
     mapConfig: null,
     panelConfig: null,  // Info panel configuration
+    geoUnitNameToId: {},  // {unit_name: integer_geo_unit_id} — for event correlation
     // Zoom scaling state
     zoomListenerAdded: false,
     baseZoom: 6
@@ -41,7 +39,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load data
     loadWorldStatistics();
     loadGeographyLevels();
-    loadVenueTypes();
     setupEventListeners();
 });
 
@@ -90,12 +87,7 @@ function getDefaultPanelConfig() {
                 fill_opacity: 0.7,
                 zoom_scaling: { enabled: true, base_zoom: 6, scale_exponent: 0.5, min_scale: 0.3, max_scale: 3.0 }
             },
-            venue: {
-                size: { radius: 6 },
-                border: { color: '#ffffff', width: 1, opacity: 1 },
-                fill_opacity: 0.8,
-                zoom_scaling: { enabled: true, base_zoom: 6, scale_exponent: 0.5, min_scale: 0.3, max_scale: 3.0 }
-            }
+
         }
     };
 }
@@ -229,24 +221,14 @@ function setupEventListeners() {
         document.getElementById('info-panel').classList.add('hidden');
     });
 
-    // Layer controls
-    document.getElementById('show-population').addEventListener('change', (e) => {
+    // Layer controls (checkbox removed from UI; geo units always visible)
+    document.getElementById('show-population')?.addEventListener('change', (e) => {
         state.showPopulation = e.target.checked;
         if (state.selectedLevel) {
             loadGeographyLevel(state.selectedLevel);
         }
     });
 
-    document.getElementById('show-venues').addEventListener('change', (e) => {
-        state.showVenues = e.target.checked;
-        if (state.showVenues && state.selectedVenueType) {
-            loadVenues(state.selectedVenueType);
-        } else {
-            Object.values(state.layers.venues).forEach(layer => {
-                if (layer) state.map.removeLayer(layer);
-            });
-        }
-    });
 }
 
 // =============================================================================
@@ -316,7 +298,56 @@ function displayWorldStats(stats) {
         `;
     }
 
+    if (stats.slim_statistics) {
+        html += buildSlimStatsHtml(stats.slim_statistics);
+    }
+
     statsEl.innerHTML = html;
+}
+
+function buildSlimStatsHtml(slim) {
+    let html = '';
+
+    // Activity map breakdown
+    if (slim.activity_map) {
+        const am = slim.activity_map;
+        html += `<div class="stat-item" style="flex-direction:column;align-items:flex-start;gap:4px;padding-bottom:8px;">
+            <span class="stat-label" style="font-weight:600;color:#495057;margin-bottom:4px;">Activities</span>`;
+        if (am.avg_contacts_estimate != null) {
+            html += `<div style="display:flex;justify-content:space-between;width:100%;">
+                <span class="stat-label">Est. avg contacts/person</span>
+                <span class="stat-value">${am.avg_contacts_estimate.toLocaleString()}</span>
+            </div>`;
+        }
+        if (am.avg_activity_types_per_person != null) {
+            html += `<div style="display:flex;justify-content:space-between;width:100%;">
+                <span class="stat-label">Avg activity types</span>
+                <span class="stat-value">${am.avg_activity_types_per_person}</span>
+            </div>`;
+        }
+        if (am.avg_venue_assignments_per_person != null) {
+            html += `<div style="display:flex;justify-content:space-between;width:100%;">
+                <span class="stat-label">Avg venue assignments</span>
+                <span class="stat-value">${am.avg_venue_assignments_per_person}</span>
+            </div>`;
+        }
+        if (am.activity_counts) {
+            const entries = Object.entries(am.activity_counts).sort((a, b) => b[1] - a[1]);
+            html += `<div style="margin-top:4px;width:100%;">`;
+            for (const [name, count] of entries) {
+                const pct = am.total_people_with_activities > 0
+                    ? Math.round(100 * count / am.total_people_with_activities) : 0;
+                html += `<div style="display:flex;justify-content:space-between;width:100%;font-size:0.8rem;">
+                    <span class="stat-label">${name}</span>
+                    <span class="stat-value">${count.toLocaleString()} (${pct}%)</span>
+                </div>`;
+            }
+            html += `</div>`;
+        }
+        html += `</div>`;
+    }
+
+    return html;
 }
 
 // =============================================================================
@@ -426,6 +457,14 @@ async function loadGeographyLevel(level) {
                 });
             }
         }).addTo(state.map);
+
+        // Build name → integer id lookup so event data can be correlated on click
+        state.geoUnitNameToId = {};
+        geojson.features.forEach(f => {
+            if (f.properties.id !== undefined) {
+                state.geoUnitNameToId[f.properties.name] = f.properties.id;
+            }
+        });
 
         // Fit map to bounds
         if (geojson.features.length > 0) {
@@ -548,7 +587,15 @@ async function showUnitDetails(unitName) {
         const content = document.getElementById('info-content');
 
         // Build panel from config
-        const html = buildDetailPanel(unit, 'geo_unit_panel');
+        let html = buildDetailPanel(unit, 'geo_unit_panel');
+
+        // Append event stats card if events visualisation is active
+        if (typeof getEventStatsHtmlForUnit === 'function') {
+            const geoUnitId = state.geoUnitNameToId[unitName] ?? unit.id;
+            if (geoUnitId !== undefined) {
+                html += await getEventStatsHtmlForUnit(geoUnitId);
+            }
+        }
 
         content.innerHTML = html;
         panel.classList.remove('hidden');
@@ -647,13 +694,28 @@ function buildDistributionSection(section, data) {
         return '';
     }
 
-    const total = Object.values(distribution).reduce((a, b) => a + b, 0);
-    if (total === 0) return '';
+    // Denominator: explicit field (e.g. population) or sum of values
+    let denominator;
+    if (section.denominator_field) {
+        denominator = getFieldValue(data, section.denominator_field) || 0;
+    } else {
+        denominator = Object.values(distribution).reduce((a, b) => a + b, 0);
+    }
+    if (denominator === 0) return '';
+
+    // Optional sort by count descending
+    let entries = Object.entries(distribution);
+    if (section.sort_by === 'count') {
+        entries = entries.slice().sort((a, b) => b[1] - a[1]);
+    }
 
     let html = '<div class="bar-chart">';
 
-    for (const [group, count] of Object.entries(distribution)) {
-        const percentage = (count / total * 100).toFixed(1);
+    for (const [group, count] of entries) {
+        const percentage = (count / denominator * 100).toFixed(1);
+        const valueText = section.show_percentage
+            ? `${count.toLocaleString()} (${percentage}%)`
+            : count.toLocaleString();
 
         html += `
             <div class="bar-item">
@@ -661,7 +723,7 @@ function buildDistributionSection(section, data) {
                 <div class="bar-wrapper">
                     <div class="bar-fill" style="width: ${percentage}%"></div>
                 </div>
-                <div class="bar-value">${count.toLocaleString()}</div>
+                <div class="bar-value">${valueText}</div>
             </div>
         `;
     }
@@ -845,6 +907,7 @@ function buildDefaultGeoUnitPanel(unit) {
 
     // Venue types
     if (unit.venue_types && Object.keys(unit.venue_types).length > 0) {
+        const maxVenueCount = Math.max(...Object.values(unit.venue_types));
         html += `
             <h3>Venue Types</h3>
             <div class="bar-chart">
@@ -854,7 +917,7 @@ function buildDefaultGeoUnitPanel(unit) {
                         <div class="bar-item">
                             <div class="bar-label">${type}</div>
                             <div class="bar-wrapper">
-                                <div class="bar-fill" style="width: ${count / Math.max(...Object.values(unit.venue_types)) * 100}%"></div>
+                                <div class="bar-fill" style="width: ${count / maxVenueCount * 100}%"></div>
                             </div>
                             <div class="bar-value">${count}</div>
                         </div>
@@ -863,15 +926,56 @@ function buildDefaultGeoUnitPanel(unit) {
         `;
     }
 
-    // People section with "View People" button
-    if (unit.population > 0) {
-        html += `
-            <h3>People</h3>
-            <p>${unit.population.toLocaleString()} people in this area</p>
-            <button class="action-button" onclick="showUnitPeople('${unit.name}')">
-                View People List
-            </button>
-        `;
+    if (unit.slim_mode) {
+        // Slim mode: show activity breakdown instead of a people list
+        if (unit.activity_counts && Object.keys(unit.activity_counts).length > 0) {
+            const maxAct = Math.max(...Object.values(unit.activity_counts));
+            html += `
+                <h3>Activity Breakdown</h3>
+                <div class="bar-chart">
+                    ${Object.entries(unit.activity_counts)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([act, count]) => {
+                            const pct = unit.population > 0
+                                ? (100 * count / unit.population).toFixed(1) : '0';
+                            return `
+                                <div class="bar-item">
+                                    <div class="bar-label">${act}</div>
+                                    <div class="bar-wrapper">
+                                        <div class="bar-fill" style="width: ${count / maxAct * 100}%"></div>
+                                    </div>
+                                    <div class="bar-value">${count.toLocaleString()} (${pct}%)</div>
+                                </div>
+                            `;
+                        }).join('')}
+                </div>
+            `;
+        }
+    } else {
+        // Full mode: show venue list (first 50) and "View People" button
+        if (unit.venue_details && unit.venue_details.length > 0) {
+            html += `
+                <h3>Venues (first ${unit.venue_details.length})</h3>
+                <div class="venue-list">
+                    ${unit.venue_details.map(v => `
+                        <div class="venue-item">
+                            <div class="venue-item-name">${v.name}</div>
+                            <div class="venue-item-type">${v.type}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        if (unit.population > 0) {
+            html += `
+                <h3>People</h3>
+                <p>${unit.population.toLocaleString()} people in this area</p>
+                <button class="action-button" onclick="showUnitPeople('${unit.name}')">
+                    View People List
+                </button>
+            `;
+        }
     }
 
     return html;
@@ -1148,152 +1252,3 @@ function formatValue(value, format) {
     }
 }
 
-// =============================================================================
-// VENUE TYPES
-// =============================================================================
-
-async function loadVenueTypes() {
-    try {
-        const response = await fetch('/api/venues/types');
-        const data = await response.json();
-
-        const container = document.getElementById('venue-types');
-        container.innerHTML = Object.entries(data.types)
-            .map(([type, count]) => `
-                <button class="venue-type-button"
-                        data-type="${type}"
-                        onclick="selectVenueType('${type}')">
-                    ${type} (${count.toLocaleString()})
-                </button>
-            `).join('');
-    } catch (error) {
-        console.error('Error loading venue types:', error);
-    }
-}
-
-function selectVenueType(venueType) {
-    state.selectedVenueType = venueType;
-
-    document.querySelectorAll('.venue-type-button').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.type === venueType);
-    });
-
-    document.getElementById('show-venues').checked = true;
-    state.showVenues = true;
-
-    loadVenues(venueType);
-}
-
-// =============================================================================
-// VENUE LAYER
-// =============================================================================
-
-async function loadVenues(venueType) {
-    try {
-        if (state.layers.venues[venueType]) {
-            state.map.removeLayer(state.layers.venues[venueType]);
-        }
-
-        if (!state.showVenues) {
-            return;
-        }
-
-        const response = await fetch(`/api/venues/${venueType}`);
-        const geojson = await response.json();
-
-        const styleConfig = state.panelConfig?.marker_styles?.venue || {};
-
-        state.layers.venues[venueType] = L.geoJSON(geojson, {
-            pointToLayer: (feature, latlng) => {
-                const venueColors = styleConfig.colors || {};
-                const fillColor = venueColors[feature.properties.type] || venueColors.default || '#95a5a6';
-
-                return L.circleMarker(latlng, {
-                    radius: styleConfig.radius || 6,
-                    fillColor: fillColor,
-                    color: styleConfig.border?.color || '#fff',
-                    weight: styleConfig.border?.weight || 1,
-                    opacity: styleConfig.border?.opacity || 1,
-                    fillOpacity: styleConfig.fill_opacity || 0.8
-                });
-            },
-            onEachFeature: (feature, layer) => {
-                const props = feature.properties;
-
-                const popupContent = `
-                    <div class="popup-title">${props.name}</div>
-                    <div class="popup-info"><strong>Type:</strong> ${props.type}</div>
-                    <div class="popup-info"><strong>Area:</strong> ${props.geographical_unit || 'Unknown'}</div>
-                    <div class="popup-info"><strong>Members:</strong> ${props.num_members}</div>
-                    <button class="popup-button" onclick="showVenueDetails(${props.id})">
-                        View Details
-                    </button>
-                `;
-
-                layer.bindPopup(popupContent);
-            }
-        }).addTo(state.map);
-
-        console.log(`Loaded ${geojson.features.length} venues of type ${venueType}`);
-    } catch (error) {
-        console.error('Error loading venues:', error);
-    }
-}
-
-// =============================================================================
-// VENUE DETAILS
-// =============================================================================
-
-async function showVenueDetails(venueId) {
-    try {
-        const response = await fetch(`/api/venues/venue/${venueId}`);
-        const venue = await response.json();
-
-        const panel = document.getElementById('info-panel');
-        const content = document.getElementById('info-content');
-
-        let html = `
-            <h2>${venue.name}</h2>
-
-            <div class="info-grid">
-                <div class="info-item">
-                    <div class="info-item-label">Type</div>
-                    <div class="info-item-value">${venue.type}</div>
-                </div>
-                <div class="info-item">
-                    <div class="info-item-label">Area</div>
-                    <div class="info-item-value">${venue.geographical_unit ? venue.geographical_unit.name : 'Unknown'}</div>
-                </div>
-            </div>
-        `;
-
-        // Subsets
-        if (venue.subsets && venue.subsets.length > 0) {
-            html += `<h3>Subsets</h3>`;
-            venue.subsets.forEach(subset => {
-                html += `
-                    <div class="info-item">
-                        <strong>${subset.name}:</strong>
-                        ${subset.num_members || 0} members
-                        ${subset.capacity ? `/ ${subset.capacity} capacity` : ''}
-                    </div>
-                `;
-            });
-        }
-
-        // Properties
-        if (venue.properties && Object.keys(venue.properties).length > 0) {
-            html += `
-                <h3>Properties</h3>
-                <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.85rem; overflow-x: auto;">
-${JSON.stringify(venue.properties, null, 2)}
-                </pre>
-            `;
-        }
-
-        content.innerHTML = html;
-        panel.classList.remove('hidden');
-    } catch (error) {
-        console.error('Error loading venue details:', error);
-    }
-}

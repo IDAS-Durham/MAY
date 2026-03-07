@@ -71,7 +71,6 @@ geo_unit_panel:
       type: "distribution"
       enabled: true
       source: "age_distribution"
-      chart_type: "bar"
       show_percentage: true
 
     # Sex Distribution Chart
@@ -80,7 +79,16 @@ geo_unit_panel:
       type: "distribution"
       enabled: true
       source: "sex_distribution"
-      chart_type: "bar"
+      show_percentage: true
+
+    # Activity Breakdown
+    - name: "activity_breakdown"
+      title: "Activity Breakdown"
+      type: "distribution"
+      enabled: true
+      source: "activity_counts"
+      denominator_field: "population"
+      sort_by: "count"
       show_percentage: true
 
     # Venue Types Breakdown
@@ -97,7 +105,7 @@ geo_unit_panel:
     - name: "venue_list"
       title: "Venues"
       type: "list"
-      enabled: true
+      enabled: false
       source: "venue_details"
       max_items: 50
       fields:
@@ -118,7 +126,7 @@ geo_unit_panel:
     - name: "people"
       title: "People"
       type: "people"
-      enabled: true
+      enabled: false
       show_count: true
       show_button: true
       button_text: "View People List"
@@ -128,105 +136,105 @@ geo_unit_panel:
 # =============================================================================
 # Displayed when clicking on a person in the people list
 
-person_panel:
-  title_field: "id"
-  title_prefix: "Person #"
+# person_panel:
+#   title_field: "id"
+#   title_prefix: "Person #"
 
-  # Fields to show in main info section
-  main_fields:
-    - name: "age"
-      label: "Age"
-      type: "attribute"
-    - name: "sex"
-      label: "Sex"
-      type: "attribute"
+#   # Fields to show in main info section
+#   main_fields:
+#     - name: "age"
+#       label: "Age"
+#       type: "attribute"
+#     - name: "sex"
+#       label: "Sex"
+#       type: "attribute"
 
-  # Sections to display
-  sections:
-    - name: "location"
-      title: "Location"
-      type: "grid"
-      enabled: true
-      fields:
-        - name: "geographical_unit.name"
-          label: "Area"
-        - name: "geographical_unit.level"
-          label: "Level"
+#   # Sections to display
+#   sections:
+#     - name: "location"
+#       title: "Location"
+#       type: "grid"
+#       enabled: true
+#       fields:
+#         - name: "geographical_unit.name"
+#           label: "Area"
+#         - name: "geographical_unit.level"
+#           label: "Level"
 
-    - name: "activities"
-      title: "Activities"
-      type: "tags"
-      enabled: true
-      source: "activities"
+#     - name: "activities"
+#       title: "Activities"
+#       type: "tags"
+#       enabled: true
+#       source: "activities"
 
-    - name: "activity_map"
-      title: "Activity Map"
-      type: "activity_map"
-      enabled: true
-      source: "activity_map"
+#     - name: "activity_map"
+#       title: "Activity Map"
+#       type: "activity_map"
+#       enabled: true
+#       source: "activity_map"
 
-    - name: "properties"
-      title: "Additional Properties"
-      type: "properties"
-      enabled: true
-      source: "properties"
+#     - name: "properties"
+#       title: "Additional Properties"
+#       type: "properties"
+#       enabled: true
+#       source: "properties"
 
-# =============================================================================
-# VENUE INFO PANEL
-# =============================================================================
-# Displayed when clicking on a venue marker
+# # =============================================================================
+# # VENUE INFO PANEL
+# # =============================================================================
+# # Displayed when clicking on a venue marker
 
-venue_panel:
-  title_field: "name"
+# venue_panel:
+#   title_field: "name"
 
-  popup:
-    enabled: true
-    fields:
-      - name: "name"
-        label: "Name"
-        type: "attribute"
-      - name: "type"
-        label: "Type"
-        type: "attribute"
-      - name: "geographical_unit"
-        label: "Area"
-        type: "attribute"
-      - name: "num_members"
-        label: "Members"
-        type: "attribute"
+#   popup:
+#     enabled: true
+#     fields:
+#       - name: "name"
+#         label: "Name"
+#         type: "attribute"
+#       - name: "type"
+#         label: "Type"
+#         type: "attribute"
+#       - name: "geographical_unit"
+#         label: "Area"
+#         type: "attribute"
+#       - name: "num_members"
+#         label: "Members"
+#         type: "attribute"
 
-  detail_sections:
-    - name: "basic_info"
-      title: null
-      type: "grid"
-      enabled: true
-      fields:
-        - name: "type"
-          label: "Type"
-          type: "attribute"
-        - name: "geographical_unit.name"
-          label: "Area"
-          type: "attribute"
+#   detail_sections:
+#     - name: "basic_info"
+#       title: null
+#       type: "grid"
+#       enabled: true
+#       fields:
+#         - name: "type"
+#           label: "Type"
+#           type: "attribute"
+#         - name: "geographical_unit.name"
+#           label: "Area"
+#           type: "attribute"
 
-    - name: "subsets"
-      title: "Subsets"
-      type: "list"
-      enabled: true
-      source: "subsets"
-      fields:
-        - name: "name"
-          label: "Name"
-        - name: "num_members"
-          label: "Members"
-        - name: "capacity"
-          label: "Capacity"
-          optional: true
+#     - name: "subsets"
+#       title: "Subsets"
+#       type: "list"
+#       enabled: true
+#       source: "subsets"
+#       fields:
+#         - name: "name"
+#           label: "Name"
+#         - name: "num_members"
+#           label: "Members"
+#         - name: "capacity"
+#           label: "Capacity"
+#           optional: true
 
-    - name: "venue_properties"
-      title: "Properties"
-      type: "properties"
-      enabled: true
-      format: "json"  # 'json', 'table', or 'list'
+#     - name: "venue_properties"
+#       title: "Properties"
+#       type: "properties"
+#       enabled: true
+#       format: "json"  # 'json', 'table', or 'list'
 
 # =============================================================================
 # MARKER STYLES

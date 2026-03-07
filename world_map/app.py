@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 # Global world instance - set via initialize_app()
 _world_instance = None
 
+# Flat {venue.id: venue} lookup built at startup (venue IDs are Python memory
+# addresses so they are unique within a session but VenueManager has no global
+# lookup method — we build one here instead of modifying VenueManager)
+_venue_index: dict = {}
+
 # Global map configuration
 _map_config = {
     'background_type': 'osm',  # 'osm' or 'image'
@@ -70,7 +75,7 @@ def _convert_numpy_types(obj):
         return str(obj)
     if isinstance(obj, dict):
         return {str(k): _convert_numpy_types(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple, set)):
         return [_convert_numpy_types(item) for item in obj]
     return obj
 
@@ -124,17 +129,25 @@ def initialize_app(world, map_config=None, panel_config_path=None):
     Returns:
         Flask app instance
     """
-    global _world_instance, _map_config
+    global _world_instance, _map_config, _venue_index
     _world_instance = world
 
     if map_config:
         _map_config.update(map_config)
 
+    # Build a flat venue index keyed by venue.id (Python memory address)
+    _venue_index = {}
+    if world.venues:
+        for venue in world.venues.get_all_venues().values():
+            _venue_index[venue.id] = venue
+
     # Load panel configuration
     load_panel_config(panel_config_path)
 
     logger.info(f"Initialized world map with: {world}")
-    logger.info(f"Map configuration: {_map_config}")
+    log_cfg = {k: (v[:60] + '…' if isinstance(v, str) and len(v) > 60 else v)
+               for k, v in _map_config.items()}
+    logger.info(f"Map configuration: {log_cfg}")
     return app
 
 
@@ -163,7 +176,9 @@ def index():
 @app.route('/api/map/config')
 def get_map_config():
     """Get map configuration including background type and bounds."""
-    return jsonify(_map_config)
+    config = dict(_map_config)
+    config['slim_mode'] = hasattr(get_world(), '_unit_statistics')
+    return jsonify(config)
 
 
 @app.route('/api/panel/config')
@@ -277,7 +292,8 @@ def get_geography_level(level):
 def get_unit_details(unit_name):
     """Get detailed information about a specific geographical unit.
 
-    For units with children, aggregates statistics from all descendants.
+    In slim mode, returns pre-computed statistics (no venue list, no people list).
+    In full mode, aggregates statistics from all descendants.
     """
     try:
         world = get_world()
@@ -288,48 +304,74 @@ def get_unit_details(unit_name):
         if not unit:
             return jsonify({'error': f'Unit {unit_name} not found'}), 404
 
-        # Use get_people() to recursively get all people from unit and descendants
+        # Parent and children info (needed in both modes)
+        parent_info = None
+        if unit.parent:
+            parent_info = {
+                'id': unit.parent.id,
+                'name': unit.parent.name,
+                'level': unit.parent.level
+            }
+
+        # ---- Slim mode: serve pre-computed stats ----------------------------
+        unit_statistics = getattr(world, '_unit_statistics', None)
+        if unit_statistics is not None:
+            pre = unit_statistics.get(unit_name, {})
+            children_info = []
+            if unit.children:
+                for child in unit.children:
+                    child_pre = unit_statistics.get(child.name, {})
+                    children_info.append({
+                        'id': child.id,
+                        'name': child.name,
+                        'level': child.level,
+                        'population': child_pre.get('population', 0),
+                    })
+            venues_count = sum(pre.get('venue_types', {}).values())
+            return jsonify(_convert_numpy_types({
+                'id': unit.id,
+                'name': unit.name,
+                'level': unit.level,
+                'coordinates': unit.coordinates,
+                'population': pre.get('population', 0),
+                'age_distribution': pre.get('age_distribution', {}),
+                'sex_distribution': pre.get('sex_distribution', {}),
+                'venues_count': venues_count,
+                'venue_types': pre.get('venue_types', {}),
+                'activity_counts': pre.get('activity_counts', {}),
+                'parent': parent_info,
+                'children': children_info,
+                'properties': unit.properties,
+                'slim_mode': True,
+            }))
+
+        # ---- Full mode: compute on the fly ----------------------------------
         all_people = unit.get_people()
 
-        # Collect detailed statistics from all people
         age_groups = {
             '0-15': 0, '16-24': 0, '25-34': 0,
             '35-49': 0, '50-64': 0, '65+': 0
         }
-
         sex_distribution = defaultdict(int)
-
         for person in all_people:
-            # Age groups
-            if person.age <= 15:
-                age_groups['0-15'] += 1
-            elif person.age <= 24:
-                age_groups['16-24'] += 1
-            elif person.age <= 34:
-                age_groups['25-34'] += 1
-            elif person.age <= 49:
-                age_groups['35-49'] += 1
-            elif person.age <= 64:
-                age_groups['50-64'] += 1
-            else:
-                age_groups['65+'] += 1
-
-            # Sex distribution
+            if person.age <= 15:    age_groups['0-15'] += 1
+            elif person.age <= 24:  age_groups['16-24'] += 1
+            elif person.age <= 34:  age_groups['25-34'] += 1
+            elif person.age <= 49:  age_groups['35-49'] += 1
+            elif person.age <= 64:  age_groups['50-64'] += 1
+            else:                   age_groups['65+'] += 1
             sex_distribution[person.sex] += 1
 
-        # Aggregate venues from unit and all descendants
         all_venues = list(unit.venues) if unit.venues else []
         if unit.children:
             for descendant in unit.get_descendants():
                 if descendant.venues:
                     all_venues.extend(descendant.venues)
 
-        # Venue breakdown from all aggregated venues
         venue_details = []
         venue_types = defaultdict(int)
         for venue in all_venues:
             venue_types[venue.type] += 1
-            # Only include details for first 50 venues
             if len(venue_details) < 50:
                 venue_details.append({
                     'id': venue.id,
@@ -339,25 +381,14 @@ def get_unit_details(unit_name):
                     'properties': venue.properties
                 })
 
-        # Parent and children info
-        parent_info = None
-        if unit.parent:
-            parent_info = {
-                'id': unit.parent.id,
-                'name': unit.parent.name,
-                'level': unit.parent.level
-            }
-
         children_info = []
         if unit.children:
             for child in unit.children:
-                # Use get_people() for children too to show aggregated population
-                child_population = len(child.get_people())
                 children_info.append({
                     'id': child.id,
                     'name': child.name,
                     'level': child.level,
-                    'population': child_population
+                    'population': len(child.get_people()),
                 })
 
         return jsonify({
@@ -373,7 +404,8 @@ def get_unit_details(unit_name):
             'venue_details': venue_details,
             'parent': parent_info,
             'children': children_info,
-            'properties': unit.properties
+            'properties': unit.properties,
+            'slim_mode': False,
         })
 
     except Exception as e:
@@ -455,7 +487,7 @@ def get_person_details(person_id):
                                     subset_list.append(subset_info)
                         activity_map_data[activity_type][venue_type] = subset_list
 
-        return jsonify({
+        return jsonify(_convert_numpy_types({
             'id': person.id,
             'age': person.age,
             'sex': person.sex,
@@ -463,7 +495,7 @@ def get_person_details(person_id):
             'activity_map': activity_map_data,
             'properties': person.properties,
             'geographical_unit': geo_info
-        })
+        }))
 
     except Exception as e:
         logger.error(f"Error getting person details for {person_id}: {e}")
@@ -523,7 +555,7 @@ def get_unit_people(unit_name):
                 'id': person.id,
                 'age': person.age,
                 'sex': person.sex,
-                'activities': person.activities,
+                'activities': list(person.activities) if isinstance(person.activities, set) else person.activities,
                 'primary_activity': primary_activity
             })
 
@@ -628,7 +660,7 @@ def get_venue_details(venue_id):
         if not world.venues:
             return jsonify({'error': 'No venues data'}), 404
 
-        venue = world.venues.get_venue_by_id(venue_id)
+        venue = _venue_index.get(venue_id)
         if not venue:
             return jsonify({'error': f'Venue {venue_id} not found'}), 404
 
@@ -711,6 +743,10 @@ def get_world_statistics():
     try:
         world = get_world()
         stats = world.get_statistics()
+        # Merge in slim-mode aggregate statistics if available
+        slim_stats = getattr(world, '_slim_statistics', None)
+        if slim_stats:
+            stats['slim_statistics'] = slim_stats
         # Convert numpy types to Python native types for JSON serialization
         stats = _convert_numpy_types(stats)
         return jsonify(stats)
@@ -860,6 +896,46 @@ def get_events_summary():
         'counts': loader.get_event_summary(),
         'time_range': loader.get_time_range()
     })
+
+
+@app.route('/api/events/geojson/batch')
+def get_events_geojson_batch():
+    """Get GeoJSON for multiple event types in a single request.
+
+    Query params:
+        types:      repeated param — e.g. ?types=infections&types=deaths
+        time_start: float
+        time_end:   float
+        method:     'count' | 'rate'
+        cumulative: 'true' | 'false'
+
+    Returns:
+        JSON object mapping event_type -> GeoJSON FeatureCollection
+    """
+    loader = get_event_loader()
+    if loader is None:
+        return jsonify({'error': 'Events not loaded'}), 404
+
+    time_start  = request.args.get('time_start', type=float, default=0.0)
+    time_end    = request.args.get('time_end',   type=float, default=loader.time_max)
+    method      = request.args.get('method', default='count')
+    cumulative  = request.args.get('cumulative', default='false').lower() == 'true'
+    event_types = request.args.getlist('types')
+
+    try:
+        results = {}
+        for event_type in event_types:
+            results[event_type] = loader.get_events_geojson(
+                event_type=event_type,
+                time_start=time_start,
+                time_end=time_end,
+                method=method,
+                cumulative=cumulative
+            )
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in batch geojson: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/events/geojson/<event_type>')

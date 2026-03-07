@@ -15,8 +15,8 @@ from may.venue_child_creator import VenueChildCreator
 from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
 
-# Legacy/Gavin social network version
-from may.social_networks import build_social_network
+# Gavin social network version
+from may.social_networks import allocate_random_bounded_distance_contacts, build_local_social_network
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -53,6 +53,7 @@ set_random_seed(0)
 def main():
     """
     Main entry point for world creation.
+
     """
 
     logger.info("=" * 60)
@@ -218,7 +219,9 @@ def main():
         logger.info("=" * 60)
         logger.info("RELATIONSHIP PIPELINE (Gavin Version)")
         logger.info("=" * 60)
-        
+
+        # Builds a local network based on a particular clustering algorithm.
+        # This creates realistic closed graphs. 
         build_local_social_network(
             world.geography,
             mean_connections_per_person=6,
@@ -238,7 +241,39 @@ def main():
                     if 'residence' in contact.activity_map:
                         person.activity_map['social_contacts_local'].update(contact.activity_map['residence'])
 
+        # Simpler version, just for making random connections with people within a certain radius
+        radius_km = 15
+        allocate_random_bounded_distance_contacts(world.geography,
+                                                  radius_km,
+                                                  mean_connections_per_person=6,
+                                                  store=True,
+                                                  storage_key=f'social_contacts_radius_km_{radius_km}',
+                                                  )
         
+        for person in world.population.people:
+            if (f'social_contacts_radius_km_{radius_km}' in person.properties) and (len(person.properties[f'social_contacts_radius_km_{radius_km}']) > 0):
+                person.activities.add(f'social_contacts_radius_km_{radius_km}')                
+                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = {}
+                for contact in person.properties[f'social_contacts_radius_km_{radius_km}']:
+                    if 'residence' in contact.activity_map:
+                        person.activity_map[f'social_contacts_radius_km_{radius_km}'].update(contact.activity_map['residence'])
+
+        radius_km = 30
+        allocate_random_bounded_distance_contacts(world.geography,
+                                                  radius_km,
+                                                  mean_connections_per_person=6,
+                                                  store=True,
+                                                  storage_key=f'social_contacts_radius_km_{radius_km}',
+                                                  )
+        
+        for person in world.population.people:
+            if (f'social_contacts_radius_km_{radius_km}' in person.properties) and (len(person.properties[f'social_contacts_radius_km_{radius_km}']) > 0):
+                person.activities.add(f'social_contacts_radius_km_{radius_km}')                
+                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = {}
+                for contact in person.properties[f'social_contacts_radius_km_{radius_km}']:
+                    if 'residence' in contact.activity_map:
+                        person.activity_map[f'social_contacts_radius_km_{radius_km}'].update(contact.activity_map['residence'])
+
     
 
     logger.info("")

@@ -1,0 +1,10 @@
+# Single Residence World - Venue Configuration
+
+venue_types:
+  household:
+    enabled: false
+    is_residence: true
+    description: "Residential households (created by household distributor)"
+
+settings:
+  filter_by_geography: true

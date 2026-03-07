@@ -205,7 +205,7 @@ relationship_pipeline:
 # to derive new activities.
 
 post_relationship_pipeline:
-  enabled: true
+  enabled: false
 
   steps:
     # Assign visit_social_contact activity based on social contacts' residences

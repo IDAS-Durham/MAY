@@ -1,0 +1,14 @@
+# Solo Households World - Allocation Strategy
+# 1,000,000 single-person households
+
+enabled: true
+
+steps:
+  - name: "Single Person Households"
+    type: "household"
+    description: "One person per household"
+    patterns:
+      - "1"
+    max_households: null
+    refresh_pools: false
+    enable_demotion: false

@@ -2,7 +2,7 @@
 World I/O utilities for saving and loading World objects.
 
 This module provides efficient serialization and deserialization of World objects
-with compression options to minimize file size.
+with compression options to minimize file size. It is designed just to simply dump the world object in a form that can easily be reloaded. It does not consider the serialization protocols that are important for June++. 
 """
 
 import logging

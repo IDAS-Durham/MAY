@@ -66,6 +66,12 @@ def main():
         default="yaml/config.yaml",
         help="Path to configuration YAML file (default: yaml/config.yaml)"
     )
+    parser.add_argument(
+        "--filename",
+        type=str,
+        default="world_state.h5",
+        help="Path to the saved file (default world_state.h5)"
+    )
     args = parser.parse_args()
 
     logger.info(f"Loading configuration from: {args.config}")
@@ -331,7 +337,7 @@ def main():
         logger.info("")
         logger.info("Exporting world to HDF5...")
         output_dir = serial_config.get("output_dir", ".")
-        filename = serial_config.get("filename", "world_state.h5")
+        filename = serial_config.get("filename", args.filename)
         
         if output_dir != ".":
             os.makedirs(output_dir, exist_ok=True)

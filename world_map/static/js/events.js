@@ -13,9 +13,11 @@ const eventState = {
     playing: false,
     playInterval: null,
     visibleEventTypes: {},
-    layers: {},
+    layers: {},            // {event_type: L.layerGroup} — persisted between ticks
+    markerCache: {},       // {event_type: {geo_unit_id: L.circleMarker}} — reused in-place
+    isUpdating: false,     // guard against overlapping async updates
     mode: 'choropleth',  // 'choropleth' or 'markers'
-    cumulative: false,
+    cumulativeByType: {},  // {event_type: bool} — per-type cumulative flag
     // Zoom scaling state
     baseZoom: 6,           // Reference zoom level for base radius
     zoomListenerAdded: false
@@ -102,15 +104,14 @@ function updateEventMarkerRadii() {
 
     const scaleFactor = getZoomScaleFactor();
 
-    for (const [eventType, layer] of Object.entries(eventState.layers)) {
-        if (!layer) continue;
-
-        layer.eachLayer((marker) => {
-            if (marker.options && marker.options.baseRadius) {
-                const newRadius = marker.options.baseRadius * scaleFactor;
-                marker.setRadius(newRadius);
+    // Iterate the marker cache directly — covers all cached markers regardless of
+    // whether they are currently visible, so zoom stays consistent.
+    for (const cache of Object.values(eventState.markerCache)) {
+        for (const marker of Object.values(cache)) {
+            if (marker.options?.baseRadius !== undefined) {
+                marker.setRadius(marker.options.baseRadius * scaleFactor);
             }
-        });
+        }
     }
 }
 
@@ -140,10 +141,11 @@ async function checkEventsAvailable() {
         eventState.timeMax = summary.time_range[1];
         eventState.currentTime = eventState.timeMin;
 
-        // Initialize visibility from config defaults
+        // Initialize visibility and cumulative from config defaults
         const eventTypes = eventState.config?.event_types || {};
         for (const [type, config] of Object.entries(eventTypes)) {
             eventState.visibleEventTypes[type] = config.default_visible || false;
+            eventState.cumulativeByType[type] = false;
         }
 
         console.log('Events available:', summary);
@@ -294,10 +296,6 @@ function setupEventControls() {
                 </div>
             </div>
             <div id="aggregation-options">
-                <label>
-                    <input type="checkbox" id="cumulative-toggle">
-                    Cumulative
-                </label>
                 <select id="display-mode">
                     <option value="choropleth">Choropleth</option>
                     <option value="markers">Markers</option>
@@ -331,14 +329,21 @@ function populateEventTypeToggles() {
 
     for (const [type, config] of Object.entries(eventTypes)) {
         const checked = eventState.visibleEventTypes[type] ? 'checked' : '';
+        const cumulChecked = eventState.cumulativeByType[type] ? 'checked' : '';
         const color = config.color || '#666';
 
         html += `
-            <label class="event-type-toggle">
-                <input type="checkbox" data-event-type="${type}" ${checked}>
-                <span class="event-color-dot" style="background-color: ${color}"></span>
-                ${config.label || type}
-            </label>
+            <div class="event-type-row">
+                <label class="event-type-toggle">
+                    <input type="checkbox" data-event-type="${type}" ${checked}>
+                    <span class="event-color-dot" style="background-color: ${color}"></span>
+                    ${config.label || type}
+                </label>
+                <label class="event-cumul-label" title="Show cumulative total from start">
+                    <input type="checkbox" class="event-cumul-toggle" data-event-type="${type}" ${cumulChecked}>
+                    Cumul.
+                </label>
+            </div>
         `;
     }
 
@@ -395,10 +400,13 @@ function setupEventListeners() {
     document.getElementById('step-forward-btn')?.addEventListener('click', () => stepTime(1));
     document.getElementById('reset-btn')?.addEventListener('click', resetTime);
 
-    // Cumulative toggle
-    document.getElementById('cumulative-toggle')?.addEventListener('change', (e) => {
-        eventState.cumulative = e.target.checked;
-        updateEventLayers();
+    // Per-type cumulative toggles
+    document.querySelectorAll('.event-cumul-toggle').forEach(input => {
+        input.addEventListener('change', (e) => {
+            const type = e.target.dataset.eventType;
+            eventState.cumulativeByType[type] = e.target.checked;
+            updateEventLayers();
+        });
     });
 
     // Display mode
@@ -474,49 +482,169 @@ function resetTime() {
 // =============================================================================
 
 async function updateEventLayers() {
-    // Clear existing event layers
-    clearEventLayers();
+    // Guard: skip this tick if a previous update is still in flight.
+    // This prevents queued-up overlapping requests during fast playback.
+    if (eventState.isUpdating) return;
+    eventState.isUpdating = true;
 
-    // Get visible event types
-    const visibleTypes = Object.entries(eventState.visibleEventTypes)
-        .filter(([_, visible]) => visible)
-        .map(([type, _]) => type);
+    try {
+        // Get visible event types
+        const visibleTypes = Object.entries(eventState.visibleEventTypes)
+            .filter(([_, visible]) => visible)
+            .map(([type, _]) => type);
 
-    if (visibleTypes.length === 0) {
-        updateEventStats({});
+        if (visibleTypes.length === 0) {
+            _hideAllMarkers();
+            updateEventStats({});
+            updateEventLegend();
+            return;
+        }
+
+        // Calculate time window
+        const rollingWindow = eventState.config?.time?.rolling_window_days || 1;
+        const timeEnd = eventState.currentTime;
+
+        // Group visible types by their per-type cumulative setting
+        const cumulTypes  = visibleTypes.filter(t =>  eventState.cumulativeByType[t]);
+        const rollingTypes = visibleTypes.filter(t => !eventState.cumulativeByType[t]);
+
+        const allGeojson = {};
+
+        // Fetch cumulative types (time_start = timeMin)
+        if (cumulTypes.length > 0) {
+            const params = new URLSearchParams({
+                time_start: eventState.timeMin,
+                time_end:   timeEnd,
+                cumulative: 'true'
+            });
+            cumulTypes.forEach(t => params.append('types', t));
+            const resp = await fetch(`/api/events/geojson/batch?${params}`);
+            Object.assign(allGeojson, await resp.json());
+        }
+
+        // Fetch rolling (non-cumulative) types (time_start = timeEnd - rollingWindow)
+        if (rollingTypes.length > 0) {
+            const params = new URLSearchParams({
+                time_start: timeEnd - rollingWindow,
+                time_end:   timeEnd,
+                cumulative: 'false'
+            });
+            rollingTypes.forEach(t => params.append('types', t));
+            const resp = await fetch(`/api/events/geojson/batch?${params}`);
+            Object.assign(allGeojson, await resp.json());
+        }
+
+        // Hide all existing markers so that geo_units absent from this
+        // frame's data are invisible (they are not removed — just transparent).
+        _hideAllMarkers();
+
+        const allStats = {};
+        for (const [eventType, geojson] of Object.entries(allGeojson)) {
+            const typeConfig = eventState.config?.event_types?.[eventType] || {};
+            if (geojson.features && geojson.features.length > 0) {
+                _updateOrCreateLayer(eventType, geojson, typeConfig);
+            }
+            allStats[eventType] = geojson.properties?.total_count || 0;
+        }
+
+        updateEventStats(allStats);
         updateEventLegend();
+
+    } catch (error) {
+        console.error('Error updating event layers:', error);
+    } finally {
+        eventState.isUpdating = false;
+    }
+}
+
+// Hide all cached markers by setting opacity to 0 (keeps DOM nodes alive for reuse).
+function _hideAllMarkers() {
+    for (const cache of Object.values(eventState.markerCache)) {
+        for (const marker of Object.values(cache)) {
+            marker.setStyle({ opacity: 0, fillOpacity: 0 });
+        }
+    }
+}
+
+// Update existing circleMarkers in-place or create new ones for unseen geo_units.
+// Only operates in choropleth mode; marker mode falls back to displayEventLayer().
+function _updateOrCreateLayer(eventType, geojson, typeConfig) {
+    if (eventState.mode !== 'choropleth') {
+        // For marker mode, fall back to the original full-recreate approach.
+        displayEventLayer(eventType, geojson);
         return;
     }
 
-    // Calculate time window
-    const window = eventState.config?.time?.rolling_window_days || 1;
-    const timeEnd = eventState.currentTime;
-    const timeStart = eventState.cumulative ? eventState.timeMin : timeEnd - window;
+    const displayConfig    = eventState.config?.display?.choropleth || {};
+    const sizeConfig       = displayConfig.size || {};
+    const minRadius        = sizeConfig.min_radius || 6;
+    const maxRadius        = sizeConfig.max_radius || 35;
+    const radiusMethod     = sizeConfig.method || 'sqrt';
+    const radiusScale      = sizeConfig.scale || 2.0;
+    const borderConfig     = displayConfig.border || {};
+    const borderColor      = borderConfig.color || '#333';
+    const borderWidth      = borderConfig.width || 1;
+    const borderOpacity    = borderConfig.opacity || 0.8;
+    const fillOpacity      = displayConfig.fill_opacity || 0.7;
+    const colorThresholds  = typeConfig.color_thresholds || [];
+    const gradient         = typeConfig.gradient || {};
+    const useRelativeScaling = typeConfig.use_relative_scaling || false;
+    const popupConfig      = eventState.config?.popup || {};
 
-    // Fetch and display each event type
-    const allStats = {};
+    const counts   = geojson.features.map(f => f.properties.count);
+    const maxCount = Math.max(...counts, 1);
+    const zoomScale = getZoomScaleFactor();
 
-    for (const eventType of visibleTypes) {
-        try {
-            const response = await fetch(
-                `/api/events/geojson/${eventType}?` +
-                `time_start=${timeStart}&time_end=${timeEnd}` +
-                `&cumulative=${eventState.cumulative}`
-            );
-            const geojson = await response.json();
-
-            if (geojson.features && geojson.features.length > 0) {
-                displayEventLayer(eventType, geojson);
-            }
-
-            allStats[eventType] = geojson.properties?.total_count || 0;
-        } catch (error) {
-            console.error(`Error loading ${eventType} events:`, error);
-        }
+    // Ensure a persistent L.layerGroup exists for this event type
+    if (!eventState.layers[eventType]) {
+        eventState.layers[eventType] = L.layerGroup();
+        if (state.map) eventState.layers[eventType].addTo(state.map);
+    }
+    if (!eventState.markerCache[eventType]) {
+        eventState.markerCache[eventType] = {};
     }
 
-    updateEventStats(allStats);
-    updateEventLegend();
+    const cache      = eventState.markerCache[eventType];
+    const layerGroup = eventState.layers[eventType];
+
+    for (const feature of geojson.features) {
+        const geoId    = feature.properties.geo_unit_id;
+        const count    = feature.properties.count;
+        const [lon, lat] = feature.geometry.coordinates;
+
+        const fillColor  = getColorForCount(count, maxCount, colorThresholds, gradient, useRelativeScaling);
+        const baseRadius = calculateEventRadius(count, maxCount, minRadius, maxRadius, radiusMethod, radiusScale);
+        const scaledRadius = baseRadius * zoomScale;
+
+        if (cache[geoId]) {
+            // Marker already exists — update its style and radius in-place.
+            // This avoids DOM node creation/destruction on every tick.
+            cache[geoId].setStyle({
+                fillColor:   fillColor,
+                color:       borderColor,
+                weight:      borderWidth,
+                opacity:     borderOpacity,
+                fillOpacity: fillOpacity
+            });
+            cache[geoId].setRadius(scaledRadius);
+            cache[geoId].options.baseRadius = baseRadius;
+        } else {
+            // First time we see this geo_unit — create a non-interactive marker.
+            // interactive: false lets clicks pass through to the geo_unit marker below.
+            const marker = L.circleMarker([lat, lon], {
+                radius:      scaledRadius,
+                baseRadius:  baseRadius,
+                fillColor:   fillColor,
+                color:       borderColor,
+                weight:      borderWidth,
+                opacity:     borderOpacity,
+                fillOpacity: fillOpacity,
+                interactive: false
+            });
+            cache[geoId] = marker;
+            layerGroup.addLayer(marker);
+        }
+    }
 }
 
 function displayEventLayer(eventType, geojson) {
@@ -588,23 +716,9 @@ function createChoroplethLayer(geojson, typeConfig) {
                 color: borderColor,
                 weight: borderWidth,
                 opacity: 0.8,
-                fillOpacity: fillOpacity
+                fillOpacity: fillOpacity,
+                interactive: false  // clicks pass through to geo_unit marker
             });
-        },
-        onEachFeature: (feature, layer) => {
-            const props = feature.properties;
-            const popupConfig = eventState.config?.popup || {};
-
-            let popupHtml = `<div class="popup-title">Geo Unit ${props.geo_unit_id}</div>`;
-
-            if (popupConfig.show_count !== false) {
-                popupHtml += `<div class="popup-info"><strong>Count:</strong> ${props.count.toLocaleString()}</div>`;
-            }
-            if (popupConfig.show_rate !== false && props.rate) {
-                popupHtml += `<div class="popup-info"><strong>Rate:</strong> ${props.rate.toFixed(1)} per 100k</div>`;
-            }
-
-            layer.bindPopup(popupHtml);
         }
     });
 }
@@ -709,23 +823,9 @@ function createMarkerLayer(geojson, typeConfig) {
                 color: borderColor,
                 weight: borderWidth,
                 opacity: borderOpacity,
-                fillOpacity: fillOpacity
+                fillOpacity: fillOpacity,
+                interactive: false  // clicks pass through to geo_unit marker
             });
-        },
-        onEachFeature: (feature, layer) => {
-            const props = feature.properties;
-            const popupConfig = eventState.config?.popup || {};
-
-            let popupHtml = `<div class="popup-title">Geo Unit ${props.geo_unit_id}</div>`;
-
-            if (popupConfig.show_count !== false) {
-                popupHtml += `<div class="popup-info"><strong>Count:</strong> ${props.count.toLocaleString()}</div>`;
-            }
-            if (popupConfig.show_rate !== false && props.rate) {
-                popupHtml += `<div class="popup-info"><strong>Rate:</strong> ${props.rate.toFixed(1)} per 100k</div>`;
-            }
-
-            layer.bindPopup(popupHtml);
         }
     });
 }
@@ -737,6 +837,8 @@ function clearEventLayers() {
         }
     }
     eventState.layers = {};
+    // Discard cached markers so they are recreated fresh on next enable
+    eventState.markerCache = {};
 }
 
 function updateEventStats(stats) {
@@ -838,6 +940,98 @@ function updateEventLegend() {
     };
 
     legend.addTo(state.map);
+}
+
+// =============================================================================
+// EVENT STATS FOR A SPECIFIC GEO UNIT
+// =============================================================================
+
+/**
+ * Returns an HTML card showing rolling and cumulative event counts for a given
+ * geo_unit_id, or '' if events are not active / no visible types.
+ * Called by app.js when the user clicks a geo unit marker.
+ */
+async function getEventStatsHtmlForUnit(geoUnitId) {
+    // Guard: only show when events are enabled and the checkbox is checked
+    if (!eventState.enabled) return '';
+    const enableToggle = document.getElementById('enable-events');
+    if (!enableToggle?.checked) return '';
+
+    const visibleTypes = Object.entries(eventState.visibleEventTypes)
+        .filter(([_, visible]) => visible)
+        .map(([type]) => type);
+    if (visibleTypes.length === 0) return '';
+
+    const timeEnd = eventState.currentTime;
+    const rollingWindow = eventState.config?.time?.rolling_window_days || 1;
+    const windowLabel = rollingWindow === 1 ? 'day' : `${rollingWindow} days`;
+
+    try {
+        // Two concurrent batch requests: rolling window and cumulative total
+        const rollingParams = new URLSearchParams({
+            time_start: timeEnd - rollingWindow,
+            time_end:   timeEnd,
+            cumulative: 'false'
+        });
+        visibleTypes.forEach(t => rollingParams.append('types', t));
+
+        const cumulParams = new URLSearchParams({
+            time_start: eventState.timeMin,
+            time_end:   timeEnd,
+            cumulative: 'true'
+        });
+        visibleTypes.forEach(t => cumulParams.append('types', t));
+
+        const [rollingResp, cumulResp] = await Promise.all([
+            fetch(`/api/events/geojson/batch?${rollingParams}`),
+            fetch(`/api/events/geojson/batch?${cumulParams}`)
+        ]);
+
+        const rollingData = await rollingResp.json();
+        const cumulData   = await cumulResp.json();
+        const geoIdInt    = parseInt(geoUnitId);
+
+        let rows = '';
+        for (const type of visibleTypes) {
+            const typeConfig   = eventState.config?.event_types?.[type] || {};
+            const label        = typeConfig.label || type;
+            const color        = typeConfig.color || typeConfig.marker?.color || '#666';
+
+            const rollingCount = rollingData[type]?.features
+                ?.find(f => f.properties.geo_unit_id === geoIdInt)
+                ?.properties?.count ?? 0;
+
+            const cumulCount = cumulData[type]?.features
+                ?.find(f => f.properties.geo_unit_id === geoIdInt)
+                ?.properties?.count ?? 0;
+
+            rows += `
+                <div class="evt-stat-row">
+                    <span class="event-color-dot" style="background-color:${color}"></span>
+                    <span class="evt-stat-label">${label}</span>
+                    <span class="evt-stat-val" title="Events in current ${windowLabel} window">${rollingCount.toLocaleString()}<span class="evt-stat-unit">/${windowLabel}</span></span>
+                    <span class="evt-stat-val evt-stat-cumul" title="Cumulative total from simulation start">${cumulCount.toLocaleString()}<span class="evt-stat-unit"> total</span></span>
+                </div>`;
+        }
+
+        return `
+            <div class="evt-stats-panel">
+                <div class="evt-stats-header">
+                    <span>Events</span>
+                    <span class="evt-stats-day">Day ${timeEnd.toFixed(1)}</span>
+                </div>
+                <div class="evt-stats-col-labels">
+                    <span></span><span></span>
+                    <span title="Current ${windowLabel} window">/${windowLabel}</span>
+                    <span title="From simulation start">total</span>
+                </div>
+                ${rows}
+            </div>`;
+
+    } catch (err) {
+        console.error('Error fetching event stats for unit:', err);
+        return '';
+    }
 }
 
 // =============================================================================
