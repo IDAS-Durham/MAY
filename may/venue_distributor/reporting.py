@@ -48,16 +48,21 @@ class ReportingManager:
             logger.warning(f"No venues of type '{venue_type}' to export")
             return
         
-        # Build venue -> people mapping
+        # Build venue -> people mapping using the distributor's subset_key
+        # This ensures we only count people assigned by THIS distributor,
+        # not people placed by other distributors (e.g., students vs teachers)
+        subset_key = self.distributor.subset_key
         venue_people = defaultdict(list)
-        for person in world.people:
-            if activity_key not in person.activity_map:
-                continue
-            venue_subsets = person.activity_map[activity_key].get(activity_type_key)
-            if not venue_subsets:
-                continue
-            for subset in venue_subsets:
-                venue_people[id(subset.venue)].append(person)
+        for venue in venues:
+            if subset_key:
+                # Only count members from this distributor's subset
+                if subset_key in venue.subsets:
+                    venue_people[id(venue)] = list(venue.subsets[subset_key].members)
+                # else: venue has 0 people from this distributor (don't count other subsets)
+            else:
+                # No specific subset_key — count all subset members
+                for sk, subset in venue.subsets.items():
+                    venue_people[id(venue)].extend(subset.members)
         
         os.makedirs(os.path.dirname(output_path), exist_ok=True) if os.path.dirname(output_path) else None
         
