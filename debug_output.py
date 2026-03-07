@@ -104,6 +104,72 @@ def export_venue_allocations(world, output_file="venue_allocations.csv"):
         logger.info("No non-household venues to export")
 
 
+def export_residence_venues(world, output_file="residence_venues.csv"):
+    """
+    Export all venues assigned as residences with their residents to CSV.
+
+    Args:
+        world: World object containing geography, population, and venues
+        output_file: Path to output CSV file
+    """
+    logger.info(f"Exporting residence venues to {output_file}...")
+
+    # Collect residence data
+    residence_data = []
+    all_venues = world.venues.get_all_venues().values()
+
+    for venue in all_venues:
+        # Check all subsets. Households use dynamic categories (Kids, Adults, etc) rather than a single 'resident' key.
+        for subset in venue.subsets.values():
+            members = subset.members
+            
+            if not members:
+                continue
+                
+            hid = venue.properties.get('HID', 'N/A')
+            s_hid = str(hid).strip()
+            if s_hid.endswith('.0'):
+                s_hid = s_hid[:-2]
+            bt_code = venue.properties.get('BTCode', 'N/A')
+            venue_type = venue.type
+            
+            for person in members:
+                # Format age/sex as "30F"
+                sex_char = person.sex[0].upper() if person.sex else 'U'
+                age_sex = f"{int(person.age)}{sex_char}"
+                
+                residence_data.append({
+                    'HID': s_hid,
+                    'BTCode': bt_code,
+                    'VenueType': venue_type,
+                    'PersonID': person.id,
+                    'AgeSex': age_sex
+                })
+
+    if residence_data:
+        # Sort primarily by VenueType (households first) and then by HID
+        try:
+            # We want 'household' to be first. Others following alphabetically is fine.
+            residence_data.sort(key=lambda x: (
+                0 if x['VenueType'] == 'household' else 1,
+                str(x['HID']),
+                x['PersonID']
+            ))
+        except Exception as e:
+            logger.warning(f"Failed to sort residence data: {e}")
+
+        # Write to CSV
+        with open(output_file, 'w', newline='') as f:
+            fieldnames = ['HID', 'BTCode', 'VenueType', 'PersonID', 'AgeSex']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(residence_data)
+            
+        logger.info(f"Exported {len(residence_data):,} residence records to {output_file}")
+    else:
+        logger.warning("No residence venues found to export")
+
+
 def export_people(world, output_file="people.csv"):
     """
     Export all people with their attributes, properties, and activity assignments to CSV.

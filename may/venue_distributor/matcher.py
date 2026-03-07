@@ -319,6 +319,35 @@ class VenueMatcher:
                 
             weights = np.array([1.0 / (d + 0.1) for d in dists])
             return np.random.choice(valid, p=weights / weights.sum())
+        elif strategy == 'closest_balanced':
+            valid = [v for v in venues if v.coordinates]
+            if not valid: return venues[0]
+            
+            if len(valid) < 50:
+                dists = np.array([self.distributor._haversine_distance(person_location, v.coordinates) for v in valid])
+            else:
+                coords = np.array([v.coordinates for v in valid])
+                dists = self.distributor._haversine_distance_vectorized(person_location, coords)
+            
+            dist_weights = 1.0 / (dists + 0.1)
+            
+            # Factor in remaining capacity
+            remaining_caps = np.array([
+                self.distributor._get_remaining_capacity(v) for v in valid
+            ], dtype=np.float64)
+            
+            total_cap = max(self.distributor._get_venue_capacity(valid[0]), 1)
+            cap_weights = remaining_caps / total_cap
+            
+            weights = dist_weights * cap_weights
+            weight_sum = weights.sum()
+            
+            if weight_sum <= 0:
+                # All venues full — fall back to closest
+                return valid[np.argmin(dists)]
+            
+            probs = weights / weight_sum
+            return np.random.choice(valid, p=probs)
         elif strategy == 'largest_capacity':
             return max(venues, key=lambda v: self.distributor._get_venue_capacity(v))
 

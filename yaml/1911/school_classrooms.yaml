@@ -1,0 +1,56 @@
+# VenueChildCreator Configuration - School Classrooms
+#
+# This config creates classrooms within schools based on student allocation.
+#
+# Workflow:
+# 1. Students are first distributed to schools (via venue_distributor)
+# 2. This config runs and:
+#    - Groups students by age
+#    - Creates classrooms for each age group
+#    - Redistributes students from school to specific classrooms
+#
+# Example: If a school has 90 students aged 10, and max_capacity is 30,
+#          this will create 3 classrooms for age 10 students.
+
+parent_venue_type: school    # Parent venues to process
+child_venue_type: classroom   # Type of child venues to create
+
+# Group students by this attribute (creates separate classrooms per age)
+group_by_attribute: age
+
+# Maximum students per classroom
+max_capacity: 45
+
+# Minimum students needed to create a classroom
+# (if a school has only 5 students aged 15, don't create a classroom)
+min_capacity: 1
+
+# Properties to add to each created classroom
+child_properties:
+  capacity: 45
+
+# Distribution strategy:
+#   'even' - Distribute students evenly across all classrooms for this age
+#   'fill'  - Fill first classroom to max before moving to next
+distribution_strategy: even
+
+# ========================================
+# ACTIVITY MANAGEMENT
+# ========================================
+# Control how students' activity_map is updated when moving to classrooms
+
+# Activity map key: Which activity to set when adding to classroom
+# This should match the activity_map_key used in school_distributor.yaml
+activity_map_key: "primary_activity"
+
+# Subset key: Which subset to add students to in the classroom
+# This should match the subset_key used in school_distributor.yaml
+subset_key: "student"
+
+# Replace parent activity: If true, replaces school's primary_activity with classroom
+# If false, keeps both school and classroom in activity_map
+replace_parent_activity: true
+
+# Remove from parent: If true, removes student from school's subset
+# If false, keeps student in school's subset for reference (can still query all students in a school)
+remove_from_parent: false

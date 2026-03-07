@@ -1,5 +1,5 @@
-distributor_name: "hospital_distributor"
-venue_type: "hospital"
+distributor_name: "medical_distributor"
+venue_type: "medical"
 description: "Assign which medical facility a person will attend to when they need it"
 
 activity_map_key: "medical_facility"
@@ -16,7 +16,7 @@ venue_selection:
   consider_by: "count"
 
   # Count-based parameters (when consider_by = "count")
-  count: 1
+  count: 15
   criteria: "closest"  # "closest", "random", "largest_capacity"
 
   max_distance: 100
@@ -36,26 +36,8 @@ venue_selection:
   respect_capacity: false
 
 allocation:
-
-  strategy: "closest"
-  # Options:
-  #   - "random": Randomly pick from eligible venues
-  #   - "closest": Always pick closest
-  #   - "proportional": Weight by inverse distance (closer = higher probability)
-
-  # What to do if capacity is missing or 0
-  capacity_handling:
-    if_missing: "ignore"  # "ignore" (no limit), "skip" (don't use venue), "default"
-    default_capacity: 1000  # Used when if_missing = "default"
-    if_zero: "ignore"  # "ignore", "skip"
-
-  track_capacity: false
-
-  when_full: "overflow"  # "exclude" (remove from options), "overflow" (allow over-capacity)
-
-  overflow_behavior:
-    distribute_evenly: true  # Spread overflow across all venues proportionally
-    max_overflow_per_venue: null  # null = unlimited, or set a max (e.g., 1.5x capacity)
+  strategy: "closest_balanced"
+  enforce_no_empty_venues: true
 
   batch_by: "geo_unit"  # "geo_unit", "none"
 
@@ -93,18 +75,6 @@ fallback:
     max_iterations: 3
     distance_multiplier: 2.0  # Double search radius each iteration
 
-# ============================================================================
-# VALIDATION & CONSTRAINTS
-# ============================================================================
-
-validation:
-  # Ensure person has required attributes before attempting allocation
-  required_person_attributes:
-    - "age"
-    - "geographical_unit"  # Person's location (at smallest level, will traverse up if needed)
-
-  # Ensure venues have required columns
-  required_venue_columns:
-    - "geo_unit"
-    - "latitude"
-    - "longitude"
+exports:
+  venue_summary: "output/1911/medical_venue_summary.csv"
+  unallocated_report: "output/1911/medical_unallocated.csv"

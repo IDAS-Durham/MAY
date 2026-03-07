@@ -235,8 +235,125 @@ class VenueDistributor(BaseDistributor):
         if unallocated_total:
             self.fallbacks.handle_fallbacks(unallocated_total, venues, world)
 
+        # Phase 4.5: Enforce no empty venues (optional)
+        if self.config.get('allocation', {}).get('enforce_no_empty_venues', False):
+            self._enforce_no_empty_venues(venues)
+
         self.reporting.log_allocation_summary(world, eligible_count=len(eligible))
         # self.reporting.check_priority_coverage(world) # Temporarily disabled for performance (slow 630k scan)
+
+        # Phase 5: Exports
+        exports_config = self.config.get('exports', {})
+        if exports_config.get('venue_summary'):
+            self.reporting.export_venue_summary(world, exports_config['venue_summary'])
+        if exports_config.get('unallocated_report'):
+            self.reporting.export_unallocated_report(world, exports_config['unallocated_report'])
+
+    def _enforce_no_empty_venues(self, venues):
+        """Post-allocation: ensure every venue has at least 1 person.
+        
+        For each empty venue, steal the nearest person from the venue
+        with the most people. This guarantees minimum occupancy while
+        minimally disrupting the existing distribution.
+        
+        Note: if there are fewer people than venues, it's impossible to
+        fill all venues. In that case, we fill as many as possible.
+        """
+        subset_key = self.subset_key
+        
+        # Build lists of empty and populated venues
+        empty_venues = []
+        populated_venues = []
+        total_people = 0
+        for v in venues:
+            count = self.venue_capacity_tracker.get(id(v), 0)
+            total_people += count
+            if count == 0:
+                empty_venues.append(v)
+            else:
+                populated_venues.append((v, count))
+        
+        if not empty_venues:
+            return
+        
+        # Check if we have enough people to fill all empty venues
+        # We can only steal from venues that have >1 people
+        stealable = sum(max(0, c - 1) for _, c in populated_venues)
+        fillable = min(len(empty_venues), stealable)
+        
+        if fillable == 0:
+            logger.warning(f"  enforce_no_empty_venues: Cannot fill {len(empty_venues)} empty venues — "
+                          f"only {total_people} people across {len(venues)} venues "
+                          f"(no venue has >1 to spare)")
+            return
+        
+        if fillable < len(empty_venues):
+            logger.info(f"  enforce_no_empty_venues: Can fill {fillable}/{len(empty_venues)} empty venues "
+                       f"({total_people} people across {len(venues)} venues)")
+        
+        # Sort populated venues by count descending (steal from most overfull first)
+        populated_venues.sort(key=lambda x: x[1], reverse=True)
+        
+        reassigned = 0
+        for empty_venue in empty_venues:
+            # Find the most overfull venue that still has >1 people
+            donor = None
+            for pv, _ in populated_venues:
+                current_count = self.venue_capacity_tracker.get(id(pv), 0)
+                if current_count > 1:
+                    donor = pv
+                    break
+            
+            if not donor:
+                break  # No more donors available
+            
+            # Get the donor's subset and pick a person
+            donor_subset = donor.subsets.get(subset_key)
+            if not donor_subset or len(donor_subset.members) < 2:
+                continue
+            
+            # Pick person closest to the empty venue
+            empty_loc = self._get_venue_location(empty_venue)
+            if empty_loc:
+                person = min(
+                    donor_subset.members,
+                    key=lambda p: self._haversine_distance(
+                        empty_loc, 
+                        self._get_person_location(p) or empty_loc
+                    )
+                )
+            else:
+                person = next(iter(donor_subset.members))
+            
+            # Remove from donor
+            donor_subset.remove_member(person)
+            self.venue_capacity_tracker[id(donor)] -= 1
+            
+            # Remove from person's activity_map
+            activity_type_key = self.activity_type if self.activity_type else self.venue_type
+            if self.activity_map_key in person.activity_map:
+                activity_dict = person.activity_map[self.activity_map_key]
+                if isinstance(activity_dict, dict) and activity_type_key in activity_dict:
+                    activity_dict[activity_type_key] = [
+                        s for s in activity_dict[activity_type_key]
+                        if s.venue.id != donor.id
+                    ]
+            
+            # Add to empty venue
+            empty_venue.add_to_subset(
+                person, subset_key=subset_key,
+                activity_name=self.activity_map_key,
+                activity_type=self.activity_type
+            )
+            self._increment_venue_count(empty_venue)
+            reassigned += 1
+            
+            # Re-sort populated venues (donor count changed)
+            populated_venues.sort(key=lambda x: self.venue_capacity_tracker.get(id(x[0]), 0), reverse=True)
+        
+        remaining_empty = len(empty_venues) - reassigned
+        logger.info(f"  enforce_no_empty_venues: Reassigned {reassigned}/{len(empty_venues)} empty venues"
+                   + (f" ({remaining_empty} unfillable — not enough people)" if remaining_empty > 0 else ""))
 
     def _prepare_vectorized_data(self, people: List):
         """Build population arrays for all attributes used in filters."""

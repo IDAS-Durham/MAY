@@ -236,6 +236,76 @@ class AllocationEngine:
                                 venue_ptr += 1
                         if not assigned:
                             unallocated.append(person)
+
+                elif strategy == 'closest_balanced' and lat is not None:
+                    # Weighted allocation: balance distance preference with remaining capacity
+                    # Pre-compute distances once for all venues in this pool
+                    venue_dists = np.array([
+                        self.distributor._haversine_distance((lat, lon), self.distributor._get_venue_location(v))
+                        for v in available_venues
+                    ])
+                    
+                    if self.verbose and not hasattr(self, '_cb_logged_geo'):
+                        self._cb_logged_geo = set()
+                    
+                    geo_name = geo_unit.name if hasattr(geo_unit, 'name') else str(geo_unit)
+                    group_allocated = 0
+                    
+                    # Pre-compute remaining capacity ONCE (not per person!)
+                    remaining_caps = np.array([
+                        self.distributor._get_remaining_capacity(v) if respect_capacity else 1
+                        for v in available_venues
+                    ], dtype=np.float64)
+                    
+                    total_cap = self.distributor._get_venue_capacity(available_venues[0]) if available_venues else 1
+                    
+                    # Pre-compute distance weights (constant for this SGU batch)
+                    dist_weights = 1.0 / (venue_dists + 0.1)
+                    
+                    for person in group:
+                        # Filter to only venues with remaining capacity
+                        valid_mask = remaining_caps > 0
+                        if not valid_mask.any():
+                            unallocated.append(person)
+                            continue
+                        
+                        valid_indices = np.where(valid_mask)[0]
+                        valid_caps = remaining_caps[valid_indices]
+                        
+                        # Capacity weight: venues with more remaining capacity are preferred
+                        cap_weights = valid_caps / max(total_cap, 1)
+                        
+                        # Combined weight = distance * capacity
+                        weights = dist_weights[valid_indices] * cap_weights
+                        weight_sum = weights.sum()
+                        
+                        if weight_sum <= 0:
+                            unallocated.append(person)
+                            continue
+                        
+                        probs = weights / weight_sum
+                        chosen_idx = valid_indices[np.random.choice(len(valid_indices), p=probs)]
+                        v = available_venues[chosen_idx]
+                        
+                        v.add_to_subset(person, subset_key=self.distributor.subset_key,
+                                       activity_name=self.distributor.activity_map_key, activity_type=self.distributor.activity_type)
+                        self.distributor._increment_venue_count(v)
+                        allocated += 1
+                        group_allocated += 1
+                        
+                        # Update capacity array incrementally (avoid rebuilding)
+                        if respect_capacity:
+                            remaining_caps[chosen_idx] -= 1
+                    
+                    # Log per-SGU summary for this group
+                    if self.verbose and geo_name not in self._cb_logged_geo:
+                        self._cb_logged_geo.add(geo_name)
+                        venue_counts = [self.distributor.venue_capacity_tracker.get(id(v), 0) for v in available_venues]
+                        used = sum(1 for c in venue_counts if c > 0)
+                        logger.debug(f"  [closest_balanced] {geo_name}: {len(group)} people -> "
+                                    f"{group_allocated} allocated across {used}/{len(available_venues)} venues, "
+                                    f"counts={sorted(venue_counts, reverse=True)[:8]}")
+
                 else:
                     # Fallback for complex strategies or missing coordinates
                     for person in group:

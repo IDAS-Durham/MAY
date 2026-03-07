@@ -20,7 +20,7 @@ class FallbackManager:
         if strategy == 'skip' or not unallocated_people:
             return unallocated_people
             
-        logger.info(f"Handling fallbacks for {len(unallocated_people)} people using strategy '{strategy}'")
+        logger.debug(f"Handling fallbacks for {len(unallocated_people)} people using strategy '{strategy}'")
         
         if strategy == 'relax_distance':
             return self._relax_distance(unallocated_people, venues, fallback_config)
@@ -78,7 +78,7 @@ class FallbackManager:
     def _assign_closest(self, people: List, venues: List) -> List:
         """Assign each person to their absolute closest venue, ignoring ALL other constraints."""
         allocated_count = 0
-        logger.info("  Assigning to closest venue regardless of eligibility or capacity...")
+        logger.debug("  Assigning to closest venue regardless of eligibility or capacity...")
         
         for person in people:
             location = self.distributor._get_person_location(person)
@@ -98,6 +98,7 @@ class FallbackManager:
                     logger.warning(f"Could not find ANY venue for person {person.id} in assign_closest fallback")
             
         self.distributor.allocated_this_run += allocated_count
-        logger.info(f"  assign_closest: Allocated {allocated_count}/{len(people)} people")
+        logger.info(f"  Fallback (assign_closest): {allocated_count}/{len(people)} placed")
         
         return [p for p in people if self.distributor._get_person_location(p) is None]
+

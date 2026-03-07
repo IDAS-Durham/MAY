@@ -276,8 +276,6 @@ allocation:
   #   - "random": Randomly pick from eligible venues
   #   - "closest": Always pick closest
   #   - "proportional": Weight by inverse distance (closer = higher probability)
-  #   - "capacity_weighted": Weight by available capacity
-  #   - "greedy_fill": Fill schools sequentially by distance
 
   # --------------------------------
   # Capacity management

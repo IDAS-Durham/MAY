@@ -92,4 +92,7 @@ debug_scripts/
 
 # Dummy log files
 log.txt
+output/
+june_analysis/
+mgu_codes.txt
 world_map/medieval_map.html

@@ -1,0 +1,34 @@
+# Workplace Distributor — Sales (Occode 2 → BTCode 2)
+# 18,760 venues, 72,990 eligible workers (~3.9 per venue)
+venue_type: "workplace_sales"
+activity_map_key: "primary_activity"
+subset_key: "worker"
+
+settings:
+  verbose: true
+  use_spatial_index: false      # Not needed with consider_by: "geo_unit"
+
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "MGU"        # Search ALL venues in the MGU
+  batch_geo_level: "SGU"        # Batch workers by SGU (fast, uses SGU centroid for distance)
+  consider_by: "geo_unit"       # O(1) dict lookup — no spatial index needed
+
+eligibility:
+  global_filters:
+    - attribute: "Occode"
+      type: "categorical"
+      values: [2]
+
+allocation:
+  track_capacity: true
+  when_full: "exclude"
+  fixed_capacity: 4            # 72,959 workers ÷ 18,760 venues ≈ 3.9
+  strategy: "closest_balanced"
+
+fallback:
+  strategy: "skip"
+
+exports:
+  venue_summary: "output/1911/workplace_sales_venue_summary.csv"
+  unallocated_report: "output/1911/workplace_sales_unallocated.csv"
