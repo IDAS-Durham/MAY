@@ -25,7 +25,7 @@ timeline:
     - type: distributor
       config: "yaml/1911/school_distributor_1911.yaml"
     - type: child_creator
-      config: "yaml/venue_child_creators/school_classrooms.yaml"
+      config: "yaml/1911/school_classrooms.yaml"
     - type: distributor
       config: "yaml/1911/workplace_classroom_distributor.yaml"
     - type: distributor
@@ -44,7 +44,10 @@ timeline:
       config: "yaml/1911/workplace_education_distributor.yaml"
     - type: distributor
       config: "yaml/1911/workplace_mine_distributor.yaml"
-
+    - type: distributor
+      config: "yaml/1911/medical_distributor.yaml"
+    - type: distributor
+      config: "yaml/1911/multi_venue_distributor.yaml"
 
 households:
   enabled: false

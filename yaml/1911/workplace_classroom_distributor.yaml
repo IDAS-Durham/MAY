@@ -21,7 +21,7 @@ eligibility:
 allocation:
   track_capacity: true
   when_full: "exclude"
-  fixed_capacity: 1
+  fixed_capacity: 2
   strategy: "closest_balanced"
   enforce_no_empty_venues: true
 

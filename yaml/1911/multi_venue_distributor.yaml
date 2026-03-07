@@ -1,0 +1,233 @@
+# ============================================================================
+# Multi-Venue Distributor Configuration
+# ============================================================================
+# This distributor provides people with multiple venue options across different
+# venue types. It creates a nested structure in activity_map:
+#
+# Structure:
+#   person.activity_map[activity_map_key] = {
+#       venue_type_1: [subset1, subset2, subset3],
+#       venue_type_2: [subset1, subset2],
+#       venue_type_3: [subset1, subset2, subset3, subset4],
+#   }
+#
+# This is a GENERIC distributor - configure it for any use case:
+# - Leisure activities (cinema, gym, pub)
+# - Social venues (cafes, parks, community centers)
+# - Service locations (banks, post offices, libraries)
+# - Any other scenario requiring multiple venue options
+# ============================================================================
+
+# ============================================================================
+# BASIC INFO
+# ============================================================================
+distributor_name: "multi_venue_distributor"
+distributor_type: "multi_venue"  # Tells the loader which class to use
+description: "Provide people with multiple venue options across different types"
+
+# Activity map key - FULLY CUSTOMIZABLE
+# Examples: "leisure", "social", "services", "entertainment"
+activity_map_key: "leisure"
+
+# Subset key for all venues - FULLY CUSTOMIZABLE
+# Examples: "patron", "member", "visitor", "customer"
+subset_key: "patron"
+
+# Venue types to include - FULLY CUSTOMIZABLE
+# Add, remove, or change any venue types as needed
+venue_types:
+  - church
+  - pub
+
+# Per-venue-type configuration
+# Fully customizable - specify any attributes for filtering
+venue_type_config:
+  church:
+    count: 1  # Override default count for gym
+    
+# ============================================================================
+# ELIGIBILITY: Who can be allocated to these venues?
+# ============================================================================
+eligibility:
+  # Don't require unassigned - this is independent of other activities
+  require_unassigned: false
+
+  # Global filters - FULLY CUSTOMIZABLE
+  global_filters:
+    # Age filter
+    - attribute: "age"
+      type: "numerical"
+      description: "Age restriction"
+      min: 14  # Change as needed
+      max: 120
+
+  # Require residence - FULLY CUSTOMIZABLE
+  require_residence: true
+
+# ============================================================================
+# VENUE SELECTION: How many venues per type?
+# ============================================================================
+venue_selection:
+  # Selection method: count-based (N closest venues)
+  consider_by: "count"
+
+  # Number of venues to assign per type - FULLY CUSTOMIZABLE
+  count: 5
+
+  # Selection criteria
+  criteria: "closest"
+
+  # Geographical level - FULLY CUSTOMIZABLE
+  venue_geo_level: "MGU"  # Leisure venues are at MGU level
+  batch_geo_level: "SGU"  # Batch by SGU for performance
+
+  # Location sources - FULLY CUSTOMIZABLE
+  person_location_source: "geographical_unit.coordinates"
+  venue_location_source: "coordinates"
+
+  # Distance calculation - FULLY CUSTOMIZABLE
+  distance_metric: "haversine"
+
+  # Filtering
+  filter_by_geography: true
+  respect_capacity: false
+
+# ============================================================================
+# ALLOCATION STRATEGY
+# ============================================================================
+allocation:
+  # No capacity tracking (optional activities)
+  track_capacity: false
+
+  # Batch processing for performance
+  batch_by: "geo_unit"
+
+# ============================================================================
+# EXECUTION SETTINGS
+# ============================================================================
+settings:
+  # Execution priority
+  priority: 1
+
+  # No allocation limit
+  max_allocations: null
+
+  # Logging
+  verbose: true
+  log_summary: true
+
+  # Performance
+  use_spatial_index: true
+
+# ============================================================================
+# VALIDATION
+# ============================================================================
+validation:
+  # Required person attributes
+  required_person_attributes:
+    - "age"
+    - "geographical_unit"
+
+  # Required venue columns
+  required_venue_columns:
+    - "geo_unit"
+    - "Latitude"
+    - "Longitude"
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# PARTICIPATION FILTERING (FULLY FLEXIBLE):
+#
+# You can filter by ANY person attributes - not limited to age/sex!
+#
+# Example 1: Filter by ethnicity and income
+#   venue_type_config:
+#     venue_x:
+#       participation_filter:
+#         data_file: "data/participation_by_ethnicity.csv"
+#         row_filters:
+#           - person_attribute: "ethnicity"
+#             csv_column: "ethnicity_group"
+#             match_type: "exact"
+#           - person_attribute: "income"
+#             csv_column: "income_band"
+#             match_type: "numerical_range"
+#         probability_column:
+#           person_attribute: "employment_status"
+#           column_template: "pct_{value}"
+#
+# Example 2: Filter by age only
+#   venue_type_config:
+#     venue_y:
+#       participation_filter:
+#         data_file: "data/age_participation.csv"
+#         row_filters:
+#           - person_attribute: "age"
+#             csv_column: "age_group"
+#             match_type: "age_range"
+#         probability_column:
+#           column_name: "participation_rate"  # Fixed column name
+#
+# Supported match_types:
+#   - age_range: Parses "16-24" format from CSV, matches person.age
+#   - exact: Exact match between person attribute and CSV value
+#   - numerical_range: Parses numerical ranges like "0-1000"
+#
+# Probability column options:
+#   - column_template: Dynamic column based on person attribute
+#   - column_name: Fixed column name (no templating)
+#
+# ALLOCATION LOGIC:
+#
+# 1. Filter people by configured criteria (age, residence, etc.)
+# 2. For each eligible person:
+#    a. Initialize person.activity_map[activity_map_key] = {}
+#    b. For each venue type in venue_types:
+#       - Find N closest venues of that type
+#       - Create a subset in each venue with configured subset_key
+#       - Store as person.activity_map[activity_map_key][venue_type] = [subsets]
+# 3. Result: Each person has a nested dict of venue options
+#
+# USAGE EXAMPLES:
+#
+# Example 1: Leisure venues (this configuration)
+#   activity_map_key: "leisure"
+#   venue_types: [cinema, grocery, gym, pub]
+#
+#   Access: person.activity_map['leisure']['cinema']
+#
+# Example 2: Social venues
+#   activity_map_key: "social"
+#   venue_types: [cafe, park, community_center]
+#   subset_key: "visitor"
+#
+#   Access: person.activity_map['social']['cafe']
+#
+# Example 3: Service locations
+#   activity_map_key: "services"
+#   venue_types: [bank, post_office, library]
+#   subset_key: "customer"
+#   eligibility.global_filters[0].min: 0  # All ages
+#
+#   Access: person.activity_map['services']['bank']
+#
+# CUSTOMIZATION:
+#
+# This distributor is COMPLETELY GENERIC. To customize:
+# - Change activity_map_key to name your activity category
+# - Change venue_types to your desired venue types
+# - Change subset_key to your desired subset name
+# - Adjust eligibility filters (age, residence, etc.)
+# - Adjust venue_selection.count for more/fewer options
+# - Change geographical levels as needed
+#
+# ADDING NEW VENUE TYPES:
+#
+# 1. Add the venue type to yaml/venues/venues_config.yaml
+# 2. Add the type name to venue_types list above
+# 3. Ensure CSV file exists with Latitude/Longitude columns
+# 4. The distributor will automatically handle it
+#
+# ============================================================================

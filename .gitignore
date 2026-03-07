@@ -91,3 +91,6 @@ debug_scripts/
 
 # Dummy log files
 log.txt
+
+output/
+june_analysis/

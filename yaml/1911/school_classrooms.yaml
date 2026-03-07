@@ -19,7 +19,7 @@ child_venue_type: classroom   # Type of child venues to create
 group_by_attribute: age
 
 # Maximum students per classroom
-max_capacity: 40
+max_capacity: 45
 
 # Minimum students needed to create a classroom
 # (if a school has only 5 students aged 15, don't create a classroom)
@@ -27,7 +27,7 @@ min_capacity: 1
 
 # Properties to add to each created classroom
 child_properties:
-  capacity: 40
+  capacity: 45
 
 # Distribution strategy:
 #   'even' - Distribute students evenly across all classrooms for this age
