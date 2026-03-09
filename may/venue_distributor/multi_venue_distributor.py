@@ -41,14 +41,15 @@ class MultiVenueDistributor(BaseDistributor):
     - Distance-based venue selection with spatial indexing
     """
 
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str = None, config_dict: dict = None):
         """
         Initialize MultiVenueDistributor from YAML configuration.
 
         Args:
             config_path: Path to distributor YAML file
+            config_dict: Dictionary config (alternative to file)
         """
-        super().__init__(config_file=config_path)
+        super().__init__(config_file=config_path, config_dict=config_dict)
 
         # Extract configuration
         self.distributor_name = self.config.get('distributor_name', 'multi_venue_distributor')

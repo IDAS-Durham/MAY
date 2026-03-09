@@ -275,7 +275,12 @@ class VenueManager:
 
             # Override name if provided
             if name and pd.notna(name):
+                # Remove the generic auto-generated name from the dictionary
+                if venue.name in self.venues:
+                    del self.venues[venue.name]
+                # Set the custom name and register it
                 venue.name = name
+                self.venues[name] = venue
 
             # Set coordinates if available
             if coordinates:

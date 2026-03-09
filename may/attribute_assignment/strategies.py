@@ -1065,6 +1065,32 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
         return sampled
 
 
+class ConstantStrategy(AssignmentStrategy):
+    """
+    Assigns a fixed, constant value.
+
+    This is useful for static attributes or default values that apply
+    unconditionally to a given role or household structure.
+    """
+
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize constant strategy."""
+        super().__init__(config, data_manager)
+        self.value = config.get('value')
+
+    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
+        """Batch assignment - all receive the same value."""
+        return [self.value] * len(people_list)
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """Assign the constant value."""
+        if self.value is None:
+            logger.warning(f"ConstantStrategy: No value configured for assignment to person {person.id}")
+            return self._fallback(person, household, context, "NO_CONSTANT_VALUE")
+
+        return self.value
+
+
 class StrategyFactory:
     """
     Factory for creating strategy instances.
@@ -1081,6 +1107,7 @@ class StrategyFactory:
         'commuting_likelihood': CommutingLikelihoodStrategy,
         'geographical_unit_sampler': GUSamplerStrategy,
         'categorical_sampler': CategoricalSamplerStrategy,
+        'constant': ConstantStrategy,
     }
 
     @classmethod
