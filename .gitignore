@@ -93,3 +93,4 @@ debug_scripts/
 # Dummy log files
 log.txt
 world_map/medieval_map.html
+world_map/data/
