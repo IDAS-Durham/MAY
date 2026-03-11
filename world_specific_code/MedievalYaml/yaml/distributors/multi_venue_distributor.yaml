@@ -27,36 +27,33 @@ description: "Provide people with multiple venue options across different types"
 
 # Activity map key - FULLY CUSTOMIZABLE
 # Examples: "leisure", "social", "services", "entertainment"
-activity_map_key: "leisure"
+activity_map_key: "church"
 
 # Subset key for all venues - FULLY CUSTOMIZABLE
 # Examples: "patron", "member", "visitor", "customer"
-subset_key: "patron"
+subset_key: "visitor"
 
 # Venue types to include - FULLY CUSTOMIZABLE
 # Add, remove, or change any venue types as needed
 venue_types:
-  - cinema
-  - grocery
-  - gym
-  - pub
+  - church
 
 # Per-venue-type configuration
 # Fully customizable - specify any attributes for filtering
 venue_type_config:
-  gym:
-    count: 1  # Override default count for gym
-    participation_filter:
-      data_file: "data/population/leisure_participation/gym_attendance.csv"
-      # Attributes to match against CSV rows
-      row_filters:
-        - person_attribute: "age"
-          csv_column: "age_band"
-          match_type: "age_range"  # Built-in: parses "16-24" format
-      # Attribute to select probability column
-      probability_column:
-        person_attribute: "sex"
-        column_template: "pct_{value}"  # {value} replaced with person.sex value
+  # gym:
+  #   count: 1  # Override default count for gym
+  #   participation_filter:
+  #     data_file: "data/population/leisure_participation/gym_attendance.csv"
+  #     # Attributes to match against CSV rows
+  #     row_filters:
+  #       - person_attribute: "age"
+  #         csv_column: "age_band"
+  #         match_type: "age_range"  # Built-in: parses "16-24" format
+  #     # Attribute to select probability column
+  #     probability_column:
+  #       person_attribute: "sex"
+  #       column_template: "pct_{value}"  # {value} replaced with person.sex value
 
 # ============================================================================
 # ELIGIBILITY: Who can be allocated to these venues?
@@ -65,19 +62,19 @@ eligibility:
   # Don't require unassigned - this is independent of other activities
   require_unassigned: false
 
-  # Global filters - FULLY CUSTOMIZABLE
-  global_filters:
-    # Age filter
-    - attribute: "age"
-      type: "numerical"
-      description: "Age restriction"
-      min: 18  # Change as needed
-      max: 120
+  # # Global filters - FULLY CUSTOMIZABLE
+  # global_filters:
+  #   # Age filter
+  #   - attribute: "age"
+  #     type: "numerical"
+  #     description: "Age restriction"
+  #     min: 18  # Change as needed
+  #     max: 120
 
-    - attribute: "residence.type"
-      type: "categorical"
-      description: "Only allocate people living in households or dorms"
-      values: ["household", "student_dorms"]
+  #   - attribute: "residence.type"
+  #     type: "categorical"
+  #     description: "Only allocate people living in households or dorms"
+  #     values: ["household", "student_dorms"]
 
   # Require residence - FULLY CUSTOMIZABLE
   require_residence: true
@@ -90,14 +87,14 @@ venue_selection:
   consider_by: "count"
 
   # Number of venues to assign per type - FULLY CUSTOMIZABLE
-  count: 5
+  count: 1
 
   # Selection criteria
   criteria: "closest"
 
   # Geographical level - FULLY CUSTOMIZABLE
-  venue_geo_level: "MGU"  # Leisure venues are at MGU level
-  batch_geo_level: "SGU"  # Batch by SGU for performance
+  venue_geo_level: "MBD_Temp_ID"  # Leisure venues are at MGU level
+  batch_geo_level: "MBD_Temp_ID"  # Batch by SGU for performance
 
   # Location sources - FULLY CUSTOMIZABLE
   person_location_source: "geographical_unit.coordinates"
@@ -153,8 +150,8 @@ validation:
   # Required venue columns
   required_venue_columns:
     - "geo_unit"
-    - "Latitude"
-    - "Longitude"
+    - "latitude"
+    - "longitude"
 
 # ============================================================================
 # NOTES
