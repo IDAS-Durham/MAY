@@ -1141,21 +1141,21 @@ class HouseholdDistributor:
                         if failed_category_idx < len(pools):
                             available_count = len(pools[failed_category_idx])
 
-                    # Try demoting the failed category directly to available count
-                # Demote directly to available count instead of one-by-one
-                new_pattern = current_pattern.demote_to_count(failed_category_idx, available_count)
+                    # Demote directly to available count instead of one-by-one
+                    new_pattern = current_pattern.demote_to_count(failed_category_idx, available_count)
 
-            # If intelligent demotion didn't work, try fallback priority order
-            if new_pattern is None:
-                logger.debug(f"  → Intelligent demotion failed, trying fallback priority order")
-                new_pattern = current_pattern.demote_once(fallback_priority)
-
+                # If intelligent demotion didn't work, try fallback priority order
                 if new_pattern is None:
-                    logger.debug(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
-                    logger.debug("")
-                    return None
+                    logger.debug(f"  → Intelligent demotion failed, trying fallback priority order")
+                    new_pattern = current_pattern.demote_once(fallback_priority)
 
-                # Check if the demoted pattern would result in an empty household
+                    if new_pattern is None:
+                        logger.debug(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
+                        logger.debug("")
+                        return None
+
+                # Safety checks apply to ALL demoted patterns (both intelligent and fallback)
+                # Check if the demoted pattern would result in a too-small household
                 min_size = self.config['demotion']['min_household_size']
                 if new_pattern.min_household_size() < min_size:
                     logger.debug(f"  ✗ Demoted pattern too small (min size {min_size}): '{new_pattern.to_string()}'")
@@ -1163,7 +1163,7 @@ class HouseholdDistributor:
                     logger.debug("")
                     return None
 
-                # Validate the new pattern against demotion rules
+                # Validate the new pattern against demotion validation rules
                 validation_rules = self.config.get('demotion', {}).get('validation_rules', [])
                 if validation_rules and not new_pattern.validate_against_rules(
                     validation_rules, self.category_name_to_idx
