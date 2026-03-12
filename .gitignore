@@ -97,3 +97,6 @@ june_analysis/
 mgu_codes.txt
 world_map/medieval_map.html
 world_map/data/
+
+# Folder to dump stuff
+tmp/

@@ -235,28 +235,37 @@ def main():
             assign_activity_map=True,
         )
 
-        # Near-range inter-unit network: annulus [1, 15] km, W-S clustering
+        # Near-range inter-unit network: annulus [0.01, 15] km, W-S clustering
         build_spatial_social_network(
             world.geography,
-            min_radius_km=1.0,
-            max_radius_km=15.0,
+            min_radius_km=0.01, # small but nonzero so that it is distinguished from people in literally the same manor. 
+            max_radius_km=8.0, # a reasonable distance to walk in an afternoon I would say. 
             mean_connections_per_person=6,
             clustering_level=0.6,
             storage_key='social_contacts_near',
             assign_activity_map=True,
         )
 
-        # Far-range inter-unit network: annulus [15, 30] km, W-S clustering
+        # Far-range inter-unit network: annulus [6, 20] km, W-S clustering
+        build_spatial_social_network(
+            world.geography,
+            min_radius_km=6.0,
+            max_radius_km=20.0,
+            mean_connections_per_person=6,
+            clustering_level=0.6,
+            storage_key='social_contacts_med',
+            assign_activity_map=True,
+        )
+        # Far-range inter-unit network: annulus [15, 50] km, W-S clustering
         build_spatial_social_network(
             world.geography,
             min_radius_km=15.0,
-            max_radius_km=30.0,
+            max_radius_km=50.0,
             mean_connections_per_person=6,
             clustering_level=0.6,
             storage_key='social_contacts_far',
             assign_activity_map=True,
         )
-
     
 
     logger.info("")
