@@ -226,24 +226,14 @@ def main():
 
         # Builds a local network based on a particular clustering algorithm.
         # This creates realistic closed graphs. 
+        # Must be run after household allocation as it maps to the contact's household.
         build_local_social_network(
             world.geography,
             mean_connections_per_person=6,
             clustering_level=0.6,
-            storage_key = 'social_contacts_local',
-            algorithm = 'watts_strogatz',
+            storage_key='social_contacts_local',
+            assign_activity_map=True,
         )
-
-        # Assign activity_map for social contacts.
-        # Must be run after household allocation as it maps to the contact's household. 
-        for person in world.population.people:
-            if 'social_contacts_local' in person.properties:
-                person.activities.add('social_contacts_local')
-                person.activity_map['social_contacts_local'] = {}
-                for contact_id in person.properties['social_contacts_local']:
-                    contact = world.population.people_by_id[contact_id]
-                    if 'residence' in contact.activity_map:
-                        person.activity_map['social_contacts_local'].update(contact.activity_map['residence'])
 
         # Near-range inter-unit network: annulus [1, 15] km, W-S clustering
         build_spatial_social_network(
