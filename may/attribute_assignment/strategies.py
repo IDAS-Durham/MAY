@@ -212,7 +212,7 @@ class PartnershipStrategy(AssignmentStrategy):
         # Get first person's attribute value
         attribute_name = context.get('attribute_name')
         first_value = self._get_attribute_value(first_person, attribute_name)
-        if not first_value:
+        if first_value is None:
             logger.warning(f"No {attribute_name} found for {self.partner_role}")
             return self._fallback(person, household, context, "PARTNER_VALUE_MISSING")
 
@@ -285,7 +285,7 @@ class InheritanceStrategy(AssignmentStrategy):
             parent = self._get_person_by_role(context, role_name)
             if parent:
                 value = self._get_attribute_value(parent, attribute_name)
-                if value:
+                if value is not None:
                     parent_values.append(value)
 
         if not parent_values:
@@ -410,7 +410,7 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
             return self._fallback(person, household, context, "CHILD_NOT_FOUND")
 
         child_value = self._get_attribute_value(child, attribute_name)
-        if not child_value:
+        if child_value is None:
             logger.warning(f"No value found for child role '{child_role}'")
             return self._fallback(person, household, context, "CHILD_VALUE_MISSING")
 
@@ -439,8 +439,21 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
                         # Nested strategy - create and execute it
                         strategy_type = then_action.get('strategy')
                         if strategy_type == 'probabilistic':
-                            fallback_strategy = ProbabilisticStrategy(then_action, self.data_manager)
-                            return fallback_strategy.assign(person, household, context)
+                            # Check for exclude constraints (e.g., secondary_elder
+                            # must differ from primary_elder when child is Mixed)
+                            exclude_refs = then_action.get('exclude', [])
+                            excluded_values = self._resolve_exclude_values(
+                                exclude_refs, context, attribute_name
+                            )
+
+                            if excluded_values:
+                                return self._sample_with_exclusion(
+                                    person, household, context,
+                                    then_action, excluded_values
+                                )
+                            else:
+                                fallback_strategy = ProbabilisticStrategy(then_action, self.data_manager)
+                                return fallback_strategy.assign(person, household, context)
                         else:
                             logger.warning(f"Unknown nested strategy: {strategy_type}")
                             return self._fallback(person, household, context, "NESTED_STRATEGY_UNSUPPORTED")
@@ -450,6 +463,111 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
 
         # No logic matched - fallback
         return self._fallback(person, household, context, "LOGIC_NO_MATCH")
+
+    def _resolve_exclude_values(self, exclude_refs: List[str],
+                                context: Dict[str, Any],
+                                attribute_name: str) -> set:
+        """
+        Resolve exclude references like ["primary_elder.ethnicity"] into
+        concrete values by looking up the referenced role persons in context.
+
+        Args:
+            exclude_refs: List of "role.attribute" reference strings
+            context: Assignment context containing role persons
+            attribute_name: Current attribute being assigned
+
+        Returns:
+            Set of concrete values to exclude (may be empty)
+        """
+        excluded = set()
+        for ref in exclude_refs:
+            # Parse "role_name.attribute_name" format
+            parts = ref.split('.', 1)
+            if len(parts) == 2:
+                role_name, attr_name = parts
+            else:
+                role_name = ref
+                attr_name = attribute_name
+
+            person = self._get_person_by_role(context, role_name)
+            if person:
+                value = self._get_attribute_value(person, attr_name)
+                if value is not None:
+                    excluded.add(value)
+                    logger.debug(f"Exclude: resolved '{ref}' → '{value}'")
+                else:
+                    logger.debug(f"Exclude: '{ref}' has no value assigned yet, skipping")
+            else:
+                logger.debug(f"Exclude: role '{role_name}' not found in context, skipping")
+
+        return excluded
+
+    def _sample_with_exclusion(self, person, household, context: Dict[str, Any],
+                                strategy_config: Dict[str, Any],
+                                excluded_values: set) -> Any:
+        """
+        Sample from a probabilistic distribution while excluding specific values.
+
+        Gets the full distribution, removes excluded values, re-normalizes,
+        and samples. Falls back to sampling without exclusion if all values
+        would be excluded.
+
+        Args:
+            person: Person being assigned
+            household: Household venue
+            context: Assignment context
+            strategy_config: Probabilistic strategy config dict
+            excluded_values: Set of values to exclude from sampling
+
+        Returns:
+            Sampled attribute value
+        """
+        data_source_name = strategy_config.get('data_source', 'geo_distribution')
+
+        # Get the geo unit for lookup
+        geo_unit = None
+        if household and household.geographical_unit:
+            geo_unit = household.geographical_unit.name
+        elif person.geographical_unit:
+            geo_unit = person.geographical_unit.name
+
+        if not geo_unit:
+            logger.warning(f"No geo unit for exclusion sampling, person {person.id}")
+            return self._fallback(person, household, context, "GEO_UNIT_MISSING")
+
+        # Look up full distribution
+        probs = self.data_manager.lookup(data_source_name, geo_unit)
+        if not probs:
+            logger.warning(f"No distribution for {data_source_name}({geo_unit})")
+            return self._fallback(person, household, context, "DATA_SOURCE_MISSING")
+
+        # Remove excluded values
+        filtered_probs = {k: v for k, v in probs.items() if k not in excluded_values}
+
+        if not filtered_probs:
+            # All values excluded — fall back to full distribution with warning
+            logger.warning(
+                f"All values excluded for person {person.id} "
+                f"(excluded={excluded_values}, available={set(probs.keys())}). "
+                f"Falling back to full distribution without exclusion."
+            )
+            filtered_probs = probs
+
+        # Re-normalize
+        total = sum(filtered_probs.values())
+        if total <= 0:
+            logger.warning(f"Zero total probability after exclusion for person {person.id}")
+            return self._fallback(person, household, context, "ZERO_PROBABILITY")
+
+        values = list(filtered_probs.keys())
+        probabilities = [v / total for v in filtered_probs.values()]
+
+        sampled = np.random.choice(values, p=probabilities)
+        logger.debug(
+            f"Reverse inheritance (with exclusion): {sampled} for {person.id} "
+            f"(excluded={excluded_values})"
+        )
+        return sampled
 
     def _evaluate_condition_with_context(self, condition: str, eval_context: dict,
                                          child_role: str, attribute_name: str, child_value: Any) -> bool:
