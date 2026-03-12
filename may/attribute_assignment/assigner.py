@@ -837,8 +837,9 @@ class AttributeAssigner:
             for venue_type, subsets in person.activity_map["residence"].items():
                 if subsets:
                     venue = subsets[0].venue
-                    logger.debug(f"  Person {person.id} residence found: {venue_type} (ID={venue.id})")
-                    return venue
+                    if venue is not None:
+                        logger.debug(f"  Person {person.id} residence found: {venue_type} (ID={venue.id})")
+                        return venue
         return None
 
     def _check_required_attributes(self, people):
