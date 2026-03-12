@@ -1,0 +1,8 @@
+venue_types:
+  household:
+    enabled: true
+    filename: households.csv
+    is_residence: true
+
+settings:
+  filter_by_geography: true

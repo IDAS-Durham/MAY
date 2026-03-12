@@ -38,7 +38,6 @@ venue_types:
     filter_values: ["P"]
     is_residence: false
 
-
   school:
     enabled: true
     batch_mode: true

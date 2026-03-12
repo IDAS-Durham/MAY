@@ -29,6 +29,81 @@ class HouseholdPromoter:
         self._households_by_geo_unit = None
         self._households_by_pattern = None
 
+    def _adding_person_satisfies_rules(self, household, category_name: str,
+                                       validation_rules: List[Dict]) -> bool:
+        """
+        Check whether adding one person of `category_name` to `household` would
+        violate any validation rule.
+
+        Unlike validate_against_rules (which works on pattern *minimums*), this
+        evaluates rules against the **actual current composition** of the household
+        *after* the hypothetical addition.  That catches cases like adding a Kid to
+        an elderly-only household where Adults == 0 in reality even though the
+        promoted pattern says '>=0' for Adults.
+
+        Args:
+            household: The household venue being considered.
+            category_name: The category of the person about to be added.
+            validation_rules: List of rule dicts from the promotion config.
+
+        Returns:
+            True if adding the person is safe, False if it would violate a rule.
+        """
+        if not validation_rules:
+            return True
+
+        age_categories = household.properties.get('_age_categories', self.distributor.categories)
+        composition = household.get_composition(age_categories)
+
+        # Simulate adding one person of this category
+        simulated = dict(composition)
+        simulated[category_name] = simulated.get(category_name, 0) + 1
+
+        cat_map = self.distributor.category_name_to_idx
+
+        for rule in validation_rules:
+            condition = rule.get('condition', {})
+            requirement = rule.get('requirement', {})
+            rule_name = rule.get('name', 'Unnamed rule')
+
+            cond_category = condition.get('category')
+            if cond_category not in cat_map:
+                continue
+
+            cond_count = simulated.get(cond_category, 0)
+            cond_operator = condition.get('operator')
+            cond_value = condition.get('value')
+
+            # Use the existing operator evaluator from CompositionPattern
+            from may.residence.composition_pattern import CompositionPattern
+            cp = CompositionPattern.from_string("0")  # dummy — just for _evaluate_operator
+            if not cp._evaluate_operator(cond_count, cond_operator, cond_value):
+                continue  # condition not triggered
+
+            # Condition is met — check requirement(s)
+            req_list = requirement if isinstance(requirement, list) else [requirement]
+            any_req_met = False
+            for req in req_list:
+                req_category = req.get('category')
+                if req_category not in cat_map:
+                    continue
+                req_count = simulated.get(req_category, 0)
+                req_operator = req.get('operator')
+                req_value = req.get('value')
+                if cp._evaluate_operator(req_count, req_operator, req_value):
+                    any_req_met = True
+                    break
+
+            if not any_req_met:
+                logger.debug(
+                    f"    Skipping add: adding {category_name} to household "
+                    f"{household.id} would violate rule '{rule_name}'. "
+                    f"Simulated composition: {simulated}"
+                )
+                return False
+
+        return True
+
     def _get_households_by_geo_unit(self) -> Dict[str, List]:
         """Index households by geo_unit if not already done."""
         if self._households_by_geo_unit is None:
@@ -216,6 +291,14 @@ class HouseholdPromoter:
                         can_add = max(0, max_count - current_count)
 
                     if can_add > 0:
+                        # Guard: check that adding this category to this household
+                        # does not violate any validation rule against the *actual*
+                        # composition (not just the promoted pattern).
+                        if not self._adding_person_satisfies_rules(
+                            household, category_name, validation_rules
+                        ):
+                            continue
+
                         # Extract IDs to remove from the front of the dictionary
                         ids_to_take = list(islice(available_people.keys(), can_add))
                         

@@ -43,7 +43,7 @@ venue_types:
 # Fully customizable - specify any attributes for filtering
 venue_type_config:
   church:
-    count: 1  # Override default count for gym
+    count: 1  # Override default count for church
     
 # ============================================================================
 # ELIGIBILITY: Who can be allocated to these venues?
