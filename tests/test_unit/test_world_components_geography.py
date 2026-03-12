@@ -1,4 +1,3 @@
-import os
 import pytest
 from may.config_loader import setup_geography
 from may.geography import Geography

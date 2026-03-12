@@ -1,24 +1,3 @@
-"""
-Priority #5: Integration-Level Allocation Strategy Tests
-
-Tests the full household allocation pipeline with a deliberately imbalanced
-"stress_world" dataset that forces demotion, promotion, overflow, and
-error-handling code paths.
-
-The stress_world has 28 people across 3 SGUs:
-  SGU_S1 (15 people): 7 kids, 3 YA, 3 adults, 2 OA
-    -> requests 3x ">=2 >=0 2 0" (needs 6 adults, has 3 → FORCES DEMOTION)
-    -> requests 1x "0 0 0 2" (elderly couple)
-  SGU_S2 (9 people): 2 kids, 1 YA, 4 adults, 2 OA
-    -> requests 1x "1 >=0 2 0", 1x "0 0 2 0", 1x "0 0 0 2"
-  SGU_S3 (4 people): 2 YA, 2 adults
-    -> requests 1x "0 0 2 0", 1x "0 >=0 0 0" (with assumption)
-
-This tests the INTENDED behavior of census obfuscation handling:
-households can't always be filled exactly as the census says, so the
-system must demote, promote, overflow, and shuffle people realistically.
-"""
-
 import pytest
 import numpy as np
 from may.geography import Geography

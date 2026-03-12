@@ -1,14 +1,3 @@
-"""
-Integration tests for the demotion-backtracking pipeline.
-
-Tests the interaction between:
-- _attempt_with_demotion (demotion loop)
-- _allocate_household_with_rules (rules-based allocation)
-- distribute_households_round (round distribution)
-- _calculate_balanced_distribution / _allocate_balanced_distribution
-
-All tests use real objects from the micro_world test data.
-"""
 import pytest
 import numpy as np
 from may.geography import Geography

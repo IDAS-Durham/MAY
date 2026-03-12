@@ -1,4 +1,3 @@
-import os
 import pytest
 from may.geography import Geography
 from may.population.population import PopulationManager

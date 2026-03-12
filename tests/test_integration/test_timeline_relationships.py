@@ -1,6 +1,5 @@
 import pytest
 from pathlib import Path
-from typing import Dict, List
 import logging
 
 # Ensure debug logging is captured

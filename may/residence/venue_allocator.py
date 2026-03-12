@@ -146,6 +146,10 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
         # Allocate people to this venue
         venue_residents = []
         for _ in range(capacity):
+            # Respect global max_allocations cap
+            if len(allocated_people) >= people_to_allocate:
+                break
+
             # Find next eligible person who hasn't been allocated yet
             person = None
             while venue_eligible:
@@ -175,8 +179,6 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
             # Add people to venue's subset system so they're counted properly
             for person in venue_residents:
                 venue.add_to_subset(person, subset_key=subset_key)
-                # Set venue reference on each person (optional)
-                setattr(person, f'{venue_type}_venue', venue)
 
         # Log progress at intervals
         if venues_processed % progress_interval == 0 or venues_processed == total_venues:

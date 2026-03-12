@@ -1,9 +1,7 @@
 import pytest
 import os
-import yaml
 import h5py
 from unittest.mock import patch, MagicMock
-import numpy as np
 
 # We focus on the isolated block of logic found in run_world (Lines 335-350)
 def execute_serialization_block(world_mock, config, args, logger_mock):

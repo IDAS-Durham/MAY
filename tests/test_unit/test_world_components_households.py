@@ -1,5 +1,4 @@
 import pytest
-import os
 from may.geography import Geography
 from may.population.population import PopulationManager
 from may.geography.venue_manager import VenueManager
