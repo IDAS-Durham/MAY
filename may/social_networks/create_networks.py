@@ -302,6 +302,7 @@ def build_spatial_social_network(
         geo_unit_level: str = None,
         storage_key: str = None,
         store: bool = True,
+        assign_activity_map: bool = False,
 ) -> None:
     """
     Build an inter-geo-unit social network using a Spatial Watts-Strogatz algorithm.
@@ -321,6 +322,9 @@ def build_spatial_social_network(
         geo_unit_level: Level of geo_units to use. Defaults to the smallest level.
         storage_key: Key for person.properties storage. Auto-generated if None.
         store: If True, store contacts in person.properties[storage_key].
+        assign_activity_map: If True (and store=True), also populate person.activities and
+            person.activity_map[storage_key] with contacts' residence venue mappings
+            in the same pass as contact storage.
 
     Returns:
         None — contacts stored as lists of Person objects in person.properties[storage_key].
@@ -381,34 +385,24 @@ def build_spatial_social_network(
     avg_nb = np.mean([len(n) for n in all_neighbors])
     logger.info(f"  Neighbour units per geo_unit: avg {avg_nb:.1f}")
 
-    # ---- Collect people, build people-per-unit CSR and person_unit map ------------
+    # ---- Collect people and build people-per-unit CSR -------------------------
     all_people = []
-    unit_people_lists = []
+    people_per_unit_counts = []
     for unit in units_with_coords:
         people_in_unit = list(unit.get_people())
-        start_idx = len(all_people)
         all_people.extend(people_in_unit)
-        unit_people_lists.append(list(range(start_idx, len(all_people))))
+        people_per_unit_counts.append(len(people_in_unit))
 
     N = len(all_people)
     if N == 0:
         logger.warning("build_spatial_social_network: no people found — skipping")
         return
 
-    total_unit_people = sum(len(p) for p in unit_people_lists)
-    unit_starts_arr = np.zeros(U, dtype=np.int32)
-    unit_ends_arr = np.zeros(U, dtype=np.int32)
-    unit_people_flat = np.zeros(total_unit_people, dtype=np.int32)
-    person_unit = np.zeros(N, dtype=np.int32)
-
-    offset = 0
-    for unit_idx, ppl_indices in enumerate(unit_people_lists):
-        unit_starts_arr[unit_idx] = offset
-        for pid in ppl_indices:
-            unit_people_flat[offset] = pid
-            person_unit[pid] = unit_idx
-            offset += 1
-        unit_ends_arr[unit_idx] = offset
+    counts_arr = np.array(people_per_unit_counts, dtype=np.int32)
+    unit_ends_arr   = np.cumsum(counts_arr).astype(np.int32)
+    unit_starts_arr = (unit_ends_arr - counts_arr).astype(np.int32)
+    unit_people_flat = np.arange(N, dtype=np.int32)
+    person_unit = np.repeat(np.arange(U, dtype=np.int32), counts_arr)
 
     logger.info(f"  {N:,} people across {U} geo_units")
 
@@ -431,26 +425,47 @@ def build_spatial_social_network(
             person_unit, rewire_prob,
         )
 
-    # ---- Symmetrize and store -----------------------------------------------------
+    # ---- Symmetrize and store (vectorised) ------------------------------------
     if store:
-        # Build symmetric adjacency (directed → undirected)
-        adj = [set() for _ in range(N)]
-        for i in range(N):
-            for j_idx in range(k):
-                j = int(all_connections[i, j_idx])
-                if j < 0 or j == i:
-                    continue
-                adj[i].add(j)
-                adj[j].add(i)
+        # Extract valid directed edges from all_connections
+        row_idx, col_idx = np.where(all_connections >= 0)
+        src = row_idx.astype(np.int64)
+        dst = all_connections[row_idx, col_idx].astype(np.int64)
+
+        # Remove self-loops then add reciprocal edges
+        keep = src != dst
+        src, dst = src[keep], dst[keep]
+        all_src = np.concatenate([src, dst])
+        all_dst = np.concatenate([dst, src])
+
+        # Lexicographic sort + dedup to get unique (i, j) pairs
+        order = np.lexsort((all_dst, all_src))
+        all_src = all_src[order]
+        all_dst = all_dst[order]
+        is_dup = (all_src[1:] == all_src[:-1]) & (all_dst[1:] == all_dst[:-1])
+        unique_mask = np.concatenate([[True], ~is_dup])
+        all_src = all_src[unique_mask]
+        all_dst = all_dst[unique_mask]
+
+        # Per-person split indices
+        edge_counts = np.bincount(all_src.astype(np.intp), minlength=N)
+        ends   = np.cumsum(edge_counts, dtype=np.int64)
+        starts = ends - edge_counts
 
         total_connections = 0
         for i, person in enumerate(all_people):
-            contacts = [all_people[j] for j in adj[i]]
-            if storage_key in person.properties:
-                person.properties[storage_key].extend(contacts)
-            else:
-                person.properties[storage_key] = contacts
+            contact_indices = all_dst[starts[i]:ends[i]]
+            contacts = [all_people[int(j)] for j in contact_indices]
+            person.properties[storage_key] = contacts
             total_connections += len(contacts)
+
+            if assign_activity_map and contacts:
+                person.activities.add(storage_key)
+                activity_dict = {}
+                for contact in contacts:
+                    if 'residence' in contact.activity_map:
+                        activity_dict.update(contact.activity_map['residence'])
+                person.activity_map[storage_key] = activity_dict
 
         avg_deg = total_connections / N if N > 0 else 0.0
         logger.info(f"Built spatial social network: {total_connections:,} connections, "

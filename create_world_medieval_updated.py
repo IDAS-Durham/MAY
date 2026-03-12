@@ -253,15 +253,8 @@ def main():
             mean_connections_per_person=6,
             clustering_level=0.6,
             storage_key='social_contacts_near',
+            assign_activity_map=True,
         )
-
-        for person in world.population.people:
-            if 'social_contacts_near' in person.properties and person.properties['social_contacts_near']:
-                person.activities.add('social_contacts_near')
-                person.activity_map['social_contacts_near'] = {}
-                for contact in person.properties['social_contacts_near']:
-                    if 'residence' in contact.activity_map:
-                        person.activity_map['social_contacts_near'].update(contact.activity_map['residence'])
 
         # Far-range inter-unit network: annulus [15, 30] km, W-S clustering
         build_spatial_social_network(
@@ -271,15 +264,8 @@ def main():
             mean_connections_per_person=6,
             clustering_level=0.6,
             storage_key='social_contacts_far',
+            assign_activity_map=True,
         )
-
-        for person in world.population.people:
-            if 'social_contacts_far' in person.properties and person.properties['social_contacts_far']:
-                person.activities.add('social_contacts_far')
-                person.activity_map['social_contacts_far'] = {}
-                for contact in person.properties['social_contacts_far']:
-                    if 'residence' in contact.activity_map:
-                        person.activity_map['social_contacts_far'].update(contact.activity_map['residence'])
 
     
 
