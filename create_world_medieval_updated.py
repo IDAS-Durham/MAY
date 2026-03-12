@@ -230,7 +230,7 @@ def main():
         build_local_social_network(
             world.geography,
             mean_connections_per_person=6,
-            clustering_level=0.6,
+            clustering_level=0.8,
             storage_key='social_contacts_local',
             assign_activity_map=True,
         )
@@ -240,7 +240,7 @@ def main():
             world.geography,
             min_radius_km=0.01, # small but nonzero so that it is distinguished from people in literally the same manor. 
             max_radius_km=8.0, # a reasonable distance to walk in an afternoon I would say. 
-            mean_connections_per_person=6,
+            mean_connections_per_person=4,
             clustering_level=0.6,
             storage_key='social_contacts_near',
             assign_activity_map=True,
@@ -251,8 +251,8 @@ def main():
             world.geography,
             min_radius_km=6.0,
             max_radius_km=20.0,
-            mean_connections_per_person=6,
-            clustering_level=0.6,
+            mean_connections_per_person=4,
+            clustering_level=0.5,
             storage_key='social_contacts_med',
             assign_activity_map=True,
         )
@@ -261,8 +261,8 @@ def main():
             world.geography,
             min_radius_km=15.0,
             max_radius_km=50.0,
-            mean_connections_per_person=6,
-            clustering_level=0.6,
+            mean_connections_per_person=4,
+            clustering_level=0.3,
             storage_key='social_contacts_far',
             assign_activity_map=True,
         )
@@ -277,10 +277,10 @@ def main():
     logger.info("=" * 60)
 
     # Export venue allocations
-    export_venue_allocations(world)
+    #export_venue_allocations(world)
 
     # Export people data
-    export_people(world)
+    #export_people(world)
 
     # Export world to HDF5 for C++ simulation
     world.export_to_hdf5("world_state_medieval_updated.h5")

@@ -148,8 +148,7 @@ def _local_ws_build_lattice(
         local_i = i - unit_starts[g]
         effective_k = k if k < unit_size else unit_size - 1
         for slot in range(effective_k):
-            offset_mag = slot // 2 + 1
-            offset = offset_mag if slot % 2 == 0 else -offset_mag
+            offset = slot + 1           # +1, +2, +3, ... (forward-only)
             neighbor_local = (local_i + offset) % unit_size
             all_connections[i, slot] = unit_starts[g] + neighbor_local
 
@@ -248,11 +247,12 @@ def build_local_social_network(
 
     N = len(all_people)
     k = int(mean_connections_per_person)
+    lattice_k = max(1, k // 2)
     logger.info(f"Building local social network: {N:,} people across {len(units)} SGUs, k={k}")
 
-    all_connections = np.full((N, k), -1, dtype=np.int32)
+    all_connections = np.full((N, lattice_k), -1, dtype=np.int32)
     _local_ws_build_lattice(unit_starts, unit_ends, unit_people_flat, person_unit,
-                            all_connections, np.int32(k))
+                            all_connections, np.int32(lattice_k))
 
     rewire_prob = np.float64(1.0 - clustering_level)
     if rewire_prob > 0.0:
@@ -562,11 +562,12 @@ def build_spatial_social_network(
 
     # ---- Phase 1: Build spatial lattice -------------------------------------------
     k = mean_connections_per_person
-    all_connections = np.full((N, k), -1, dtype=np.int32)
+    lattice_k = max(1, k // 2)
+    all_connections = np.full((N, lattice_k), -1, dtype=np.int32)
     _spatial_ws_build_lattice(
         neighbor_starts, neighbor_ends, neighbor_flat,
         unit_starts_arr, unit_ends_arr, unit_people_flat,
-        person_unit, all_connections, np.int32(k),
+        person_unit, all_connections, np.int32(lattice_k),
     )
 
     # ---- Phase 2: Rewire ----------------------------------------------------------
