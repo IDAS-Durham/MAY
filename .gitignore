@@ -100,3 +100,7 @@ world_map/data/
 
 # Folder to dump stuff
 tmp/
+benchmarks/
+*~
+\#*\#
+*profile.stats
