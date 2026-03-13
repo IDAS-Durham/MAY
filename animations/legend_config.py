@@ -1,34 +1,31 @@
 """Legend configuration for the epidemic spread animation.
 
-Edit the values in LEGEND_CONFIG to control the appearance and placement of
-the static intensity legend drawn on the animation axes.
+Edit the values in LEGEND_CONFIG to control the appearance of the legend panel
+displayed to the left of the map.
 """
 
 LEGEND_CONFIG = {
-    # Set to False to hide the legend entirely.
+    # Set to False to hide the legend panel entirely.
     "show": True,
 
-    # Position of the first legend entry in axes coordinates (0-1).
-    # (0, 0) is the bottom-left corner; (1, 1) is top-right.
-    "x": 0.02,
-    "y": 0.88,
+    # Position of the first legend entry within the legend axes (axes coords 0-1).
+    # x=0.15 leaves a small left margin; y=0.95 starts near the top.
+    "x": 0.15,
+    "y": 0.95,
 
     # Vertical gap between legend entries in axes coordinates.
-    "spacing": 0.05,
+    "spacing": 0.055,
 
     # Marker diameter in points.
-    "markersize": 9,
+    "markersize": 10,
 
     # Font size for entry labels and the optional title.
-    "fontsize": 9,
+    "fontsize": 12,
 
     # Optional title drawn above the entries.  Set to None for no title.
     "title": "Intensity",
 
-    # --- Background box ---
-    "box_facecolor":  "#1a1a1a",  # fill colour
-    "box_edgecolor":  "white",    # outline colour
-    "box_alpha":      0.7,        # opacity (0 = transparent, 1 = opaque)
-    "box_padding":    0.02,       # gap between content and box edge (axes coords)
-    "box_width":      0.28,       # total width of the box (axes coords)
+    # --- Legend panel background and border ---
+    "box_facecolor": "#FFFFFF", #"#1a1a1a",   # panel background colour
+    "box_edgecolor": None, #"#888888",   # panel border colour
 }

@@ -1,0 +1,1 @@
+python launch_world_map.py --world-file data/world_state_medieval_updated.h5 --map-background image --map-image ./image1.png --map-bounds "56.0,2.0,49.0,-7.0" --map-attribution "Topological Map" --debug --events-file data/simulation_events_5_mar_whole_world.h5 2>&1 | tee log.txt

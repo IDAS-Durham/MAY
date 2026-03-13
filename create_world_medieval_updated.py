@@ -229,7 +229,7 @@ def main():
         # Must be run after household allocation as it maps to the contact's household.
         build_local_social_network(
             world.geography,
-            mean_connections_per_person=6,
+            mean_connections_per_person=4,
             clustering_level=0.8,
             storage_key='social_contacts_local',
             assign_activity_map=True,
@@ -239,9 +239,9 @@ def main():
         build_spatial_social_network(
             world.geography,
             min_radius_km=0.01, # small but nonzero so that it is distinguished from people in literally the same manor. 
-            max_radius_km=8.0, # a reasonable distance to walk in an afternoon I would say. 
-            mean_connections_per_person=4,
-            clustering_level=0.6,
+            max_radius_km=4.0, # a reasonable distance to walk in an afternoon I would say. 
+            mean_connections_per_person=2,
+            clustering_level=0.9,
             storage_key='social_contacts_near',
             assign_activity_map=True,
         )
@@ -249,20 +249,20 @@ def main():
         # Far-range inter-unit network: annulus [6, 20] km, W-S clustering
         build_spatial_social_network(
             world.geography,
-            min_radius_km=6.0,
-            max_radius_km=20.0,
-            mean_connections_per_person=4,
-            clustering_level=0.5,
+            min_radius_km=3.0,
+            max_radius_km=12.0,
+            mean_connections_per_person=2,
+            clustering_level=0.9,
             storage_key='social_contacts_med',
             assign_activity_map=True,
         )
         # Far-range inter-unit network: annulus [15, 50] km, W-S clustering
         build_spatial_social_network(
             world.geography,
-            min_radius_km=15.0,
-            max_radius_km=50.0,
-            mean_connections_per_person=4,
-            clustering_level=0.3,
+            min_radius_km=10.0,
+            max_radius_km=100.0,
+            mean_connections_per_person=2,
+            clustering_level=0.9,
             storage_key='social_contacts_far',
             assign_activity_map=True,
         )
@@ -283,7 +283,7 @@ def main():
     #export_people(world)
 
     # Export world to HDF5 for C++ simulation
-    world.export_to_hdf5("world_state_medieval_updated.h5")
+    world.export_to_hdf5("world_state_medieval_updated_low_contact_high_cluster.h5")
 
     return world
 

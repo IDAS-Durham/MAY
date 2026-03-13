@@ -48,20 +48,20 @@ from legend_config import LEGEND_CONFIG  # noqa: E402
 # ============================================================
 CONFIG = {
     # --- Data files ---
-    "events_file":      "world_map/data/simulation_events_5_mar_whole_world.h5",
-    "world_state_file": "world_map/data/world_state_medieval_updated.h5",
+    "events_file":      "world_map/data/simulation_events_with_rats.h5",
+    "world_state_file": "world_map/data/world_state_medieval_updated_low_contact_high_cluster.h5",
 
     # --- What to animate ---
-    "event_types": ["infections", "deaths"],   # subset or both
+    "event_types": ["infections", "deaths"],   # subset or both , "deaths"
 
     # --- Animation timing ---
-    "fps":            20,     # frames per second
+    "fps":            10,     # frames per second
     "days_per_frame": 1.0,    # simulation days advanced per frame
-    "time_range":     None,   # [start_day, end_day] or None = full simulation
+    "time_range":  None,   # [start_day, end_day] or None = full simulation
 
     # --- Geo-unit display ---
-    "show_geo_unit_markers":     True,   # dim baseline circles for all units
-    "geo_unit_level":            "SGU",  # geography level to animate
+    "show_geo_unit_markers":     False,   # dim baseline circles for all units
+    "geo_unit_level":            "MBD_Temp_ID",  # geography level to animate
     "geo_unit_marker_base_size": 20,     # scatter size in pt² (before scaling)
     "geo_unit_size_method":      "fixed",  # "fixed" or "population"
 
@@ -70,18 +70,19 @@ CONFIG = {
         "infections": {
             "color":        "#ff6600",
             "edge_color":   "#aa3300",
-            "alpha_max":    0.9,
-            "distribution": stats.uniform(loc=0, scale=7),  # visible 7 sim-days
-            "alpha_floor":  0.05,
-            "size_scale":   1.0,
+            "alpha_max":    1.0,
+            "distribution": stats.norm(loc=0, scale=2),   #stats.uniform(loc=0, scale=7),  # visible 7 sim-days
+            "alpha_floor":  0.0,
+            "size_scale":   1.5,
         },
         "deaths": {
             "color":        "#1a1a2e",
-            "edge_color":   "#000000",
-            "alpha_max":    1.0,
-            "distribution": stats.invgauss(1.5, loc=0, scale=10),
-            "alpha_floor":  0.05,
+            "edge_color":   "#00000000",
+            "alpha_max":    0.7,
+            "distribution": stats.uniform(loc=0, scale=1000),
+            "alpha_floor":  0.0,
             "size_scale":   1.5,
+            "normalize_by_population": True,   # colour ∝ % of geo-unit population dead
         },
     },
 
@@ -89,7 +90,7 @@ CONFIG = {
     # Each list maps to intensity_colors entries; None = catch-all top bucket.
     "intensity_thresholds": {
         "infections": [1,  5,  20, 100, None],
-        "deaths":     [1,  3,  10,  50, None],
+        "deaths":     [0.01, 10.0, 40.0, 70.0, None],  # % of geo-unit population
     },
     "intensity_colors": {
         "infections": ["#ffe0b2", "#ffb74d", "#ff9800", "#e65100", "#b71c1c"],
@@ -97,20 +98,31 @@ CONFIG = {
     },
 
     # --- Epidemic curve subplot ---
-    "show_stats":         True,
+    "show_stats":         False,
     "stats_height_ratio": [4, 1],          # map : curve height ratio
     "curve_event_types":  ["infections", "deaths"],
 
     # --- Map background (same API as tmp/animations) ---
-    "map_image":    None,           # None = auto-download ESRI; path = custom image
-    "map_bbox":     {"west": -6.0, "east": 2.0, "south": 49.0, "north": 60.0},
-    "image_corners": None,          # None = use map_bbox
+    # Geographic bounding box of the animation window (WGS-84 decimal degrees)
+    "map_bbox": {
+        "west":  -6.0,
+        "east":   2.0,
+        "south": 49.0,
+        "north": 56.0,
+    },
+
+    # Corners of the image file when they differ from map_bbox; None to use map_bbox.
+    "image_corners": {"west": -6.05, "east": 2.05, "south": 49.05, "north": 56.21},
+
+    "map_image":  'world_map/data/Topographic_Map_of_the_UK_Blank (Edited).png', # 'world_map/image1.png',#  'world_map/Topographic_Map_of_the_UK_cropped.png',           # None = auto-download ESRI; path = custom image  #
+#    "map_bbox":     {"west": -7.0, "east": 2.0, "south": 50.0, "north": 56.0},
+#    "image_corners": {"west": -7.0, "east": 2.0, "south": 50.0, "north": 56.0},
     "map_resolution": (900, 1100),  # pixel resolution for ESRI download
 
     # --- Output ---
-    "output_file":   "animations/output/epidemic.mp4",
+    "output_file":   "animations/output/epidemic_infections_only_no_rats.mp4",
     "output_format": "mp4",         # "mp4" or "gif"
-    "figure_size":   (8, 11),
+    "figure_size":   (8, 8),
     "dpi":           120,
     "title":         "Medieval Epidemic Spread",
 }
@@ -164,54 +176,31 @@ def _build_color_tables(cfg: dict) -> dict:
 
 
 def _draw_intensity_legend(ax, cfg: dict, legend_cfg: dict):
-    """Draw an intensity colour-scale legend on the map axes.
+    """Draw an intensity colour-scale legend into a dedicated legend axes.
+
+    The axes background and border are styled by the caller; this function only
+    draws the text and marker content.
 
     Args:
-        ax: Map matplotlib Axes.
+        ax: Dedicated legend Axes (not the map axes).
         cfg: The CONFIG dict.
         legend_cfg: The LEGEND_CONFIG dict.
     """
     if not legend_cfg.get("show", False):
         return
 
-    from matplotlib.patches import FancyBboxPatch
-
-    lx      = legend_cfg.get("x",       0.02)
-    ly      = legend_cfg.get("y",       0.88)
+    lx      = legend_cfg.get("x",       0.15)
+    ly      = legend_cfg.get("y",       0.95)
     spacing = legend_cfg.get("spacing", 0.05)
-    msize   = legend_cfg.get("markersize", 9)
-    fsize   = legend_cfg.get("fontsize",   9)
+    msize   = legend_cfg.get("markersize", 10)
+    fsize   = legend_cfg.get("fontsize",   16)
     title   = legend_cfg.get("title",   None)
-    padding = legend_cfg.get("box_padding", 0.02)
-    bwidth  = legend_cfg.get("box_width",   0.28)
-
-    # Count total rows across all event types (title + buckets per type)
-    total_rows = sum(
-        len(cfg["intensity_colors"].get(et, [])) + 1  # +1 for event type label
-        for et in cfg["event_types"]
-    ) + (1 if title else 0)
-
-    box_top    = ly + padding
-    box_bottom = ly - (total_rows - 1) * spacing - padding
-    box = FancyBboxPatch(
-        (lx - padding, box_bottom),
-        bwidth + 2 * padding,
-        box_top - box_bottom,
-        boxstyle="round,pad=0.01",
-        facecolor=legend_cfg.get("box_facecolor", "#1a1a1a"),
-        edgecolor=legend_cfg.get("box_edgecolor", "white"),
-        alpha=legend_cfg.get("box_alpha", 0.7),
-        transform=ax.transAxes,
-        zorder=10,
-        clip_on=False,
-    )
-    ax.add_patch(box)
 
     cur_y = ly
     if title:
         ax.text(lx, cur_y, title,
-                transform=ax.transAxes, color="white",
-                fontsize=fsize, fontweight="bold", va="top", zorder=11)
+                transform=ax.transAxes, color="black",
+                fontsize=fsize, fontweight="bold", va="top")
         cur_y -= spacing
 
     for et in cfg["event_types"]:
@@ -222,26 +211,23 @@ def _draw_intensity_legend(ax, cfg: dict, legend_cfg: dict):
         sty_color = cfg["event_styles"].get(et, {}).get("color", "white")
         ax.text(lx, cur_y, et.capitalize(),
                 transform=ax.transAxes, color=sty_color,
-                fontsize=fsize, fontweight="bold", va="center", zorder=11)
+                fontsize=fsize, fontweight="bold", va="center")
         cur_y -= spacing
 
         for i, color in enumerate(colors):
-            ax.plot(lx + 0.02, cur_y,
+            ax.plot(lx + 0.12, cur_y,
                     marker="o", color=color,
                     markeredgecolor="#555555", markeredgewidth=0.3,
                     markersize=msize, linestyle="none",
-                    transform=ax.transAxes, zorder=11)
+                    transform=ax.transAxes)
 
             thr_lo = thresholds[i - 1] if i > 0 else 0
             thr_hi = thresholds[i] if i < len(thresholds) else None
-            if thr_hi is None:
-                label = f"≥{thr_lo}"
-            else:
-                label = f"{thr_lo}–{thr_hi}"
+            label  = f"≥{thr_lo}" if thr_hi is None else f"{thr_lo}–{thr_hi}"
 
-            ax.text(lx + 0.05, cur_y, label,
-                    transform=ax.transAxes, color="white",
-                    fontsize=fsize - 1, va="center", zorder=11)
+            ax.text(lx + 0.25, cur_y, label,
+                    transform=ax.transAxes, color="black",
+                    fontsize=fsize - 2, va="center")
             cur_y -= spacing
 
 
@@ -259,6 +245,7 @@ def build_animation(cfg: dict):
     U         = len(geo_units)
     lons      = np.array([u["lon"] for u in geo_units], dtype=np.float64)
     lats      = np.array([u["lat"] for u in geo_units], dtype=np.float64)
+    pops      = np.array([u["pop"] for u in geo_units], dtype=np.float64)
 
     # --- 2. Pre-compute per-event-type style parameters ---
     print("Pre-computing event styles...")
@@ -271,20 +258,37 @@ def build_animation(cfg: dict):
     bbox = cfg["map_bbox"]
 
     # --- 4. Build figure ---
-    show_stats = cfg.get("show_stats", True)
-    if show_stats:
-        fig, (ax_map, ax_curve) = plt.subplots(
-            2, 1,
-            figsize=cfg["figure_size"],
-            dpi=cfg["dpi"],
-            gridspec_kw={"height_ratios": cfg["stats_height_ratio"]},
-        )
-    else:
-        fig, ax_map = plt.subplots(figsize=cfg["figure_size"], dpi=cfg["dpi"])
-        ax_curve = None
+    from matplotlib.gridspec import GridSpec
 
+    show_stats = cfg.get("show_stats", True)
+    fig = plt.figure(figsize=cfg["figure_size"], dpi=cfg["dpi"])
     fig.patch.set_facecolor("#1a1a1a")
-    fig.subplots_adjust(hspace=0.04)
+
+    if show_stats:
+        gs = GridSpec(
+            2, 2, figure=fig,
+            width_ratios=[1, 4],
+            height_ratios=cfg["stats_height_ratio"],
+            hspace=0.04, wspace=0.05,
+        )
+        ax_legend = fig.add_subplot(gs[:, 0])
+        ax_map    = fig.add_subplot(gs[0, 1])
+        ax_curve  = fig.add_subplot(gs[1, 1])
+    else:
+        gs = GridSpec(1, 2, figure=fig, width_ratios=[1, 4], wspace=0.05)
+        ax_legend = fig.add_subplot(gs[0, 0])
+        ax_map    = fig.add_subplot(gs[0, 1])
+        ax_curve  = None
+
+    # Legend axes styling — dark background, white border, no ticks
+    ax_legend.set_facecolor(LEGEND_CONFIG.get("box_facecolor", "#1a1a1a"))
+    ax_legend.set_xlim(0, 1)
+    ax_legend.set_ylim(0, 1)
+    ax_legend.set_xticks([])
+    ax_legend.set_yticks([])
+    for spine in ax_legend.spines.values():
+        spine.set_edgecolor(LEGEND_CONFIG.get("box_edgecolor", "white"))
+        spine.set_linewidth(0.8)
 
     # Map axes
     ax_map.set_facecolor("#1a1a1a")
@@ -297,20 +301,20 @@ def build_animation(cfg: dict):
     ax_map.set_xlim(bbox["west"],  bbox["east"])
     ax_map.set_ylim(bbox["south"], bbox["north"])
     ax_map.axis("off")
-    ax_map.set_title(cfg["title"], color="white", fontsize=11, pad=6, fontweight="bold")
+    ax_map.set_title(cfg["title"], color="white", fontsize=16, pad=6, fontweight="bold")
 
     # Dim baseline markers for all geo-units
     if cfg.get("show_geo_unit_markers", True):
         base_size = cfg.get("geo_unit_marker_base_size", 20)
         ax_map.scatter(lons, lats, s=base_size, c="#888888",
-                       alpha=0.12, linewidths=0, zorder=2)
+                       alpha=0.03, linewidths=0, zorder=2)
 
     # One scatter per event type — updated each frame
     scats = {}
     for et in cfg["event_types"]:
         sty       = event_styles[et]
         base_size = cfg.get("geo_unit_marker_base_size", 20) * sty.get("size_scale", 1.0)
-        sc = ax_map.scatter([], [], s=base_size, linewidths=0.4, zorder=5)
+        sc = ax_map.scatter([], [], s=base_size, linewidths=0, zorder=5)
         scats[et] = sc
 
     # Text overlays
@@ -323,11 +327,11 @@ def build_animation(cfg: dict):
     stat_text = ax_map.text(
         0.98, 0.02, "",
         transform=ax_map.transAxes, color="white",
-        fontsize=8, ha="right", va="bottom", bbox=label_box, zorder=10,
+        fontsize=12, ha="right", va="bottom", bbox=label_box, zorder=10,
     )
 
-    # Intensity legend
-    _draw_intensity_legend(ax_map, cfg, LEGEND_CONFIG)
+    # Intensity legend — drawn into the dedicated left-hand panel
+    _draw_intensity_legend(ax_legend, cfg, LEGEND_CONFIG)
 
     # --- 5. Epidemic curve subplot ---
     cursor_line = None
@@ -402,18 +406,23 @@ def build_animation(cfg: dict):
             counts_window = sim["counts"][et][:, d_start:d_end + 1]  # (U, W)
             intensity_vec = counts_window @ weights                   # (U,)
 
+            # Optionally normalise by geo-unit population → % of population affected
+            if sty.get("normalize_by_population", False):
+                display_vec = intensity_vec / np.maximum(pops, 1) * 100.0
+            else:
+                display_vec = intensity_vec
+
             # Map intensity → colour bucket
             thresholds = [x for x in cfg["intensity_thresholds"][et] if x is not None]
-            buckets    = np.searchsorted(thresholds, intensity_vec)
+            buckets    = np.searchsorted(thresholds, display_vec)
             buckets    = np.clip(buckets, 0, len(color_tables[et]) - 1)
 
             rgba = color_tables[et][buckets].copy()  # (U, 4) float32
-            # Alpha from weighted intensity, clamped to [alpha_floor, alpha_max]
             max_thresh = float(thresholds[-1]) if thresholds else 1.0
-            raw_alpha  = (intensity_vec / max_thresh).astype(np.float32)
-            rgba[:, 3] = np.clip(raw_alpha, alpha_floor, alpha_max)
+            raw_alpha  = (display_vec / max_thresh).astype(np.float32)
+            rgba[:, 3] = np.clip(raw_alpha, 0.0, alpha_max)
             # Hide units with no events in the window
-            rgba[intensity_vec < 1e-9, 3] = 0.0
+            rgba[intensity_vec < 0.01, 3] = 0.0
 
             base_size = cfg.get("geo_unit_marker_base_size", 20) * sty.get("size_scale", 1.0)
 
