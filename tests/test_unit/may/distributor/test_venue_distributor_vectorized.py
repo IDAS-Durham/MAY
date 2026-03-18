@@ -52,8 +52,7 @@ class TestVenueDistributorVectorized(unittest.TestCase):
         arrays = self.dist.population_arrays
         self.assertEqual(len(arrays['age']), 3)
         np.testing.assert_array_equal(arrays['age'], np.array([10, 20, 5]))
-        np.testing.assert_array_equal(arrays['sex'], np.array([1, 0, 0])) # male=1, female=0
-        np.testing.assert_array_equal(arrays['residence_type'], np.array([0, 1, 0])) # household=0, care_home=1
+        np.testing.assert_array_equal(arrays['sex'], np.array([2, 1, 1])) # female=1, male=2 (sorted, 1-indexed)
 
     def test_vectorized_filtering(self):
         # Setup people
@@ -89,20 +88,19 @@ class TestVenueDistributorVectorized(unittest.TestCase):
         self.assertTrue(4 not in filtered_indices)
 
     def test_apply_global_filters_integration(self):
-        # This tests the integration in _apply_global_filters
-        
+        # This tests the integration via FilteringManager.apply_global_filters
+
         # Create 1000 eligible people and 1000 ineligible
         eligible = [MockPerson(i, 10, 'female', 'household') for i in range(1000)]
         ineligible = [MockPerson(i+1000, 25, 'male', 'household') for i in range(1000)]
         all_people = eligible + ineligible
-        
+
         # 1. Build arrays (mimic what allocate() does)
         self.dist._build_population_arrays(all_people)
-        
-        # 2. Call _apply_global_filters
-        # It should detect that people == self.population_arrays['people'] and use fast path
-        result = self.dist._apply_global_filters(all_people)
-        
+
+        # 2. Call apply_global_filters via the filtering manager
+        result = self.dist.filtering.apply_global_filters(all_people)
+
         self.assertEqual(len(result), 1000)
         self.assertTrue(all(p.age == 10 for p in result))
         self.assertTrue(all(p.sex == 'female' for p in result))

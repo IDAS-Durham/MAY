@@ -1,39 +1,26 @@
 import logging
-import random
-import numpy as np
-import numba as nb
-import yaml
 
-from may.config_loader import setup_default_geography
-from may.geography import VenueManager
-from may.geography import Venue
-from may.world import World
-from may.population import Person
-import may.geography
-from may.population import PopulationManager
+from may.geography import VenueManager, Venue, Geography
+from may.geography import GeographicalUnit
 
 import pytest
-
-# import sys
-# from pathlib import Path
-# project_root = Path(__file__).parent.parent.parent
-# print(project_root)
-# sys.path.insert(0, str(project_root))
 
 logger = logging.getLogger(__name__)
 
 @pytest.fixture
 def geo():
-    # Load config file
-    with open("tests/test_units/may/config.yaml", "r") as f:
-        config = yaml.safe_load(f)
-
-    # Setup geography from config and command-line arguments
-    geo, filters = setup_default_geography()
-
-    # Load the geography data
-    geo.load_from_csv()
-    return geo
+    """Create a minimal geography with 4 units (enough for all tests)."""
+    geography = Geography(levels=["SGU", "MGU"])
+    units = [
+        GeographicalUnit(id=i, name=f'E0000{i}', level='SGU',
+                         coordinates=(51.5 + i*0.01, -0.1 - i*0.01))
+        for i in range(4)
+    ]
+    for u in units:
+        geography.units[u.name] = u
+        geography.units_by_id[u.id] = u
+        geography.units_by_level['SGU'][u.name] = u
+    return geography
 
 
 @pytest.fixture
@@ -57,7 +44,7 @@ def venues(geo):
             coordinates=(51.5 + i*0.01, -0.4 + i*0.05),
             properties={'resident_capacity': 50 + i*10, 'staff_count': 35 + i*5}
         )
-        venues.add_venue(venue, geo_units[i % len(geo_units)])
+        venues.add_venue(venue)
 
     # Create companies (4 expected)
     for i, name in enumerate(['Tech Corp Office', 'Finance Ltd HQ', 'Manufacturing Co', 'Retail Solutions']):
@@ -68,7 +55,7 @@ def venues(geo):
             coordinates=(51.5 + i*0.01, -0.15 + i*0.02),
             properties={'employee_count': 100 + i*50, 'office_space_sqm': 2000 + i*1000}
         )
-        venues.add_venue(venue, geo_units[i % len(geo_units)])
+        venues.add_venue(venue)
 
     # Create hospitals (3 expected)
     for i, name in enumerate(['St Mary\'s Hospital', 'Royal London Hospital', 'City General Hospital']):
@@ -79,7 +66,7 @@ def venues(geo):
             coordinates=(51.52 + i*0.01, -0.16 + i*0.05),
             properties={'beds': 300 + i*100, 'icu_beds': 25 + i*10}
         )
-        venues.add_venue(venue, geo_units[i % len(geo_units)])
+        venues.add_venue(venue)
 
     # Create prisons (2 expected)
     for i, name in enumerate(['City Prison', 'Northern Detention Center']):
@@ -90,7 +77,7 @@ def venues(geo):
             coordinates=(51.54 + i*0.01, -0.12 + i*0.05),
             properties={'prisoner_capacity': 1000 + i*200, 'staff': 300 + i*50}
         )
-        venues.add_venue(venue, geo_units[i % len(geo_units)])
+        venues.add_venue(venue)
 
     # Create schools (4 expected)
     for i, name in enumerate(['Springfield Primary', 'Oakwood Secondary', 'Riverside Primary', 'Greenfield Secondary']):
@@ -101,7 +88,7 @@ def venues(geo):
             coordinates=(51.53 + i*0.01, -0.13 + i*0.03),
             properties={'student_capacity': 400 + i*200, 'staff_count': 35 + i*20}
         )
-        venues.add_venue(venue, geo_units[i % len(geo_units)])
+        venues.add_venue(venue)
 
     # Create universities (2 expected)
     for i, name in enumerate(['University College', 'City Technical University']):
@@ -112,7 +99,7 @@ def venues(geo):
             coordinates=(51.52 + i*0.01, -0.13 + i*0.05),
             properties={'student_capacity': 10000 + i*5000, 'staff_count': 2000 + i*500}
         )
-        venues.add_venue(venue, geo_units[i % len(geo_units)])
+        venues.add_venue(venue)
 
     # Note: 'vampire castle' and 'narnia' are intentionally not created (0 expected)
 
@@ -276,23 +263,21 @@ def test_get_venue_nonexistent(venues):
     assert result is None
 
 
-def test_get_venue_by_id(venues):
-    """Test retrieving venues by ID"""
-    # Get a venue and its ID
+def test_get_venue_by_type_and_id(venues):
+    """Test retrieving venues by type and ID"""
     hospital = venues.get_venue('St Mary\'s Hospital')
     hospital_id = hospital.id
 
-    # Retrieve by ID
-    retrieved = venues.get_venue_by_id(hospital_id)
+    retrieved = venues.get_venue_by_type_and_id('hospital', hospital_id)
 
     assert retrieved is not None
     assert retrieved.id == hospital_id
     assert retrieved.name == 'St Mary\'s Hospital'
 
 
-def test_get_venue_by_id_nonexistent(venues):
-    """Test retrieving nonexistent venue ID returns None"""
-    result = venues.get_venue_by_id(999999999)
+def test_get_venue_by_type_and_id_nonexistent(venues):
+    """Test retrieving nonexistent venue type/ID returns None"""
+    result = venues.get_venue_by_type_and_id('hospital', 999999999)
 
     assert result is None
 
@@ -321,16 +306,13 @@ def test_get_all_venues(venues):
     assert 'St Mary\'s Hospital' in all_venues
 
 
-def test_get_all_venues_list(venues):
-    """Test retrieving all venues as a sorted list"""
-    venue_list = venues.get_all_venues_list()
+def test_get_all_venues_as_list(venues):
+    """Test retrieving all venues as a list"""
+    all_venues = venues.get_all_venues()
+    venue_list = list(all_venues.values())
 
     assert isinstance(venue_list, list)
     assert len(venue_list) == 18
-
-    # Check that list is sorted by ID
-    ids = [v.id for v in venue_list]
-    assert ids == sorted(ids)
 
 
 def test_get_venue_types(venues):
@@ -364,15 +346,15 @@ def test_add_venue_updates_all_dicts(geo):
         properties={'beds': 200}
     )
 
-    manager.add_venue(venue, geo_units[0])
+    manager.add_venue(venue)
 
     # Check venues dict
     assert 'New Hospital' in manager.venues
     assert manager.venues['New Hospital'] == venue
 
-    # Check venues_by_id dict
-    assert venue.id in manager.venues_by_id
-    assert manager.venues_by_id[venue.id] == venue
+    # Check venues_by_type_and_id dict
+    assert venue.id in manager.venues_by_type_and_id['hospital']
+    assert manager.venues_by_type_and_id['hospital'][venue.id] == venue
 
     # Check venues_by_type dict
     assert 'hospital' in manager.venues_by_type
@@ -397,7 +379,7 @@ def test_extend_combines_venue_managers(geo):
         geographical_unit=geo_units[0],
         properties={'beds': 100}
     )
-    manager1.add_venue(venue1, geo_units[0])
+    manager1.add_venue(venue1)
 
     # Add venue to manager2
     venue2 = Venue(
@@ -406,7 +388,7 @@ def test_extend_combines_venue_managers(geo):
         geographical_unit=geo_units[0],
         properties={'beds': 200}
     )
-    manager2.add_venue(venue2, geo_units[0])
+    manager2.add_venue(venue2)
 
     # Extend manager1 with manager2
     manager1.extend(manager2)

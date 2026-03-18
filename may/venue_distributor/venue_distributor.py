@@ -456,16 +456,17 @@ class VenueDistributor(BaseDistributor):
                 original_when_full = self.config.get('allocation', {}).get('when_full', 'exclude')
                 self.config.setdefault('allocation', {})['when_full'] = 'overflow'
 
-            allocated_count = self.allocation.allocate_group(group_people, venues, allow_overflow=allow_overflow, 
-                                                   group_search_limits=group.get('search_limits'))
+            try:
+                allocated_count = self.allocation.allocate_group(group_people, venues, allow_overflow=allow_overflow,
+                                                       group_search_limits=group.get('search_limits'))
+            finally:
+                if allow_overflow:
+                    self.config['allocation']['when_full'] = original_when_full
 
             # Tracking
             for p in group_people:
                 if self.activity_map_key not in p.activity_map:
                     unallocated_priority_people.append(p)
-
-            if allow_overflow:
-                self.config['allocation']['when_full'] = original_when_full
 
             self.allocated_this_run += allocated_count
             all_priority_people.extend(group_people)

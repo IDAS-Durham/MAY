@@ -276,6 +276,13 @@ class VenueChildCreator:
                     if get_person_attribute(p, attr_name) in allowed_values
                 ]
 
+            else:
+                logger.warning(
+                    f"Unknown filter type '{filter_type}' for attribute '{attr_name}'. "
+                    f"Valid types are: 'numerical', 'categorical'. "
+                    f"This filter has been SKIPPED — all {len(filtered)} members pass through."
+                )
+
         return filtered
 
     def _group_members_by_attribute(self, members, attribute_name):

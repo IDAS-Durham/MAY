@@ -219,6 +219,8 @@ class Person:
         Doesn't check they have the same IDs as if ID assignment is different with all
         other attributes being equal, I'd still like this to return True / Gavin 21/Jan/26.
         """
+        if not isinstance(other, Person):
+            return NotImplemented
         if float(self.age) != float(other.age):
             return False
         if self.geographical_unit != other.geographical_unit:

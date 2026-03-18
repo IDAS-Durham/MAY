@@ -522,20 +522,6 @@ class BaseDistributor:
             elif hasattr(venue, 'properties') and col in venue.properties:
                 capacity = venue.properties[col]
         
-        # Default heuristics for common venue types if no specific col found
-        if capacity is None:
-            for attr in ["SchoolCapacity", "Noofroomscode", "number_staff", "capacity", "max_capacity"]:
-                if hasattr(venue, attr):
-                    capacity = getattr(venue, attr)
-                elif hasattr(venue, 'properties') and attr in venue.properties:
-                    capacity = venue.properties[attr]
-                
-                if capacity is not None and not pd.isna(capacity):
-                    # Heuristic: if it's rooms, multiply by a reasonable factor
-                    if attr == "Noofroomscode":
-                        capacity = int(float(capacity)) * 30 
-                    break
-
         # Handle missing capacity based on config
         capacity_handling = allocation_config.get('capacity_handling', {})
         if capacity is None or pd.isna(capacity):

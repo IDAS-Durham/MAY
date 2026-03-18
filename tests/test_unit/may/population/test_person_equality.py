@@ -38,13 +38,17 @@ def reset_person_counter():
 class TestPersonEquality:
     """Test Person.__eq__ method."""
 
-    def test_equality_different_ids(self):
-        """Test that persons with different IDs are not equal."""
+    def test_equality_different_ids_same_attributes(self):
+        """Test that persons with different IDs but same attributes are equal.
+
+        Person.__eq__ intentionally ignores IDs — two persons with identical
+        attributes are considered equal regardless of ID.
+        """
         person1 = Person(age=30, sex='male')
         person2 = Person(age=30, sex='male')
 
         assert person1.id != person2.id
-        assert person1 != person2
+        assert person1 == person2
 
     def test_equality_same_basic_attributes(self):
         """Test equality when all basic attributes match."""

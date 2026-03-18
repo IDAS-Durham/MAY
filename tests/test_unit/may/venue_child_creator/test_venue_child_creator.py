@@ -1134,3 +1134,286 @@ class TestBugDetection:
         creator.create_children(world)
         # Stats accumulated — not reset
         assert creator.stats["parents_processed"] == 3  # 1 + 2 (both schools processed)
+
+
+# =============================================================================
+# Tests: filter edge cases and silent failure modes
+# =============================================================================
+
+class TestFilterMembersEdgeCases:
+
+    def test_unknown_filter_type_logs_warning_and_passes_all(self, caplog):
+        """An unknown filter_type (e.g. 'regex', a YAML typo like 'numercial') must
+        log a loud WARNING naming the bad type and skip the filter. All members pass
+        through so the simulation doesn't silently produce wrong results without
+        any indication of what happened."""
+        import logging
+        creator = VenueChildCreator("s", "c", member_filters=[
+            {"attribute": "age", "type": "regex", "pattern": r"\d+"}
+        ])
+        people = [MinimalPerson(age=a) for a in [5, 10, 99]]
+        with caplog.at_level(logging.WARNING, logger="venue_child_creator"):
+            result = creator._filter_members(people)
+        assert len(result) == 3  # filter skipped, all pass through
+        assert "regex" in caplog.text
+        assert "SKIPPED" in caplog.text
+
+    def test_filter_missing_type_key_defaults_to_numerical(self):
+        """When 'type' key is omitted, get('type', 'numerical') defaults to numerical.
+        A filter like {'attribute': 'age', 'min': 18} (no type) behaves as numerical."""
+        creator = VenueChildCreator("s", "c", member_filters=[
+            {"attribute": "age", "min": 18}  # no 'type' key
+        ])
+        people = [MinimalPerson(age=a) for a in [10, 18, 30]]
+        result = creator._filter_members(people)
+        ages = [p.age for p in result]
+        assert ages == [18, 30]
+
+    def test_categorical_empty_values_excludes_all(self):
+        """An empty values list in a categorical filter excludes everyone,
+        since no attribute value is in the empty set."""
+        creator = VenueChildCreator("s", "c", member_filters=[
+            {"attribute": "sex", "type": "categorical", "values": []}
+        ])
+        people = [MinimalPerson(sex="male"), MinimalPerson(sex="female")]
+        result = creator._filter_members(people)
+        assert len(result) == 0
+
+    def test_numerical_filter_boundary_is_inclusive(self):
+        """Both min and max bounds should be inclusive (<=, >=)."""
+        creator = VenueChildCreator("s", "c", member_filters=[
+            {"attribute": "age", "type": "numerical", "min": 18, "max": 65}
+        ])
+        people = [MinimalPerson(age=a) for a in [17, 18, 65, 66]]
+        result = creator._filter_members(people)
+        ages = [p.age for p in result]
+        assert ages == [18, 65]
+
+
+# =============================================================================
+# Tests: child_properties mutation safety
+# =============================================================================
+
+class TestNestedChildPropertiesShallowCopyBug:
+
+    def test_nested_child_properties_shared_across_children(self, world, venue_manager):
+        """BUG: _create_children_for_group uses child_properties.copy() which is
+        a SHALLOW copy. Nested dict values (e.g. {'meta': {'level': 1}}) are shared
+        across all created children. Mutating a nested dict on one child affects all."""
+        school = MinimalVenue(name="school", venue_type="school")
+        venue_manager.add_venue(school)
+
+        creator = VenueChildCreator(
+            "school", "classroom",
+            child_properties={"meta": {"level": 1}},  # nested dict
+            max_capacity=5,
+        )
+        people = make_people(10, age=10)
+        creator._create_children_for_group(school, 10, people, world)
+
+        child_a, child_b = school.children[0], school.children[1]
+
+        # Mutate nested dict on child_a
+        child_a.properties["meta"]["level"] = 99
+
+        # BUG: child_b.properties["meta"] IS the same dict object
+        assert child_b.properties["meta"]["level"] == 99  # documents the shallow-copy bug
+
+
+# =============================================================================
+# Tests: person appears in multiple parent subsets
+# =============================================================================
+
+class TestPersonInMultipleSubsets:
+
+    def test_person_in_two_parent_subsets_counted_twice(self, world, venue_manager):
+        """BUG: get_all_members() iterates all subsets. A person added to two subsets
+        of the same parent appears twice in the members list. They get assigned to two
+        different children and are counted twice in people_redistributed stats."""
+        creator = VenueChildCreator("school", "classroom", max_capacity=10)
+        school = MinimalVenue(name="school", venue_type="school")
+        venue_manager.add_venue(school)
+
+        person = MinimalPerson(age=10)
+        # Add the same person to TWO different subsets of the same parent
+        school.add_to_subset(person, subset_key="student", activity_name="primary_activity")
+        school.add_to_subset(person, subset_key="prefect", activity_name="primary_activity")
+
+        assert len(school.get_all_members()) == 2  # same person counted twice
+
+        creator.create_children(world)
+
+        # The duplicate causes people_redistributed to count the same person twice
+        assert creator.stats["people_redistributed"] == 2  # documents the double-count bug
+
+
+# =============================================================================
+# Tests: child venue registration in venue manager
+# =============================================================================
+
+class TestChildVenueRegistration:
+
+    def test_created_children_are_queryable_by_type(self, world, venue_manager):
+        """Child venues created by VenueChildCreator must be registered in the
+        venue manager so they can be retrieved later via get_venues_by_type."""
+        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        school = MinimalVenue(name="school", venue_type="school")
+        venue_manager.add_venue(school)
+        populate_venue(school, make_people(60))
+
+        creator.create_children(world)
+
+        classrooms = venue_manager.get_venues_by_type("classroom")
+        assert len(classrooms) == 2
+        assert all(v.type == "classroom" for v in classrooms)
+
+    def test_children_count_matches_stats(self, world, venue_manager):
+        """The number of child venues in the manager must equal stats['children_created']."""
+        creator = VenueChildCreator(
+            "school", "classroom",
+            group_by_attribute="age",
+            max_capacity=30,
+        )
+        school = MinimalVenue(name="school", venue_type="school")
+        venue_manager.add_venue(school)
+        populate_venue(school, make_people(60, age=10) + make_people(45, age=11))
+
+        stats = creator.create_children(world)
+
+        classrooms = venue_manager.get_venues_by_type("classroom")
+        assert len(classrooms) == stats["children_created"]
+
+    def test_parent_venue_type_not_mixed_with_child_type(self, world, venue_manager):
+        """Creating classrooms inside schools must not affect the school count."""
+        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        for i in range(3):
+            school = MinimalVenue(name=f"school_{i}", venue_type="school")
+            venue_manager.add_venue(school)
+            populate_venue(school, make_people(30))
+
+        creator.create_children(world)
+
+        assert len(venue_manager.get_venues_by_type("school")) == 3
+        assert len(venue_manager.get_venues_by_type("classroom")) == 3
+
+
+# =============================================================================
+# Tests: distribution invariants (no members lost)
+# =============================================================================
+
+class TestDistributionInvariants:
+
+    def _total_members_in_children(self, children):
+        return sum(
+            len(s.members)
+            for c in children
+            for s in c.subsets.values()
+        )
+
+    def test_even_strategy_assigns_all_members(self, world, venue_manager):
+        """Even distribution must assign every member to exactly one child venue."""
+        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        school = MinimalVenue(name="school", venue_type="school")
+        venue_manager.add_venue(school)
+        people = make_people(91)  # odd number to test remainder handling
+        populate_venue(school, people)
+
+        creator.create_children(world)
+
+        total = self._total_members_in_children(school.children)
+        assert total == 91
+
+    def test_fill_strategy_assigns_all_members(self, world, venue_manager):
+        """Fill distribution must assign every member to exactly one child venue."""
+        creator = VenueChildCreator(
+            "school", "classroom",
+            max_capacity=30,
+            distribution_strategy="fill",
+        )
+        school = MinimalVenue(name="school", venue_type="school")
+        venue_manager.add_venue(school)
+        people = make_people(91)
+        populate_venue(school, people)
+
+        creator.create_children(world)
+
+        total = self._total_members_in_children(school.children)
+        assert total == 91
+
+    def test_even_strategy_no_child_is_empty_when_members_exceed_venues(self, world, venue_manager):
+        """With even distribution, every child venue should receive at least one member
+        when there are more members than child venues (guaranteed by ceil division)."""
+        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        school = MinimalVenue(name="school", venue_type="school")
+        venue_manager.add_venue(school)
+        populate_venue(school, make_people(61))  # ceil(61/30) = 3 children, min 20 each
+
+        creator.create_children(world)
+
+        for child in school.children:
+            count = sum(len(s.members) for s in child.subsets.values())
+            assert count > 0, f"Child {child.name} has 0 members"
+
+
+# =============================================================================
+# Tests: from_yaml error handling
+# =============================================================================
+
+class TestFromYamlErrorHandling:
+
+    def test_missing_parent_venue_type_raises(self, tmp_path):
+        """from_yaml with no parent_venue_type should raise KeyError."""
+        yaml_file = tmp_path / "bad.yaml"
+        yaml_file.write_text("child_venue_type: classroom\n")
+        with pytest.raises(KeyError):
+            VenueChildCreator.from_yaml(str(yaml_file))
+
+    def test_missing_child_venue_type_raises(self, tmp_path):
+        """from_yaml with no child_venue_type should raise KeyError."""
+        yaml_file = tmp_path / "bad.yaml"
+        yaml_file.write_text("parent_venue_type: school\n")
+        with pytest.raises(KeyError):
+            VenueChildCreator.from_yaml(str(yaml_file))
+
+    def test_empty_yaml_raises(self, tmp_path):
+        """from_yaml with completely empty YAML raises KeyError or TypeError."""
+        yaml_file = tmp_path / "empty.yaml"
+        yaml_file.write_text("")
+        with pytest.raises((KeyError, TypeError, AttributeError)):
+            VenueChildCreator.from_yaml(str(yaml_file))
+
+
+# =============================================================================
+# Tests: attribute_mapping type-mismatch
+# =============================================================================
+
+class TestAttributeMappingTypeMismatch:
+
+    def test_int_key_in_mapping_vs_string_attribute_value(self):
+        """Attribute mapping with integer key (18) does NOT match a string value ('18').
+        The person's attribute value must match the key type exactly.
+        A YAML 'attribute_mapping: {18: "Year1"}' loads as int key.
+        If person.age is stored as int (typical), it matches. If stored as str, it won't."""
+        creator = VenueChildCreator(
+            "uni", "year",
+            attribute_mapping={18: "Year1", "default": "Other"},
+        )
+        # int attribute value — should match int key
+        person_int = MinimalPerson(age=18)
+        groups = creator._group_members_by_attribute([person_int], "age")
+        assert "Year1" in groups, "int key should match int attribute value"
+
+        # string attribute value — should NOT match int key, falls through to default
+        person_str = MinimalPerson()
+        person_str.age = "18"  # force string
+        groups_str = creator._group_members_by_attribute([person_str], "age")
+        # "18" (str) is not in {18: "Year1"}, so falls to "default"
+        assert "Other" in groups_str, "str attribute value should not match int key"
+
+    def test_grouping_single_value_creates_one_group(self):
+        """If all members have the same attribute value, only one group is created."""
+        creator = VenueChildCreator("school", "classroom", group_by_attribute="age")
+        people = [MinimalPerson(age=10) for _ in range(30)]
+        groups = creator._group_members_by_attribute(people, "age")
+        assert list(groups.keys()) == [10]
+        assert len(groups[10]) == 30
