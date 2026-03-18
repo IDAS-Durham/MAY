@@ -13,6 +13,8 @@ import numpy as np
 from collections import deque
 from typing import List, Dict
 
+from may.utils.attribute_access import get_person_attribute
+
 logger = logging.getLogger("venue_allocator")
 
 
@@ -262,7 +264,7 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
                 continue
 
             # Get the attribute value from person
-            person_value = getattr(person, attr_name, None)
+            person_value = get_person_attribute(person, attr_name)
 
             # If person doesn't have this attribute, they don't qualify
             if person_value is None:
@@ -352,7 +354,7 @@ def _check_attribute_constraints(person, venue, attribute_constraints: Dict) -> 
 
     for attr_name, constraint_config in attribute_constraints.items():
         # Get the attribute value from the person
-        person_value = getattr(person, attr_name, None)
+        person_value = get_person_attribute(person, attr_name)
         if person_value is None:
             logger.debug(f"Person {person.id} has no attribute '{attr_name}', skipping constraint check")
             continue

@@ -21,19 +21,15 @@ def test_population_manager_explicit_load(loaded_geography):
     }
     
     pm.load_explicit_from_csv("people.csv", column_mapping)
-    
-    assert len(pm.people) == 10
-    
-    # Check the first person
-    p1 = pm.get_person(0) # Due to reset_counter and 0-indexing
+
+    assert len(pm.people) == 16
+
+    # Check the first person (row 1 in CSV: age=32, sex=f → female, location=SGU_001)
+    p1 = pm.get_person(0)
     assert p1 is not None
-    assert p1.age == 35
-    assert p1.sex == "male"
-    assert p1.geographical_unit.name == "SGU_001" # This comes from the assigned location using the config Mapping
-    
-    # Wait, the loaded_geography uses SGU_001, but people.csv uses DUR001. 
-    # Let's verify how it handles missing geography - it should skip them or leave geo_unit=None.
-    # Ah, explicit load skips rows with missing geography. Let's write a new test people csv below.
+    assert p1.age == 32
+    assert p1.sex == "female"
+    assert p1.geographical_unit.name == "SGU_001"
 
 def test_population_manager_explicit_batch_load(loaded_geography):
     """
@@ -47,20 +43,19 @@ def test_population_manager_explicit_batch_load(loaded_geography):
     }
     
     pm.load_batch_explicit_from_csv(data_dir="tests/test_data/micro_world/population/batch", column_mapping=column_mapping)
-    
+
     # From MGU_01_pop.csv we have 2 people, from MGU_02_pop.csv we have 2 people
     assert len(pm.people) == 4
-    
-    # person id counter was reset
-    p = pm.people[0]
-    assert p.age == 55
-    assert p.sex == "male"
-    assert p.geographical_unit.name == "SGU_001"
-    
-    p = pm.people[2]
-    assert p.age == 5
-    assert p.sex == "unknown"
-    assert p.geographical_unit.name == "SGU_003"
+
+    # MGU file load order is non-deterministic (set iteration), so check by sorting
+    by_age = sorted(pm.people, key=lambda p: p.age)
+    assert by_age[0].age == 5
+    assert by_age[0].sex == "unknown"
+    assert by_age[0].geographical_unit.name == "SGU_003"
+
+    assert by_age[3].age == 55
+    assert by_age[3].sex == "male"
+    assert by_age[3].geographical_unit.name == "SGU_001"
     
 def test_population_manager_matrix_load(loaded_geography):
     """

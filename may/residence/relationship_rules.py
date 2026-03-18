@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Tuple, Any, Callable
 from dataclasses import dataclass
 
 from may.population.person import Person
+from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("relationship_rules")
 
@@ -165,8 +166,8 @@ class RelationshipRulesValidator:
         elif attribute in Person.__slots__:
             return attrgetter(attribute)
         else:
-            # Fallback to properties dict
-            return lambda p: p.properties.get(attribute)
+            # Fallback to shared utility (handles dot-notation, properties, residence)
+            return lambda p: get_person_attribute(p, attribute)
 
     def validate_composition(self, composition: Dict[str, int], constraints: List[Dict]) -> Tuple[bool, Optional[str]]:
         """

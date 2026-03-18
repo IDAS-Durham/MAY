@@ -99,7 +99,10 @@ class AssignmentStrategy:
 
     def _get_attribute_value(self, person, attribute_name: str) -> Any:
         """
-        Get attribute value from person (checks properties dict first).
+        Get attribute value from person.
+
+        Delegates to the shared get_person_attribute utility which handles
+        dot-notation, properties dict, and residence prefix.
 
         Args:
             person: Person object
@@ -108,15 +111,8 @@ class AssignmentStrategy:
         Returns:
             Attribute value or None
         """
-        if person is None:
-            return None
-
-        # Check properties dict first
-        if hasattr(person, 'properties') and attribute_name in person.properties:
-            return person.properties[attribute_name]
-
-        # Fall back to direct attribute
-        return getattr(person, attribute_name, None)
+        from may.utils.attribute_access import get_person_attribute
+        return get_person_attribute(person, attribute_name)
 
 
 class ProbabilisticStrategy(AssignmentStrategy):
@@ -815,31 +811,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             for idx, sampled_idx in zip(indices, sampled_indices):
                 sampled_dest = dest_codes[sampled_idx]
                 sampled_metadata = metadata_list[sampled_idx]
-
-                # Build output based on configured outputs
-                if len(self.outputs) == 1:
-                    # Single output - return just the value
-                    output_attr, output_source = list(self.outputs.items())[0]
-                    if output_source == 'destination':
-                        results[idx] = sampled_dest
-                    elif output_source in sampled_metadata:
-                        results[idx] = sampled_metadata[output_source]
-                    else:
-                        logger.warning(f"Output source '{output_source}' not found in metadata")
-                        results[idx] = sampled_dest
-                else:
-                    # Multiple outputs - return dict
-                    result = {}
-                    for output_attr, output_source in self.outputs.items():
-                        if output_source == 'destination':
-                            result[output_attr] = sampled_dest
-                        elif output_source in sampled_metadata:
-                            result[output_attr] = sampled_metadata[output_source]
-                        else:
-                            logger.warning(f"Output source '{output_source}' not found")
-
-                    results[idx] = result
-                    logger.debug(f"Commuting (batch): person at index {idx} -> {result}")
+                results[idx] = self._build_output(sampled_dest, sampled_metadata)
 
         return results
 
@@ -886,29 +858,43 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         sampled_metadata = metadata_list[idx]
 
         # Build output based on configured outputs
+        result = self._build_output(sampled_dest, sampled_metadata)
+        if not isinstance(result, dict):
+            return result
+        logger.debug(f"Commuting: {person.id} -> {result}")
+        return result
+
+    def _build_output(self, sampled_dest, sampled_metadata):
+        """
+        Build return value from sampled destination and metadata.
+
+        Returns:
+            Single value (if one output configured) or dict (if multiple).
+        """
         if len(self.outputs) == 1:
-            # Single output - return just the value
             output_attr, output_source = list(self.outputs.items())[0]
             if output_source == 'destination':
                 return sampled_dest
-            elif output_source in sampled_metadata:
+            if output_source in sampled_metadata:
                 return sampled_metadata[output_source]
-            else:
-                logger.warning(f"Output source '{output_source}' not found in metadata")
-                return sampled_dest
-        else:
-            # Multiple outputs - return dict
-            result = {}
-            for output_attr, output_source in self.outputs.items():
-                if output_source == 'destination':
-                    result[output_attr] = sampled_dest
-                elif output_source in sampled_metadata:
-                    result[output_attr] = sampled_metadata[output_source]
-                else:
-                    logger.warning(f"Output source '{output_source}' not found")
+            raise ValueError(
+                f"Output source '{output_source}' not found in metadata keys "
+                f"{list(sampled_metadata.keys())}. Check outputs config."
+            )
 
-            logger.debug(f"Commuting: {person.id} -> {result}")
-            return result
+        result = {}
+        for output_attr, output_source in self.outputs.items():
+            if output_source == 'destination':
+                result[output_attr] = sampled_dest
+            elif output_source in sampled_metadata:
+                result[output_attr] = sampled_metadata[output_source]
+            else:
+                raise ValueError(
+                    f"Output source '{output_source}' for attribute '{output_attr}' "
+                    f"not found in metadata keys {list(sampled_metadata.keys())}. "
+                    f"Check outputs config."
+                )
+        return result
 
     def _get_fallback(self, person, household, context):
         """Standard fallback for commuting."""
@@ -1118,17 +1104,9 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
             indices = [idx for idx, _ in group_data]
             probs = group_data[0][1]  # All have same probs for this key
 
-            # Sample one category
-            categories = list(probs.keys())
-            probabilities = list(probs.values())
-
-            # Normalize if needed
-            total = sum(probabilities)
-            if total <= 0:
+            categories, probabilities = self._sanitize_probabilities(probs)
+            if categories is None:
                 continue
-
-            if abs(total - 1.0) > 0.01:  # Not normalized
-                probabilities = [p / total for p in probabilities]
 
             # BATCH SAMPLE: Sample for all people in this group at once
             n_samples = len(indices)
@@ -1164,23 +1142,45 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
             logger.warning(f"No probabilities found for person {person.id}")
             return None
 
-        # Sample one category
-        categories = list(probs.keys())
-        probabilities = list(probs.values())
-
-        # Normalize if needed
-        total = sum(probabilities)
-        if total <= 0:
-            logger.warning(f"Invalid probabilities (sum={total}) for person {person.id}")
+        categories, probabilities = self._sanitize_probabilities(probs, person.id)
+        if categories is None:
             return None
-
-        if abs(total - 1.0) > 0.01:  # Not normalized
-            probabilities = [p / total for p in probabilities]
 
         sampled = np.random.choice(categories, p=probabilities)
 
         logger.debug(f"Categorical: {sampled} for person {person.id}")
         return sampled
+
+    @staticmethod
+    def _sanitize_probabilities(probs, person_id=None):
+        """
+        Clamp negatives, normalize, and validate probabilities.
+
+        Returns:
+            (categories, probabilities) tuple, or (None, None) if invalid.
+        """
+        categories = list(probs.keys())
+        probabilities = list(probs.values())
+
+        # Clamp negatives to 0
+        has_negative = False
+        for i, p in enumerate(probabilities):
+            if p < 0:
+                has_negative = True
+                probabilities[i] = 0.0
+        if has_negative:
+            logger.warning(f"Negative probability clamped to 0 for person {person_id}")
+
+        # Check total after clamping
+        total = sum(probabilities)
+        if total <= 0:
+            logger.warning(f"Invalid probabilities (sum={total}) for person {person_id}")
+            return None, None
+
+        # Always normalize to avoid numpy tolerance issues
+        probabilities = [p / total for p in probabilities]
+
+        return categories, probabilities
 
 
 class ConstantStrategy(AssignmentStrategy):
@@ -1198,6 +1198,9 @@ class ConstantStrategy(AssignmentStrategy):
 
     def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
         """Batch assignment - all receive the same value."""
+        if self.value is None:
+            # Match assign() behavior: delegate to per-person fallback
+            return [self.assign(p, h, c) for p, h, c in zip(people_list, households_list, contexts_list)]
         return [self.value] * len(people_list)
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:

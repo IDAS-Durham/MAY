@@ -29,6 +29,7 @@ from may.residence.composition_pattern import CompositionPattern
 from may.residence.household_excess_handler import HouseholdExcessHandler
 from may.residence.household_promoter import HouseholdPromoter
 from may.residence.household_round_distributor import HouseholdRoundDistributor
+from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("household")
 
@@ -205,14 +206,9 @@ class HouseholdDistributor:
 
     def _categorize_person(self, person: Person) -> int:
         """Get the category index for a person based on their attributes."""
-        p_props = person.properties
         for idx, cat in enumerate(self.categories):
-            # Inline expansion of matches() logic for speed in hot path
-            # Category.attribute is the key we check
             attr = cat.attribute
-            val = getattr(person, attr, None)
-            if val is None:
-                val = p_props.get(attr)
+            val = get_person_attribute(person, attr)
             
             if val is None:
                 continue
