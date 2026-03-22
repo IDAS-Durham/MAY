@@ -1,0 +1,1 @@
+python export_static.py --world-file ../world_state_medieval_updated.h5 --map-background image --map-image ./image1.png --map-bounds "56.0,2.0,49.0,-7.0" --map-attribution "Topological Map" --max-size-mb 300 --title "1348 England" --output medieval_map.html --events-file ../simulation_events_full_19_feb_weymouth.h5 --events-max-size-mb 500 2>&1 | tee log.txt
