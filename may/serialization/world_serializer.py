@@ -145,8 +145,17 @@ class WorldSerializer:
         metadata_group = f.require_group('metadata/names')
         self._create_dataset(metadata_group, 'geography', names)
 
-        # Intern geography levels
-        unique_levels = sorted(list(set(unit.level for unit in units_list)))
+        # Intern geography levels — order by tree depth (root=0, leaves=highest)
+        # Find depth of each level by walking parent chains
+        level_depths = {}
+        for unit in units_list:
+            depth = 0
+            ancestor = unit
+            while ancestor.parent is not None:
+                depth += 1
+                ancestor = ancestor.parent
+            level_depths[unit.level] = depth
+        unique_levels = sorted(level_depths.keys(), key=lambda l: level_depths[l])
         level_to_id = {l: i for i, l in enumerate(unique_levels)}
         levels = np.array([level_to_id[unit.level] for unit in units_list], dtype=np.uint8)
         self.registries['geo_levels'] = level_to_id

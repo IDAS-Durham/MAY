@@ -180,6 +180,12 @@ class MultiVenueDistributor(BaseDistributor):
 
         except Exception as e:
             logger.error(f"Failed to load participation data for '{venue_type}': {e}")
+            # Mark as failed so _should_allocate_venue_type returns False (fail-closed)
+            self.participation_data[venue_type] = {
+                'lookup_index': {},
+                'row_filters': filter_config.get('row_filters', []),
+                'probability_column': filter_config.get('probability_column', {}),
+            }
 
     def _match_row_filters(self, person, row, row_filters: List[Dict]) -> bool:
         """
@@ -215,21 +221,29 @@ class MultiVenueDistributor(BaseDistributor):
 
             # Apply match type
             if match_type == 'age_range':
-                # Parse "16-24" format
+                # Parse "16-24", "65-+", or "65+" formats
                 try:
-                    parts = str(csv_value).split('-')
-                    if len(parts) == 2:
-                        min_val = int(parts[0])
-                        # Handle "65+" format
-                        if parts[1].endswith('+'):
-                            max_val = 200  # Arbitrary high value
-                        else:
-                            max_val = int(parts[1])
-
+                    csv_str = str(csv_value)
+                    if csv_str.endswith('+') and '-' not in csv_str:
+                        # Standalone "65+" format
+                        min_val = int(csv_str[:-1])
+                        max_val = 200  # Arbitrary high value
                         if not (min_val <= person_value <= max_val):
                             return False
                     else:
-                        return False
+                        parts = csv_str.split('-')
+                        if len(parts) == 2:
+                            min_val = int(parts[0])
+                            # Handle "65-+" format
+                            if parts[1].endswith('+'):
+                                max_val = 200  # Arbitrary high value
+                            else:
+                                max_val = int(parts[1])
+
+                            if not (min_val <= person_value <= max_val):
+                                return False
+                        else:
+                            return False
                 except (ValueError, AttributeError):
                     return False
 
@@ -285,8 +299,13 @@ class MultiVenueDistributor(BaseDistributor):
                     return None
 
                 # Replace {value} or {attribute_name} in template
-                column_name = template.replace('{value}', str(person_value).lower())
-                column_name = column_name.replace(f'{{{person_attr}}}', str(person_value).lower())
+                lower_value = str(person_value).lower()
+                if '{value}' in template:
+                    column_name = template.replace('{value}', lower_value)
+                elif f'{{{person_attr}}}' in template:
+                    column_name = template.replace(f'{{{person_attr}}}', lower_value)
+                else:
+                    column_name = template
 
                 if column_name in row:
                     return float(row[column_name])
@@ -329,7 +348,7 @@ class MultiVenueDistributor(BaseDistributor):
 
         # Build lookup key from person attributes
         lookup_keys = []
-        for filter_cfg in row_filters:
+        for filter_idx, filter_cfg in enumerate(row_filters):
             person_attr = filter_cfg.get('person_attribute')
             match_type = filter_cfg.get('match_type', 'exact')
 
@@ -345,24 +364,27 @@ class MultiVenueDistributor(BaseDistributor):
                 # Find which age range this person falls into
                 # Try all possible age ranges in the lookup index
                 for key_tuple in lookup_index.keys():
-                    # Extract the value for this filter position
-                    filter_idx = row_filters.index(filter_cfg)
                     if filter_idx < len(key_tuple):
                         age_band = key_tuple[filter_idx]
-                        # Parse "16-24" format
+                        # Parse "16-24", "65-+", or "65+" formats
                         try:
-                            parts = age_band.split('-')
-                            if len(parts) == 2:
+                            if age_band.endswith('+') and '-' not in age_band:
+                                # Standalone "65+" format
+                                min_val = int(age_band[:-1])
+                                max_val = 200
+                            else:
+                                parts = age_band.split('-')
+                                if len(parts) != 2:
+                                    continue
                                 min_val = int(parts[0])
-                                # Handle "65+" format
                                 if parts[1].endswith('+'):
                                     max_val = 200
                                 else:
                                     max_val = int(parts[1])
 
-                                if min_val <= person_value <= max_val:
-                                    csv_value = age_band
-                                    break
+                            if min_val <= person_value <= max_val:
+                                csv_value = age_band
+                                break
                         except (ValueError, AttributeError):
                             continue
 
@@ -372,7 +394,6 @@ class MultiVenueDistributor(BaseDistributor):
             elif match_type == 'numerical_range':
                 # Similar to age_range but for numerical ranges
                 for key_tuple in lookup_index.keys():
-                    filter_idx = row_filters.index(filter_cfg)
                     if filter_idx < len(key_tuple):
                         range_val = key_tuple[filter_idx]
                         try:
@@ -405,7 +426,7 @@ class MultiVenueDistributor(BaseDistributor):
             # Template-based: select probability by person attribute
             person_attr = prob_config.get('person_attribute')
             attr_value = self._get_person_attribute(person_attr, person)
-            if attr_value:
+            if attr_value is not None:
                 probability = prob_value.get(str(attr_value).lower())
         else:
             # Fixed column: probability is a single value
@@ -505,7 +526,8 @@ class MultiVenueDistributor(BaseDistributor):
         for geo_unit in people_by_geo_unit.keys():
             # Get geo_unit coordinates
             if geo_unit.coordinates is None or len(geo_unit.coordinates) != 2:
-                logger.debug(f"Geo unit {geo_unit.name} has no coordinates, skipping")
+                logger.warning(f"Geo unit {geo_unit.name} has invalid coordinates ({getattr(geo_unit, 'coordinates', None)}), "
+                               f"skipping {len(people_by_geo_unit[geo_unit])} people")
                 continue
 
             coords = list(geo_unit.coordinates)
@@ -580,8 +602,8 @@ class MultiVenueDistributor(BaseDistributor):
         if self.subset_key in venue.subsets:
             return venue.subsets[self.subset_key]
 
-        # Create new subset
-        subset_index = len(venue.subsets)
+        # Create new subset — use max existing index + 1 to avoid collisions after deletions
+        subset_index = (max(s.subset_index for s in venue.subsets.values()) + 1) if venue.subsets else 0
         subset = Subset(
             venue=venue,
             subset_index=subset_index,
