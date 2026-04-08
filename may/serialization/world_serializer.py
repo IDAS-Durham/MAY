@@ -660,8 +660,15 @@ class WorldSerializer:
         for v, global_id in zip(all_venues_sorted, global_ids):
             self._venue_to_global_id[id(v)] = global_id
 
-        # Also store type-scoped IDs for debugging/reference
-        type_scoped_ids = np.array([v.id for v in all_venues_sorted], dtype=np.int32)
+        # Compute ranks_in_type: sequential position within each type in sorted order.
+        # Must match the indexing in _write_venue_properties.
+        type_counters = {}
+        ranks_in_type_list = []
+        for v in all_venues_sorted:
+            rank = type_counters.get(v.type, 0)
+            ranks_in_type_list.append(rank)
+            type_counters[v.type] = rank + 1
+        type_scoped_ids = np.array(ranks_in_type_list, dtype=np.int32)
 
         # Core attributes (always included)
         ids = global_ids  # Use GLOBAL IDs for C++
