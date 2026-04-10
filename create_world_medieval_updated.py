@@ -5,6 +5,7 @@ import pstats
 import sys
 import numpy as np
 import numba as nb
+import pandas as pd
 import yaml
 from may.config_loader import setup_geography
 from may.geography import VenueManager
@@ -14,6 +15,7 @@ from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
+from world_specific_code.MedievalYaml.travel_assignment import assign_travel_activities, assign_guest_houses
 
 # Gavin social network version
 from may.social_networks import (
@@ -52,7 +54,6 @@ def set_random_seed(seed=999):
     return
 
 set_random_seed(0)
-
 
 def main():
     """
@@ -118,6 +119,18 @@ def main():
     logger.info("Creating World object...")
     world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
     logger.info(world)
+
+    # Assign guest house property to random households in large geo units
+    assign_guest_houses(world, "world_specific_code/MedievalYaml/data/large_geo_units.csv")
+
+    # Assign travel itineraries to a fraction of residents in source geo_units
+    assign_travel_activities(
+        world,
+        paths_names_json_path="world_specific_code/MedievalYaml/data/paths_names.json",
+        travel_fraction=0.10,
+        min_age=18,
+        max_age=70,
+    )
 
     # ========================================
     # TIMELINE - Unified Event Processing
@@ -240,7 +253,7 @@ def main():
             world.geography,
             min_radius_km=0.01, # small but nonzero so that it is distinguished from people in literally the same manor. 
             max_radius_km=4.0, # a reasonable distance to walk in an afternoon I would say. 
-            mean_connections_per_person=2,
+            mean_connections_per_person=4,
             clustering_level=0.9,
             storage_key='social_contacts_near',
             assign_activity_map=True,
@@ -251,22 +264,12 @@ def main():
             world.geography,
             min_radius_km=3.0,
             max_radius_km=12.0,
-            mean_connections_per_person=2,
+            mean_connections_per_person=4,
             clustering_level=0.9,
             storage_key='social_contacts_med',
             assign_activity_map=True,
         )
-        # Far-range inter-unit network: annulus [15, 50] km, W-S clustering
-        build_spatial_social_network(
-            world.geography,
-            min_radius_km=10.0,
-            max_radius_km=100.0,
-            mean_connections_per_person=2,
-            clustering_level=0.9,
-            storage_key='social_contacts_far',
-            assign_activity_map=True,
-        )
-    
+
 
     logger.info("")
     logger.info("=" * 60)
@@ -283,7 +286,10 @@ def main():
     #export_people(world)
 
     # Export world to HDF5 for C++ simulation
-    world.export_to_hdf5("world_state_medieval_updated_low_contact_high_cluster.h5")
+    world.export_to_hdf5(
+        "world_state_medieval.h5",
+        config_file="world_specific_code/MedievalYaml/yaml/serialization_config.yaml",
+    )
 
     return world
 
