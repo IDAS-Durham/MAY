@@ -15,7 +15,7 @@ from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
-from world_specific_code.MedievalYaml.travel_assignment import assign_travel_activities, assign_guest_houses
+from world_specific_code.MedievalYaml.travel_assignment import assign_travel_activities, assign_guest_houses, assign_sailing_activities
 
 # Gavin social network version
 from may.social_networks import (
@@ -126,8 +126,17 @@ def main():
     # Assign travel itineraries to a fraction of residents in source geo_units
     assign_travel_activities(
         world,
-        paths_names_json_path="world_specific_code/MedievalYaml/data/paths_names.json",
+        paths_names_json_path="world_specific_code/MedievalYaml/data/travel/paths_names_full.json",
         travel_fraction=0.10,
+        min_age=18,
+        max_age=70,
+    )
+
+    assign_sailing_activities(
+        world,
+        paths_names_ports_json_path="world_specific_code/MedievalYaml/data/travel/paths_names_ports.json",
+        port_manor_map_csv_path="world_specific_code/MedievalYaml/data/travel/port_manor_map.csv",
+        sailing_fraction=0.05,
         min_age=18,
         max_age=70,
     )
