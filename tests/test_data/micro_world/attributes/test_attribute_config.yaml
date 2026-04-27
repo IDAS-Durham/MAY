@@ -1,0 +1,116 @@
+---
+# Test configuration for 'test_attribute' testing pipeline
+attribute:
+  name: "test_attribute"
+description: "Test attribute assignment config"
+assignment_level: "person_by_household"
+
+household_venue_types: ["household"]
+
+required_attributes:
+  age:
+    required: true
+
+# Add a simple filter to exclude infants for testing
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 1
+      max: 100
+
+settings:
+  assignment_order:
+    base:
+      - "Adults"
+      - "Young Adults"
+      - "Old Adults"
+      - "Kids"
+    sort_by_age: true
+    age_sort_direction: "descending"
+  logging:
+    detailed_assignment_logging: true
+
+# Define the roles mapping subsets
+roles:
+  Head:
+    type: primary
+    subsets: ["Adults"]
+  Partner:
+    type: secondary
+    subsets: ["Adults"]
+  Parent:
+    type: primary
+    subsets: ["Adults", "Young Adults"]
+  Child:
+    subsets: ["Kids"]
+
+# The structure definitions
+household_structures:
+  "Single Adult":
+    matching_rules:
+      - actual: ["0 0 1 0"]
+        
+  "Couples":
+    matching_rules:
+      - actual: ["0 0 2 0"]
+        description: "Two adults"
+        
+  "Family":
+    matching_rules:
+      - actual: [">=1 >=0 >=1 0"]
+        description: "Adults with kids"
+
+# The data sources (used as mock constant providers via fallbacks)
+data_sources: {}
+
+# The assignment rules per structure
+assignment_rules:
+  # Structure 1: Single Adult
+  "Single Adult":
+    rules:
+      - role: "Head"
+        assignment:
+          strategy: "constant"
+          value: "single_val"
+
+  # Structure 2: Couples
+  "Couples":
+    rules:
+      - role: "Head"
+        assignment:
+          strategy: "constant"
+          value: "head_val"
+      - role: "Partner"
+        dependencies: ["Head"]  # Partner depends on Head's assignment
+        assignment:
+          strategy: "constant"
+          value: "partner_val"
+          
+  # Structure 3: Family
+  "Family":
+    rules:
+      - role: "Parent"
+        assignment:
+          strategy: "constant"
+          value: "parent_val"
+      - role: "Child"
+        dependencies: ["Parent"]
+        assignment:
+          strategy: "inheritance"
+          inherit_from:
+            roles: ["Parent"]
+          logic:
+            - when: "True"
+              then: "values[0]"
+          fallback:
+            strategy: "constant"
+            value: "parent_val"
+
+# Non-Household communals
+venue_assignment_rules:
+  - venue_types: ["care_home"]
+    assignment:
+      strategy: "constant"
+      value: "care_home_val"

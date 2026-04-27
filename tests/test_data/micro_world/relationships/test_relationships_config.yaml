@@ -1,0 +1,41 @@
+# Mock configuration for FriendshipBuilder testing
+
+name: "friendships"
+
+connections:
+  default: 2
+  variants:
+    - probability: 1.0  # Force to 5 to test variants overriding default
+      count: 5
+
+sources:
+  - name: "activity_peers"
+    weight: 0.5  # 50%
+    pool:
+      type: "activity"
+      activity_key: "primary_activity"
+    filters:
+      - attribute: "subset_name"
+        match: "same"
+      - attribute: "age"
+        match: "range"
+        range: 5
+
+  - name: "geographic_sgu"
+    weight: 0.5  # 50%
+    pool:
+      type: "geographic"
+      level: "SGU"
+    filters:
+      - attribute: "age"
+        match: "range"
+        range: 10
+
+  - name: "invalid_geographic_layer_test"
+    weight: 1.0
+    pool:
+      type: "geographic"
+      level: "NATION" # Does not exist in Mock world geography
+
+storage:
+  key: "friendships"

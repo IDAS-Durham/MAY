@@ -54,10 +54,12 @@ class VenueMatcher:
                     'min_col': v_con.get('min_column'),
                     'max_col': v_con.get('max_column')
                 })
-                # Initialize arrays for this numerical attribute
+                # Initialize arrays with int32 min/max as "no constraint" sentinels
+                _INT32_MIN = np.iinfo(np.int32).min
+                _INT32_MAX = np.iinfo(np.int32).max
                 self.num_constraints[attr_name] = {
-                    'min': np.full(len(venues), -1000, dtype=np.int32),
-                    'max': np.full(len(venues), 1000, dtype=np.int32)
+                    'min': np.full(len(venues), _INT32_MIN, dtype=np.int32),
+                    'max': np.full(len(venues), _INT32_MAX, dtype=np.int32)
                 }
             elif attr_type == 'categorical' and rule.get('venue_column'):
                 active_rules.append({
@@ -218,11 +220,11 @@ class VenueMatcher:
                 constraints = self.num_constraints[attr_name]
                 # Direct array access is much faster than dict lookup
                 v_min = constraints['min'][v_idx]
-                if v_min != -1000 and person_value < v_min:
+                if v_min != np.iinfo(np.int32).min and person_value < v_min:
                     return False
-                    
+
                 v_max = constraints['max'][v_idx]
-                if v_max != 1000 and person_value > v_max:
+                if v_max != np.iinfo(np.int32).max and person_value > v_max:
                     return False
 
         # Categorical rules with venue_column are handled via prefilter_venues_by_categorical

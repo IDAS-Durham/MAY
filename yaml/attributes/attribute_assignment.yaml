@@ -40,6 +40,11 @@
 #   Child is M → Parents must be different (one is X, other is Y where X ≠ Y)
 # ============================================================================
 
+# ============================================================================
+# IMPORTANT SCHEMA DEFINITION:
+# The root attribute configuration MUST be defined as a nested dictionary 
+# under the 'attribute:' key. Top-level 'attribute_name' will be ignored.
+# ============================================================================
 attribute:
   name: "ethnicity"
   description: "Assigns ethnicity based on residence structure and roles"
@@ -55,7 +60,12 @@ attribute:
 # Role Definitions
 # ============================================================================
 # Define roles and which household subsets (age categories) they apply to
-# These subsets come from household_config.yaml: Kids, Young Adults, Adults, Old Adults
+#
+# IMPORTANT SCHEMA DEFINITION: 
+# Roles MUST be defined globally here at the root level, NOT nested inside 
+# individual `household_structures`. The parser builds a global registry.
+# If nested inside a structure, subset mapping fails.
+# ============================================================================
 
 roles:
   primary_adult:
@@ -101,6 +111,11 @@ roles:
 # ============================================================================
 # Define the three household types with flexible pattern matching
 # Pattern format: "Kids Young_Adults Adults Old_Adults"
+#
+# IMPORTANT SCHEMA DEFINITION:
+# Structure matching strictly requires the `matching_rules: \n - actual: [...]` 
+# format. Legacy flat `patterns: [...]` arrays are not supported and will fail.
+#
 # Operators supported: >=N, <=N, N (exact), >=0 (any)
 #
 # IMPORTANT: Order matters! Structures are checked in the order defined below.
@@ -232,6 +247,9 @@ data_sources:
 
 # ============================================================================
 # Assignment Rules by Household Structure
+# ============================================================================
+# Note: To assign a hardcoded value instead of using a probabilistic distribution,
+# you can use `strategy: "constant"` and `value: "your_value"`.
 # ============================================================================
 
 assignment_rules:

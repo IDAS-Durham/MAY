@@ -11,6 +11,8 @@ The Household class has been removed in favor of the generic Venue system.
 from typing import Optional, List, Any
 from dataclasses import dataclass
 
+from may.utils.attribute_access import get_person_attribute
+
 
 @dataclass
 class Category:
@@ -49,7 +51,9 @@ class Category:
             True if entity's attribute value falls within this category
         """
         # Get the attribute value from the entity
-        attr_value = getattr(entity, self.attribute)
+        attr_value = get_person_attribute(entity, self.attribute)
+        if attr_value is None:
+            return False
 
         if self.type == "numerical":
             if self.max_value is None:

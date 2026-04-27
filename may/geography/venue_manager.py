@@ -275,7 +275,20 @@ class VenueManager:
 
             # Override name if provided
             if name and pd.notna(name):
+                # Remove the generic auto-generated name from the dictionary
+                if venue.name in self.venues:
+                    del self.venues[venue.name]
+                # Warn on name collision — two venues with the same name
+                if name in self.venues:
+                    existing = self.venues[name]
+                    logger.warning(
+                        f"Venue name collision: '{name}' already exists as "
+                        f"type='{existing.type}' (id={existing.id}). "
+                        f"Overwriting in name lookup with type='{venue_type}' (id={venue.id})."
+                    )
+                # Set the custom name and register it
                 venue.name = name
+                self.venues[name] = venue
 
             # Set coordinates if available
             if coordinates:
@@ -539,8 +552,11 @@ class VenueManager:
         return self.venues
 
     def get_all_venues_list(self):
-        """Get all venues as a list, sorted by ID"""
-        return sorted(self.venues.values(), key=lambda v: v.id)
+        """Get all venues as a flat list from venues_by_type (authoritative source)."""
+        all_venues = []
+        for venue_list in self.venues_by_type.values():
+            all_venues.extend(venue_list)
+        return all_venues
 
     def get_venue_types(self):
         """Get list of all venue types"""

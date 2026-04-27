@@ -96,11 +96,20 @@ output/
 june_analysis/
 mgu_codes.txt
 world_map/medieval_map.html
+.agents/
+
+# Emacs autosave files
+\#*\#
+.\#*
+
+# Built mkdocs site output
+docs/site/
+
 world_map/data/
 
 # Folder to dump stuff
 tmp/
 benchmarks/
-*~
-\#*\#
+
+# Profiling output
 *profile.stats

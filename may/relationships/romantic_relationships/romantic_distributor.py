@@ -256,9 +256,6 @@ class RomanticDistributor:
                                         probs[i] = 0.0
                             else:
                                 logger.warning(f"Partner P_{partner_id} for person P_{person_id} not found in eligible people list")
-
-                                if partner_sex_name not in compat_sexes:
-                                    probs[i] = 0.0
                         
                         prob_sum = probs.sum()
                         if prob_sum > 0: 

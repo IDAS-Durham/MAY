@@ -13,6 +13,8 @@ import numpy as np
 from collections import deque
 from typing import List, Dict
 
+from may.utils.attribute_access import get_person_attribute
+
 logger = logging.getLogger("venue_allocator")
 
 
@@ -146,6 +148,10 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
         # Allocate people to this venue
         venue_residents = []
         for _ in range(capacity):
+            # Respect global max_allocations cap
+            if len(allocated_people) >= people_to_allocate:
+                break
+
             # Find next eligible person who hasn't been allocated yet
             person = None
             while venue_eligible:
@@ -175,8 +181,6 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
             # Add people to venue's subset system so they're counted properly
             for person in venue_residents:
                 venue.add_to_subset(person, subset_key=subset_key)
-                # Set venue reference on each person (optional)
-                setattr(person, f'{venue_type}_venue', venue)
 
         # Log progress at intervals
         if venues_processed % progress_interval == 0 or venues_processed == total_venues:
@@ -260,7 +264,7 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
                 continue
 
             # Get the attribute value from person
-            person_value = getattr(person, attr_name, None)
+            person_value = get_person_attribute(person, attr_name)
 
             # If person doesn't have this attribute, they don't qualify
             if person_value is None:
@@ -350,7 +354,7 @@ def _check_attribute_constraints(person, venue, attribute_constraints: Dict) -> 
 
     for attr_name, constraint_config in attribute_constraints.items():
         # Get the attribute value from the person
-        person_value = getattr(person, attr_name, None)
+        person_value = get_person_attribute(person, attr_name)
         if person_value is None:
             logger.debug(f"Person {person.id} has no attribute '{attr_name}', skipping constraint check")
             continue

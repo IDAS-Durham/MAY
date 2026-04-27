@@ -1,4 +1,0 @@
-name,geo_unit,latitude,longitude,beds,icu_beds,emergency_dept
-St Mary's Hospital,E02000173,51.5155,-0.1677,300,25,yes
-Royal London Hospital,E02000414,51.5179,-0.0607,800,80,yes
-City General Hospital,E02000422,51.5830,-0.0855,450,35,no

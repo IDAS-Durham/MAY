@@ -58,7 +58,7 @@ class Subset(AbstractSet):
         return self.venue.type , self.subset_index
     
     def __contains__(self, item):
-        return item in self.people_present
+        return item in self.members
 
     def __iter__(self):
         return iter(self.members)
@@ -78,7 +78,7 @@ class Subset(AbstractSet):
             return False
         if not self.subset_index == other.subset_index:
             return False
-        for p, p2 in zip(self.people_present, other.people_present):
+        for p, p2 in zip(self.members, other.members):
             if not p == p2:
                 return False
         return True
