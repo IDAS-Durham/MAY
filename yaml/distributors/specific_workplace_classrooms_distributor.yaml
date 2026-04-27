@@ -55,7 +55,7 @@ eligibility:
       values: ["household"]
 
   attributes:
-    - name: "work_sector"
+    - name: "properties.work_sector"
       type: "categorical"
       description: "Person's work_sector (from properties) should be P (Education)"
 
@@ -76,7 +76,7 @@ venue_selection:
   consider_by: "geo_unit"
 
   # Classrooms inherit geo_unit from parent school (typically SGU or MGU)
-  venue_geo_level: "SGU"
+  venue_geo_level: "LGU"
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to classrooms near their WORK location, not home
@@ -118,13 +118,9 @@ settings:
   # Limit number of allocations (null = no limit)
   max_allocations: null
 
-  # Random seed for reproducibility
-  random_seed: null
-
   # Logging
   verbose: true
   log_summary: true
-  debug: false
 
 # ============================================================================
 # FALLBACK BEHAVIOR

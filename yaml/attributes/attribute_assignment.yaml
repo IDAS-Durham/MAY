@@ -40,6 +40,11 @@
 #   Child is M → Parents must be different (one is X, other is Y where X ≠ Y)
 # ============================================================================
 
+# ============================================================================
+# IMPORTANT SCHEMA DEFINITION:
+# The root attribute configuration MUST be defined as a nested dictionary 
+# under the 'attribute:' key. Top-level 'attribute_name' will be ignored.
+# ============================================================================
 attribute:
   name: "ethnicity"
   description: "Assigns ethnicity based on residence structure and roles"
@@ -50,39 +55,46 @@ attribute:
   # Other residence types (not in this list) use venue_assignment_rules instead
   household_venue_types: ["household"]
 
-  # Attribute-specific inheritance configuration
-  inheritance_config:
-    mixed_code: "M"  # Code for mixed/combined values
-    single_values: ["W", "A", "B", "O"]  # Pure (non-mixed) values
 
 # ============================================================================
 # Role Definitions
 # ============================================================================
 # Define roles and which household subsets (age categories) they apply to
-# These subsets come from household_config.yaml: Kids, Young Adults, Adults, Old Adults
+#
+# IMPORTANT SCHEMA DEFINITION: 
+# Roles MUST be defined globally here at the root level, NOT nested inside 
+# individual `household_structures`. The parser builds a global registry.
+# If nested inside a structure, subset mapping fails.
+# ============================================================================
 
 roles:
   primary_adult:
+    type: primary
     description: "First adult assigned in any household"
     subsets: ["Adults"]
 
   secondary_adult:
+    type: secondary
     description: "Second adult (partner in couples/families)"
     subsets: ["Adults"]
 
   extra_adult:
+    type: extra
     description: "Additional adults beyond primary pair"
     subsets: ["Adults"]
 
   primary_elder:
+    type: primary
     description: "First elderly person"
     subsets: ["Old Adults"]
 
   secondary_elder:
+    type: secondary
     description: "Second elderly person"
     subsets: ["Old Adults"]
 
   extra_elder:
+    type: extra
     description: "Additional elderly beyond primary pair"
     subsets: ["Old Adults"]
 
@@ -99,6 +111,11 @@ roles:
 # ============================================================================
 # Define the three household types with flexible pattern matching
 # Pattern format: "Kids Young_Adults Adults Old_Adults"
+#
+# IMPORTANT SCHEMA DEFINITION:
+# Structure matching strictly requires the `matching_rules: \n - actual: [...]` 
+# format. Legacy flat `patterns: [...]` arrays are not supported and will fail.
+#
 # Operators supported: >=N, <=N, N (exact), >=0 (any)
 #
 # IMPORTANT: Order matters! Structures are checked in the order defined below.
@@ -211,22 +228,6 @@ data_sources:
       M: 0.03
       O: 0.03
 
-  diversity:
-    type: "csv_lookup"
-    description: "Household diversity probabilities (single vs mixed ethnicity)"
-
-    files:
-      - path: "data/population/ethnicity/combination_ethnicities_in_households_standardized.csv"
-        key_column: "geo_unit"
-        value_columns:
-          single: "single_ethnicity"
-          mixed_two: "two_ethnicities"
-          mixed_three_plus: "three_plus_ethnicities"
-
-    fallback:
-      single: 0.85
-      mixed_two: 0.12
-      mixed_three_plus: 0.03
 
   pair_probabilities:
     type: "csv_lookup"
@@ -246,6 +247,9 @@ data_sources:
 
 # ============================================================================
 # Assignment Rules by Household Structure
+# ============================================================================
+# Note: To assign a hardcoded value instead of using a probabilistic distribution,
+# you can use `strategy: "constant"` and `value: "your_value"`.
 # ============================================================================
 
 assignment_rules:
@@ -305,6 +309,10 @@ assignment_rules:
             - when: "count(unique_values) > 1"
               then: "M"
               note: "W+A=M, W+B=M, A+O=M, M+W=M, etc."
+          fallback:
+            strategy: "probabilistic"
+            data_source: "geo_distribution"
+            context: "household.geo_unit"
 
       # Elderly: Reverse inheritance from primary_adult (parents of adults)
       - role: "primary_elder"
@@ -323,6 +331,10 @@ assignment_rules:
               then:
                 strategy: "probabilistic"
                 data_source: "geo_distribution"
+          fallback:
+            strategy: "probabilistic"
+            data_source: "geo_distribution"
+            context: "household.geo_unit"
 
       - role: "secondary_elder"
         priority: 6
@@ -469,13 +481,3 @@ settings:
     show_samples: true
     sample_size: 10
 
-# ============================================================================
-# Ethnicity Codes
-# ============================================================================
-
-ethnicity_codes:
-  W: "White"
-  A: "Asian/Asian British"
-  B: "Black/African/Caribbean/Black British"
-  M: "Mixed/Multiple ethnic groups"
-  O: "Other ethnic group"

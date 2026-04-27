@@ -41,8 +41,9 @@ class HouseholdRoundDistributor:
         Returns:
             List of target sizes for each household
         """
+        min_size = pattern.min_household_size() # Calculate once
         if geo_unit_code not in self.distributor.person_pool_by_geo_unit:
-            return [pattern.min_household_size()] * num_households
+            return [min_size] * num_households
 
         pools = self.distributor.person_pool_by_geo_unit[geo_unit_code]
 
@@ -196,14 +197,11 @@ class HouseholdRoundDistributor:
                 if actual_pattern_str != pattern_str:
                     pattern.census_pattern = pattern_str
 
-                # Validate max_household_size against pattern minimum (currently only used by flexible households (step 23))
+                # Validate max_household_size against pattern minimum
                 if max_household_size is not None:
                     pattern_min_size = pattern.min_household_size()
                     if max_household_size < pattern_min_size:
                         logger.error(f"ERROR: max_household_size ({max_household_size}) is less than pattern '{actual_pattern_str}' minimum size ({pattern_min_size})")
-                        logger.error(f"  Pattern: {pattern_str}")
-                        if actual_pattern_str != pattern_str:
-                            logger.error(f"  Assumption: {actual_pattern_str}")
                         raise ValueError(f"max_household_size ({max_household_size}) cannot be less than pattern minimum size ({pattern_min_size}) for pattern '{actual_pattern_str}'")
 
                 # PRE-CALCULATE balanced distribution if allocate_flexible is True

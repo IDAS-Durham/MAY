@@ -130,13 +130,9 @@ settings:
   # No allocation limit
   max_allocations: null
 
-  # Random seed
-  random_seed: null
-
   # Logging
   verbose: true
   log_summary: true
-  debug: false
 
   # Performance
   use_spatial_index: true

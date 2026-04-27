@@ -11,6 +11,9 @@ import numpy as np
 logger = logging.getLogger("debug_output")
 
 
+from may.serialization.export_properties import export_relationships
+
+
 def export_venue_allocations(world, output_file="venue_allocations.csv"):
     """
     Export all venues (except households) with their allocation counts to CSV.
@@ -101,6 +104,72 @@ def export_venue_allocations(world, output_file="venue_allocations.csv"):
         logger.info("No non-household venues to export")
 
 
+def export_residence_venues(world, output_file="residence_venues.csv"):
+    """
+    Export all venues assigned as residences with their residents to CSV.
+
+    Args:
+        world: World object containing geography, population, and venues
+        output_file: Path to output CSV file
+    """
+    logger.info(f"Exporting residence venues to {output_file}...")
+
+    # Collect residence data
+    residence_data = []
+    all_venues = world.venues.get_all_venues().values()
+
+    for venue in all_venues:
+        # Check all subsets. Households use dynamic categories (Kids, Adults, etc) rather than a single 'resident' key.
+        for subset in venue.subsets.values():
+            members = subset.members
+            
+            if not members:
+                continue
+                
+            hid = venue.properties.get('HID', 'N/A')
+            s_hid = str(hid).strip()
+            if s_hid.endswith('.0'):
+                s_hid = s_hid[:-2]
+            bt_code = venue.properties.get('BTCode', 'N/A')
+            venue_type = venue.type
+            
+            for person in members:
+                # Format age/sex as "30F"
+                sex_char = person.sex[0].upper() if person.sex else 'U'
+                age_sex = f"{int(person.age)}{sex_char}"
+                
+                residence_data.append({
+                    'HID': s_hid,
+                    'BTCode': bt_code,
+                    'VenueType': venue_type,
+                    'PersonID': person.id,
+                    'AgeSex': age_sex
+                })
+
+    if residence_data:
+        # Sort primarily by VenueType (households first) and then by HID
+        try:
+            # We want 'household' to be first. Others following alphabetically is fine.
+            residence_data.sort(key=lambda x: (
+                0 if x['VenueType'] == 'household' else 1,
+                str(x['HID']),
+                x['PersonID']
+            ))
+        except Exception as e:
+            logger.warning(f"Failed to sort residence data: {e}")
+
+        # Write to CSV
+        with open(output_file, 'w', newline='') as f:
+            fieldnames = ['HID', 'BTCode', 'VenueType', 'PersonID', 'AgeSex']
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(residence_data)
+            
+        logger.info(f"Exported {len(residence_data):,} residence records to {output_file}")
+    else:
+        logger.warning("No residence venues found to export")
+
+
 def export_people(world, output_file="people.csv"):
     """
     Export all people with their attributes, properties, and activity assignments to CSV.
@@ -159,30 +228,31 @@ def export_people(world, output_file="people.csv"):
             if activity_name == 'residence':
                 continue
 
+            row[f'{activity_name}'] = str(subsets)
             # Check if this is a multi-venue activity (dict) or single-venue (list)
-            if isinstance(subsets, dict):
-                # Multi-venue activity (e.g., leisure with multiple types)
-                # Store count of venues per type
-                for venue_type, venue_subsets in subsets.items():
-                    if venue_subsets and len(venue_subsets) > 0:
-                        # Store count of venues for this type
-                        row[f'{activity_name}_{venue_type}_count'] = len(venue_subsets)
-                        # Optionally store first venue name
-                        first_venue = venue_subsets[0].venue
-                        row[f'{activity_name}_{venue_type}_first'] = first_venue.name
-            elif subsets and len(subsets) > 0:
-                # Single-venue activity (traditional)
-                venue = subsets[0].venue
-                row[f'{activity_name}_venue_name'] = venue.name
-                row[f'{activity_name}_venue_type'] = venue.type
-                row[f'{activity_name}_venue_geo_unit'] = venue.geographical_unit.name if venue.geographical_unit else None
+            # if isinstance(subsets, dict):
+            #     # Multi-venue activity (e.g., leisure with multiple types)
+            #     # Store count of venues per type
+            #     for venue_type, venue_subsets in subsets.items():
+            #         if venue_subsets and len(venue_subsets) > 0:
+            #             # Store count of venues for this type
+            #             row[f'{activity_name}_{venue_type}_count'] = len(venue_subsets)
+            #             # Optionally store first venue name
+            #             row[f'{activity_name}_{venue_type}_first'] = venue_subsets
+            # elif subsets and len(subsets) > 0:
+            #     # Single-venue activity (traditional)
+            #     subset_list = subsets.values()
+            #     venue = subsets_list[0].venue
+            #     row[f'{activity_name}_venue_name'] = venue.name
+            #     row[f'{activity_name}_venue_type'] = venue.type
+            #     row[f'{activity_name}_venue_geo_unit'] = venue.geographical_unit.name if venue.geographical_unit else None
 
-                # Add parent venue information if it exists
-                if venue.parent:
-                    parent = venue.parent
-                    row[f'{activity_name}_parent_venue_name'] = parent.name
-                    row[f'{activity_name}_parent_venue_type'] = parent.type
-                    row[f'{activity_name}_parent_venue_geo_unit'] = parent.geographical_unit.name if parent.geographical_unit else None
+            #     # Add parent venue information if it exists
+            #     if venue.parent:
+            #         parent = venue.parent
+            #         row[f'{activity_name}_parent_venue_name'] = parent.name
+            #         row[f'{activity_name}_parent_venue_type'] = parent.type
+            #         row[f'{activity_name}_parent_venue_geo_unit'] = parent.geographical_unit.name if parent.geographical_unit else None
 
         person_data.append(row)
 
@@ -372,3 +442,87 @@ def print_world_examples(world):
 
     logger.info("")
     logger.info("=" * 60)
+
+
+def export_resident_linked_connections(world, output_file="outputs/resident_linked_connections.csv"):
+    """
+    Debug only: Export resident-linked connections (e.g., care home visits) to CSV.
+    This helps verify that people are correctly linked to venues based on residents.
+
+    Args:
+        world: World object
+        output_file: Path to output CSV file
+    """
+    import os
+    
+    # Ensure output directory exists
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    
+    logger.info(f"DEBUG: Exporting resident-linked connections to {output_file}...")
+    
+    data = []
+    people = world.population.get_all_people()
+    
+    # We look for 'leisure' activity with 'care_home' venue type by default
+    activity_key = "leisure"
+    target_venue_type = "care_home"
+    
+    # Pre-build person lookup for efficiency if needed, but get_person is usually fast
+    
+    for person in people:
+        if activity_key not in person.activity_map:
+            continue
+            
+        links = person.activity_map[activity_key].get(target_venue_type, [])
+        for subset_link in links:
+            venue = subset_link.venue
+            subset_name = subset_link.subset_name
+            
+            # Extract resident_id from subset_name (e.g., "visitor_for_123")
+            resident_id = 'unknown'
+            resident_age = 'unknown'
+            resident_sex = 'unknown'
+            
+            if "_for_" in subset_name:
+                try:
+                    res_id_str = subset_name.split("_for_")[-1]
+                    resident_id = int(res_id_str)
+                    resident = world.population.get_person(resident_id)
+                    if resident:
+                        resident_age = resident.age
+                        resident_sex = resident.sex
+                except (ValueError, IndexError):
+                    pass
+            
+            # Get person details
+            residence = person.residence
+            household_id = residence.id if residence and residence.type == 'household' else 'none'
+            
+            data.append({
+                'person_id': person.id,
+                'age': person.age,
+                'sex': person.sex,
+                'household_id': household_id,
+                'geo_unit': person.geographical_unit.name if person.geographical_unit else 'none',
+                'linked_venue_id': venue.id,
+                'linked_venue_name': venue.name,
+                'visitor_to_resident_id': resident_id,
+                'resident_age': resident_age,
+                'resident_sex': resident_sex,
+                'linked_venue_geo': venue.geographical_unit.name if venue.geographical_unit else 'none'
+            })
+            
+    if not data:
+        logger.warning(f"DEBUG: No {target_venue_type} links found in {activity_key} map.")
+        return
+
+    # Write to CSV
+    with open(output_file, 'w', newline='') as f:
+        fieldnames = ['person_id', 'age', 'sex', 'household_id', 'geo_unit', 
+                     'linked_venue_id', 'linked_venue_name', 'visitor_to_resident_id', 
+                     'resident_age', 'resident_sex', 'linked_venue_geo']
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(data)
+        
+    logger.info(f"DEBUG: Successfully exported {len(data)} links to {output_file}.")

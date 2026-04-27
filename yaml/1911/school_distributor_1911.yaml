@@ -1,0 +1,118 @@
+# ============================================================================
+# Educational Venue Distributor for Durham 1911
+# ============================================================================
+# This file configures how eligible people are assigned to school venues.
+# The allocation flows through 5 phases in order:
+#   1. Special cases (e.g., boarding school students)
+#   2. Eligibility filtering (global_filters below)
+#   3. Normal allocation (allocate_by_geo_unit using the strategy below)
+#   4. Fallback for anyone still unallocated
+#   5. Exports (CSV reports)
+# ============================================================================
+
+# --- IDENTITY ---
+# These link the distributor to venue objects and person activity maps.
+#   venue_type:       Which venue type from the world to distribute to.
+#   activity_map_key: The top-level key added to person.activity_map (e.g., "primary_activity").
+#   subset_key:       The subset name within the venue (e.g., venue.subsets["student"]).
+#   activity_type:    The nested key under activity_map_key (e.g., person.activity_map["primary_activity"]["education"]).
+venue_type: "school"
+activity_map_key: "primary_activity"
+subset_key: "student"
+
+# --- SETTINGS ---
+#   verbose:           If true, logs detailed per-SGU allocation stats.
+#   use_spatial_index: If true, builds a cKDTree for fast nearest-venue lookups.
+#                      Required when consider_by is "count" or "distance".
+settings:
+  verbose: true
+  use_spatial_index: true
+
+# --- VENUE SELECTION ---
+# Controls HOW candidate venues are found for each person/batch.
+#
+#   person_location_source: Dot-path to get (lat, lon) from a Person object.
+#       Examples: "geographical_unit.coordinates", "properties.workplace_sgu"
+#
+#   venue_geo_level: The geography level at which venues are grouped (e.g., "SGU").
+#   batch_geo_level: The geography level at which people are batched for allocation.
+#       Usually same as venue_geo_level. People in the same batch share a centroid.
+#
+#   consider_by: How to build the candidate venue pool. Options:
+#       "count"    → Find the N closest venues via spatial index (N = count below).
+#       "distance" → Find ALL venues within max_distance km.
+#       "geo_unit" → Only consider venues in the same geographical unit (no spatial search).
+#
+#   count: Number of nearest venues to consider (only used when consider_by = "count").
+#       Higher = broader search, more likely to find capacity, but slower.
+#       50 means each batch considers the 50 closest schools.
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "SGU"
+  batch_geo_level: "SGU"
+  consider_by: "count"
+  count: 50
+
+# --- ELIGIBILITY ---
+# Filters applied to ALL people BEFORE allocation. Only matching people are eligible.
+#
+#   global_filters: List of attribute filters. All must pass (AND logic).
+#     Each filter has:
+#       attribute: Name of the person attribute (checked in order: person.age/sex → person.properties → nested path)
+#       type:      "numerical" (min/max range) or "categorical" (value/values match)
+#       min/max:   Inclusive bounds for numerical filters.
+#       value:     Single match for categorical. values: list of matches.
+#
+#   Current filter: Occode 12-13 (scholars in 1911 census).
+#   People with NaN/missing Occode are correctly excluded.
+eligibility:
+  global_filters:
+    - attribute: "Occode"
+      type: "categorical"
+      values: [13]
+
+# --- ALLOCATION ---
+# Controls HOW people are assigned to venues from their candidate pool.
+#
+#   track_capacity: If true, tracks how many people are assigned to each venue.
+#   when_full:      What happens when a venue reaches capacity:
+#       "exclude" → Skip the venue (default). "overflow" → Allow over-capacity.
+#   fixed_capacity: Maximum people per venue (all venues get the same limit).
+#
+#   strategy: The allocation algorithm. Options:
+#       "random"           → Shuffles venues randomly, fills sequentially.
+#       "closest"          → Sorts venues by distance, fills nearest first (sequential pointer).
+#                            ⚠ Can leave far venues empty if near ones absorb all demand.
+#       "closest_balanced" → Weights selection by BOTH distance (1/d) and remaining capacity.
+#                            Uses probabilistic selection (np.random.choice) to spread people
+#                            across all nearby venues proportionally. Best for avoiding empty venues.
+#       "proportional"     → Like closest_balanced but without capacity weighting (distance only).
+#       "largest_capacity" → Picks the venue with the most total capacity.
+allocation:
+  track_capacity: true
+  when_full: "exclude"
+  fixed_capacity: 500
+  strategy: "closest_balanced"
+
+# --- FALLBACK ---
+# Triggered AFTER normal allocation, only for people who remain unallocated.
+# Typically these are people in SGUs with no nearby schools or all nearby schools full.
+#
+#   strategy: The fallback approach. Options:
+#       "skip"             → Do nothing, leave them unallocated (default if section missing).
+#       "relax_distance"   → Retry with progressively larger search radius.
+#           relax_params.distance_multiplier: Factor to expand search each iteration (default: 2.0).
+#           relax_params.max_iterations: How many expansion rounds (default: 3).
+#       "relax_capacity"   → Retry while ignoring capacity limits entirely.
+#       "assign_closest"   → Assign each person to their absolute closest venue,
+#                            ignoring capacity AND eligibility. Last resort.
+fallback:
+  strategy: "assign_closest"
+
+# --- EXPORTS ---
+# CSV reports generated after allocation completes.
+#   venue_summary:      Per-school stats (student count, avg/min/max age, capacity, remaining).
+#   unallocated_report: Details of eligible people who were NOT allocated (geo unit, age, Occode).
+exports:
+  venue_summary: "output/1911/school_venue_summary.csv"
+  unallocated_report: "output/1911/school_unallocated.csv"

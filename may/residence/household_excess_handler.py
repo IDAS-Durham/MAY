@@ -9,6 +9,7 @@ This module contains logic for:
 import logging
 import numpy as np
 from typing import List, Optional, Dict
+from itertools import islice
 from may.population.person import Person
 from may.geography.venue import Venue
 
@@ -173,7 +174,8 @@ class HouseholdExcessHandler:
                             break
                     else:
                         # No rule - take first available person
-                        person = available_people[0]  # Always take first (already shuffled)
+                        # available_people is now a dict, take first value
+                        person = next(iter(available_people.values()))  # Always take first (already shuffled)
 
                     # Add the person
                     self.distributor._allocate_person_to_household(household, person, available_people)
@@ -205,7 +207,8 @@ class HouseholdExcessHandler:
                             break
                     else:
                         # No rule - take first available person
-                        person = available_people[0]  # Always take first (already shuffled)
+                        # available_people is now a dict, take first value
+                        person = next(iter(available_people.values()))  # Always take first (already shuffled)
 
                     # Add the person
                     self.distributor._allocate_person_to_household(household, person, available_people)
@@ -334,11 +337,13 @@ class HouseholdExcessHandler:
                 continue
 
             pools = self.distributor.person_pool_by_geo_unit[geo_unit_code]
-            available_people = pools[add_cat_idx]
+            pool_dict = pools[add_cat_idx]
 
-            if not available_people:
+            if not pool_dict:
                 continue
 
+            # Convert to list for complex indexing in overflow mode
+            available_people = list(pool_dict.values())
             logger.debug(f"geo_unit {geo_unit_code}: {len(available_people)} {add_category} available")
 
             # Get all households in this geo_unit across all patterns
@@ -423,8 +428,11 @@ class HouseholdExcessHandler:
                         households_modified += 1
                         logger.debug(f"Added {added_to_hh} {add_category} to household {household.id} (pattern: {pattern}, now size: {household.size()})")
 
-            # Remove allocated people from pool
-            pools[add_cat_idx] = pools[add_cat_idx][global_people_index:]
+            # Remove allocated people from pool dictionary
+            if global_people_index > 0:
+                ids_to_remove = [p.id for p in available_people[:global_people_index]]
+                for pid in ids_to_remove:
+                    pool_dict.pop(pid, None)
 
             # Log progress at intervals
             if geo_units_processed % progress_interval == 0 or geo_units_processed == total_geo_units:
@@ -507,7 +515,7 @@ class HouseholdExcessHandler:
 
         # Use relationship rules to select a valid person
         person = self.distributor.relationship_rules.select_person_with_constraint(
-            candidates=candidates,
+            candidates=list(candidates.values()) if isinstance(candidates, dict) else candidates,
             existing_people_by_role=existing_people_by_role,
             constraints=rule.constraints,
             current_role=current_role,

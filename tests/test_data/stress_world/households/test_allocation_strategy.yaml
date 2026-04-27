@@ -1,0 +1,79 @@
+enabled: true
+
+steps:
+  # Step 1: Two-adult families with children
+  # SGU_S1 requests 3 of ">=2 >=0 2 0" but only has 3 adults -> forces demotion
+  # Demotion switches from "Two-adult" to "Single-adult" rule
+  - name: "Two-Adult Families with Children"
+    type: "household"
+    description: "Allocate two-adult families with kids, with demotion to single-adult"
+    rule: "Two-adult family with kids"
+    patterns:
+      - ">=2 >=0 2 0"
+      - "1 >=0 2 0"
+    demotion_rules:
+      ">=2 >=0 1 0": "Single-adult family with kids"
+      "1 >=0 1 0": "Single-adult family with kids"
+
+  # Step 2: Elderly couples
+  - name: "Elderly Couples"
+    type: "household"
+    description: "Allocate elderly couples using pair matching"
+    rule: "Elderly pair"
+    patterns:
+      - "0 0 0 2"
+
+  # Step 3: Adult couples (rule-based pair matching)
+  - name: "Adult Couples"
+    type: "household"
+    description: "Allocate adult couples with romantic pairing"
+    rule: "Adult pair"
+    patterns:
+      - "0 0 2 0"
+
+  # Step 4: YA pairs (with pattern assumption)
+  # Census says "0 >=0 0 0" (flexible) but we assume exactly 2 YA
+  - name: "YA Pairs"
+    type: "household"
+    description: "Allocate young adult pairs using assumption"
+    patterns:
+      - pattern: "0 >=0 0 0"
+        assumption: "0 2 0 0"
+    allocate_flexible: false
+
+  # Step 5: Excess kids -> add remaining kids to family households
+  - name: "Add Excess Kids to Families"
+    type: "household_excess"
+    description: "Add remaining kids to existing family households"
+    target_patterns:
+      - ">=2 >=0 2 0"
+      - ">=2 >=0 1 0"
+      - "1 >=0 2 0"
+      - "1 >=0 1 0"
+    add_category: "Kids"
+    constraints:
+      - category_sum: ["Kids"]
+        max: 5
+    add_distribution:
+      type: "weighted"
+      probabilities: {"1": 1.0}
+
+  # Step 6: Overflow remaining Young Adults
+  - name: "Overflow Young Adults"
+    type: "household_overflow"
+    description: "Distribute ALL remaining YA balancedly across eligible households"
+    target_patterns:
+      - ">=2 >=0 2 0"
+      - ">=2 >=0 1 0"
+      - "1 >=0 2 0"
+      - "1 >=0 1 0"
+      - "0 >=0 0 0"
+      - "0 0 2 0"
+    add_category: "Young Adults"
+
+  # Step 7: Promote and allocate all remaining people
+  - name: "Promote and Allocate Remaining"
+    type: "household_promotion"
+    description: "Promote households to accept any remaining people"
+    target_categories: ["Kids", "Young Adults", "Adults", "Old Adults"]
+    refresh_pools: true

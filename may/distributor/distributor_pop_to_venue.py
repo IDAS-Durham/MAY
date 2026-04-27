@@ -60,8 +60,13 @@ class Distributor:
         return [True] * self.subset_distributor.n_subsets
 
     def _assign_subsets(self):
-        self.subset_distributor = SubsetDistributor(self.venue_type,
-                                                    example_venue.properties['subsets'])
+        # We need to peek at the properties of one of our potential venues to get subsets
+        subsets = ['everyone']
+        if self.potential_venues and len(self.potential_venues) > 0:
+            example_venue = self.potential_venues[0]
+            subsets = example_venue.properties.get('subsets', ['everyone'])
+            
+        self.subset_distributor = SubsetDistributor(self.venue_type, subsets)
         # Note: Using a method instead of lambda for pickle compatibility
         self._venue_has_membership_capacity_by_subset = defaultdict(self._create_capacity_list)
         

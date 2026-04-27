@@ -29,7 +29,7 @@ eligibility:
       values: ["household"]
 
   attributes:
-    - name: "work_sector"
+    - name: "properties.work_sector"
       type: "categorical"
       description: "Person's work_sector (from properties) should match company industry sector"
 
@@ -71,7 +71,7 @@ venue_selection:
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to companies near their WORK location, not home
   # Note: workplace_sgu is the SGU code, stored in person.properties
-  person_location_attribute: "properties.workplace_sgu"
+  person_location_source: "properties.workplace_sgu"
 
   # Batch at SGU level (workplace) for better performance
   # Even though companies are at MGU level, we batch people by their specific workplace SGU
@@ -102,10 +102,8 @@ allocation:
 settings:
   priority: 5  # Run after school (10) and university (1)
   max_allocations: null
-  random_seed: null
   verbose: true
   log_summary: true
-  debug: false  # Enable debug logging to see why allocation is failing
 
 fallback:
   strategy: "skip"  # Skip if no matching companies found

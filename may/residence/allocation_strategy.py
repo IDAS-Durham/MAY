@@ -9,6 +9,7 @@ import logging
 import yaml
 from typing import Dict, List
 from .venue_allocator import _allocate_to_venue_type
+from may.venue_distributor import distributor_from_yaml
 
 logger = logging.getLogger("allocation_strategy")
 
@@ -69,7 +70,7 @@ def execute_allocation_strategy(population,
         step_type = step_config.get('type')
         step_name = step_config.get('name', f'Step {step_number}')
 
-        if step_type not in ['household', 'venue', 'household_excess', 'household_overflow', 'household_promotion']:
+        if step_type not in ['household', 'venue', 'household_excess', 'household_overflow', 'household_promotion', 'resident_linked']:
             logger.warning(f"Unknown step type '{step_type}' for step '{step_name}', skipping")
             continue
 
@@ -93,6 +94,8 @@ def execute_allocation_strategy(population,
             stats = _execute_household_overflow_step(step_config, household_distributor)
         elif step_type == 'household_promotion':
             stats = _execute_household_promotion_step(step_config, household_distributor)
+        elif step_type == 'resident_linked':
+            stats = _execute_resident_linked_step(step_config, population, venues, household_distributor)
 
         all_stats[step_name] = {
             'type': step_type,
@@ -162,6 +165,12 @@ def execute_allocation_strategy(population,
     logger.info(f"  People added to households (excess): {total_excess_alloc:,}")
     logger.info(f"  People added to households (overflow): {total_overflow_alloc:,}")
     logger.info(f"  People in venues: {total_venue_alloc:,}")
+    
+    # Optional: Log resident_linked total if needed
+    total_resident_linked = sum(s.get('total_links', 0) for s in all_stats.values() if s['type'] == 'resident_linked')
+    if total_resident_linked > 0:
+        logger.info(f"  Resident-linked connections: {total_resident_linked:,}")
+
     logger.info(f"  Total allocated: {len(household_distributor.allocated_people):,}")
     logger.info(f"  Remaining unallocated: {household_distributor.get_available_people_count():,}")
 
@@ -234,7 +243,7 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
         household_distributor.config['demotion']['enabled'] = enable_demotion
 
     try:
-        stats = household_distributor.distribute_households_round(
+        stats = household_distributor.round_distributor.distribute_households_round(
             pattern_filter=pattern_list,
             pattern_assumptions=pattern_assumptions,
             max_households=max_households,
@@ -423,4 +432,54 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         household_distributor=household_distributor
     )
 
+    return stats
+
+
+def _execute_resident_linked_step(step_config: Dict, population, venues, household_distributor) -> Dict:
+    """
+    Execute a resident-linked allocation step (e.g., care home visits).
+
+    Args:
+        step_config: Configuration dict for this step
+        population: PopulationManager
+        venues: VenueManager
+        household_distributor: HouseholdDistributor
+
+    Returns:
+        dict: Statistics for this step
+    """
+    config_file = step_config.get('config_file')
+    if not config_file:
+        logger.error("No 'config_file' specified for resident_linked step")
+        return {'total_links': 0, 'error': "Missing 'config_file' parameter"}
+
+    # Use factory to get the distributor
+    distributor = distributor_from_yaml(config_file)
+    
+    # Create a proxy for World to avoid circular imports and satisfy distributor interface
+    class WorldProxy:
+        def __init__(self, geo, pop, vns, hhd):
+            self.geography = geo
+            self.population = pop
+            self.venues = vns
+            self.household_distributor = hhd
+        
+        @property
+        def people(self):
+            return self.population.get_all_people()
+            
+        def venues_by_type(self, venue_type):
+            return self.venues.get_venues_by_type(venue_type)
+
+    world_proxy = WorldProxy(household_distributor.geography, population, venues, household_distributor)
+    
+    # Execute allocation
+    stats = distributor.allocate(world_proxy)
+    
+    # Handle export if requested
+    export_file = step_config.get('export_file')
+    if export_file:
+        distributor.export_links(world_proxy, export_file)
+        stats['export_file'] = export_file
+    
     return stats

@@ -1,0 +1,82 @@
+# Serialization Configuration for 1911 Durham World
+# Specifies which properties and attributes to include in the HDF5 export
+
+# =============================================
+# POPULATION
+# =============================================
+population:
+  # Core attributes (id, age, sex, geographical_unit) are ALWAYS serialized
+  # We currently have no additional properties (like ethnicity) assigned
+  properties: ["Occode"]
+
+# =============================================
+# GEOGRAPHY
+# =============================================
+geography:
+  include_coordinates: true
+  properties: []
+
+# =============================================
+# VENUES
+# =============================================
+venues:
+  global:
+    include_coordinates: true
+    include_is_residence: true
+
+  # Per-type property configuration
+  # We include the 10 categories defined in households_config.yaml
+  types:
+    household:
+      properties: ["BTCode", "HID"]
+    pub:
+      properties: ["BTCode", "HID"]
+    school:
+      properties: ["BTCode", "HID"]
+    church:
+      properties: ["BTCode", "HID"]
+    army_building:
+      properties: ["BTCode", "HID"]
+    medical:
+      properties: ["BTCode", "HID"]
+    prison:
+      properties: ["BTCode", "HID"]
+    workplace_sales:
+      properties: ["BTCode", "HID"]
+    workplace_service:
+      properties: ["BTCode", "HID"]
+    workplace_production:
+      properties: ["BTCode", "HID"]
+    workplace_education:
+      properties: ["BTCode", "HID"]
+    workplace_mine:
+      properties: ["BTCode", "HID"]
+
+# =============================================
+# SUBSETS
+# =============================================
+subsets:
+  properties: []
+
+# =============================================
+# RELATIONSHIPS
+# =============================================
+relationships:
+  include_activity_map: true
+  include_venue_hierarchy: true
+  include_geography_hierarchy: true
+
+# =============================================
+# OUTPUT SETTINGS
+# =============================================
+output:
+  compression: "gzip"
+  compression_level: 4
+  include_metadata: true
+  metadata:
+    - random_seed
+    - creation_timestamp
+    - config_files_used
+    - num_people
+    - num_venues
+    - num_geo_units

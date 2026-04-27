@@ -1,0 +1,14 @@
+venue_types:
+  household:
+    enabled: true
+    filename: households.csv
+    is_residence: true
+  school:
+    enabled: true
+    filename: schools.csv
+  hospital:
+    enabled: false
+    filename: hospitals.csv
+
+settings:
+  filter_by_geography: true

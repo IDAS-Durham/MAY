@@ -1,0 +1,81 @@
+# 1. Standard VenueDistributor
+# Exhaustive scenario testing normal matching:
+# - Filtering limit (only adults allowed via subsets)
+# - Special cases lookup (a particular mock person to a specific venue based on ID)
+# - Geographical 'closest' matching (using capacity limits)
+standard_distributor:
+  distributor_type: "single_venue"
+  venue_type: "standard_office"
+  activity_map_key: "work"
+  subset_key: "employees"
+
+  # Test filtering functionality
+  eligibility:
+    global_filters:
+      - attribute: "age"
+        min: 18
+
+  # Test special cases functionality
+  special_cases:
+    - condition:
+        filters:
+          - attribute: "is_ceo"
+            operator: "=="
+            value: true
+      allocation_rule:
+        match_by:
+          - source: "person.ceo_target"
+            target: "venue.name"
+
+  # Test standard nearest capacity allocation functionality
+  venue_selection:
+    strategy: "closest"
+    person_location_source: "geographical_unit.coordinates"
+
+  # Fallback to nearest alternative if full
+  allocation:
+    strategy: "closest_available"
+    # Ensure venues get at least 1 person
+    enforce_no_empty_venues: true
+
+
+# 2. PropertyMatchingDistributor
+# Scenario: Strict key-value matching overriding physical distance
+property_distributor:
+  distributor_type: "property_matching"
+  venue_type: "strict_building"
+  activity_name: "work"
+  subset_key: "assigned_worker"
+  
+  target_venue_type: "strict_building"
+  mapping_key: "building_id"
+  venue_property: "building_id"
+
+
+# 3. MultiVenueDistributor
+# Scenario: One person assigned to an array of leisure venues simultaneously
+multi_venue_distributor:
+  distributor_type: "multi_venue"
+  venue_types: ["pub", "restaurant"]
+  activity_map_key: "leisure"
+  subset_key: "patron"
+
+  # Will iterate and try to match pub then restaurant
+  max_venues_per_person: 2
+  
+  venue_selection:
+    strategy: "closest"
+
+
+# 4. ResidentLinkedDistributor
+# Scenario: People assigned conditionally if a relative is present at the target venue
+resident_linked_distributor:
+  distributor_type: "resident_linked"
+  venue_type: "care_home"
+  activity_map_key: "visitor"
+  subset_key: "care_home_visitor"
+
+  relationship_types: ["relative", "partner"]
+
+  # They will visit the venue if their relative's residence matches this venue type
+  relationship_venue_property: "residence"

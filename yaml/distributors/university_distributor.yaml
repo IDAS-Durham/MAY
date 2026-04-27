@@ -159,8 +159,6 @@ allocation:
   #   - "random": Randomly pick from eligible venues
   #   - "closest": Always pick closest
   #   - "proportional": Weight by inverse distance (closer = higher probability)
-  #   - "capacity_weighted": Weight by available capacity
-  #   - "greedy_fill": Fill schools sequentially by distance
 
   capacity_column: "n_students"
 
@@ -189,17 +187,12 @@ settings:
   # Limit number of allocations (null = no limit)
   max_allocations: null
 
-  # Random seed for reproducibility
-  random_seed: null
-
   # Logging
   verbose: true
   log_summary: true  # Print allocation statistics
-  debug: false  # Enable debug-level logging for troubleshooting
 
   # Performance
   use_spatial_index: true  # Use KDTree for distance queries
-  cache_venue_pools: false  # Cache eligible venues per geo_unit
 
 # ============================================================================
 # FALLBACK BEHAVIOR

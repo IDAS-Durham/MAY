@@ -55,7 +55,7 @@ eligibility:
       values: ["household"]
 
   attributes:
-    - name: "work_sector"
+    - name: "properties.work_sector"
       type: "categorical"
       description: "Person's work_sector (from properties) should be Q (Health)"
 
@@ -76,7 +76,7 @@ venue_selection:
   consider_by: "geo_unit"
 
   # Care homes are typically at SGU or MGU level
-  venue_geo_level: "SGU"
+  venue_geo_level: "LGU"
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to care homes near their WORK location, not home
@@ -122,13 +122,9 @@ settings:
   # Limit number of allocations (null = no limit)
   max_allocations: null
 
-  # Random seed for reproducibility
-  random_seed: null
-
   # Logging
   verbose: true
   log_summary: true
-  debug: false
 
 # ============================================================================
 # FALLBACK BEHAVIOR

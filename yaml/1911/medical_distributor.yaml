@@ -1,0 +1,80 @@
+distributor_name: "medical_distributor"
+venue_type: "medical"
+description: "Assign which medical facility a person will attend to when they need it"
+
+activity_map_key: "medical_facility"
+
+# Subset to add students to
+subset_key: "patient"
+
+eligibility:
+
+  require_unassigned: true
+
+venue_selection:
+
+  consider_by: "count"
+
+  # Count-based parameters (when consider_by = "count")
+  count: 15
+  criteria: "closest"  # "closest", "random", "largest_capacity"
+
+  max_distance: 100
+  max_distance_unit: "km"  # "km", "miles", "meters"
+
+  venue_geo_level: "SGU"
+
+  person_location_source: "geographical_unit.coordinates"
+
+  venue_location_source: "coordinates"
+
+  distance_metric: "haversine"  # "haversine" (great-circle), "euclidean"
+
+  filter_by_geography: true  # Already enforced by venues_config.yaml
+
+  # Only consider venues with available capacity
+  respect_capacity: false
+
+allocation:
+  strategy: "closest_balanced"
+  enforce_no_empty_venues: true
+
+  batch_by: "geo_unit"  # "geo_unit", "none"
+
+  batch_location_source: "centroid"
+
+settings:
+  # Execution order (higher = earlier)
+  priority: 1
+
+  # Limit number of allocations (null = no limit)
+  max_allocations: null
+
+  # Logging
+  verbose: true
+  log_summary: true  # Print allocation statistics
+
+  # Performance
+  use_spatial_index: true  # Use KDTree for distance queries
+
+# ============================================================================
+# FALLBACK BEHAVIOR
+# ============================================================================
+# What to do when no eligible venues are found for a person?
+
+fallback:
+  strategy: "assign_closest"
+  # Options:
+  #   - "skip": Leave person.activity_map['primary_activity'] unassigned
+  #   - "relax_distance": Increase search radius and retry
+  #   - "relax_capacity": Allow over-capacity allocation
+  #   - "assign_closest": Assign to closest venue regardless of constraints
+
+  # Relaxation parameters (if strategy = "relax_distance")
+  relax_params:
+    max_iterations: 3
+    distance_multiplier: 2.0  # Double search radius each iteration
+
+exports:
+  venue_summary: "output/1911/medical_venue_summary.csv"
+  unallocated_report: "output/1911/medical_unallocated.csv"

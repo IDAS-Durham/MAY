@@ -18,8 +18,11 @@ from pathlib import Path
 
 from .venue_distributor import VenueDistributor
 from .multi_venue_distributor import MultiVenueDistributor
+from .social_contact_visit_distributor import SocialContactVisitDistributor
+from .resident_linked_distributor import ResidentLinkedDistributor
+from .property_matching_distributor import PropertyMatchingDistributor
 
-__all__ = ['VenueDistributor', 'MultiVenueDistributor', 'distributor_from_yaml']
+__all__ = ['VenueDistributor', 'MultiVenueDistributor', 'SocialContactVisitDistributor', 'ResidentLinkedDistributor', 'PropertyMatchingDistributor', 'distributor_from_yaml']
 
 
 def distributor_from_yaml(yaml_path: str):
@@ -53,6 +56,12 @@ def distributor_from_yaml(yaml_path: str):
     # Instantiate appropriate class
     if distributor_type == 'multi_venue':
         return MultiVenueDistributor(yaml_path)
+    elif distributor_type == 'social_contact_visit':
+        return SocialContactVisitDistributor(yaml_path)
+    elif distributor_type == 'resident_linked':
+        return ResidentLinkedDistributor(yaml_path)
+    elif distributor_type == 'property_matching':
+        return PropertyMatchingDistributor(yaml_path)
     else:
         # Default to single-venue distributor
         return VenueDistributor(yaml_path)

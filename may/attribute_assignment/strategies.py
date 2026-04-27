@@ -55,6 +55,34 @@ class AssignmentStrategy:
         """
         raise NotImplementedError("Subclasses must implement assign()")
 
+    def _record_fallback(self, context: Dict[str, Any], reason: str):
+        """Record the reason for fallback in the context for diagnostics."""
+        context['fallback_reason'] = reason
+        logger.debug(f"      ! Fallback: {reason}")
+
+    def _fallback(self, person, household, context: Dict[str, Any], reason: str) -> Any:
+        """
+        Execute fallback strategy (either configured in YAML or default geo).
+        """
+        self._record_fallback(context, reason)
+        
+        # Check if a custom fallback is configured in the YAML
+        fallback_config = self.config.get('fallback')
+        if fallback_config:
+            strategy_type = fallback_config.get('strategy')
+            if strategy_type == 'probabilistic':
+                strat = ProbabilisticStrategy(fallback_config, self.data_manager)
+                return strat.assign(person, household, context)
+            elif strategy_type == 'constant':
+                return fallback_config.get('value')
+        
+        # Default: Probabilistic geo distribution
+        strat = ProbabilisticStrategy(
+            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
+            self.data_manager
+        )
+        return strat.assign(person, household, context)
+
     def _get_person_by_role(self, context: Dict[str, Any], role_name: str):
         """
         Get person by role name from context.
@@ -71,7 +99,10 @@ class AssignmentStrategy:
 
     def _get_attribute_value(self, person, attribute_name: str) -> Any:
         """
-        Get attribute value from person (checks properties dict first).
+        Get attribute value from person.
+
+        Delegates to the shared get_person_attribute utility which handles
+        dot-notation, properties dict, and residence prefix.
 
         Args:
             person: Person object
@@ -80,15 +111,8 @@ class AssignmentStrategy:
         Returns:
             Attribute value or None
         """
-        if person is None:
-            return None
-
-        # Check properties dict first
-        if hasattr(person, 'properties') and attribute_name in person.properties:
-            return person.properties[attribute_name]
-
-        # Fall back to direct attribute
-        return getattr(person, attribute_name, None)
+        from may.utils.attribute_access import get_person_attribute
+        return get_person_attribute(person, attribute_name)
 
 
 class ProbabilisticStrategy(AssignmentStrategy):
@@ -116,12 +140,20 @@ class ProbabilisticStrategy(AssignmentStrategy):
         Returns:
             Sampled attribute value
         """
-        # Get geo unit from household
-        if not household or not household.geographical_unit:
-            logger.warning("No geographical unit found for household")
-            return None
+        # 1. Try to get geo unit from residence venue (household/CE)
+        geo_unit = None
+        if household and household.geographical_unit:
+            geo_unit = household.geographical_unit.name
+            logger.debug(f"  Geographical unit for person {person.id} sourced from venue: {geo_unit}")
+        
+        # 2. Fall back to person's own geo unit (useful for individuals not yet distributed or CE residents)
+        if not geo_unit and person.geographical_unit:
+            geo_unit = person.geographical_unit.name
+            logger.debug(f"  Geographical unit for person {person.id} sourced from person: {geo_unit}")
 
-        geo_unit = household.geographical_unit.name
+        if not geo_unit:
+            logger.warning(f"No geographical unit found for person {person.id} (no residence venue and no person-level geo unit)")
+            return None
 
         # Get probability distribution from data source
         probs = self.data_manager.lookup(self.data_source_name, geo_unit)
@@ -171,19 +203,18 @@ class PartnershipStrategy(AssignmentStrategy):
         if not first_person:
             logger.warning(f"Partner role '{self.partner_role}' not found in context")
             # Fall back to probabilistic
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "PARTNER_ROLE_NOT_FOUND")
 
         # Get first person's attribute value
         attribute_name = context.get('attribute_name')
         first_value = self._get_attribute_value(first_person, attribute_name)
-        if not first_value:
+        if first_value is None:
             logger.warning(f"No {attribute_name} found for {self.partner_role}")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "PARTNER_VALUE_MISSING")
 
-        # Get geo unit
         if not household or not household.geographical_unit:
             logger.warning("No geographical unit found for household")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "GEO_UNIT_MISSING")
 
         geo_unit = household.geographical_unit.name
 
@@ -191,7 +222,7 @@ class PartnershipStrategy(AssignmentStrategy):
         probs = self.data_manager.lookup(self.data_source_name, geo_unit, first_value)
         if not probs:
             logger.warning(f"No pair probabilities for {geo_unit}, {first_value}")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "DATA_SOURCE_MISSING")
 
         # Sample from distribution
         values = list(probs.keys())
@@ -201,24 +232,6 @@ class PartnershipStrategy(AssignmentStrategy):
         logger.debug(f"Partnership: {sampled} (partner of {first_value}) for {person.id}")
         return sampled
 
-    def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
-        """
-        Fallback to geographical distribution if pair data not available.
-
-        Args:
-            person: Person object
-            household: Household object
-            context: Assignment context
-
-        Returns:
-            Sampled value from geo distribution
-        """
-        logger.debug("Falling back to geographical distribution")
-        fallback_strategy = ProbabilisticStrategy(
-            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
-            self.data_manager
-        )
-        return fallback_strategy.assign(person, household, context)
 
 
 class InheritanceStrategy(AssignmentStrategy):
@@ -268,12 +281,12 @@ class InheritanceStrategy(AssignmentStrategy):
             parent = self._get_person_by_role(context, role_name)
             if parent:
                 value = self._get_attribute_value(parent, attribute_name)
-                if value:
+                if value is not None:
                     parent_values.append(value)
 
         if not parent_values:
             logger.warning(f"No parent values found for inheritance")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "NO_PARENT_VALUES")
 
         # Evaluate logic blocks
         unique_values = list(set(parent_values))
@@ -302,41 +315,47 @@ class InheritanceStrategy(AssignmentStrategy):
                     elif isinstance(then_action, dict):
                         # Nested strategy - not implemented yet, fall back
                         logger.warning(f"Nested strategy in inheritance not yet supported")
-                        return self._fallback_probabilistic(person, household, context)
+                        return self._fallback(person, household, context, "NESTED_STRATEGY_UNSUPPORTED")
             except Exception as e:
                 logger.warning(f"Error evaluating inheritance logic: {e}")
                 continue
 
         # No logic matched - fallback
-        return self._fallback_probabilistic(person, household, context)
+        return self._fallback(person, household, context, "LOGIC_NO_MATCH")
 
     def _evaluate_condition(self, condition: str, context: dict) -> bool:
-        """Evaluate a when condition."""
+        """Evaluate a when condition with fast-paths for common patterns."""
+        # FAST PATH: These account for >90% of ethnicity inheritance calls
+        if condition == "count(unique_values) == 1":
+            return len(context['unique_values']) == 1
+        if condition == "count(unique_values) > 1":
+            return len(context['unique_values']) > 1
+            
         try:
-            # Use cached compiled expression for better performance
+            # Fallback to cached eval for complex conditions
             code = _compile_expression(condition, 'eval')
             return eval(code, {"__builtins__": {}}, context)
         except:
             return False
 
     def _resolve_value(self, value_expr: str, context: dict) -> Any:
-        """Resolve a value expression like 'values[0]' or 'M'."""
+        """Resolve a value expression with fast-paths for common patterns."""
+        # FAST PATH: Common resolutions like 'M' or 'values[0]'
+        if value_expr == "values[0]":
+            return context['values'][0] if context['values'] else None
+        if len(value_expr) <= 2: # Likely a literal code like "M", "W", etc.
+            # If it's in context, it's a variable, but for letters it's usually literal
+            if value_expr not in context:
+                return value_expr
+            
         try:
-            # Use cached compiled expression for better performance
+            # Fallback to cached eval
             code = _compile_expression(value_expr, 'eval')
             return eval(code, {"__builtins__": {}}, context)
         except:
             # If it fails, return as literal string
             return value_expr
 
-    def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
-        """Fallback to geographical distribution if no parents found."""
-        logger.debug("Falling back to geographical distribution")
-        fallback_strategy = ProbabilisticStrategy(
-            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
-            self.data_manager
-        )
-        return fallback_strategy.assign(person, household, context)
 
 
 class ReverseInheritanceStrategy(AssignmentStrategy):
@@ -378,18 +397,18 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         child_role = self.inherit_config.get('role')
         if not child_role:
             logger.warning("No child role specified for reverse inheritance")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "NO_CHILD_ROLE")
 
         # Get child's attribute value
         child = self._get_person_by_role(context, child_role)
         if not child:
             logger.warning(f"Child role '{child_role}' not found")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "CHILD_NOT_FOUND")
 
         child_value = self._get_attribute_value(child, attribute_name)
-        if not child_value:
+        if child_value is None:
             logger.warning(f"No value found for child role '{child_role}'")
-            return self._fallback_probabilistic(person, household, context)
+            return self._fallback(person, household, context, "CHILD_VALUE_MISSING")
 
         # Create evaluation context for logic blocks
         # Make child value accessible as "primary_adult.ethnicity" format
@@ -416,21 +435,148 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
                         # Nested strategy - create and execute it
                         strategy_type = then_action.get('strategy')
                         if strategy_type == 'probabilistic':
-                            fallback_strategy = ProbabilisticStrategy(then_action, self.data_manager)
-                            return fallback_strategy.assign(person, household, context)
+                            # Check for exclude constraints (e.g., secondary_elder
+                            # must differ from primary_elder when child is Mixed)
+                            exclude_refs = then_action.get('exclude', [])
+                            excluded_values = self._resolve_exclude_values(
+                                exclude_refs, context, attribute_name
+                            )
+
+                            if excluded_values:
+                                return self._sample_with_exclusion(
+                                    person, household, context,
+                                    then_action, excluded_values
+                                )
+                            else:
+                                fallback_strategy = ProbabilisticStrategy(then_action, self.data_manager)
+                                return fallback_strategy.assign(person, household, context)
                         else:
                             logger.warning(f"Unknown nested strategy: {strategy_type}")
-                            return self._fallback_probabilistic(person, household, context)
+                            return self._fallback(person, household, context, "NESTED_STRATEGY_UNSUPPORTED")
             except Exception as e:
                 logger.warning(f"Error evaluating reverse inheritance logic: {e}")
                 continue
 
         # No logic matched - fallback
-        return self._fallback_probabilistic(person, household, context)
+        return self._fallback(person, household, context, "LOGIC_NO_MATCH")
+
+    def _resolve_exclude_values(self, exclude_refs: List[str],
+                                context: Dict[str, Any],
+                                attribute_name: str) -> set:
+        """
+        Resolve exclude references like ["primary_elder.ethnicity"] into
+        concrete values by looking up the referenced role persons in context.
+
+        Args:
+            exclude_refs: List of "role.attribute" reference strings
+            context: Assignment context containing role persons
+            attribute_name: Current attribute being assigned
+
+        Returns:
+            Set of concrete values to exclude (may be empty)
+        """
+        excluded = set()
+        for ref in exclude_refs:
+            # Parse "role_name.attribute_name" format
+            parts = ref.split('.', 1)
+            if len(parts) == 2:
+                role_name, attr_name = parts
+            else:
+                role_name = ref
+                attr_name = attribute_name
+
+            person = self._get_person_by_role(context, role_name)
+            if person:
+                value = self._get_attribute_value(person, attr_name)
+                if value is not None:
+                    excluded.add(value)
+                    logger.debug(f"Exclude: resolved '{ref}' → '{value}'")
+                else:
+                    logger.debug(f"Exclude: '{ref}' has no value assigned yet, skipping")
+            else:
+                logger.debug(f"Exclude: role '{role_name}' not found in context, skipping")
+
+        return excluded
+
+    def _sample_with_exclusion(self, person, household, context: Dict[str, Any],
+                                strategy_config: Dict[str, Any],
+                                excluded_values: set) -> Any:
+        """
+        Sample from a probabilistic distribution while excluding specific values.
+
+        Gets the full distribution, removes excluded values, re-normalizes,
+        and samples. Falls back to sampling without exclusion if all values
+        would be excluded.
+
+        Args:
+            person: Person being assigned
+            household: Household venue
+            context: Assignment context
+            strategy_config: Probabilistic strategy config dict
+            excluded_values: Set of values to exclude from sampling
+
+        Returns:
+            Sampled attribute value
+        """
+        data_source_name = strategy_config.get('data_source', 'geo_distribution')
+
+        # Get the geo unit for lookup
+        geo_unit = None
+        if household and household.geographical_unit:
+            geo_unit = household.geographical_unit.name
+        elif person.geographical_unit:
+            geo_unit = person.geographical_unit.name
+
+        if not geo_unit:
+            logger.warning(f"No geo unit for exclusion sampling, person {person.id}")
+            return self._fallback(person, household, context, "GEO_UNIT_MISSING")
+
+        # Look up full distribution
+        probs = self.data_manager.lookup(data_source_name, geo_unit)
+        if not probs:
+            logger.warning(f"No distribution for {data_source_name}({geo_unit})")
+            return self._fallback(person, household, context, "DATA_SOURCE_MISSING")
+
+        # Remove excluded values
+        filtered_probs = {k: v for k, v in probs.items() if k not in excluded_values}
+
+        if not filtered_probs:
+            # All values excluded — fall back to full distribution with warning
+            logger.warning(
+                f"All values excluded for person {person.id} "
+                f"(excluded={excluded_values}, available={set(probs.keys())}). "
+                f"Falling back to full distribution without exclusion."
+            )
+            filtered_probs = probs
+
+        # Re-normalize
+        total = sum(filtered_probs.values())
+        if total <= 0:
+            logger.warning(f"Zero total probability after exclusion for person {person.id}")
+            return self._fallback(person, household, context, "ZERO_PROBABILITY")
+
+        values = list(filtered_probs.keys())
+        probabilities = [v / total for v in filtered_probs.values()]
+
+        sampled = np.random.choice(values, p=probabilities)
+        logger.debug(
+            f"Reverse inheritance (with exclusion): {sampled} for {person.id} "
+            f"(excluded={excluded_values})"
+        )
+        return sampled
 
     def _evaluate_condition_with_context(self, condition: str, eval_context: dict,
                                          child_role: str, attribute_name: str, child_value: Any) -> bool:
-        """Evaluate a when condition with attribute access."""
+        """Evaluate a when condition with attribute access and fast-paths."""
+        # FAST PATH: Pattern like "primary_adult.ethnicity == 'W'"
+        prefix = f"{child_role}.{attribute_name}"
+        if condition.startswith(prefix):
+            op_part = condition[len(prefix):].strip()
+            if op_part.startswith("=="):
+                # Extract value (handles both 'VAL' and "VAL")
+                val_part = op_part[2:].strip().strip("'").strip('"')
+                return str(child_value) == val_part
+
         try:
             # Build a safe evaluation context
             safe_context = {
@@ -665,31 +811,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             for idx, sampled_idx in zip(indices, sampled_indices):
                 sampled_dest = dest_codes[sampled_idx]
                 sampled_metadata = metadata_list[sampled_idx]
-
-                # Build output based on configured outputs
-                if len(self.outputs) == 1:
-                    # Single output - return just the value
-                    output_attr, output_source = list(self.outputs.items())[0]
-                    if output_source == 'destination':
-                        results[idx] = sampled_dest
-                    elif output_source in sampled_metadata:
-                        results[idx] = sampled_metadata[output_source]
-                    else:
-                        logger.warning(f"Output source '{output_source}' not found in metadata")
-                        results[idx] = sampled_dest
-                else:
-                    # Multiple outputs - return dict
-                    result = {}
-                    for output_attr, output_source in self.outputs.items():
-                        if output_source == 'destination':
-                            result[output_attr] = sampled_dest
-                        elif output_source in sampled_metadata:
-                            result[output_attr] = sampled_metadata[output_source]
-                        else:
-                            logger.warning(f"Output source '{output_source}' not found")
-
-                    results[idx] = result
-                    logger.debug(f"Commuting (batch): person at index {idx} -> {result}")
+                results[idx] = self._build_output(sampled_dest, sampled_metadata)
 
         return results
 
@@ -736,54 +858,47 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         sampled_metadata = metadata_list[idx]
 
         # Build output based on configured outputs
+        result = self._build_output(sampled_dest, sampled_metadata)
+        if not isinstance(result, dict):
+            return result
+        logger.debug(f"Commuting: {person.id} -> {result}")
+        return result
+
+    def _build_output(self, sampled_dest, sampled_metadata):
+        """
+        Build return value from sampled destination and metadata.
+
+        Returns:
+            Single value (if one output configured) or dict (if multiple).
+        """
         if len(self.outputs) == 1:
-            # Single output - return just the value
             output_attr, output_source = list(self.outputs.items())[0]
             if output_source == 'destination':
                 return sampled_dest
-            elif output_source in sampled_metadata:
+            if output_source in sampled_metadata:
                 return sampled_metadata[output_source]
-            else:
-                logger.warning(f"Output source '{output_source}' not found in metadata")
-                return sampled_dest
-        else:
-            # Multiple outputs - return dict
-            result = {}
-            for output_attr, output_source in self.outputs.items():
-                if output_source == 'destination':
-                    result[output_attr] = sampled_dest
-                elif output_source in sampled_metadata:
-                    result[output_attr] = sampled_metadata[output_source]
-                else:
-                    logger.warning(f"Output source '{output_source}' not found")
+            raise ValueError(
+                f"Output source '{output_source}' not found in metadata keys "
+                f"{list(sampled_metadata.keys())}. Check outputs config."
+            )
 
-            logger.debug(f"Commuting: {person.id} -> {result}")
-            return result
+        result = {}
+        for output_attr, output_source in self.outputs.items():
+            if output_source == 'destination':
+                result[output_attr] = sampled_dest
+            elif output_source in sampled_metadata:
+                result[output_attr] = sampled_metadata[output_source]
+            else:
+                raise ValueError(
+                    f"Output source '{output_source}' for attribute '{output_attr}' "
+                    f"not found in metadata keys {list(sampled_metadata.keys())}. "
+                    f"Check outputs config."
+                )
+        return result
 
     def _get_fallback(self, person, household, context):
-        """Get fallback value when commuting data not available."""
-        # Default fallback: work in same location as residence
-        fallback_config = self.config.get('fallback', {})
-        fallback_strategy_type = fallback_config.get('strategy')
-
-        if fallback_strategy_type == 'constant':
-            # Return constant values
-            data_source_name = fallback_config.get('data_source')
-            if data_source_name:
-                fallback_source = self.data_manager.get_source(data_source_name)
-                if fallback_source:
-                    return fallback_source.lookup(person)
-
-            # Hard-coded fallback: work at home
-            if len(self.outputs) == 1:
-                return person.geographical_unit.name
-            else:
-                return {
-                    'workplace_location': person.geographical_unit.name,
-                    'work_mode': 'Normal'
-                }
-
-        return None
+        """Standard fallback for commuting."""
+        return self._fallback(person, household, context, "COMMUTING_DATA_MISSING")
 
 
 class GUSamplerStrategy(AssignmentStrategy):
@@ -989,17 +1104,9 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
             indices = [idx for idx, _ in group_data]
             probs = group_data[0][1]  # All have same probs for this key
 
-            # Sample one category
-            categories = list(probs.keys())
-            probabilities = list(probs.values())
-
-            # Normalize if needed
-            total = sum(probabilities)
-            if total <= 0:
+            categories, probabilities = self._sanitize_probabilities(probs)
+            if categories is None:
                 continue
-
-            if abs(total - 1.0) > 0.01:  # Not normalized
-                probabilities = [p / total for p in probabilities]
 
             # BATCH SAMPLE: Sample for all people in this group at once
             n_samples = len(indices)
@@ -1035,23 +1142,74 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
             logger.warning(f"No probabilities found for person {person.id}")
             return None
 
-        # Sample one category
-        categories = list(probs.keys())
-        probabilities = list(probs.values())
-
-        # Normalize if needed
-        total = sum(probabilities)
-        if total <= 0:
-            logger.warning(f"Invalid probabilities (sum={total}) for person {person.id}")
+        categories, probabilities = self._sanitize_probabilities(probs, person.id)
+        if categories is None:
             return None
-
-        if abs(total - 1.0) > 0.01:  # Not normalized
-            probabilities = [p / total for p in probabilities]
 
         sampled = np.random.choice(categories, p=probabilities)
 
         logger.debug(f"Categorical: {sampled} for person {person.id}")
         return sampled
+
+    @staticmethod
+    def _sanitize_probabilities(probs, person_id=None):
+        """
+        Clamp negatives, normalize, and validate probabilities.
+
+        Returns:
+            (categories, probabilities) tuple, or (None, None) if invalid.
+        """
+        categories = list(probs.keys())
+        probabilities = list(probs.values())
+
+        # Clamp negatives to 0
+        has_negative = False
+        for i, p in enumerate(probabilities):
+            if p < 0:
+                has_negative = True
+                probabilities[i] = 0.0
+        if has_negative:
+            logger.warning(f"Negative probability clamped to 0 for person {person_id}")
+
+        # Check total after clamping
+        total = sum(probabilities)
+        if total <= 0:
+            logger.warning(f"Invalid probabilities (sum={total}) for person {person_id}")
+            return None, None
+
+        # Always normalize to avoid numpy tolerance issues
+        probabilities = [p / total for p in probabilities]
+
+        return categories, probabilities
+
+
+class ConstantStrategy(AssignmentStrategy):
+    """
+    Assigns a fixed, constant value.
+
+    This is useful for static attributes or default values that apply
+    unconditionally to a given role or household structure.
+    """
+
+    def __init__(self, config: Dict[str, Any], data_manager):
+        """Initialize constant strategy."""
+        super().__init__(config, data_manager)
+        self.value = config.get('value')
+
+    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
+        """Batch assignment - all receive the same value."""
+        if self.value is None:
+            # Match assign() behavior: delegate to per-person fallback
+            return [self.assign(p, h, c) for p, h, c in zip(people_list, households_list, contexts_list)]
+        return [self.value] * len(people_list)
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """Assign the constant value."""
+        if self.value is None:
+            logger.warning(f"ConstantStrategy: No value configured for assignment to person {person.id}")
+            return self._fallback(person, household, context, "NO_CONSTANT_VALUE")
+
+        return self.value
 
 
 class StrategyFactory:
@@ -1070,6 +1228,7 @@ class StrategyFactory:
         'commuting_likelihood': CommutingLikelihoodStrategy,
         'geographical_unit_sampler': GUSamplerStrategy,
         'categorical_sampler': CategoricalSamplerStrategy,
+        'constant': ConstantStrategy,
     }
 
     @classmethod

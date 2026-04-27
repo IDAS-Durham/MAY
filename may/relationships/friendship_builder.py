@@ -154,8 +154,8 @@ def _process_all_groups_numba(group_starts, group_ends, group_people_flat,
         n_group = len(group_people)
 
         # Get ages and subsets for this group
-        group_ages = np.empty(n_group, dtype=np.int16)
-        group_subsets = np.empty(n_group, dtype=np.int16)
+        group_ages = np.empty(n_group, dtype=np.int32)
+        group_subsets = np.empty(n_group, dtype=np.int32)
 
         for i in range(n_group):
             pid = group_people[i]
@@ -179,8 +179,7 @@ class FriendshipBuilder:
     """
     Builds configurable relationship networks between people.
 
-    All relationship types, criteria, and sources are defined in YAML.
-    Optimized for large populations (60M+) using Numba JIT compilation.
+    All relationship types, criteria, and sources are defined in YAML using Numba JIT compilation.
     """
 
     def __init__(self, world, config: dict | str):
@@ -210,7 +209,7 @@ class FriendshipBuilder:
         n_people = len(self.world.population.people)
 
         # Core attributes as contiguous arrays
-        self._ages = np.array([p.age for p in self.world.population.people], dtype=np.int16)
+        self._ages = np.array([p.age for p in self.world.population.people], dtype=np.int32)
         self._n_people = n_people
 
         # Get geographic levels from world.geography
@@ -261,7 +260,7 @@ class FriendshipBuilder:
                         people_by_venue[venue_idx].append(i)
 
         # Dummy subset array (subset filtering not supported with multiple venues)
-        self._person_subset = np.zeros(n_people, dtype=np.int16)
+        self._person_subset = np.zeros(n_people, dtype=np.int32)
 
         # Convert venue data to flattened arrays for Numba
         self._venue_data = self._flatten_groups(people_by_venue)
@@ -392,12 +391,12 @@ class FriendshipBuilder:
             logger.info(f"  Processing source {source_idx}/{total_sources}: {source_name} (pool={pool_type})")
 
             # Parse filters
-            age_range = np.int16(-1)  # -1 means no filter
+            age_range = np.int32(-1)  # -1 means no filter
             require_same_subset = False
 
             for f in filters:
                 if f['attribute'] == 'age' and f['match'] == 'range':
-                    age_range = np.int16(f['range'])
+                    age_range = np.int32(f['range'])
                 elif f['attribute'] == 'subset_name' and f['match'] == 'same':
                     require_same_subset = True
 
@@ -418,19 +417,27 @@ class FriendshipBuilder:
                 # - "geographic_county", "geographic_country", etc. with level specified
                 level = source['pool'].get('level')
 
-                if level and level in self._geo_level_data:
-                    starts, ends, people_flat = self._geo_level_data[level]
-                    _process_all_groups_numba(
-                        starts, ends, people_flat,
-                        self._ages, self._person_subset,
-                        all_connections, current_counts, connection_counts,
-                        weight_fraction, age_range, False, True
-                    )
-                else:
-                    available_levels = list(self._geo_level_data.keys())
-                    logger.warning(f"    Unknown geographic level '{level}'. "
-                                   f"Available levels: {available_levels}. Skipping source.")
-                    continue
+                if level:
+                    # Look up level case-insensitively
+                    found_level = None
+                    for available_level in self._geo_level_data.keys():
+                        if available_level.upper() == level.upper():
+                            found_level = available_level
+                            break
+
+                    if found_level:
+                        starts, ends, people_flat = self._geo_level_data[found_level]
+                        _process_all_groups_numba(
+                            starts, ends, people_flat,
+                            self._ages, self._person_subset,
+                            all_connections, current_counts, connection_counts,
+                            weight_fraction, age_range, False, True
+                        )
+                    else:
+                        available_levels = list(self._geo_level_data.keys())
+                        logger.warning(f"    Unknown geographic level '{level}'. "
+                                       f"Available levels: {available_levels}. Skipping source.")
+                        continue
 
             # Show progress after each source
             connections_so_far = int(current_counts.sum())

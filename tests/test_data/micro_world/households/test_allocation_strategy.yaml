@@ -1,0 +1,83 @@
+enabled: true
+
+steps:
+  - name: "Two-Adult Families with Children (Rule-based)"
+    type: "household"
+    description: "Allocate two-adult families with kids"
+    rule: "Two-adult family with kids"
+    patterns:
+      - ">=2 >=0 2 0"
+      - "1 >=0 2 0"
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+    demotion_rules:
+      ">=2 >=0 1 0": "Single-adult family with kids"
+      "1 >=0 1 0": "Single-adult family with kids"
+
+  - name: "Adult Couples (Rule-based Pair Matching)"
+    type: "household"
+    description: "Allocate adult couples"
+    rule: "Adult pair"
+    patterns:
+      - "0 0 2 0" 
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  - name: "Adult Singles"
+    type: "household"
+    description: "Allocate single adults (simple allocation, no rules)"
+    patterns:
+      - "0 0 1 0"
+    max_households: null
+    refresh_pools: false
+    enable_demotion: null
+
+  - name: "Add Excess kids to Family households"
+    type: "household_excess"
+    description: "Add remaining kids to existing kids households"
+    target_patterns:
+      - ">=2 >=0 2 0"
+      - ">=2 >=0 1 0"
+      - "1 >=0 2 0"
+      - "1 >=0 1 0"
+    add_category: "Kids"
+    constraints:
+      - category_sum: ["Kids"]
+        max: 4
+    add_distribution:
+      type: "weighted"
+      probabilities: {1: 1.0}
+    max_per_household: null
+    refresh_pools: false 
+
+  - name: "Overflow remaining Young Adults"
+    type: "household_overflow"
+    description: "Distribute ALL remaining Young Adults balancedly across flexible households"
+    target_patterns:
+      - "0 >=0 0 0"
+      - "0 >=1 2 0"
+      - "0 >=1 1 0"
+      - "2 >=0 2 0"
+      - "2 >=0 1 0"
+      - "1 >=0 2 0"
+      - "1 >=0 1 0"
+    add_category: "Young Adults"
+    pattern_bias:
+      "0 >=0 0 0": 5.0
+      "0 >=1 2 0": 1.0  
+      "0 >=1 1 0": 1.0
+      "2 >=0 2 0": 1.0
+      "2 >=0 1 0": 1.0
+    refresh_pools: false
+
+  - name: "Promote households for specific categories"
+    type: "household_promotion"
+    description: "Promote household patterns with controlled rules"
+    promotion_rules:
+      - source_pattern: "0 0 2 0"
+        target_pattern: ">=0 >=0 2 0"
+        accept_categories: ["Kids", "Young Adults"]
+        max_to_add: 3
+    refresh_pools: false

@@ -1,0 +1,75 @@
+venue_types:
+  household:
+    enabled: true
+    filename: households.csv
+    is_residence: true
+
+  shelter:
+    enabled: true
+    filename: shelters.csv
+    is_residence: true
+
+  care_home:
+    enabled: true
+    filename: care_homes.csv
+    is_residence: true
+    capacity_config:
+      attribute_capacities:
+        column_mappings:
+          age_50_64_male:
+            age_band: [50, 64]
+            sex: male
+          age_50_64_female:
+            age_band: [50, 64]
+            sex: female
+          age_65_74_male:
+            age_band: [65, 74]
+            sex: male
+          age_65_74_female:
+            age_band: [65, 74]
+            sex: female
+          age_75_84_male:
+            age_band: [75, 84]
+            sex: male
+          age_75_84_female:
+            age_band: [75, 84]
+            sex: female
+          age_85_94_male:
+            age_band: [85, 94]
+            sex: male
+          age_85_94_female:
+            age_band: [85, 94]
+            sex: female
+          age_95_plus_male:
+            age_band: [95, 120]
+            sex: male
+          age_95_plus_female:
+            age_band: [95, 120]
+            sex: female
+
+  boarding_school:
+    enabled: true
+    filename: boarding_schools.csv
+    is_residence: true
+    capacity_config:
+      attribute_capacities:
+        column_mappings:
+          n_0_15_female:
+            age_band: [0, 15]
+            sex: female
+          n_0_15_male:
+            age_band: [0, 15]
+            sex: male
+          n_16_24_female:
+            age_band: [16, 24]
+            sex: female
+          n_16_24_male:
+            age_band: [16, 24]
+            sex: male
+      attribute_constraints:
+        age:
+          min_column: StatutoryLowAge
+          max_column: StatutoryHighAge
+
+settings:
+  filter_by_geography: true

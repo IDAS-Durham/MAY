@@ -1,0 +1,33 @@
+# Workplace Distributor — Education Other (Occode 12 → BTCode 12)
+# 97 venues, 1,341 eligible workers (~13.8 per venue)
+venue_type: "workplace_education"
+activity_map_key: "primary_activity"
+subset_key: "worker"
+
+settings:
+  verbose: true
+  use_spatial_index: true
+
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "SGU"
+  batch_geo_level: "SGU"
+  consider_by: "count"
+  count: 50
+
+eligibility:
+  global_filters:
+    - attribute: "Occode"
+      type: "categorical"
+      values: [12]
+
+allocation:
+  track_capacity: false
+  strategy: "closest_balanced"
+
+fallback:
+  strategy: "skip"
+
+exports:
+  venue_summary: "output/1911/workplace_education_venue_summary.csv"
+  unallocated_report: "output/1911/workplace_education_unallocated.csv"

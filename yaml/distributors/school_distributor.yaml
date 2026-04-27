@@ -295,8 +295,6 @@ allocation:
   #   - "random": Randomly pick from eligible venues
   #   - "closest": Always pick closest
   #   - "proportional": Weight by inverse distance (closer = higher probability)
-  #   - "capacity_weighted": Weight by available capacity
-  #   - "greedy_fill": Fill schools sequentially by distance
 
   # --------------------------------
   # Capacity management
@@ -342,17 +340,12 @@ settings:
   # Limit number of allocations (null = no limit)
   max_allocations: null
 
-  # Random seed for reproducibility
-  random_seed: null
-
   # Logging
   verbose: true
   log_summary: true  # Print allocation statistics
-  debug: false  # Enable debug-level logging for troubleshooting
 
   # Performance
   use_spatial_index: true  # Use KDTree for distance queries
-  cache_venue_pools: false  # Cache eligible venues per geo_unit
 
 # ============================================================================
 # FALLBACK BEHAVIOR
@@ -475,10 +468,5 @@ validation:
 #   2. Run school_distributor to set primary_activity
 #   3. Boarding students get matched to school by name+geo_unit
 #   4. Regular students get allocated by distance
-#
-# PERFORMANCE NOTES:
-# - Batching by geo_unit reduces queries from O(N_people) to O(N_geo_units)
-# - Spatial index (KDTree) makes distance queries O(log N_venues)
-# - For 10M people + 30K schools, expect ~1-2 minutes runtime
 #
 # ============================================================================

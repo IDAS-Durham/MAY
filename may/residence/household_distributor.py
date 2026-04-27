@@ -14,7 +14,9 @@ import yaml
 import math
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional, Set
+from typing import Dict, List, Tuple, Optional, Set, Any
+from itertools import islice
+from collections import defaultdict
 
 from may.geography.geography import Geography
 from may.geography.venue import Venue
@@ -27,6 +29,7 @@ from may.residence.composition_pattern import CompositionPattern
 from may.residence.household_excess_handler import HouseholdExcessHandler
 from may.residence.household_promoter import HouseholdPromoter
 from may.residence.household_round_distributor import HouseholdRoundDistributor
+from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("household")
 
@@ -80,7 +83,7 @@ class HouseholdDistributor:
         self.allocated_people: Set[int] = set()  # Person IDs that have been allocated
 
         # Pool of available people by geo_unit and category
-        self.person_pool_by_geo_unit: Dict[str, List[List['Person']]] = {}
+        self.person_pool_by_geo_unit: Dict[str, List[Dict[int, 'Person']]] = {}
 
         # Round tracking
         self.current_round: int = 0
@@ -105,8 +108,16 @@ class HouseholdDistributor:
         # Initialize promoter
         self.promoter = HouseholdPromoter(self)
 
-        # Initialize round distributor
         self.round_distributor = HouseholdRoundDistributor(self)
+
+        # Pre-calculate demotion fallback priority
+        priority_config = self.config.get('demotion', {}).get('priority', {})
+        priority_order = []
+        for cat_idx, cat in enumerate(self.categories):
+            priority = priority_config.get(cat.name, 999)
+            priority_order.append((priority, cat_idx))
+        priority_order.sort()  # Sort by priority (lower = demote first)
+        self.fallback_priority = [idx for _, idx in priority_order]
 
         logger.info(f"Initialized HouseholdDistributor with {len(self.categories)} categories")
         for cat in self.categories:
@@ -194,15 +205,10 @@ class HouseholdDistributor:
         logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
 
     def _categorize_person(self, person: Person) -> int:
-        """Get the category index for a person based on their attributes. (Optimized)"""
-        p_props = person.properties
+        """Get the category index for a person based on their attributes."""
         for idx, cat in enumerate(self.categories):
-            # Inline expansion of matches() logic for speed in hot path
-            # Category.attribute is the key we check
             attr = cat.attribute
-            val = getattr(person, attr, None)
-            if val is None:
-                val = p_props.get(attr)
+            val = get_person_attribute(person, attr)
             
             if val is None:
                 continue
@@ -252,18 +258,19 @@ class HouseholdDistributor:
             if not people:
                 continue
 
-            # Initialize category pools
-            category_pools = [[] for _ in self.categories]
+            # Initialize category pools as dictionaries
+            # We shuffle the list of people first to maintain randomness in the dictionary order
+            # (which is preserved in Python 3.7+)
+            category_pools = [{} for _ in self.categories]
+
+            # Shuffling people ensures random dictionary order
+            np.random.shuffle(people)
 
             # Categorize each person (only if not already allocated)
             for person in people:
                 if person.id not in self.allocated_people:
                     cat_idx = self._categorize_person(person)
-                    category_pools[cat_idx].append(person)
-
-            # Shuffle each pool for randomness
-            for pool in category_pools:
-                np.random.shuffle(pool)
+                    category_pools[cat_idx][person.id] = person
 
             self.person_pool_by_geo_unit[geo_unit_code] = category_pools
 
@@ -352,7 +359,7 @@ class HouseholdDistributor:
         logger.debug(f"Rule: {rule.name}")
         logger.debug(f"Selection order: {' → '.join(rule.selection_order)}")
         logger.debug("")
-        self._show_detailed_logs = True
+        self._show_detailed_logs = logger.isEnabledFor(logging.DEBUG)
 
         # Get backtracking config
         backtrack_config = self.relationship_rules.selection_strategy.get('backtracking', {})
@@ -374,18 +381,16 @@ class HouseholdDistributor:
         if not all_selected:
             return (None, None)
 
-        # Remove selected people from pools (Optimized for reuse)
+        # Remove selected people from pools
         selected_ids = {p.id for p in all_selected}
         self.allocated_people.update(selected_ids)
         
         for p in all_selected:
             cat_idx = self._get_person_category_idx(p)
-            # Efficiently remove from pool (assuming people list is relatively small per SGU)
-            # Using list.remove is O(N) but only done for the few selected people
             try:
-                pools[cat_idx].remove(p)
-            except ValueError:
-                pass # Already removed or not in pool (shouldn't happen)
+                del pools[cat_idx][p.id]
+            except KeyError:
+                pass # Already removed or not in pool
 
         # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)
@@ -493,10 +498,10 @@ class HouseholdDistributor:
         Returns:
             List of candidate people for this role
         """
-        # Get candidates from these categories
+        # Get candidates from these categories (use .values() for dict-based pools)
         candidates = []
         for cat_idx in category_indices:
-            candidates.extend(pools[cat_idx])
+            candidates.extend(pools[cat_idx].values())
 
         # If this is the first role and we're backtracking, exclude already-tried people
         if role_index == 0 and backtrack_attempt > 0 and avoid_duplicates and tried_first_role_ids:
@@ -680,6 +685,7 @@ class HouseholdDistributor:
             # Track selected people by role
             selected_by_role: Dict[str, List[Person]] = {role_name: [] for role_name in rule.roles.keys()}
             failed_at_role_index = None
+            couples_to_flag = []  # Defer property assignment until success
 
             # Select people for each role in order
             for role_index, role_name in enumerate(rule.selection_order):
@@ -730,13 +736,21 @@ class HouseholdDistributor:
                             already_selected = sum(len(people) for people in selected_by_role.values())
                             logger.debug(f"  Constraints: Must validate against {already_selected} already-selected people")
 
+                    # Pre-group candidates by categorical attribute
+                    cat_attr = pair_constraint.get('categorical_attribute', {}).get('attribute', 'sex')
+                    cat_getter = self.relationship_rules._get_attribute_getter(cat_attr)
+                    candidates_by_cat = defaultdict(list)
+                    for p in candidates:
+                        candidates_by_cat[cat_getter(p)].append(p)
+
                     pair = self.relationship_rules.select_pair(
                         candidates,
                         pair_constraint,
                         existing_people_by_role=selected_by_role,
                         constraints=rule.constraints,
                         current_role=role_name,
-                        show_detailed_logs=show_detailed_logs
+                        show_detailed_logs=show_detailed_logs,
+                        candidates_by_cat=candidates_by_cat
                     )
                     if not pair:
                         # Couldn't find valid pair
@@ -752,10 +766,7 @@ class HouseholdDistributor:
 
                     # Check if this pair should be flagged as a romantic couple
                     if pair_constraint.get('creates_romantic_couple', False):
-                        pair[0].properties['household_couple'] = pair[1].id
-                        pair[1].properties['household_couple'] = pair[0].id
-                        if show_detailed_logs:
-                            logger.debug(f"  ✓ Flagged as household couple for romantic relationship distribution")
+                        couples_to_flag.append(pair)
 
                 elif role_count == "any":
                     # Determine count from pattern
@@ -834,6 +845,11 @@ class HouseholdDistributor:
             # Role selection succeeded! Create household
             if backtrack_attempt > 0 and log_backtracks:
                 logger.debug(f"  ✓ SUCCESS after {backtrack_attempt} backtrack(s)")
+
+            # Now that success is certain, apply relationship flagging
+            for p0, p1 in couples_to_flag:
+                p0.properties['cohabiting_couple'] = [p1.id]
+                p1.properties['cohabiting_couple'] = [p0.id]
 
             break  # Exit backtracking while loop
 
@@ -986,7 +1002,7 @@ class HouseholdDistributor:
         # Determine allocation strategy
         if allocate_flexible and target_size is not None:
             # Use balanced distribution mode
-            selections, failed_cat = self._allocate_balanced_distribution(pattern, pools, target_size)
+            selections, failed_cat = self.round_distributor._allocate_balanced_distribution(pattern, pools, target_size)
             if failed_cat is not None:
                 return (None, failed_cat)
         else:
@@ -1002,10 +1018,14 @@ class HouseholdDistributor:
             cat = self.categories[cat_idx]
             logger.debug(f"  {cat.name} ({cat.attribute} {cat.min_value}-{cat.max_value if cat.max_value else '∞'}): {count} people")
             if count > 0:
-                selected = pools[cat_idx][:count]
-                selected_people.extend(selected)
-                pools[cat_idx] = pools[cat_idx][count:]
-                for person in selected:
+                pool = pools[cat_idx]
+                # Take N IDs from the front of the dictionary
+                # Dict preserves order in Python 3.7+, so this is equivalent to list slicing
+                ids_to_remove = list(islice(pool.keys(), count))
+                
+                for pid in ids_to_remove:
+                    person = pool.pop(pid)
+                    selected_people.append(person)
                     logger.debug(f"    - {person}")
 
         if not selected_people:
@@ -1068,14 +1088,8 @@ class HouseholdDistributor:
         Returns:
             Venue object if successful, None otherwise
         """
-        # Get demotion priority from config (used as fallback)
-        priority_config = self.config['demotion']['priority']
-        priority_order = []
-        for cat_idx, cat in enumerate(self.categories):
-            priority = priority_config.get(cat.name, 999)
-            priority_order.append((priority, cat_idx))
-        priority_order.sort()  # Sort by priority (lower = demote first)
-        fallback_priority = [idx for _, idx in priority_order]
+        # Fallback priority is pre-calculated in __init__
+        fallback_priority = self.fallback_priority
 
         current_pattern = pattern
 
@@ -1123,29 +1137,21 @@ class HouseholdDistributor:
                         if failed_category_idx < len(pools):
                             available_count = len(pools[failed_category_idx])
 
-                    # Try demoting the failed category directly to available count
-                    cat_name = self.categories[failed_category_idx].name
-                    logger.debug(f"  → Attempting intelligent demotion: Reducing '{cat_name}' (category {failed_category_idx})")
-                    logger.debug(f"  → Available {cat_name}: {available_count} people")
-
                     # Demote directly to available count instead of one-by-one
                     new_pattern = current_pattern.demote_to_count(failed_category_idx, available_count)
-
-                    # If demote_to_count doesn't exist, fall back to demote_once
-                    if new_pattern is None:
-                        new_pattern = current_pattern.demote_once([failed_category_idx])
 
                 # If intelligent demotion didn't work, try fallback priority order
                 if new_pattern is None:
                     logger.debug(f"  → Intelligent demotion failed, trying fallback priority order")
                     new_pattern = current_pattern.demote_once(fallback_priority)
 
-                if new_pattern is None:
-                    logger.debug(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
-                    logger.debug("")
-                    return None
+                    if new_pattern is None:
+                        logger.debug(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
+                        logger.debug("")
+                        return None
 
-                # Check if the demoted pattern would result in an empty household
+                # Safety checks apply to ALL demoted patterns (both intelligent and fallback)
+                # Check if the demoted pattern would result in a too-small household
                 min_size = self.config['demotion']['min_household_size']
                 if new_pattern.min_household_size() < min_size:
                     logger.debug(f"  ✗ Demoted pattern too small (min size {min_size}): '{new_pattern.to_string()}'")
@@ -1153,7 +1159,7 @@ class HouseholdDistributor:
                     logger.debug("")
                     return None
 
-                # Validate the new pattern against demotion rules
+                # Validate the new pattern against demotion validation rules
                 validation_rules = self.config.get('demotion', {}).get('validation_rules', [])
                 if validation_rules and not new_pattern.validate_against_rules(
                     validation_rules, self.category_name_to_idx
@@ -1180,13 +1186,6 @@ class HouseholdDistributor:
 
         return None
 
-    def _calculate_balanced_distribution(self, *args, **kwargs):
-        """Delegate to round distributor. See HouseholdRoundDistributor._calculate_balanced_distribution for documentation."""
-        return self.round_distributor._calculate_balanced_distribution(*args, **kwargs)
-
-    def distribute_households_round(self, *args, **kwargs):
-        """Delegate to round distributor. See HouseholdRoundDistributor.distribute_households_round for documentation."""
-        return self.round_distributor.distribute_households_round(*args, **kwargs)
 
     def get_available_people_count(self) -> int:
         """Get the number of people currently available (not allocated)."""
@@ -1228,36 +1227,6 @@ class HouseholdDistributor:
         logger.info(f"Marked {count} people as allocated to {venue_type}")
         return count
 
-    def reset_allocation(self):
-        """
-        Reset all household allocations.
-
-        Warning: This will clear all households and reset person allocations.
-        Use with caution!
-        """
-        logger.warning("Resetting all household allocations...")
-
-        # Clear all residence activities from all allocated people
-        residence_types = self.venue_manager.get_residence_types()
-
-        for person_id in self.allocated_people:
-            person = self.population.get_person(person_id)
-            if person:
-                # Remove all residence activities and activity_map entries
-                for res_type in residence_types:
-                    if res_type in person.activities:
-                        person.remove_activity(res_type)
-                    if res_type in person.activity_map:
-                        del person.activity_map[res_type]
-
-        # Clear all data
-        # Note: Households are stored in VenueManager, cleared separately if needed
-        self.allocated_people = set()
-        self.person_pool_by_geo_unit = {}
-        self.current_round = 0
-        self.pools_prepared = False
-
-        logger.info("Allocation reset complete")
 
     def _select_person_for_excess_with_rule(self, *args, **kwargs):
         """Delegate to excess handler. See HouseholdExcessHandler._select_person_for_excess_with_rule for documentation."""
@@ -1341,9 +1310,6 @@ class HouseholdDistributor:
         self._household_counts_by_geo_unit_log[geo_unit_code] += 1
         return self._household_counts_by_geo_unit_log[geo_unit_code]
 
-    def _allocate_balanced_distribution(self, *args, **kwargs):
-        """Delegate to round distributor. See HouseholdRoundDistributor._allocate_balanced_distribution for documentation."""
-        return self.round_distributor._allocate_balanced_distribution(*args, **kwargs)
 
     def _log_round_start(self, round_name: Optional[str], default_prefix: str) -> str:
         """
@@ -1422,10 +1388,14 @@ class HouseholdDistributor:
 
         # Remove from pool if provided
         if pool is not None:
-            for i, p in enumerate(pool):
-                if p.id == person.id:
-                    pool.pop(i)
-                    break
+            if isinstance(pool, dict):
+                pool.pop(person.id, None)
+            else:
+                # Fallback for list-based pools
+                for i, p in enumerate(pool):
+                    if p.id == person.id:
+                        pool.pop(i)
+                        break
 
     def allocate_excess_to_households(self, *args, **kwargs):
         """Delegate to excess handler. See HouseholdExcessHandler.allocate_excess_to_households for documentation."""
@@ -1538,41 +1508,13 @@ class HouseholdDistributor:
         simulated_composition = dict(current_composition)
         simulated_composition[add_category] = simulated_composition.get(add_category, 0) + 1
 
-        # Check each constraint
-        for constraint in constraints:
-            # Category sum constraint
-            if 'category_sum' in constraint:
-                categories = constraint['category_sum']
-                max_sum = constraint.get('max')
-
-                if max_sum is not None:
-                    current_sum = sum(simulated_composition.get(cat, 0) for cat in categories)
-                    if current_sum > max_sum:
-                        logger.debug(f"  Constraint violated: sum({categories}) = {current_sum} > {max_sum}")
-                        return False
-
-            # Single category constraint
-            elif 'category' in constraint:
-                category = constraint['category']
-                max_count = constraint.get('max')
-
-                if max_count is not None:
-                    current_count = simulated_composition.get(category, 0)
-                    if current_count > max_count:
-                        logger.debug(f"  Constraint violated: {category} = {current_count} > {max_count}")
-                        return False
-
-            # Household size constraint
-            elif 'household_size' in constraint:
-                max_size = constraint.get('max')
-
-                if max_size is not None:
-                    current_size = sum(simulated_composition.values())
-                    if current_size > max_size:
-                        logger.debug(f"  Constraint violated: household size = {current_size} > {max_size}")
-                        return False
-
-        return True
+        # Use unified validator
+        is_valid, error = self.relationship_rules.validate_composition(simulated_composition, constraints)
+        
+        if not is_valid and error:
+            logger.debug(f"  {error}")
+            
+        return is_valid
 
     def export_households_to_csv(self, output_file: str = "household_allocations.csv"):
         """

@@ -182,18 +182,3 @@ promotion:
         operator: ">="
         value: 1
 
-# Allocation strategy
-allocation:
-  # Strategy for selecting people to assign to households
-  # Options:
-  #   - "random": Randomly select from available people
-  #   - "age_sorted": Sort by age and allocate in order
-  #   - "balanced": Try to balance age distributions
-  strategy: "random"
-
-  # Whether to allow partial household allocation
-  # If false, households that can't be fully filled are skipped
-  allow_partial: false
-
-  # Random seed for reproducibility (null = use global seed)
-  seed: null

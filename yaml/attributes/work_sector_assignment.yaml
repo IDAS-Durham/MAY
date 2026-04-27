@@ -144,25 +144,3 @@ settings:
     show_attribute_distribution: true 
 
 
-# ============================================================================
-# Industry Sector Labels (for reference)
-# ============================================================================
-sector_labels:
-  A: "Agriculture, Forestry, and Fishing"
-  B: "Mining and Quarrying"
-  C: "Manufacturing"
-  D: "Electricity, Gas, Steam and Air Conditioning Supply"
-  E: "Water Supply, Sewage, Waste Management and Remediation"
-  F: "Construction"
-  G: "Wholesale and Retail Trade, Motor Vehicle Repair"
-  H: "Transport and Storage"
-  I: "Accommodation and Food Service Activities"
-  J: "Information and Communication"
-  K: "Financial and Insurance Activities"
-  L: "Real Estate Activities"
-  M: "Professional, Scientific and Technical Activities"
-  N: "Administrative and Support Service Activities"
-  O: "Public Administration and Defence, Compulsory Social Security"
-  P: "Education"
-  Q: "Human Health and Social Work Activities"
-  Other: "Other Services"

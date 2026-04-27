@@ -320,7 +320,7 @@ def setup_households(geo, population, venues, config):
     # Show a few example households
     if all_households:
         logger.info("Example Households (5 random):")
-        for household in sample(all_households, 5):
+        for household in sample(all_households, min(5, len(all_households))):
             age_categories = household.properties.get('_age_categories', [])
             composition = household.get_composition(age_categories)
             members = household.get_all_members()

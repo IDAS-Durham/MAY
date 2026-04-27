@@ -15,6 +15,8 @@ import yaml
 import math
 from collections import defaultdict
 
+from may.utils.attribute_access import get_person_attribute
+
 logger = logging.getLogger("venue_child_creator")
 
 
@@ -42,6 +44,7 @@ class VenueChildCreator:
         subset_key=None,
         replace_parent_activity=True,
         remove_from_parent=False,
+        member_filters=None,
     ):
         """
         Initialize VenueChildCreator.
@@ -65,6 +68,9 @@ class VenueChildCreator:
                                     If False, appends child's activity to existing.
             remove_from_parent: If True, removes person from parent venue's subset.
                                If False, keeps person in parent for reference.
+            member_filters: Optional list of filters to apply to members before processing.
+                           Only members passing all filters will be assigned to child venues.
+                           Example: [{"attribute": "age", "type": "numerical", "min": 12}]
         """
         self.parent_venue_type = parent_venue_type
         self.child_venue_type = child_venue_type
@@ -78,12 +84,14 @@ class VenueChildCreator:
         self.subset_key = subset_key
         self.replace_parent_activity = replace_parent_activity
         self.remove_from_parent = remove_from_parent
+        self.member_filters = member_filters or []
 
         # Statistics
         self.stats = {
             'parents_processed': 0,
             'children_created': 0,
             'people_redistributed': 0,
+            'people_filtered_out': 0,
         }
 
     @classmethod
@@ -114,7 +122,7 @@ class VenueChildCreator:
         with open(yaml_file, 'r') as f:
             config = yaml.safe_load(f)
 
-        return cls(
+        instance = cls(
             parent_venue_type=config['parent_venue_type'],
             child_venue_type=config['child_venue_type'],
             group_by_attribute=config.get('group_by_attribute'),
@@ -127,7 +135,20 @@ class VenueChildCreator:
             subset_key=config.get('subset_key'),
             replace_parent_activity=config.get('replace_parent_activity', True),
             remove_from_parent=config.get('remove_from_parent', False),
+            member_filters=config.get('member_filters', []),
         )
+
+        # Log configuration summary
+        logger.info(f"  Parent type: {instance.parent_venue_type} → Child type: {instance.child_venue_type}")
+        if instance.member_filters:
+            logger.info(f"  Member filters: {len(instance.member_filters)} filter(s) configured")
+            for f in instance.member_filters:
+                if f.get('type') == 'numerical':
+                    logger.info(f"    - {f.get('attribute')}: {f.get('min', '-∞')} to {f.get('max', '∞')}")
+                elif f.get('type') == 'categorical':
+                    logger.info(f"    - {f.get('attribute')} in {f.get('values')}")
+
+        return instance
 
     def create_children(self, world):
         """
@@ -163,6 +184,8 @@ class VenueChildCreator:
         logger.info(f"  Parents processed: {self.stats['parents_processed']}")
         logger.info(f"  Children created: {self.stats['children_created']}")
         logger.info(f"  People redistributed: {self.stats['people_redistributed']}")
+        if self.member_filters:
+            logger.info(f"  People filtered out: {self.stats['people_filtered_out']}")
         logger.info("=" * 60)
 
         return self.stats
@@ -183,6 +206,16 @@ class VenueChildCreator:
             return
 
         #logger.info(f"  {parent_venue.name}: {len(members)} members")
+
+        # Apply member filters if specified
+        if self.member_filters:
+            original_count = len(members)
+            members = self._filter_members(members)
+            filtered_out = original_count - len(members)
+            self.stats['people_filtered_out'] += filtered_out
+            if not members:
+                logger.debug(f"  {parent_venue.name}: No members after filtering, skipping")
+                return
 
         # Group members by attribute if specified
         if self.group_by_attribute:
@@ -205,6 +238,53 @@ class VenueChildCreator:
         #logger.info(f"    → Created {total_children_created} {self.child_venue_type}(s)")
         self.stats['parents_processed'] += 1
 
+    def _filter_members(self, members):
+        """
+        Filter members based on configured member_filters.
+
+        Supports filter types:
+        - numerical: Filter by numeric attribute (min/max bounds)
+        - categorical: Filter by attribute value in a list of allowed values
+
+        Args:
+            members: List of Person objects
+
+        Returns:
+            List of Person objects that pass all filters
+        """
+        filtered = members
+
+        for filter_config in self.member_filters:
+            attr_name = filter_config.get('attribute')
+            filter_type = filter_config.get('type', 'numerical')
+
+            if filter_type == 'numerical':
+                min_val = filter_config.get('min', float('-inf'))
+                max_val = filter_config.get('max', float('inf'))
+
+                filtered = [
+                    p for p in filtered
+                    if (v := get_person_attribute(p, attr_name)) is not None
+                    and min_val <= v <= max_val
+                ]
+
+            elif filter_type == 'categorical':
+                allowed_values = filter_config.get('values', [])
+
+                filtered = [
+                    p for p in filtered
+                    if get_person_attribute(p, attr_name) in allowed_values
+                ]
+
+            else:
+                logger.warning(
+                    f"Unknown filter type '{filter_type}' for attribute '{attr_name}'. "
+                    f"Valid types are: 'numerical', 'categorical'. "
+                    f"This filter has been SKIPPED — all {len(filtered)} members pass through."
+                )
+
+        return filtered
+
     def _group_members_by_attribute(self, members, attribute_name):
         """
         Group members by a specific attribute value.
@@ -214,7 +294,7 @@ class VenueChildCreator:
 
         Args:
             members: List of Person objects
-            attribute_name: Name of attribute to group by (e.g., "age", "sex")
+            attribute_name: Name of attribute to group by (e.g., "age", "sex", "properties.ethnicity")
 
         Returns:
             Dict of {group_key: [Person, ...]}
@@ -223,7 +303,7 @@ class VenueChildCreator:
 
         for person in members:
             # Get attribute value from person
-            attr_value = getattr(person, attribute_name, None)
+            attr_value = get_person_attribute(person, attribute_name)
 
             if attr_value is not None:
                 # Apply attribute mapping if configured
@@ -352,7 +432,7 @@ class VenueChildCreator:
         # If replacing parent activity, clear the existing activity first
         if self.replace_parent_activity and self.activity_map_key:
             if self.activity_map_key in person.activity_map:
-                person.activity_map[self.activity_map_key] = []
+                person.activity_map[self.activity_map_key] = {}
 
         # Add person to child venue
         child_venue.add_to_subset(
@@ -422,7 +502,8 @@ class VenueChildCreator:
         logger.info(f"Exported {len(rows)} {self.child_venue_type}s to {output_file}")
 
     def __repr__(self):
+        filter_info = f", filters={len(self.member_filters)}" if self.member_filters else ""
         return (
             f"<VenueChildCreator: {self.parent_venue_type} → {self.child_venue_type}, "
-            f"group_by={self.group_by_attribute}, max_capacity={self.max_capacity}>"
+            f"group_by={self.group_by_attribute}, max_capacity={self.max_capacity}{filter_info}>"
         )

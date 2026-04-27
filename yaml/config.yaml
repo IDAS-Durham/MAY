@@ -98,81 +98,94 @@ households:
 # ATTRIBUTES
 # ========================================
 
-attributes:
-  # Enable attribute assignment (set to false to skip)
-  enabled: true
-
-  # Sequential attribute assignment configurations
-  # Each config is applied in order (dependencies must be satisfied)
-  configs:
-    - "yaml/attributes/attribute_assignment.yaml"           # Ethnicity (household-level)
-    - "yaml/attributes/comorbidity_assignment.yaml"         # Comorbidities (person-level, depends on ethnicity)
-    - "yaml/attributes/workplace_assignment.yaml"           # Stage 1: Workplace LGU + work mode (person-level, 18-65)
-    - "yaml/attributes/workplace_sgu_assignment.yaml"       # Stage 2: Workplace SGU within LGU (depends on workplace_location)
-    - "yaml/attributes/work_sector_assignment.yaml"         # Stage 3: Work sector by LGU+Sex (depends on workplace_location, workplace_sgu)
-
 # ========================================
-# VENUE PIPELINE - Unified distributors and child creators
+# TIMELINE - Unified Simulation Events
 # ========================================
-# NEW STYLE: Interleave distributors and child creators in any order
-# This gives you full control over the sequence of operations
+# Defines the exact sequence of simulation events (attribute assignment, venue distribution, etc.)
+# This allows critical ordering, such as assigning schools/universities before workplaces.
 
-venue_pipeline:
+timeline:
   enabled: true
-
+  
   steps:
-    # Step 1: Distribute students to schools
+    # ----------------------------------------
+    # 1. Initial Attributes (Ethnicity, Comorbidities)
+    # ----------------------------------------
+    - type: attribute
+      config: "yaml/attributes/attribute_assignment.yaml"
+      
+    - type: attribute
+      config: "yaml/attributes/comorbidity_assignment.yaml"
+
+    # ----------------------------------------
+    # 2. Education (Assigns primary_activity = school/university)
+    # ----------------------------------------
+    # School distribution
     - type: distributor
       config: "yaml/distributors/school_distributor.yaml"
-
-    # Step 2: Create classrooms within schools (based on student age)
+      
     - type: child_creator
       config: "yaml/venue_child_creators/school_classrooms.yaml"
 
-    # Step 3: Distribute students to universities
+    # University distribution
     - type: distributor
       config: "yaml/distributors/university_distributor.yaml"
-
-    # Step 4: Create uni_year venues within universities (ages 18-22 individual, 23+ grouped)
+      
     - type: child_creator
       config: "yaml/venue_child_creators/university_uni_years.yaml"
 
-    # Step 5: Distribute Q sector workers to hospitals
+    # ----------------------------------------
+    # 3. Employment (Filters out people with primary_activity)
+    # ----------------------------------------
+    # Workplace location assignment (LGU + Work Mode)
+    - type: attribute
+      config: "yaml/attributes/workplace_assignment.yaml"
+      
+    # Workplace SGU assignment (within LGU)
+    - type: attribute
+      config: "yaml/attributes/workplace_sgu_assignment.yaml"
+      
+    # Work sector assignment
+    - type: attribute
+      config: "yaml/attributes/work_sector_assignment.yaml"
+
+    # ----------------------------------------
+    # 4. Specific Workplaces (Hospitals, Care Homes, Schools, etc.)
+    # ----------------------------------------
+    # Q sector -> Hospitals
     - type: distributor
       config: "yaml/distributors/specific_workplace_hospitals_distributor.yaml"
-
-    # Step 6: Distribute Q sector workers to care homes
+      
+    # Q sector -> Care Homes
     - type: distributor
       config: "yaml/distributors/specific_workplace_care_homes_distributor.yaml"
-
-    # Step 7: Distribute P sector workers to schools
+      
+    # P sector -> Schools
     - type: distributor
       config: "yaml/distributors/specific_workplace_classrooms_distributor.yaml"
-
-    # Step 8: Distribute workers to companies
+      
+    # ----------------------------------------
+    # 5. General Employment (Companies)
+    # ----------------------------------------
     - type: distributor
       config: "yaml/distributors/company_distributor.yaml"
 
-    #- type: distributor
-    #  config: "yaml/distributors/company_distributor_2.yaml"
-
-    # Step 9: Create offices within companies
     - type: child_creator
       config: "yaml/venue_child_creators/company_offices.yaml"
 
+    # ----------------------------------------
+    # 6. Other Services
+    # ----------------------------------------
     - type: distributor
       config: "yaml/distributors/hospital_distributor.yaml"
 
-    # Step 10: Assign leisure venue options (cinema, grocery, gym, pub)
+    # Leisure (multi-venue)
     - type: distributor
       config: "yaml/distributors/multi_venue_distributor.yaml"
 
-  # Notes:
-  # - Each step runs in sequence
-  # - Distributors assign people to parent venues
-  # - Child creators create sub-venues and redistribute people
-  # - Order matters: child creators should run AFTER their parent distributor
-  # - Multi-venue distributors (like leisure) assign multiple venue options per person
+    # Care Home Visits (linked to residents)
+    - type: distributor
+      config: "yaml/distributors/care_home_visits_distributor.yaml"
 
 # ========================================
 # RELATIONSHIP PIPELINE - Build agent networks

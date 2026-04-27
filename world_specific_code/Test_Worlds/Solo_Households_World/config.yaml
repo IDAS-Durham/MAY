@@ -1,0 +1,44 @@
+# Solo Households World Configuration
+# 1M people in 1M single-person households, 2 companies for ages 18-64
+
+geography:
+  data_dir: "world_specific_code/Solo_Households_World/data/geography"
+  levels: ["SGU", "MGU", "LGU"]
+  load_all: true
+  filter:
+    level: null
+    codes: []
+
+population:
+  data_dir: "world_specific_code/Solo_Households_World/data/population"
+  demographics_male_file: "demographics_male.csv"
+  demographics_female_file: "demographics_female.csv"
+
+venues:
+  data_dir: "world_specific_code/Solo_Households_World/data/venues"
+  config_file: "world_specific_code/Solo_Households_World/yaml/venues/venues_config.yaml"
+  export_file: "venue_allocations.csv"
+
+households:
+  data_dir: "world_specific_code/Solo_Households_World/data/households"
+  data_file: "households.csv"
+  config_file: "world_specific_code/Solo_Households_World/yaml/households/households_config.yaml"
+  strategy_file: "world_specific_code/Solo_Households_World/yaml/households/allocation_strategy.yaml"
+  export_file: "household_allocations.csv"
+
+attributes:
+  enabled: false
+  configs: []
+
+venue_pipeline:
+  enabled: true
+  steps:
+    - type: distributor
+      config: "world_specific_code/Solo_Households_World/yaml/distributors/company_distributor.yaml"
+
+relationship_pipeline:
+  enabled: false
+  relationships: []
+
+romantic_relationships:
+  enabled: false

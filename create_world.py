@@ -13,47 +13,8 @@ from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.relationships import FriendshipBuilder
-from debug_output import export_venue_allocations, export_people, print_world_examples
+from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships, export_residence_venues
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
-
-
-def export_relationships(world, property_key, output_file):
-    """Export relationships to CSV for inspection."""
-    import csv
-
-    logger.info(f"Exporting relationships to {output_file}...")
-
-    with open(output_file, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['person_id', 'age', 'sex', 'sgu', 'subset_name', 'n_connections', 'connection_ids'])
-
-        for person in world.population.people:
-            connections = person.properties.get(property_key, [])
-
-            # Get subset name if available
-            # UNIFIED STRUCTURE: activity_map['primary_activity'][venue_type] = [subsets]
-            subset_name = ""
-            if 'primary_activity' in person.activity_map and person.activity_map['primary_activity']:
-                activity_dict = person.activity_map['primary_activity']
-                # Get first subset from any venue type
-                for subsets in activity_dict.values():
-                    if subsets:
-                        subset_name = getattr(subsets[0], 'subset_name', '')
-                        break
-
-            sgu = person.geographical_unit.name if person.geographical_unit else ""
-
-            writer.writerow([
-                person.id,
-                person.age,
-                person.sex,
-                sgu,
-                subset_name,
-                len(connections),
-                ';'.join(map(str, connections))
-            ])
-
-    logger.info(f"Exported {len(world.population.people):,} people's relationships to {output_file}")
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -105,6 +66,12 @@ def main():
         default="yaml/config.yaml",
         help="Path to configuration YAML file (default: yaml/config.yaml)"
     )
+    parser.add_argument(
+        "--filename",
+        type=str,
+        default="world_state.h5",
+        help="Path to the saved file (default world_state.h5)"
+    )
     args = parser.parse_args()
 
     logger.info(f"Loading configuration from: {args.config}")
@@ -120,8 +87,12 @@ def main():
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir="data/venues")
     venue_config = config.get("venues", {})
+    venues = VenueManager(
+        geography=geo, 
+        data_dir=venue_config.get("data_dir", "data/venues")
+    )
+    
     yaml_config_file = venue_config.get("config_file", "venues_config.yaml")
     venues.load_from_yaml_config(yaml_config_file)
 
@@ -134,16 +105,38 @@ def main():
         data_dir=pop_config.get("data_dir", "data/population")
     )
 
-    # Load demographic data
-    male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
-    female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
-    population.load_demographics_from_csv(male_file, female_file)
+    pop_type = pop_config.get("type", "matrix")
+    if pop_type == "explicit" or pop_type == "explicit_batch":
+        column_mapping = pop_config.get("column_mapping", {})
+        
+        if pop_type == "explicit_batch":
+            population.load_batch_explicit_from_csv(
+                data_dir=pop_config.get("data_dir", "1911_data/population"),
+                column_mapping=column_mapping
+            )
+        else:
+            filename = pop_config.get("filename")
+            if not filename:
+                logger.error("Population type 'explicit' required a 'filename' in configuration")
+                sys.exit(1)
+                
+            population.load_explicit_from_csv(
+                filename=filename,
+                column_mapping=column_mapping
+            )
+    else:
+        # Load demographic data (matrix style)
+        male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
+        female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
+        population.load_demographics_from_csv(male_file, female_file)
 
-    # Generate population
-    population.generate_population()
+        # Generate population
+        population.generate_population()
 
     # Setup and distribute households
-    household_distributor = setup_households(geo, population, venues, config)
+    household_distributor = None
+    if config.get("households", {}).get("enabled", True):
+        household_distributor = setup_households(geo, population, venues, config)
 
     # Create World object
     logger.info("")
@@ -151,87 +144,131 @@ def main():
     world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
     logger.info(world)
 
-    # Assign attributes
-    attribute_config = config.get("attributes", {})
-    if attribute_config.get("enabled", True):
-        # Support both single config and list of configs
-        configs = attribute_config.get("configs")
-        if configs is None:
-            # Legacy: single config
-            configs = [attribute_config.get("config", "yaml/attribute_assignment.yaml")]
-
-        # Assign each attribute in sequence
-        for config_path in configs:
-            logger.info(f"Assigning attributes from: {config_path}")
-            world.assign_attributes(config_path)
-
     # ========================================
-    # VENUE PIPELINE - Unified distributors and child creators
+    # TIMELINE - Unified Event Processing
     # ========================================
-    # Interleave distributors and child creators in any order
-    # Each step runs sequentially in the order specified
+    # This replaces the separate "attributes" and "venue_pipeline" sections if "timeline" is present.
+    
+    timeline_config = config.get("timeline", {})
 
-    pipeline_config = config.get("venue_pipeline", {})
-
-    if pipeline_config.get("enabled", False):
+    if timeline_config.get("enabled", False) and timeline_config.get("steps"):
         logger.info("")
         logger.info("=" * 60)
-        logger.info("VENUE PIPELINE")
+        logger.info("SIMULATION TIMELINE")
         logger.info("=" * 60)
+        
+        for step in timeline_config.get("steps", []):
+            step_type = step.get("type")
+            step_config = step.get("config")
+            
+            if step_type == "attribute":
+                logger.info("")
+                logger.info(f"[ATTRIBUTE] {step_config}")
+                world.assign_attributes(step_config)
+                
+            elif step_type == "distributor":
+                logger.info("")
+                logger.info(f"[DISTRIBUTOR] {step_config}")
+                try:
+                    distributor = VenueDistributor.from_yaml(step_config)
+                    distributor.allocate(world)
+                    
+                    # If this is the residence distributor, export detailed allocations
+                    if getattr(distributor, 'activity_name', None) == "residence":
+                        serial_config = config.get("serialization", {})
+                        output_dir = serial_config.get("output_dir", ".")
+                        res_export_file = os.path.join(output_dir, "residence_venues.csv")
+                        export_residence_venues(world, res_export_file)
+                except Exception as e:
+                    logger.error(f"Failed to run distributor {step_config}: {e}")
+                    logger.exception(e)
+                    
+            elif step_type == "child_creator":
+                logger.info("")
+                logger.info(f"[CHILD CREATOR] {step_config}")
+                try:
+                    creator = VenueChildCreator.from_yaml(step_config)
+                    creator.create_children(world)
+                except Exception as e:
+                    logger.error(f"Failed to run child creator {step_config}: {e}")
+                    logger.exception(e)
+                    
+            else:
+                logger.warning(f"Unknown timeline step type: {step_type}")
 
-        pipeline_steps = pipeline_config.get("steps", [])
+    else:
+        # FALLBACK: LEGACY BEHAVIOR
+        logger.info("No timeline configured, using legacy pipeline attributes -> venues")
 
-        if not pipeline_steps:
-            logger.info("No pipeline steps configured")
-        else:
-            # Execute each step in sequence
-            for step in pipeline_steps:
-                step_type = step.get("type")
-                step_config = step.get("config")
+        # Assign attributes
+        attribute_config = config.get("attributes", {})
+        if attribute_config.get("enabled", True):
+            # Support both single config and list of configs
+            configs = attribute_config.get("configs")
+            if configs is None:
+                # Legacy: single config
+                configs = [attribute_config.get("config", "yaml/attribute_assignment.yaml")]
 
-                if step_type == "distributor":
-                    logger.info("")
-                    logger.info(f"[DISTRIBUTOR] {step_config}")
-                    try:
-                        distributor = VenueDistributor.from_yaml(step_config)
-                        distributor.allocate(world)
+            # Assign each attribute in sequence
+            for config_path in configs:
+                logger.info(f"Assigning attributes from: {config_path}")
+                world.assign_attributes(config_path)
 
-                        # Export allocations to CSV
-                        venue_type = distributor.venue_type
-                        output_file = f"{venue_type}_allocations.csv"
-                        #distributor.export_allocations(world, output_file)
-                        #logger.info(f"Saved allocations to: {output_file}")
+        # Venue Pipeline
+        pipeline_config = config.get("venue_pipeline", {})
 
-                    except Exception as e:
-                        logger.error(f"Failed to run distributor {step_config}: {e}")
-                        logger.exception(e)
+        if pipeline_config.get("enabled", False):
+            logger.info("")
+            logger.info("=" * 60)
+            logger.info("VENUE PIPELINE")
+            logger.info("=" * 60)
 
-                elif step_type == "child_creator":
-                    logger.info("")
-                    logger.info(f"[CHILD CREATOR] {step_config}")
-                    try:
-                        creator = VenueChildCreator.from_yaml(step_config)
-                        creator.create_children(world)
+            pipeline_steps = pipeline_config.get("steps", [])
 
-                        # Export allocations to CSV
-                        child_type = creator.child_venue_type
-                        output_file = f"{child_type}_allocations.csv"
-                        #creator.export_allocations(world, output_file)
-                        #logger.info(f"Saved allocations to: {output_file}")
+            if not pipeline_steps:
+                logger.info("No pipeline steps configured")
+            else:
+                # Execute each step in sequence
+                for step in pipeline_steps:
+                    step_type = step.get("type")
+                    step_config = step.get("config")
 
-                    except Exception as e:
-                        logger.error(f"Failed to run child creator {step_config}: {e}")
-                        logger.exception(e)
+                    if step_type == "distributor":
+                        logger.info("")
+                        logger.info(f"[DISTRIBUTOR] {step_config}")
+                        try:
+                            distributor = VenueDistributor.from_yaml(step_config)
+                            distributor.allocate(world)
 
-                else:
-                    logger.warning(f"Unknown pipeline step type: {step_type}")
+                            # Export allocations to CSV
+                            venue_type = distributor.venue_type
+                            output_file = f"{venue_type}_allocations.csv"
+                            #distributor.export_allocations(world, output_file)
+                            #logger.info(f"Saved allocations to: {output_file}")
 
-        # Analyze multiple jobs after venue pipeline completes
-        """ logger.info("")
-        logger.info("=" * 60)
-        logger.info("MULTIPLE JOBS ANALYSIS")
-        logger.info("=" * 60)
-        analyze_multiple_jobs(world) """
+                        except Exception as e:
+                            logger.error(f"Failed to run distributor {step_config}: {e}")
+                            logger.exception(e)
+
+                    elif step_type == "child_creator":
+                        logger.info("")
+                        logger.info(f"[CHILD CREATOR] {step_config}")
+                        try:
+                            creator = VenueChildCreator.from_yaml(step_config)
+                            creator.create_children(world)
+
+                            # Export allocations to CSV
+                            child_type = creator.child_venue_type
+                            output_file = f"{child_type}_allocations.csv"
+                            #creator.export_allocations(world, output_file)
+                            #logger.info(f"Saved allocations to: {output_file}")
+
+                        except Exception as e:
+                            logger.error(f"Failed to run child creator {step_config}: {e}")
+                            logger.exception(e)
+
+                    else:
+                        logger.warning(f"Unknown pipeline step type: {step_type}")
 
     # ========================================
     # RELATIONSHIP PIPELINE - Build agent networks
@@ -294,18 +331,23 @@ def main():
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
     logger.info("=" * 60)
 
-    # Export venue allocations
-    #export_venue_allocations(world)
-
-    # Export people data
-    #export_people(world)
-
-    # Show examples of what was created
-    #print_world_examples(world)
-
     # Export world to HDF5 for C++ simulation
-    # Uncomment to enable HDF5 export:
-    world.export_to_hdf5("world_state.h5")
+    serial_config = config.get("serialization", {})
+    if serial_config.get("enabled", True):
+        logger.info("")
+        logger.info("Exporting world to HDF5...")
+        output_dir = serial_config.get("output_dir", ".")
+        filename = serial_config.get("filename", args.filename)
+        
+        if output_dir != ".":
+            os.makedirs(output_dir, exist_ok=True)
+            
+        export_path = os.path.join(output_dir, filename)
+        config_file = serial_config.get("config_file")
+        if config_file:
+            world.export_to_hdf5(export_path, config_file=config_file)
+        else:
+            world.export_to_hdf5(export_path)
 
     return world
 

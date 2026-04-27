@@ -276,8 +276,6 @@ allocation:
   #   - "random": Randomly pick from eligible venues
   #   - "closest": Always pick closest
   #   - "proportional": Weight by inverse distance (closer = higher probability)
-  #   - "capacity_weighted": Weight by available capacity
-  #   - "greedy_fill": Fill schools sequentially by distance
 
   # --------------------------------
   # Capacity management
@@ -457,9 +455,5 @@ validation:
 #   3. Boarding students get matched to school by name+geo_unit
 #   4. Regular students get allocated by distance
 #
-# PERFORMANCE NOTES:
-# - Batching by geo_unit reduces queries from O(N_people) to O(N_geo_units)
-# - Spatial index (KDTree) makes distance queries O(log N_venues)
-# - For 10M people + 30K schools, expect ~1-2 minutes runtime
 #
 # ============================================================================

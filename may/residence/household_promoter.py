@@ -8,8 +8,8 @@ This module contains logic for:
 
 import logging
 import numpy as np
-from collections import deque
 from typing import List, Optional, Dict
+from itertools import islice
 from may.residence.composition_pattern import CompositionPattern
 
 logger = logging.getLogger("household")
@@ -26,6 +26,112 @@ class HouseholdPromoter:
             household_distributor: Reference to parent HouseholdDistributor
         """
         self.distributor = household_distributor
+        self._households_by_geo_unit = None
+        self._households_by_pattern = None
+
+    def _adding_person_satisfies_rules(self, household, category_name: str,
+                                       validation_rules: List[Dict]) -> bool:
+        """
+        Check whether adding one person of `category_name` to `household` would
+        violate any validation rule.
+
+        Unlike validate_against_rules (which works on pattern *minimums*), this
+        evaluates rules against the **actual current composition** of the household
+        *after* the hypothetical addition.  That catches cases like adding a Kid to
+        an elderly-only household where Adults == 0 in reality even though the
+        promoted pattern says '>=0' for Adults.
+
+        Args:
+            household: The household venue being considered.
+            category_name: The category of the person about to be added.
+            validation_rules: List of rule dicts from the promotion config.
+
+        Returns:
+            True if adding the person is safe, False if it would violate a rule.
+        """
+        if not validation_rules:
+            return True
+
+        age_categories = household.properties.get('_age_categories', self.distributor.categories)
+        composition = household.get_composition(age_categories)
+
+        # Simulate adding one person of this category
+        simulated = dict(composition)
+        simulated[category_name] = simulated.get(category_name, 0) + 1
+
+        cat_map = self.distributor.category_name_to_idx
+
+        for rule in validation_rules:
+            condition = rule.get('condition', {})
+            requirement = rule.get('requirement', {})
+            rule_name = rule.get('name', 'Unnamed rule')
+
+            cond_category = condition.get('category')
+            if cond_category not in cat_map:
+                continue
+
+            cond_count = simulated.get(cond_category, 0)
+            cond_operator = condition.get('operator')
+            cond_value = condition.get('value')
+
+            # Use the existing operator evaluator from CompositionPattern
+            from may.residence.composition_pattern import CompositionPattern
+            cp = CompositionPattern.from_string("0")  # dummy — just for _evaluate_operator
+            if not cp._evaluate_operator(cond_count, cond_operator, cond_value):
+                continue  # condition not triggered
+
+            # Condition is met — check requirement(s)
+            req_list = requirement if isinstance(requirement, list) else [requirement]
+            any_req_met = False
+            for req in req_list:
+                req_category = req.get('category')
+                if req_category not in cat_map:
+                    continue
+                req_count = simulated.get(req_category, 0)
+                req_operator = req.get('operator')
+                req_value = req.get('value')
+                if cp._evaluate_operator(req_count, req_operator, req_value):
+                    any_req_met = True
+                    break
+
+            if not any_req_met:
+                logger.debug(
+                    f"    Skipping add: adding {category_name} to household "
+                    f"{household.id} would violate rule '{rule_name}'. "
+                    f"Simulated composition: {simulated}"
+                )
+                return False
+
+        return True
+
+    def _get_households_by_geo_unit(self) -> Dict[str, List]:
+        """Index households by geo_unit if not already done."""
+        if self._households_by_geo_unit is None:
+            self._households_by_geo_unit = {}
+            all_households = self.distributor.venue_manager.get_venues_by_type("household")
+            for hh in all_households:
+                geo_code = hh.geographical_unit.name
+                if geo_code not in self._households_by_geo_unit:
+                    self._households_by_geo_unit[geo_code] = []
+                self._households_by_geo_unit[geo_code].append(hh)
+        return self._households_by_geo_unit
+
+    def _get_households_by_pattern(self) -> Dict[str, List]:
+        """Index households by actual_pattern if not already done."""
+        if self._households_by_pattern is None:
+            self._households_by_pattern = {}
+            all_households = self.distributor.venue_manager.get_venues_by_type("household")
+            for hh in all_households:
+                pattern = hh.properties.get('actual_pattern', '')
+                if pattern not in self._households_by_pattern:
+                    self._households_by_pattern[pattern] = []
+                self._households_by_pattern[pattern].append(hh)
+        return self._households_by_pattern
+
+    def reset_indexes(self):
+        """Reset the cached indexes."""
+        self._households_by_geo_unit = None
+        self._households_by_pattern = None
 
     def promote_and_allocate(self,
                             target_categories: List[str],
@@ -101,10 +207,8 @@ class HouseholdPromoter:
 
                 logger.debug(f"  geo_unit {geo_unit_code}: {len(available_people)} {category_name} available")
 
-                # Find households in this geo_unit
-                # Get all households from VenueManager
-                all_households = self.distributor.venue_manager.get_venues_by_type("household")
-                geo_unit_households = [hh for hh in all_households if hh.geographical_unit.name == geo_unit_code]
+                # Find households in this geo_unit using index
+                geo_unit_households = self._get_households_by_geo_unit().get(geo_unit_code, [])
 
                 if not geo_unit_households:
                     logger.debug(f"    No households in geo_unit {geo_unit_code}")
@@ -172,31 +276,40 @@ class HouseholdPromoter:
                     age_categories = household.properties.get('_age_categories', self.distributor.categories)
                     current_count = household.get_composition(age_categories).get(category_name, 0)
 
+                    if not available_people:
+                        continue
+
+                    # Create a temporary list of IDs from the pool (we use current state of dict)
+                    # We can't use deque for complex dictionary removals, so we just take from the front
+                    added_to_this = 0
+                    
                     # Determine how many we can add
                     if max_count is None:  # Flexible
-                        # Add as many as available (greedy)
+                        # Add as many as possible (greedy)
                         can_add = len(available_people)
                     else:  # Fixed
                         can_add = max(0, max_count - current_count)
 
-                    if not isinstance(available_people, deque):
-                        available_people = deque(available_people)
+                    if can_add > 0:
+                        # Guard: check that adding this category to this household
+                        # does not violate any validation rule against the *actual*
+                        # composition (not just the promoted pattern).
+                        if not self._adding_person_satisfies_rules(
+                            household, category_name, validation_rules
+                        ):
+                            continue
 
-                    # Add people
-                    added_to_this = 0
-                    for _ in range(can_add):
-                        if not available_people:
-                            break
+                        # Extract IDs to remove from the front of the dictionary
+                        ids_to_take = list(islice(available_people.keys(), can_add))
+                        
+                        for pid in ids_to_take:
+                            person = available_people.pop(pid)
+                            household.add_to_subset(person)
+                            self.distributor.allocated_people.add(person.id)
+                            added_to_this += 1
+                            people_added += 1
 
-                        person = available_people.popleft()
-                        household.add_to_subset(person)
-                        self.distributor.allocated_people.add(person.id)
-                        added_to_this += 1
-                        people_added += 1
-
-                    # Update the original pool to remove people we took
                     if added_to_this > 0:
-                        pools[cat_idx] = pools[cat_idx][added_to_this:]
                         logger.debug(f"    Added {added_to_this} {category_name} to household {household.id}")
 
         # Statistics
@@ -281,23 +394,17 @@ class HouseholdPromoter:
 
             logger.info(f"Rule {rule_idx}: {source_pattern} → {target_pattern_str} (categories: {accept_categories})")
 
-            # Find households matching source pattern
-            # Get all households from VenueManager
-            all_households = self.distributor.venue_manager.get_venues_by_type("household")
+            # Find households matching source pattern using index
+            all_households_in_pattern = self._get_households_by_pattern().get(source_pattern, [])
 
             # Track progress for this rule
             rule_start_promoted = households_promoted_count
             rule_start_people_added = people_added
             households_processed = 0
-            total_households = len(all_households)
+            total_households = len(all_households_in_pattern)
             progress_interval = max(1, total_households // 10)  # Update every 10%
 
-            for household in all_households:
-                households_processed += 1
-                actual_pattern = household.properties.get('actual_pattern', '')
-
-                if actual_pattern != source_pattern:
-                    continue
+            for household in all_households_in_pattern:
 
                 geo_unit_code = household.geographical_unit.name
 
@@ -351,29 +458,20 @@ class HouseholdPromoter:
                         promoted_households.add(household.id)
                         logger.debug(f"  Promoted household {household.id}: {source_pattern} → {target_pattern_str}")
 
-                    if not isinstance(available_people, deque):
-                        available_people = deque(available_people)
-
-                    # Track how many we actually add for pool update
-                    people_added_this_category = 0
-
-                    # Add people
-                    for _ in range(category_can_add):
-                        if not available_people:
-                            break
-                        if max_to_add is not None and added_to_this_household >= max_to_add:
-                            break
-
-                        person = available_people.popleft()
-                        household.add_to_subset(person)
-                        self.distributor.allocated_people.add(person.id)
-                        added_to_this_household += 1
-                        people_added += 1
-                        people_added_this_category += 1
-
-                    # Update the original pool to remove people we took
-                    if people_added_this_category > 0:
-                        pools[cat_idx] = pools[cat_idx][people_added_this_category:]
+                    if category_can_add > 0:
+                        # Extract IDs to remove from the front of the dictionary
+                        # Dict preserves order, so this acts like a queue
+                        ids_to_take = list(islice(available_people.keys(), category_can_add))
+                        
+                        for pid in ids_to_take:
+                            if max_to_add is not None and added_to_this_household >= max_to_add:
+                                break
+                            
+                            person = available_people.pop(pid)
+                            household.add_to_subset(person)
+                            self.distributor.allocated_people.add(person.id)
+                            added_to_this_household += 1
+                            people_added += 1
 
                 if added_to_this_household > 0:
                     logger.debug(f"  Added {added_to_this_household} people to household {household.id}")
@@ -385,11 +483,17 @@ class HouseholdPromoter:
                     rule_people_added = people_added - rule_start_people_added
                     logger.info(f"  Rule {rule_idx} progress: {households_processed}/{total_households} households checked ({percent_complete:.1f}%) - {rule_households_promoted} promoted, {rule_people_added} people added")
 
+                households_processed += 1
+
             # Log rule completion summary
             rule_households_promoted = households_promoted_count - rule_start_promoted
             rule_people_added = people_added - rule_start_people_added
             if rule_households_promoted > 0 or rule_people_added > 0:
                 logger.info(f"  Rule {rule_idx} complete: {rule_households_promoted} households promoted, {rule_people_added} people added")
+            
+            # Reset pattern index so the next rule sees updated patterns
+            if rule_households_promoted > 0:
+                self._households_by_pattern = None
 
         # Statistics
         stats = {

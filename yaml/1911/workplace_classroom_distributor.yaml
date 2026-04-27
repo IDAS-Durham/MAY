@@ -1,0 +1,33 @@
+venue_type: "classroom"
+activity_map_key: "primary_activity"
+subset_key: "teacher"
+
+settings:
+  verbose: true
+  use_spatial_index: false
+
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "MGU"
+  batch_geo_level: "SGU"
+  consider_by: "geo_unit"
+
+eligibility:
+  global_filters:
+    - attribute: "Occode"
+      type: "categorical"
+      values: [11]
+
+allocation:
+  track_capacity: true
+  when_full: "exclude"
+  fixed_capacity: 2
+  strategy: "closest_balanced"
+  enforce_no_empty_venues: true
+
+fallback:
+  strategy: "skip"
+
+exports:
+  venue_summary: "output/1911/workplace_classroom_venue_summary.csv"
+  unallocated_report: "output/1911/workplace_classroom_unallocated.csv"

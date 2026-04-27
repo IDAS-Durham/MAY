@@ -1,0 +1,44 @@
+name: "romantic_relationships"
+
+min_age: 18
+max_age: 120
+
+sexual_orientations:
+  types: ['heterosexual', 'homosexual', 'bisexual']
+
+  probabilities:
+    male:
+      heterosexual: 0.90
+      homosexual: 0.05
+      bisexual: 0.05
+    female:
+      heterosexual: 0.90
+      homosexual: 0.05
+      bisexual: 0.05
+
+  # Age-based probability modifiers
+  age_adjustments:
+    "18-24":
+      heterosexual: 0.8  # Heterosexual reduced by 20%
+      homosexual: 2.0    # Homosexual doubled
+      bisexual: 2.0      # Bisexual doubled
+    "25-34":
+      heterosexual: 0.9
+      homosexual: 1.5
+      bisexual: 1.5
+
+  # Compatibility matrix mapping sexual orientation to acceptable partner sexes
+  compatibility:
+    heterosexual:
+      male: ['female']
+      female: ['male']
+    homosexual:
+      male: ['male']
+      female: ['female']
+    bisexual:
+      male: ['male', 'female']
+      female: ['male', 'female']
+
+storage:
+  orientation_key: "sexual_orientation"
+  status_key: "relationship_status"

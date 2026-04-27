@@ -72,7 +72,7 @@ class Person:
         self.age = age
         self.sex = sex
         self.geographical_unit = geographical_unit
-        self.activities = activities if activities is not None else set()
+        self.activities = set(activities) if activities is not None else set()
         self.properties = properties if properties is not None else {}
         # UNIFIED STRUCTURE: activity_map[activity_name][venue_type] = [subsets]
         if activity_map is None:
@@ -90,8 +90,8 @@ class Person:
         Args:
             activity (str): Name of the activity to add
         """
-        #if activity not in self.activities:
-        self.activities.add(activity)
+        if activity not in self.activities:
+            self.activities.add(activity)
 
         # Initialize activity_map with empty dict for unified structure
         # Structure: activity_map[activity_name][venue_type] = [subsets]
@@ -105,8 +105,8 @@ class Person:
         Args:
             activity (str): Name of the activity to remove
         """
-        #if activity in self.activities:
-        self.activities.remove(activity)
+        if activity in self.activities:
+            self.activities.remove(activity)
 
     def add_activities(self, activities):
         self.activities.update(activities)
@@ -144,60 +144,30 @@ class Person:
     def residence(self):
         """
         Get the venue where this person resides.
-
-        This property automatically finds the person's residence by checking
-        for the 'residence' activity in their activity_map. All residence types
-        (household, care_home, boarding_school, student_dorms, etc.) are
-        registered under the 'residence' activity.
-
-        Returns:
-            Venue object where person lives, or None if no residence assigned
-
-        Examples:
-            >>> person.residence
-            <Venue #123: household_E00004320 (household) in E00004320>
-
-            >>> person.residence.type
-            'household'
-
-            >>> person.residence.geographical_unit.name
-            'E00004320'
-
-            >>> # Works with any residence type
-            >>> person.residence.type
-            'care_home'
         """
-        # Check for 'residence' activity in activity_map
-        # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
-        if 'residence' in self.activity_map and self.activity_map['residence']:
-            # Iterate through venue types (household, care_home, etc.) and return first found
-            for venue_type, subsets in self.activity_map['residence'].items():
-                if subsets:  # Check if list is not empty
-                    return subsets[0].venue
-
+        res_map = self.activity_map.get('residence')
+        if not res_map:
+            return None
+            
+        for subsets in res_map.values():
+            if subsets:
+                # Return first venue found
+                return subsets[0].venue
         return None
 
     @property
     def residence_type(self):
         """
         Get the type of residence this person lives in.
-
-        Returns:
-            String indicating residence type (e.g., 'household', 'care_home',
-            'farm', 'bench'), or None if no residence assigned
-
-        Examples:
-            >>> person.residence_type
-            'household'
-
-            >>> person.residence_type
-            'care_home'
-
-            >>> person.residence_type
-            'farm'
         """
-        residence = self.residence
-        return residence.type if residence else None
+        res_map = self.activity_map.get('residence')
+        if not res_map:
+            return None
+            
+        for v_type, subsets in res_map.items():
+            if subsets:
+                return v_type
+        return None
 
     def has_residence(self) -> bool:
         """
@@ -249,6 +219,8 @@ class Person:
         Doesn't check they have the same IDs as if ID assignment is different with all
         other attributes being equal, I'd still like this to return True / Gavin 21/Jan/26.
         """
+        if not isinstance(other, Person):
+            return NotImplemented
         if float(self.age) != float(other.age):
             return False
         if self.geographical_unit != other.geographical_unit:

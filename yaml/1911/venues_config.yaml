@@ -1,0 +1,109 @@
+venue_types:
+  household:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["C"]
+    is_residence: true
+    subset_categories:
+      - name: "Kids"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 0
+          max: 17
+      - name: "Young Adults"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 18
+          max: 24
+      - name: "Adults"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 25
+          max: 64
+      - name: "Old Adults"
+        attribute: "age"
+        type: "numerical"
+        numerical:
+          min: 65
+          max: null
+    
+  pub:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["P"]
+    is_residence: false
+
+  school:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["S"]
+    is_residence: false
+
+  church:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["CH"]
+    is_residence: false
+
+  army_building:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["E"]
+    is_residence: false
+
+  medical:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["H"]
+    is_residence: false
+
+  prison:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["N"]
+    is_residence: true
+    subset_key: "resident"
+
+  # Workplace subtypes — each gets its own spatial index for efficient nearest-venue search
+  # BTCode 1 (Professional): 1,579 venues, 0 people → excluded
+  # BTCode 4 (Agricultural): 0 venues → excluded
+  workplace_sales:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["2"]
+
+  workplace_service:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["3"]
+
+  workplace_production:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["5"]
+
+  workplace_education:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["12"]
+
+  workplace_mine:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["50"]
+

@@ -1,0 +1,81 @@
+enabled: true
+
+selection_strategy:
+  max_attempts: 10
+  use_best_candidate: true
+  penalty_mode: "squared"
+  log_violations: true
+  backtracking:
+    enabled: true
+    max_backtracks: 3
+    strategy: "first_role"
+    log_backtracks: true
+    avoid_duplicates: true
+
+track_statistics: true
+
+rules:
+  - name: "Two-adult family with kids"
+    patterns:
+      - ">=2 >=0 2 0"
+      - "1 >=0 2 0"
+    roles:
+      role_A:
+        categories: ["Kids"]
+        count: "any"
+      role_B:
+        categories: ["Adults"]
+        count: 2
+    selection_order:
+      - role_A
+      - role_B
+    constraints:
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "role_B"
+        role_2: "role_A"
+        min_difference: 16
+        max_difference: 50
+        max_difference_by_categorical_attribute:
+          attribute: "sex"
+          values:
+            female: 50
+            male: 55
+        preferred_distribution:
+          type: "normal"
+          mean: 32
+          std: 6
+          tolerance: 9
+      - type: "pair_matching"
+        role: "role_B"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19
+        creates_romantic_couple: true
+
+  - name: "Adult pair"
+    patterns:
+      - "0 0 2 0"
+    roles:
+      role_A:
+        categories: ["Adults"]
+        count: 2
+    selection_order:
+      - role_A
+    constraints:
+      - type: "pair_matching"
+        role: "role_A"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19
+        creates_romantic_couple: true
