@@ -104,3 +104,12 @@ world_map/medieval_map.html
 
 # Built mkdocs site output
 docs/site/
+
+world_map/data/
+
+# Folder to dump stuff
+tmp/
+benchmarks/
+
+# Profiling output
+*profile.stats

@@ -1,0 +1,40 @@
+distributor_name: "church_distributor"
+venue_type: "church"
+description: "Assign everyone to a local church, randomly distributed"
+
+activity_map_key: "church"
+subset_key: "visitor"
+
+eligibility:
+  require_unassigned: false
+  require_residence: true
+
+venue_selection:
+  consider_by: "geo_unit"
+  venue_geo_level: "MBD_Temp_ID"
+  batch_geo_level: "MBD_Temp_ID"
+  filter_by_geography: true
+  respect_capacity: false
+
+allocation:
+  strategy: "random"
+  track_capacity: false
+  batch_by: "geo_unit"
+
+settings:
+  priority: 1
+  max_allocations: null
+  random_seed: null
+  verbose: true
+  log_summary: true
+  debug: false
+  use_spatial_index: true
+
+validation:
+  required_person_attributes:
+    - "age"
+    - "geographical_unit"
+  required_venue_columns:
+    - "geo_unit"
+    - "latitude"
+    - "longitude"

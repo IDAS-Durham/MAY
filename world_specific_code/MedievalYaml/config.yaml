@@ -125,9 +125,9 @@ venue_pipeline:
     - type: child_creator
       config: "world_specific_code/MedievalYaml/yaml/venue_child_creators/household_lands.yaml"
 
-    # # Step 2: Distribute students to schools
-    # # - type: distributor
-    # #   config: "world_specific_code/MedievalYaml/yaml/distributors/school_distributor.yaml"
+    # Step 2: Distribute folk to church
+    - type: distributor
+      config: "world_specific_code/MedievalYaml/yaml/distributors/church_distributor.yaml"
 
     # # Step 3: Create classrooms within schools (based on student age)
     # # - type: child_creator

@@ -237,6 +237,30 @@ venue_types:
     description: "Leisure location"
     is_residence: false
 
+  church:
+    enabled: true
+    filename: churches.csv
+    description: "Place of worship"
+    is_residence: false
+    
+    # subset_categories:
+    #   - name: "Kids"
+    #     attribute: "age"
+    #     type: "numerical"
+    #       min: 0
+    #       max: 12
+    #   - name: "Female adults"
+    #     attribute: "sex"
+    #     value: "female"
+    #   - name: "Male adults"
+    #     attribute: "sex"
+    #     value: "male"
+
+    # batch_mode: true
+    # filter_column: "BTCode"
+    # filter_values: ["CH"]
+    # is_residence: false
+
 
 # Global venue settings
 settings:

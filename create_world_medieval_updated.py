@@ -16,7 +16,11 @@ from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
 
 # Gavin social network version
-from may.social_networks import allocate_random_bounded_distance_contacts, build_local_social_network
+from may.social_networks import (
+    allocate_random_bounded_distance_contacts,
+    build_local_social_network,
+    build_spatial_social_network,
+)
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -222,58 +226,46 @@ def main():
 
         # Builds a local network based on a particular clustering algorithm.
         # This creates realistic closed graphs. 
+        # Must be run after household allocation as it maps to the contact's household.
         build_local_social_network(
             world.geography,
-            mean_connections_per_person=6,
-            clustering_level=0.6,
-            storage_key = 'social_contacts_local',
-            algorithm = 'watts_strogatz',
+            mean_connections_per_person=4,
+            clustering_level=0.8,
+            storage_key='social_contacts_local',
+            assign_activity_map=True,
         )
 
-        # Assign activity_map for social contacts.
-        # Must be run after household allocation as it maps to the contact's household. 
-        for person in world.population.people:
-            if 'social_contacts_local' in person.properties:
-                person.activities.add('social_contacts_local')
-                person.activity_map['social_contacts_local'] = {}
-                for contact_id in person.properties['social_contacts_local']:
-                    contact = world.population.people_by_id[contact_id]
-                    if 'residence' in contact.activity_map:
-                        person.activity_map['social_contacts_local'].update(contact.activity_map['residence'])
+        # Near-range inter-unit network: annulus [0.01, 15] km, W-S clustering
+        build_spatial_social_network(
+            world.geography,
+            min_radius_km=0.01, # small but nonzero so that it is distinguished from people in literally the same manor. 
+            max_radius_km=4.0, # a reasonable distance to walk in an afternoon I would say. 
+            mean_connections_per_person=2,
+            clustering_level=0.9,
+            storage_key='social_contacts_near',
+            assign_activity_map=True,
+        )
 
-        # Simpler version, just for making random connections with people within a certain radius
-        radius_km = 15
-        allocate_random_bounded_distance_contacts(world.geography,
-                                                  radius_km,
-                                                  mean_connections_per_person=6,
-                                                  store=True,
-                                                  storage_key=f'social_contacts_radius_km_{radius_km}',
-                                                  )
-        
-        for person in world.population.people:
-            if (f'social_contacts_radius_km_{radius_km}' in person.properties) and (len(person.properties[f'social_contacts_radius_km_{radius_km}']) > 0):
-                person.activities.add(f'social_contacts_radius_km_{radius_km}')                
-                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = {}
-                for contact in person.properties[f'social_contacts_radius_km_{radius_km}']:
-                    if 'residence' in contact.activity_map:
-                        person.activity_map[f'social_contacts_radius_km_{radius_km}'].update(contact.activity_map['residence'])
-
-        radius_km = 30
-        allocate_random_bounded_distance_contacts(world.geography,
-                                                  radius_km,
-                                                  mean_connections_per_person=6,
-                                                  store=True,
-                                                  storage_key=f'social_contacts_radius_km_{radius_km}',
-                                                  )
-        
-        for person in world.population.people:
-            if (f'social_contacts_radius_km_{radius_km}' in person.properties) and (len(person.properties[f'social_contacts_radius_km_{radius_km}']) > 0):
-                person.activities.add(f'social_contacts_radius_km_{radius_km}')                
-                person.activity_map[f'social_contacts_radius_km_{radius_km}'] = {}
-                for contact in person.properties[f'social_contacts_radius_km_{radius_km}']:
-                    if 'residence' in contact.activity_map:
-                        person.activity_map[f'social_contacts_radius_km_{radius_km}'].update(contact.activity_map['residence'])
-
+        # Far-range inter-unit network: annulus [6, 20] km, W-S clustering
+        build_spatial_social_network(
+            world.geography,
+            min_radius_km=3.0,
+            max_radius_km=12.0,
+            mean_connections_per_person=2,
+            clustering_level=0.9,
+            storage_key='social_contacts_med',
+            assign_activity_map=True,
+        )
+        # Far-range inter-unit network: annulus [15, 50] km, W-S clustering
+        build_spatial_social_network(
+            world.geography,
+            min_radius_km=10.0,
+            max_radius_km=100.0,
+            mean_connections_per_person=2,
+            clustering_level=0.9,
+            storage_key='social_contacts_far',
+            assign_activity_map=True,
+        )
     
 
     logger.info("")
@@ -285,13 +277,13 @@ def main():
     logger.info("=" * 60)
 
     # Export venue allocations
-    export_venue_allocations(world)
+    #export_venue_allocations(world)
 
     # Export people data
-    export_people(world)
+    #export_people(world)
 
     # Export world to HDF5 for C++ simulation
-    world.export_to_hdf5("world_state_medieval_updated.h5")
+    world.export_to_hdf5("world_state_medieval_updated_low_contact_high_cluster.h5")
 
     return world
 
