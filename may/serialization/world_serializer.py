@@ -124,9 +124,12 @@ class WorldSerializer:
         geo_group = f.create_group('geography')
         geo_settings = self.config.get_geography_settings()
 
-        # Get all units
-        all_units = world.geography.get_all_units()
-        units_list = list(all_units.values())
+        # Get all units. Use units_by_id (keyed by unique ID) rather than
+        # get_all_units() (keyed by name): a single name can occur at multiple
+        # levels (e.g. SGU "DURHAM" parish under MGU "DURHAM" county) and the
+        # name-keyed dict silently drops the second one, which loses entire
+        # hierarchy levels from the export.
+        units_list = sorted(world.geography.units_by_id.values(), key=lambda u: u.id)
 
         if not units_list:
             logger.warning("No geographical units to serialize")
