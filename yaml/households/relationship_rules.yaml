@@ -5,6 +5,45 @@
 
 enabled: true
 
+# ============================================================================
+# PER-AREA "SAME-CATEGORY" PROBABILITY SOURCES (optional)
+# ============================================================================
+# Each pair_matching rule below carries a scalar `same_category_probability_fallback`.
+# Anything declared here overrides that scalar PER AREA when a candidate's
+# geography is found in the source CSV. If no source is configured for a given
+# `attribute`, the per-rule scalar is the authoritative value.
+#
+# Each entry declares:
+#   attribute        – which `categorical_attribute.attribute` this source
+#                      applies to (e.g. "sex", "religion", "ethnicity", ...).
+#                      Only pair_matching rules whose `attribute` matches will
+#                      use this source.
+#   csv_path         – CSV with one row per area.
+#   geo_code_column  – name of the column in the CSV that holds the area code.
+#   geo_level        – which geography level those codes refer to
+#                      (SGU / MGU / LGU / XLGU). The validator walks each
+#                      person's home unit up to this level before lookup.
+#   formula          – a list of {column, weight} pairs. The probability for
+#                      an area is the linear combination
+#                          P = Σ ( CSV[column] * weight )
+#                      with the result clamped to [0, 1]. Use whatever columns
+#                      and weights are appropriate for your domain.
+# ============================================================================
+same_category_sources:
+  # Per-MSOA P(same-sex couple) from the ONS 2021 sexual-orientation marginals.
+  # Modeling assumption: homosexuals always pair same-sex; bisexuals pair
+  # same-sex half the time; heterosexuals never. Adjust the weights below if
+  # you prefer a different mapping.
+  - attribute: "sex"
+    csv_path: "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+    geo_code_column: "geo_unit"
+    geo_level: "MGU"
+    formula:
+      - column: "homosexual"
+        weight: 1.0
+      - column: "bisexual"
+        weight: 0.5
+
 # =============================================
 # SELECTION STRATEGY
 # =============================================
@@ -76,7 +115,10 @@ rules:
         role: "role_B"
         categorical_attribute:
           attribute: "sex"
-          same_category_probability: 0.05
+          # Live value comes from `same_category_source` at the top of this file
+          # (per-MSOA P(same-sex couple) from ONS data). This scalar is only
+          # used when the candidate's MSOA is missing from that table.
+          same_category_probability_fallback: 0.05
         numerical_attribute:
           attribute: "age"
           mean_difference: 3.0
@@ -165,7 +207,10 @@ rules:
         role: "role_B"
         categorical_attribute:
           attribute: "sex"
-          same_category_probability: 0.05
+          # Live value comes from `same_category_source` at the top of this file
+          # (per-MSOA P(same-sex couple) from ONS data). This scalar is only
+          # used when the candidate's MSOA is missing from that table.
+          same_category_probability_fallback: 0.05
         numerical_attribute:
           attribute: "age"
           mean_difference: 3.0
@@ -228,7 +273,10 @@ rules:
         role: "role_A"
         categorical_attribute:
           attribute: "sex"
-          same_category_probability: 0.05
+          # Live value comes from `same_category_source` at the top of this file
+          # (per-MSOA P(same-sex couple) from ONS data). This scalar is only
+          # used when the candidate's MSOA is missing from that table.
+          same_category_probability_fallback: 0.05
         numerical_attribute:
           attribute: "age"
           mean_difference: 3.0
@@ -254,7 +302,10 @@ rules:
         role: "role_A"
         categorical_attribute:
           attribute: "sex"
-          same_category_probability: 0.05
+          # Live value comes from `same_category_source` at the top of this file
+          # (per-MSOA P(same-sex couple) from ONS data). This scalar is only
+          # used when the candidate's MSOA is missing from that table.
+          same_category_probability_fallback: 0.05
         numerical_attribute:
           attribute: "age"
           mean_difference: 3.0
@@ -344,7 +395,10 @@ rules:
         require_exact_count: 2
         categorical_attribute:
           attribute: "sex"
-          same_category_probability: 0.05
+          # Live value comes from `same_category_source` at the top of this file
+          # (per-MSOA P(same-sex couple) from ONS data). This scalar is only
+          # used when the candidate's MSOA is missing from that table.
+          same_category_probability_fallback: 0.05
         numerical_attribute:
           attribute: "age"
           mean_difference: 3.0
@@ -400,7 +454,11 @@ rules:
 #      - require_exact_count: Only apply if role has exactly N people (optional)
 #      - categorical_attribute: (optional) Constraints on a categorical attribute
 #          - attribute: Name of categorical attribute (e.g., "sex", "religion", "occupation")
-#          - same_category_probability: Probability of matching categories (0.0-1.0)
+#          - same_category_probability_fallback: Probability of matching categories (0.0-1.0).
+#              Used as the fallback when a top-level `same_category_source` is configured
+#              but the candidate's geography is missing from it. When no source is
+#              configured at all, this is the authoritative probability. Older configs
+#              may still use the legacy name `same_category_probability`.
 #      - numerical_attribute: (optional) Constraints on a numerical attribute
 #          - attribute: Name of numerical attribute (e.g., "age", "income", "education_years")
 #          - mean_difference: Target mean difference
