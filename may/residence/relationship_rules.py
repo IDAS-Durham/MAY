@@ -54,22 +54,28 @@ class RelationshipRulesValidator:
 
     def __init__(self,
                  categories: List,
-                 config_file: str = "data/households/relationship_rules.yaml"):
+                 config_file: str = "data/households/relationship_rules.yaml",
+                 geography=None):
         """
         Initialize relationship rules validator.
 
         Args:
             categories: List of Category objects from household config
             config_file: Path to relationship rules YAML configuration
+            geography: Optional Geography object (needed for per-MSOA same_category lookups)
         """
         self.categories = categories
         self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(categories)}
+        self.geography = geography
 
         # Load configuration
         self.enabled = False
         self.rules = []
         self.selection_strategy = {}
         self.track_statistics = False
+        # Per-categorical-attribute lookup tables for `same_category_probability`.
+        # Schema: {attribute_name: {"geo_level": <str>, "by_code": {area_code: prob}}}
+        self._same_category_sources: Dict[str, Dict] = {}
 
         if os.path.exists(config_file):
             self._load_config(config_file)
@@ -86,7 +92,13 @@ class RelationshipRulesValidator:
             'violations': {
                 'numerical_attribute_difference': 0,
                 'pair_numerical_attribute_diff': 0
-            }
+            },
+            # Per-attribute breakdown of how the same_category_probability was
+            # resolved during pair_matching. Keys are the categorical_attribute
+            # name (e.g. "sex"); each entry tracks how often the per-area
+            # source was used vs the YAML scalar fallback, and the empirical
+            # distribution of probabilities the validator actually rolled against.
+            'same_category_lookup': {},
         }
 
     def _load_config(self, config_file: str):
@@ -110,6 +122,99 @@ class RelationshipRulesValidator:
             self.rules.append(rule)
 
         logger.info(f"Loaded {len(self.rules)} relationship rules")
+
+        # Accept either a single source ("same_category_source") or a list of
+        # them ("same_category_sources") so simple cases stay terse.
+        sources = config.get('same_category_sources')
+        if sources is None and 'same_category_source' in config:
+            sources = [config['same_category_source']]
+        if sources:
+            for source in sources:
+                self._load_same_category_source(source)
+
+    def _load_same_category_source(self, source: Dict):
+        """Load a per-area `same_category_probability` table for one categorical attribute.
+
+        Expected schema (see yaml/households/relationship_rules.yaml for an example):
+
+            attribute:        <name of the categorical attribute, e.g. "sex">
+            csv_path:         <path to a CSV with one row per area>
+            geo_code_column:  <column in the CSV holding the area code>
+            geo_level:        <Geography level name, e.g. "MGU">
+            formula:          <list of {column, weight} pairs; P = Σ col * weight>
+
+        The result is clamped to [0, 1] and stored in self._same_category_sources
+        keyed by attribute. A pair_matching rule whose `categorical_attribute.attribute`
+        matches will then use the per-area value instead of its scalar fallback.
+        """
+        attribute = source.get('attribute')
+        path = source.get('csv_path')
+        if not attribute:
+            logger.warning("same_category_source missing required 'attribute'; skipped")
+            return
+        if not path or not os.path.exists(path):
+            logger.warning(f"same_category_source[{attribute}] csv_path missing or not found: {path}; skipped")
+            return
+
+        geo_code_column = source.get('geo_code_column', 'geo_unit')
+        geo_level = source.get('geo_level', 'MGU')
+        formula = source.get('formula') or []
+        if not formula:
+            logger.warning(f"same_category_source[{attribute}] has no formula; skipped")
+            return
+
+        terms = []
+        for term in formula:
+            col = term.get('column')
+            weight = float(term.get('weight', 1.0))
+            if col is None:
+                logger.warning(f"same_category_source[{attribute}] formula term missing 'column'; skipped term")
+                continue
+            terms.append((col, weight))
+        if not terms:
+            logger.warning(f"same_category_source[{attribute}] formula has no valid terms; skipped")
+            return
+
+        import csv as _csv
+        by_code: Dict[str, float] = {}
+        with open(path) as f:
+            reader = _csv.DictReader(f)
+            for row in reader:
+                code = row[geo_code_column].strip()
+                p = sum(float(row[col]) * w for col, w in terms)
+                by_code[code] = max(0.0, min(1.0, p))
+
+        self._same_category_sources[attribute] = {
+            "geo_level": geo_level,
+            "by_code": by_code,
+        }
+
+        logger.info(
+            f"Loaded same_category_source[{attribute}]: {len(by_code)} {geo_level} "
+            f"entries from {path}"
+        )
+
+    def _resolve_same_category_prob(self,
+                                     attribute: str,
+                                     geo_unit_code: Optional[str],
+                                     default: float) -> float:
+        """Look up the per-area P(same-category pair) for a person's home geography.
+
+        Walks from the candidate's home unit up to the configured geo_level for
+        this attribute's source, and returns the loaded probability. Falls back
+        to ``default`` whenever the source isn't configured, the geography object
+        is missing, or the area is not in the CSV.
+        """
+        source = self._same_category_sources.get(attribute)
+        if source is None or not geo_unit_code or self.geography is None:
+            return default
+        unit = self.geography.get_unit(geo_unit_code)
+        if unit is None:
+            return default
+        ancestor = unit.get_ancestor_by_level(source["geo_level"])
+        if ancestor is None:
+            return default
+        return source["by_code"].get(ancestor.name, default)
 
     def get_rule_for_pattern(self, pattern_str: str) -> Optional[RelationshipRule]:
         """
@@ -584,7 +689,8 @@ class RelationshipRulesValidator:
                      constraints: Optional[List[Dict]] = None,
                      current_role: Optional[str] = None,
                      show_detailed_logs: bool = False,
-                     candidates_by_cat: Optional[Dict[Any, List[Person]]] = None) -> Optional[Tuple[Person, Person]]:
+                     candidates_by_cat: Optional[Dict[Any, List[Person]]] = None,
+                     geo_unit_code: Optional[str] = None) -> Optional[Tuple[Person, Person]]:
         """
         Select 2 people from candidates to form a compatible pair.
 
@@ -613,10 +719,52 @@ class RelationshipRulesValidator:
         if len(candidates) < 2:
             return None
 
-        # Extract categorical attribute config
+        # Extract categorical attribute config.
+        # `same_category_probability_fallback` is the explicit name used
+        # whenever a top-level `same_category_sources` entry exists for this
+        # attribute (the source provides the live per-area value; the scalar
+        # below is only used when the candidate's area is missing from it).
+        # `same_category_probability` is accepted for back-compat with worlds
+        # that have no source configured (e.g. Medieval), where the scalar IS
+        # the authoritative value.
         cat_attr_config = constraint.get('categorical_attribute', {})
         cat_attribute = cat_attr_config.get('attribute', 'sex')
-        same_category_prob = cat_attr_config.get('same_category_probability', 0.05)
+        fallback_prob = cat_attr_config.get(
+            'same_category_probability_fallback',
+            cat_attr_config.get('same_category_probability', 0.05),
+        )
+
+        # If a per-area source is configured for this categorical attribute,
+        # override the scalar with the area-specific probability.
+        same_category_prob = self._resolve_same_category_prob(
+            cat_attribute, geo_unit_code, default=fallback_prob,
+        )
+
+        # Running counters (constant memory) for stage-1 diagnostics. We never
+        # store the full per-call list — at England scale that would be tens of
+        # millions of floats, and `mean / min / max` is all anyone reads.
+        attr_stats = self.stats['same_category_lookup'].setdefault(
+            cat_attribute,
+            {
+                'source_hits': 0,
+                'fallback_hits': 0,
+                'prob_sum': 0.0,
+                'prob_min': float('inf'),
+                'prob_max': float('-inf'),
+                'prob_n': 0,
+            },
+        )
+        if (cat_attribute in self._same_category_sources
+                and same_category_prob != fallback_prob):
+            attr_stats['source_hits'] += 1
+        else:
+            attr_stats['fallback_hits'] += 1
+        attr_stats['prob_sum'] += same_category_prob
+        if same_category_prob < attr_stats['prob_min']:
+            attr_stats['prob_min'] = same_category_prob
+        if same_category_prob > attr_stats['prob_max']:
+            attr_stats['prob_max'] = same_category_prob
+        attr_stats['prob_n'] += 1
 
         is_same_category = np.random.random() < same_category_prob
 

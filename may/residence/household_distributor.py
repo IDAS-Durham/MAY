@@ -99,7 +99,8 @@ class HouseholdDistributor:
 
         self.relationship_rules = RelationshipRulesValidator(
             categories=self.categories,
-            config_file=rules_config_path
+            config_file=rules_config_path,
+            geography=self.geography,
         )
 
         # Initialize excess handler
@@ -366,7 +367,8 @@ class HouseholdDistributor:
 
         # Use backtracking algorithm to select people for all roles
         selected_by_role, failed_cat_idx = self._select_roles_with_backtracking(
-            rule, pattern, pools, backtrack_config, self._show_detailed_logs
+            rule, pattern, pools, backtrack_config, self._show_detailed_logs,
+            geo_unit_code=geo_unit_code,
         )
 
         # Check if role selection failed
@@ -650,7 +652,8 @@ class HouseholdDistributor:
     def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
                                        pools: Dict[int, List[Person]],
                                        backtrack_config: Dict,
-                                       show_detailed_logs: bool) -> Tuple[Optional[Dict[str, List[Person]]], Optional[int]]:
+                                       show_detailed_logs: bool,
+                                       geo_unit_code: Optional[str] = None) -> Tuple[Optional[Dict[str, List[Person]]], Optional[int]]:
         """
         Select people for household roles using backtracking algorithm.
 
@@ -750,7 +753,8 @@ class HouseholdDistributor:
                         constraints=rule.constraints,
                         current_role=role_name,
                         show_detailed_logs=show_detailed_logs,
-                        candidates_by_cat=candidates_by_cat
+                        candidates_by_cat=candidates_by_cat,
+                        geo_unit_code=geo_unit_code,
                     )
                     if not pair:
                         # Couldn't find valid pair

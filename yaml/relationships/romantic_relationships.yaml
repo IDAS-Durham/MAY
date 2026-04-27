@@ -11,6 +11,23 @@ name: "romantic_relationships"
 min_age: 16
 max_age: 120
 
+# Data sources (UK / ONS-driven). When present, the distributor uses raked
+# probabilities P(o | sex, age, msoa) ∝ P_nat(o | sex, age) · P_msoa(o) / P_nat_marginal(o)
+# instead of the YAML `probabilities` block below. Worlds that do not have
+# UK MSOA codes (e.g. MedievalYaml) should override this YAML and omit
+# `data_sources` to fall back to the YAML-only path.
+data_sources:
+  prevalence_path: "data/population/sexual_orientation/orientation_prevalence_extended.csv"
+  msoa_marginal_path: "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+  geo_level: "MGU"
+
+# Verification logging. OFF for production runs (the heavy diagnostics walk
+# the entire population multiple times). Flip to true after a code change to
+# verify behavior — outputs national-vs-empirical comparison, MSOA quintile
+# sweep, etc. (see RomanticDistributor._log_verbose_diagnostics).
+diagnostics:
+  verbose: false
+
 # Sexual Orientation Configuration
 sexual_orientations:
   types:
