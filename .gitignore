@@ -97,3 +97,10 @@ june_analysis/
 mgu_codes.txt
 world_map/medieval_map.html
 .agents/
+
+# Emacs autosave files
+\#*\#
+.\#*
+
+# Built mkdocs site output
+docs/site/
