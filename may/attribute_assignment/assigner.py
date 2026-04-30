@@ -205,9 +205,8 @@ class AttributeAssigner:
             logger.info(f"✓ Assigned {people_assigned_in_other_residences} people in other residences")
             logger.info("")
 
-        # Update total_people stat to reflect actual total
+        # Set total_people from the authoritative venue count
         self.stats['total_people'] = total_people_in_simulation
-        self.stats['unassigned_people'] = total_people_in_simulation - self.stats['people_in_households'] - people_assigned_in_other_residences
 
     def _assign_other_residences(self, venues):
         """
@@ -661,7 +660,11 @@ class AttributeAssigner:
                     # Update statistics
                     self.stats['assignments_by_role'][role] += 1
                     self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
-                    self.stats['attribute_distribution'][value] += 1
+                    self.stats['assigned_people'] += 1
+
+                    # Track distribution — use str() for unhashable types (e.g. lists)
+                    dist_key = str(value) if isinstance(value, (list, dict)) else value
+                    self.stats['attribute_distribution'][dist_key] += 1
 
                     # Record fallback reason
                     if 'fallback_reason' in context:
@@ -837,8 +840,9 @@ class AttributeAssigner:
             for venue_type, subsets in person.activity_map["residence"].items():
                 if subsets:
                     venue = subsets[0].venue
-                    logger.debug(f"  Person {person.id} residence found: {venue_type} (ID={venue.id})")
-                    return venue
+                    if venue is not None:
+                        logger.debug(f"  Person {person.id} residence found: {venue_type} (ID={venue.id})")
+                        return venue
         return None
 
     def _check_required_attributes(self, people):

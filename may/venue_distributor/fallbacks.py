@@ -46,14 +46,15 @@ class FallbackManager:
         try:
             for i in range(max_iters):
                 if not remaining: break
-                
-                if 'max_distance' in selection_config:
-                    selection_config['max_distance'] *= multiplier
-                if 'count' in selection_config:
-                    selection_config['count'] = int(selection_config['count'] * multiplier)
-                
-                logger.info(f"  Relaxation iteration {i+1}/{max_iters} (distance x{multiplier**(i+1)})...")
-                remaining = self.distributor._allocate_individual(remaining, venues)
+
+                scale = multiplier ** (i + 1)
+                if original_max_dist is not None:
+                    selection_config['max_distance'] = original_max_dist * scale
+                if original_count is not None:
+                    selection_config['count'] = int(original_count * scale)
+
+                logger.info(f"  Relaxation iteration {i+1}/{max_iters} (distance x{scale:.1f})...")
+                remaining = self.distributor.allocation.allocate_individual(remaining, venues)
         finally:
             if original_max_dist is not None:
                 selection_config['max_distance'] = original_max_dist
@@ -69,7 +70,7 @@ class FallbackManager:
         
         try:
             logger.info("  Relaxing capacity constraints...")
-            remaining = self.distributor._allocate_individual(people, venues)
+            remaining = self.distributor.allocation.allocate_individual(people, venues)
         finally:
             self.config['allocation']['when_full'] = original_when_full
             
@@ -78,8 +79,9 @@ class FallbackManager:
     def _assign_closest(self, people: List, venues: List) -> List:
         """Assign each person to their absolute closest venue, ignoring ALL other constraints."""
         allocated_count = 0
+        remaining = []
         logger.debug("  Assigning to closest venue regardless of eligibility or capacity...")
-        
+
         for person in people:
             location = self.distributor._get_person_location(person)
             if location:
@@ -87,18 +89,21 @@ class FallbackManager:
                 if closest:
                     venue = closest[0]
                     venue.add_to_subset(
-                        person, 
-                        subset_key=self.distributor.subset_key, 
-                        activity_name=self.distributor.activity_map_key, 
+                        person,
+                        subset_key=self.distributor.subset_key,
+                        activity_name=self.distributor.activity_map_key,
                         activity_type=self.distributor.activity_type
                     )
                     self.distributor._increment_venue_count(venue)
                     allocated_count += 1
                 else:
                     logger.warning(f"Could not find ANY venue for person {person.id} in assign_closest fallback")
-            
+                    remaining.append(person)
+            else:
+                remaining.append(person)
+
         self.distributor.allocated_this_run += allocated_count
         logger.info(f"  Fallback (assign_closest): {allocated_count}/{len(people)} placed")
-        
-        return [p for p in people if self.distributor._get_person_location(p) is None]
+
+        return remaining
 

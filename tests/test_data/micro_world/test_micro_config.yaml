@@ -1,0 +1,11 @@
+venues:
+  data_dir: "tests/test_data/micro_world/venues"
+  config_file: "tests/test_data/micro_world/test_venues_config.yaml"
+geography:
+  data_dir: "tests/test_data/micro_world/geography"
+  # minimal geographic parameters, 
+  # just enough to pass loading config without errors
+population:
+  type: "explicit"
+  data_dir: "tests/test_data/micro_world/population"
+  filename: "tests/test_data/micro_world/population/people.csv"

@@ -64,6 +64,25 @@ class DataSource:
         Returns:
             Normalized probabilities that sum to 1.0
         """
+        if not probs:
+            logger.warning(f"Empty probability distribution in source '{self.name}'")
+            return {}
+
+        # Clamp negative values to 0 — negative probabilities are invalid
+        has_negatives = False
+        for v in probs.values():
+            if v < 0:
+                has_negatives = True
+                break
+
+        if has_negatives:
+            neg_keys = [k for k, v in probs.items() if v < 0]
+            logger.warning(
+                f"Negative probability values in source '{self.name}' "
+                f"for keys {neg_keys} — clamping to 0"
+            )
+            probs = {k: max(0.0, v) for k, v in probs.items()}
+
         total = sum(probs.values())
 
         if abs(total - 1.0) < 1e-10:  # Already normalized
@@ -71,8 +90,12 @@ class DataSource:
         elif total > 0:
             return {k: v / total for k, v in probs.items()}
         else:
-            # All zeros - return uniform distribution
+            # All zeros — return uniform distribution
             n = len(probs)
+            logger.warning(
+                f"All-zero probability distribution in source '{self.name}' "
+                f"({n} keys) — falling back to uniform"
+            )
             return {k: 1.0 / n for k in probs.keys()}
 
 

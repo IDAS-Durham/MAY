@@ -15,6 +15,8 @@ import yaml
 import math
 from collections import defaultdict
 
+from may.utils.attribute_access import get_person_attribute
+
 logger = logging.getLogger("venue_child_creator")
 
 
@@ -262,7 +264,8 @@ class VenueChildCreator:
 
                 filtered = [
                     p for p in filtered
-                    if min_val <= getattr(p, attr_name, float('-inf')) <= max_val
+                    if (v := get_person_attribute(p, attr_name)) is not None
+                    and min_val <= v <= max_val
                 ]
 
             elif filter_type == 'categorical':
@@ -270,8 +273,15 @@ class VenueChildCreator:
 
                 filtered = [
                     p for p in filtered
-                    if getattr(p, attr_name, None) in allowed_values
+                    if get_person_attribute(p, attr_name) in allowed_values
                 ]
+
+            else:
+                logger.warning(
+                    f"Unknown filter type '{filter_type}' for attribute '{attr_name}'. "
+                    f"Valid types are: 'numerical', 'categorical'. "
+                    f"This filter has been SKIPPED — all {len(filtered)} members pass through."
+                )
 
         return filtered
 
@@ -293,7 +303,7 @@ class VenueChildCreator:
 
         for person in members:
             # Get attribute value from person
-            attr_value = self._get_attribute_value(person, attribute_name)
+            attr_value = get_person_attribute(person, attribute_name)
 
             if attr_value is not None:
                 # Apply attribute mapping if configured
@@ -317,50 +327,6 @@ class VenueChildCreator:
                 groups['unknown'].append(person)
 
         return dict(groups)
-
-    def _get_attribute_value(self, person, path: str):
-        """
-        Get value from person supporting dot-notation and special handling for residence.
-        Consistent with BaseDistributor._get_person_attribute.
-        """
-        if not path:
-            return None
-
-        if path.startswith('residence.'):
-            residence = getattr(person, 'residence', None)
-            if residence is None:
-                return None
-            attr_path = path.replace('residence.', '')
-            return self._get_nested_value(residence, attr_path)
-
-        return self._get_nested_value(person, path)
-
-    def _get_nested_value(self, obj, path: str):
-        """
-        Get value from nested path supporting both object attributes and properties dict.
-        """
-        parts = path.split('.')
-        current = obj
-        
-        for part in parts:
-            if current is None:
-                return None
-            
-            # 1. Try properties dict if it exists (for Person or Venue objects)
-            if hasattr(current, 'properties') and isinstance(current.properties, dict):
-                if part in current.properties:
-                    current = current.properties[part]
-                    continue
-            
-            # 2. Try dict access (for general dicts)
-            if isinstance(current, dict):
-                current = current.get(part)
-            
-            # 3. Try direct attribute/property
-            else:
-                current = getattr(current, part, None)
-                
-        return current
 
     def _create_children_for_group(self, parent_venue, group_key, group_members, world):
         """

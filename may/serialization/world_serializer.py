@@ -124,9 +124,12 @@ class WorldSerializer:
         geo_group = f.create_group('geography')
         geo_settings = self.config.get_geography_settings()
 
-        # Get all units
-        all_units = world.geography.get_all_units()
-        units_list = list(all_units.values())
+        # Get all units. Use units_by_id (keyed by unique ID) rather than
+        # get_all_units() (keyed by name): a single name can occur at multiple
+        # levels (e.g. SGU "DURHAM" parish under MGU "DURHAM" county) and the
+        # name-keyed dict silently drops the second one, which loses entire
+        # hierarchy levels from the export.
+        units_list = sorted(world.geography.units_by_id.values(), key=lambda u: u.id)
 
         if not units_list:
             logger.warning("No geographical units to serialize")
@@ -145,8 +148,17 @@ class WorldSerializer:
         metadata_group = f.require_group('metadata/names')
         self._create_dataset(metadata_group, 'geography', names)
 
-        # Intern geography levels
-        unique_levels = sorted(list(set(unit.level for unit in units_list)))
+        # Intern geography levels — order by tree depth (root=0, leaves=highest)
+        # Find depth of each level by walking parent chains
+        level_depths = {}
+        for unit in units_list:
+            depth = 0
+            ancestor = unit
+            while ancestor.parent is not None:
+                depth += 1
+                ancestor = ancestor.parent
+            level_depths[unit.level] = depth
+        unique_levels = sorted(level_depths.keys(), key=lambda l: level_depths[l])
         level_to_id = {l: i for i, l in enumerate(unique_levels)}
         levels = np.array([level_to_id[unit.level] for unit in units_list], dtype=np.uint8)
         self.registries['geo_levels'] = level_to_id
@@ -651,8 +663,15 @@ class WorldSerializer:
         for v, global_id in zip(all_venues_sorted, global_ids):
             self._venue_to_global_id[id(v)] = global_id
 
-        # Also store type-scoped IDs for debugging/reference
-        type_scoped_ids = np.array([v.id for v in all_venues_sorted], dtype=np.int32)
+        # Compute ranks_in_type: sequential position within each type in sorted order.
+        # Must match the indexing in _write_venue_properties.
+        type_counters = {}
+        ranks_in_type_list = []
+        for v in all_venues_sorted:
+            rank = type_counters.get(v.type, 0)
+            ranks_in_type_list.append(rank)
+            type_counters[v.type] = rank + 1
+        type_scoped_ids = np.array(ranks_in_type_list, dtype=np.int32)
 
         # Core attributes (always included)
         ids = global_ids  # Use GLOBAL IDs for C++

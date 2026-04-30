@@ -29,6 +29,7 @@ from may.residence.composition_pattern import CompositionPattern
 from may.residence.household_excess_handler import HouseholdExcessHandler
 from may.residence.household_promoter import HouseholdPromoter
 from may.residence.household_round_distributor import HouseholdRoundDistributor
+from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("household")
 
@@ -98,7 +99,8 @@ class HouseholdDistributor:
 
         self.relationship_rules = RelationshipRulesValidator(
             categories=self.categories,
-            config_file=rules_config_path
+            config_file=rules_config_path,
+            geography=self.geography,
         )
 
         # Initialize excess handler
@@ -205,14 +207,9 @@ class HouseholdDistributor:
 
     def _categorize_person(self, person: Person) -> int:
         """Get the category index for a person based on their attributes."""
-        p_props = person.properties
         for idx, cat in enumerate(self.categories):
-            # Inline expansion of matches() logic for speed in hot path
-            # Category.attribute is the key we check
             attr = cat.attribute
-            val = getattr(person, attr, None)
-            if val is None:
-                val = p_props.get(attr)
+            val = get_person_attribute(person, attr)
             
             if val is None:
                 continue
@@ -370,7 +367,8 @@ class HouseholdDistributor:
 
         # Use backtracking algorithm to select people for all roles
         selected_by_role, failed_cat_idx = self._select_roles_with_backtracking(
-            rule, pattern, pools, backtrack_config, self._show_detailed_logs
+            rule, pattern, pools, backtrack_config, self._show_detailed_logs,
+            geo_unit_code=geo_unit_code,
         )
 
         # Check if role selection failed
@@ -654,7 +652,8 @@ class HouseholdDistributor:
     def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
                                        pools: Dict[int, List[Person]],
                                        backtrack_config: Dict,
-                                       show_detailed_logs: bool) -> Tuple[Optional[Dict[str, List[Person]]], Optional[int]]:
+                                       show_detailed_logs: bool,
+                                       geo_unit_code: Optional[str] = None) -> Tuple[Optional[Dict[str, List[Person]]], Optional[int]]:
         """
         Select people for household roles using backtracking algorithm.
 
@@ -754,7 +753,8 @@ class HouseholdDistributor:
                         constraints=rule.constraints,
                         current_role=role_name,
                         show_detailed_logs=show_detailed_logs,
-                        candidates_by_cat=candidates_by_cat
+                        candidates_by_cat=candidates_by_cat,
+                        geo_unit_code=geo_unit_code,
                     )
                     if not pair:
                         # Couldn't find valid pair
@@ -1141,21 +1141,21 @@ class HouseholdDistributor:
                         if failed_category_idx < len(pools):
                             available_count = len(pools[failed_category_idx])
 
-                    # Try demoting the failed category directly to available count
-                # Demote directly to available count instead of one-by-one
-                new_pattern = current_pattern.demote_to_count(failed_category_idx, available_count)
+                    # Demote directly to available count instead of one-by-one
+                    new_pattern = current_pattern.demote_to_count(failed_category_idx, available_count)
 
-            # If intelligent demotion didn't work, try fallback priority order
-            if new_pattern is None:
-                logger.debug(f"  → Intelligent demotion failed, trying fallback priority order")
-                new_pattern = current_pattern.demote_once(fallback_priority)
-
+                # If intelligent demotion didn't work, try fallback priority order
                 if new_pattern is None:
-                    logger.debug(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
-                    logger.debug("")
-                    return None
+                    logger.debug(f"  → Intelligent demotion failed, trying fallback priority order")
+                    new_pattern = current_pattern.demote_once(fallback_priority)
 
-                # Check if the demoted pattern would result in an empty household
+                    if new_pattern is None:
+                        logger.debug(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
+                        logger.debug("")
+                        return None
+
+                # Safety checks apply to ALL demoted patterns (both intelligent and fallback)
+                # Check if the demoted pattern would result in a too-small household
                 min_size = self.config['demotion']['min_household_size']
                 if new_pattern.min_household_size() < min_size:
                     logger.debug(f"  ✗ Demoted pattern too small (min size {min_size}): '{new_pattern.to_string()}'")
@@ -1163,7 +1163,7 @@ class HouseholdDistributor:
                     logger.debug("")
                     return None
 
-                # Validate the new pattern against demotion rules
+                # Validate the new pattern against demotion validation rules
                 validation_rules = self.config.get('demotion', {}).get('validation_rules', [])
                 if validation_rules and not new_pattern.validate_against_rules(
                     validation_rules, self.category_name_to_idx
