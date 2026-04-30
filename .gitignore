@@ -84,6 +84,7 @@ friendships.csv
 *.zip
 june_analysis/
 *.html
+!world_map/templates/*.html
 
 # Debug/Temp scripts
 debug_*.py
@@ -110,6 +111,7 @@ world_map/data/
 # Folder to dump stuff
 tmp/
 benchmarks/
-
+*~
 # Profiling output
 *profile.stats
+*profile.stats.worktrees/
