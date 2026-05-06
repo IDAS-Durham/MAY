@@ -56,6 +56,16 @@ All six packages should appear at the versions pinned in `requirements.txt`. If 
 
 > **Reminder:** activate the environment in every new terminal session **before** running `python create_world.py`. If you forget, you'll either get the wrong Python version or `ModuleNotFoundError`.
 
+### Downloading the input data
+
+The repository ships with code and configs but **not** the bulky census/venue CSVs that live under `data/`. Fetch them with:
+
+```bash
+bash scripts/get_data.sh
+```
+
+This downloads `data_may.zip` from the project's data server, unpacks it into `data/`, and removes the zip. You only need to do this once (or whenever the upstream dataset is refreshed).
+
 ---
 
 ## 2. Quick Start
