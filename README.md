@@ -29,6 +29,16 @@ source .venv/bin/activate          # macOS / Linux
 pip install -r requirements.txt
 ```
 
+## Get the data
+
+The repo ships without the bulky census/venue CSVs. Fetch them once with:
+
+```bash
+bash scripts/get_data.sh
+```
+
+This downloads and unpacks the dataset into `data/`.
+
 ## Run
 
 ```bash
