@@ -237,6 +237,11 @@ venue_types:
     description: "Leisure location"
     is_residence: false
 
+  lords_land:
+    enabled: false  # Created programmatically per geo_unit, not from CSV
+    is_residence: false
+    description: "Lord's land — labour obligation for villagers in small manors"
+
   church:
     enabled: true
     filename: churches.csv

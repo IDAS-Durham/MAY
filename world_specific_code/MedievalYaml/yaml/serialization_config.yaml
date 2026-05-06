@@ -9,7 +9,11 @@ population:
   # id, age, sex, geographical_unit are ALWAYS serialized
 
   # Additional properties to include from person.properties dict
-  properties: []
+  properties:
+    - num_travel_days   # number of overnight stops; only set on travellers
+    - traveller         # True for persons assigned a travel itinerary
+    - num_sailing_days  # number of sailing days
+    - sailor            # True if a sailor
 
 # =============================================
 # GEOGRAPHY

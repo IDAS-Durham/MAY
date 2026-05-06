@@ -17,7 +17,8 @@ logger = logging.getLogger("allocation_strategy")
 def execute_allocation_strategy(population,
                                 venues,
                                 household_distributor,
-                                strategy_file: str = "data/households/allocation_strategy.yaml"):
+                                strategy_file: str = "data/households/allocation_strategy.yaml",
+                                export_debug_csv: bool = False):
     """
     Execute a unified allocation strategy from YAML configuration.
 
@@ -179,8 +180,10 @@ def execute_allocation_strategy(population,
     logger.info(f"  Allocation rate: {alloc_pct:.1f}%")
     logger.info("=" * 60)
 
-    # Export unallocated people if any
-    household_distributor.export_unallocated_people_to_csv()
+    # Optionally export unallocated people (skipped for large worlds —
+    # builds a DataFrame across every unplaced person).
+    if export_debug_csv:
+        household_distributor.export_unallocated_people_to_csv()
 
     return all_stats
 
