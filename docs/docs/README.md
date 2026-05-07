@@ -13,7 +13,7 @@ A high-performance population simulation framework for modeling geographical hie
 ## Project Structure
 
 ```
-june_zero/
+MAY/
 ├── may/                          # Core framework. Should not need to be changed when using a new world.
 │   ├── geography/               # Geography and venue classes
 │   ├── population/              # Population and person classes

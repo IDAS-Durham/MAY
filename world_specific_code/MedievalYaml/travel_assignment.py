@@ -23,7 +23,7 @@ def assign_guest_houses(world, large_geo_units_csv_path):
         geo_unit_code = row['MBD_Temp_ID']
         num_guest_houses = round(row['Num_guest_houses'])
 
-        geo_unit = world.geography.get_geo_unit(geo_unit_code)
+        geo_unit = world.geography.get_unit(geo_unit_code)
         if geo_unit is None:
             logger.warning(f"Geo unit {geo_unit_code} not found in world, skipping.")
             continue
@@ -80,7 +80,7 @@ def assign_travel_activities(
     total_skipped = 0
 
     for source_code, available_paths in paths_by_source.items():
-        source_geo_unit = world.geography.get_geo_unit(source_code)
+        source_geo_unit = world.geography.get_unit(source_code)
         if source_geo_unit is None:
             logger.debug(f"Source geo_unit {source_code} not in loaded geography, skipping.")
             continue
@@ -106,7 +106,7 @@ def assign_travel_activities(
 
             all_stops_succeeded = True
             for day_number, stop_code in enumerate(stops, start=1):
-                stop_geo_unit = world.geography.get_geo_unit(stop_code)
+                stop_geo_unit = world.geography.get_unit(stop_code)
                 if stop_geo_unit is None:
                     logger.warning(
                         f"Stop geo_unit {stop_code} not found on path from {source_code}; "
@@ -196,7 +196,7 @@ def assign_sailing_activities(
     total_skipped = 0
 
     for source_code, available_paths in paths_by_source.items():
-        source_geo_unit = world.geography.get_geo_unit(source_code)
+        source_geo_unit = world.geography.get_unit(source_code)
         if source_geo_unit is None:
             logger.debug(f"Port geo_unit {source_code} not in loaded geography, skipping.")
             continue
@@ -223,7 +223,7 @@ def assign_sailing_activities(
 
             all_stops_succeeded = True
             for day_number, stop_code in enumerate(stops, start=1):
-                stop_geo_unit = world.geography.get_geo_unit(stop_code)
+                stop_geo_unit = world.geography.get_unit(stop_code)
                 if stop_geo_unit is None:
                     logger.warning(
                         f"Stop geo_unit {stop_code} not found on sea path from {source_code}; "

@@ -1,5 +1,5 @@
 """
-Person class for June Zero.
+Person class for MAY.
 
 Represents an individual agent with age, sex, geographical unit, and activities.
 """
@@ -73,10 +73,15 @@ class Person:
         self.sex = sex
         self.geographical_unit = geographical_unit
         self.activities = set(activities) if activities is not None else set()
-        self.properties = properties if properties is not None else {}
+        # Copy caller-provided dicts so two Persons built with the same kwarg
+        # don't share state. Without this, PopulationManager.generate_population
+        # fans a single properties/activity_map dict into every Person it creates.
+        self.properties = dict(properties) if properties is not None else {}
         # UNIFIED STRUCTURE: activity_map[activity_name][venue_type] = [subsets]
         if activity_map is None:
             self.activity_map = {}
+        else:
+            self.activity_map = dict(activity_map)
        
     @classmethod
     def reset_counter(cls) -> None:

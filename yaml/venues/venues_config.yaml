@@ -1,4 +1,4 @@
-# Venue Configuration for June Zero
+# Venue Configuration for MAY
 #
 # This file defines what venue types to load and how to load them.
 # Users can easily add, remove, or configure venue types by editing this file.
@@ -27,11 +27,6 @@ venue_types:
     filename: medical/hospitals.csv
     description: "Healthcare facilities providing medical treatment"
     is_residence: false  # Not a place where people live
-
-  field:
-    enabled: true
-    filename: field.csv
-    is_residence: false
 
   school:
     enabled: true

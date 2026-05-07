@@ -1,5 +1,5 @@
 """
-Population module for June Zero.
+Population module for MAY.
 
 This module provides generic, aspacial, and atemporal population generation
 for any geographical hierarchy.

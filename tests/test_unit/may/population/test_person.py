@@ -109,6 +109,49 @@ class TestPersonInitialization:
         assert person.age == 95
 
 
+class TestPersonInitDoesNotAliasCallerState:
+    """The constructor must defensively copy caller-provided dicts. Otherwise
+    PopulationManager.generate_population(properties={...}) — which fans the
+    same kwarg dict into every Person — silently entangles every Person's
+    state."""
+
+    def test_properties_dict_is_copied_not_aliased(self, mock_geo_unit):
+        shared = {'foo': 'bar'}
+        p1 = Person(age=1, sex='male', geographical_unit=mock_geo_unit, properties=shared)
+        p2 = Person(age=2, sex='female', geographical_unit=mock_geo_unit, properties=shared)
+
+        p1.properties['mutated'] = True
+
+        assert 'mutated' not in p2.properties
+        assert p1.properties is not p2.properties
+        assert p1.properties is not shared
+
+    def test_activity_map_kwarg_is_assigned(self, mock_geo_unit):
+        """Passing activity_map=<dict> used to leave self.activity_map unset
+        (only the `is None` branch assigned), and __slots__ blocks the usual
+        attribute-default fallback — so the very first read raised
+        AttributeError."""
+        am = {'residence': {'household': []}}
+        p = Person(
+            age=1, sex='male', geographical_unit=mock_geo_unit, activity_map=am
+        )
+        assert p.activity_map == {'residence': {'household': []}}
+
+    def test_activity_map_dict_is_copied_not_aliased(self, mock_geo_unit):
+        shared = {'residence': {'household': []}}
+        p1 = Person(
+            age=1, sex='male', geographical_unit=mock_geo_unit, activity_map=shared
+        )
+        p2 = Person(
+            age=2, sex='female', geographical_unit=mock_geo_unit, activity_map=shared
+        )
+
+        p1.activity_map['leisure'] = {'cinema': []}
+
+        assert 'leisure' not in p2.activity_map
+        assert p1.activity_map is not p2.activity_map
+
+
 class TestPersonIDAssignment:
     """Test Person ID assignment and counter."""
 
