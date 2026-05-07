@@ -1,5 +1,5 @@
 """
-World module for June Zero.
+World module for MAY.
 
 The World class is the main container for geography and population.
 This module also contains setup functions for orchestrating world creation.

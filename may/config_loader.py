@@ -1,5 +1,5 @@
 """
-Configuration and command-line argument handling for June Zero.
+Configuration and command-line argument handling for MAY.
 """
 
 import os
@@ -40,7 +40,7 @@ def parse_arguments():
         Parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description="June Zero - Geographical Simulation",
+        description="MAY - Geographical Simulation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -204,45 +204,6 @@ def setup_geography(args=None, config=None):
     if args is None:
         args, unknown_args = parse_arguments()
         
-    # Load configuration if not provided
-    if config is None:
-        config = load_config(args.config)
-
-    # Build filters from args and config
-    filters = build_filters(args, config)
-
-    if filters:
-        logger.info(f"Using filter: {filters['level']} with {len(filters['codes'])} codes")
-    else:
-        logger.info("Loading all geographical units (no filters)")
-
-    # Get data directory and levels from config
-    geo_config = config.get('geography', {})
-    data_dir = geo_config.get('data_dir', 'data/geography')
-    levels = geo_config.get('levels', None)  # None = use Geography default
-
-    # Create Geography object
-    geo = Geography(data_dir=data_dir, filters=filters, levels=levels)
-
-    return geo, filters
-
-
-def setup_default_geography(args=None, config=None):
-    """
-    Setup geography based on arguments and config.
-    Convenience function that handles all the configuration loading.
-
-    Args:
-        args: Parsed arguments (if None, will parse from command line)
-        config: Configuration dict (if None, will load from file)
-
-    Returns:
-        Tuple of (Geography object, filters dict)
-    """
-    # # Parse arguments if not provided
-    if args is None:
-        args, unknown_args = parse_arguments()
-
     # Load configuration if not provided
     if config is None:
         config = load_config(args.config)

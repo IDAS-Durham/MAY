@@ -1,5 +1,5 @@
 """
-Venue management for June Zero.
+Venue management for MAY.
 Venues are places where people live, work, learn, or receive services.
 """
 

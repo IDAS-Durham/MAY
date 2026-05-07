@@ -1,5 +1,5 @@
 """
-Serialization module for June Zero.
+Serialization module for MAY.
 
 Handles exporting world state to HDF5 format for C++ simulation.
 """

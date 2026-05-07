@@ -6,9 +6,8 @@ class Subset(AbstractSet):
     __slots__ = (
         "venue",
         "subset_index",
-        "people_present",
         'subset_name',
-        'members'
+        'members',
     )
 
     def __init__(self,
@@ -22,8 +21,7 @@ class Subset(AbstractSet):
           venue (Venue): the location in which this subset is situated.
           subset_index (int): index of the subset within the Venue's contact matrix.
           subset_name (str, optional): the string denoting which subset this is within the Venue. Default is str(subset_index).
-          people_present (list[Person], optional): an optional list of people to immediately put in the subset. Default is [].
-          members (set[Person], optional): an optional set of the people who might go to the subset if their activity comes up.
+          members (set[Person], optional): an optional set of the people in this subset.
         """
         self.venue = venue
         self.subset_index = subset_index
@@ -31,16 +29,16 @@ class Subset(AbstractSet):
         self.members= members if members is not None else set()
 
     def _collate(self, attribute: str, ifnot=False) -> list["Person"]:
-        """Collates Persons from self.people_present that have a particular attribute == True.
+        """Collates Persons from self.members that have a particular attribute == True.
 
-        Requires that the attribute called for is truthy (a boolean). 
+        Requires that the attribute called for is truthy (a boolean).
 
         Args:
             attribute (str): the attribute to look at (e.g. 'dead', or 'susceptible', or 'infected').
-            ifnot (bool, optional): if True, looks for people where the attribute is False. 
+            ifnot (bool, optional): if True, looks for people where the attribute is False.
 
         Returns:
-            (list[Person]) : a list of people_present filtered so the given attribute is True/False. 
+            (list[Person]) : a list of members filtered so the given attribute is True/False.
         """
         if ifnot:
             return [person for person in self.members if not getattr(person, attribute)]

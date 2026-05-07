@@ -54,7 +54,7 @@ Output: `world_state.h5` (HDF5) at the project root.
 ## Project layout
 
 ```
-june_zero/
+MAY/
 ├── create_world.py     # Main entry point
 ├── yaml/               # All user-facing configuration
 ├── data/               # Input CSVs (census-style)
