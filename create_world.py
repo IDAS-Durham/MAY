@@ -54,7 +54,7 @@ def main():
     """
 
     logger.info("=" * 60)
-    logger.info("June Zero - World Creation")
+    logger.info("MAY - World Creation")
     logger.info("=" * 60)
 
     # Load config file (support command-line argument)

@@ -117,7 +117,7 @@ class WorldSerializer:
 
         # Version info
         f.attrs['serialization_version'] = '1.0'
-        f.attrs['june_zero_version'] = '0.1.0'
+        f.attrs['MAY_version'] = '0.1.0'
 
     def _write_geography(self, f, world):
         """Write geography hierarchy to HDF5."""

@@ -97,7 +97,7 @@ When the run finishes you will have:
 ## 3. The Two Folders You Edit
 
 ```
-june_zero/
+MAY/
 ├── yaml/   ← edit YAMLs to change behaviour, scope, scenarios
 └── data/   ← edit CSVs to change the input statistics / locations
 ```

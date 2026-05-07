@@ -1,5 +1,5 @@
 """
-Person class for June Zero.
+Person class for MAY.
 
 Represents an individual agent with age, sex, geographical unit, and activities.
 """

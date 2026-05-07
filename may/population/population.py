@@ -1,6 +1,6 @@
 from __future__ import annotations
 """
-Population manager for June Zero.
+Population manager for MAY.
 
 Handles population generation and distribution across geographical units.
 """

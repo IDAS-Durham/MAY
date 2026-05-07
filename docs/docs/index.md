@@ -16,7 +16,7 @@ See [here](about.md) for more info about MAY.
 ## Project Structure
 
 ```
-june_zero/
+MAY/
 ├── may/                          # Core framework. Should not need to be changed when using a new world.
 │   ├── geography/               # Geography and venue classes
 │   ├── population/              # Population and person classes
