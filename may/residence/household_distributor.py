@@ -166,6 +166,17 @@ class HouseholdDistributor:
         filepath = os.path.join(self.data_dir, filename)
         logger.info(f"Loading household data from {filepath}")
 
+        # Reset state up-front so a second call doesn't carry stale entries
+        # from a previous load (parallel with load_demographics_from_csv).
+        self.household_counts_by_geo_unit = {}
+
+        # Missing files are surfaced with a warning (matching the failure mode
+        # used by load_demographics_from_csv and load_venue_type_from_csv);
+        # raising would diverge from the rest of the loader contract.
+        if not os.path.exists(filepath):
+            logger.warning(f"Household data file not found: {filepath}")
+            return
+
         # Get the smallest geographical level from the loaded geography
         # to filter household data to only relevant geo units
         smallest_level = self.geography.levels[0]

@@ -28,11 +28,6 @@ venue_types:
     description: "Healthcare facilities providing medical treatment"
     is_residence: false  # Not a place where people live
 
-  field:
-    enabled: true
-    filename: field.csv
-    is_residence: false
-
   school:
     enabled: true
     filename: primary_activities/Schools_EW.csv
