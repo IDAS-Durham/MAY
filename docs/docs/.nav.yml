@@ -1,5 +1,6 @@
 nav:
-  - Home: index.md
+  - Home: README.md
+  - LICENSE: LICENSE.md
   - About: about.md
   - User Guide: USER_GUIDE.md
   - may:

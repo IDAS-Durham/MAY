@@ -70,56 +70,6 @@ for f in $filelist;do
     fi
 done
 
-
-morefiles=$(find ../world_map -name "*.py")
-# Loop through the .py files
-for f in $morefiles;do
-    fname=$(echo $f | awk '{print $NF}' FS=/)
-    
-    # If it isn't an __init__.py file
-    if ! [ "$fname" = __init__.py ];then
-
-	# Skip directories without __init__.py (griffe won't render them)
-	dir=$(dirname "$f")
-	if ! [ -e "${dir}/__init__.py" ]; then
-	    echo "  Skipping $f (no __init__.py in ${dir})"
-	    continue
-	fi
-
-	# Create the new file path with .md at the end
-	newfpath=docs/world_map/$(echo $f | awk '{print $NF}' FS=world_map/ | rev | sed 's/yp./dm./' | rev)
-	echo $newfpath
-	# If the file doesn't already exist
-	if ! [ -e "${newfpath}" ];then
-	    # Create the file path, but in the python style (with . as seperators instead of /)
-	    python_file_path=$(echo ${f} | sed 's/\//./g' | rev | sed 's/yp.//' | rev | cut --complement -c 1-3)
-	    title=$(echo ${fname} | rev | cut --complement -c 1-3 | rev | sed 's/_/ /g')
-	    
-	    # Make the file
-	    echo "# ${title^}
-
-::: ${python_file_path}
-    options:
-      docstring_style: google
-" > temp.txt
-	    
-	    # Copy the template into the .md file, and make any parent directories needed.
-	    parent_dir=$(echo "${newfpath}" | awk 'BEGIN{FS=OFS="/"}{NF--; print}')
-
-	    #install -Dv -m 666 temp.txt docs/${newfname}
-	    mkdir -pv ${parent_dir}
-	    cp -v temp.txt ${newfpath}
-	    
-	    # log the .md file path for the mkdocs.yml
-	    echo "      - ${title^}: ${newfpath}" >> temp_potential_nav_additions.yml
-#	else
-#	    echo "Skipping docs/${newfname} as it already exists"
-	fi
-    fi
-done
-
-
-
 rm temp.txt temp2.txt
 echo "
 --------------------------------------------
