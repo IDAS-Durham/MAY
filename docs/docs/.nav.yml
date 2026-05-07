@@ -1,14 +1,6 @@
 nav:
   - Home: index.md
   - About: about.md
+  - User Guide: USER_GUIDE.md
   - may:
-    - Running and Simulation:
-      - "may/*.md"
     - "*"
-  - world map visualiser:
-    - README: world_map/README.md
-    - Custom Backgrounds: world_map/CUSTOM_BACKGROUNDS.md
-    - App: world_map/app.md
-    - Example integration: world_map/example_integration.md
-    - Launch world map: world_map/launch_world_map.md
-    

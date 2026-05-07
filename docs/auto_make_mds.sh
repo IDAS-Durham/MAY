@@ -31,6 +31,13 @@ for f in $filelist;do
     # If it isn't an __init__.py file
     if ! [ "$fname" = __init__.py ];then
 
+	# Skip directories without __init__.py (griffe won't render them)
+	dir=$(dirname "$f")
+	if ! [ -e "${dir}/__init__.py" ]; then
+	    echo "  Skipping $f (no __init__.py in ${dir})"
+	    continue
+	fi
+
 	# Create the new file path with .md at the end
 	newfpath=docs/may/$(echo $f | awk '{print $NF}' FS=may/ | rev | sed 's/yp./dm./' | rev)
 	echo $newfpath
@@ -71,6 +78,13 @@ for f in $morefiles;do
     
     # If it isn't an __init__.py file
     if ! [ "$fname" = __init__.py ];then
+
+	# Skip directories without __init__.py (griffe won't render them)
+	dir=$(dirname "$f")
+	if ! [ -e "${dir}/__init__.py" ]; then
+	    echo "  Skipping $f (no __init__.py in ${dir})"
+	    continue
+	fi
 
 	# Create the new file path with .md at the end
 	newfpath=docs/world_map/$(echo $f | awk '{print $NF}' FS=world_map/ | rev | sed 's/yp./dm./' | rev)
