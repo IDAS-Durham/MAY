@@ -20,10 +20,10 @@ The project requires **Python 3.13+**. Pick whichever environment manager you al
 
 ```bash
 # Create the environment
-conda create -n JuneZero python=3.13 -y
+conda create -n MayEnv python=3.13 -y
 
 # Activate it (do this every time you open a new terminal)
-conda activate JuneZero
+conda activate MayEnv
 
 # Install dependencies
 pip install -r requirements.txt
