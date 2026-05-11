@@ -1,0 +1,212 @@
+INFO    -  Building documentation...
+INFO    -  Cleaning site directory
+WARNING -  A reference to '../../README.md' is included in the 'nav' configuration, which is not found in the documentation files.
+WARNING -  A reference to '../../USER_GUIDE.md' is included in the 'nav' configuration, which is not found in the documentation files.
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:127: No type or annotation for parameter 'args'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:128: No type or annotation for parameter 'config'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:131: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:18: No type or annotation for parameter 'config_path'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:21: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:39: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:196: No type or annotation for parameter 'args'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:197: No type or annotation for parameter 'config'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/config_loader.py:200: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:181: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:224: No type or annotation for parameter 'output_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:225: No type or annotation for parameter 'config_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:228: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:68: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:57: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:82: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:133: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:100: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:262: No type or annotation for parameter 'geo'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:263: No type or annotation for parameter 'population'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:264: No type or annotation for parameter 'venues'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:265: No type or annotation for parameter 'config'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/world.py:268: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/assigner.py:138: No type or annotation for parameter 'venue_manager'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/assigner.py:16: No type or annotation for parameter 'venue_manager'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/assignment_config.py:574: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/assignment_config.py:100: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/data_sources.py:909: No type or annotation for parameter 'config'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/data_sources.py:986: No type or annotation for parameter '*args, **kwargs'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/data_sources.py:986: Parameter '*args, **kwargs' does not appear in the function signature
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/data_sources.py:440: No type or annotation for parameter 'assignment_config'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/data_sources.py:506: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/data_sources.py:507: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/data_sources.py:508: No type or annotation for parameter 'context'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:37: No type or annotation for parameter 'data_manager'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:48: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:49: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:1125: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:1126: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:822: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:823: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:995: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:996: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:265: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:266: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:193: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:194: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:618: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:619: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:135: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:136: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:386: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:387: No type or annotation for parameter 'household'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/attribute_assignment/strategies.py:1240: No type or annotation for parameter 'data_manager'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/activity_assigner.py:249: Parameter 'activity_assigner' does not appear in the function signature
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/distributor_pop_to_venue.py:33: Parameter 'population' does not appear in the function signature
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/distributor_pop_to_venue.py:165: Parameter 'randomize' does not appear in the function signature
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/distributor_venue_to_subsets.py:18: Parameter 'subsets' does not appear in the function signature
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/distributor_venue_to_subsets.py:45: Parameter 'venue' does not appear in the function signature
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:84: No type or annotation for parameter 'member_counts'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:85: No type or annotation for parameter 'thresholds'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:88: No type or annotation for returned value 'capacities'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:59: No type or annotation for parameter 'age'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:60: No type or annotation for parameter 'sex_code'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:61: No type or annotation for parameter 'capacities'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:62: No type or annotation for parameter 'age_ranges'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:65: No type or annotation for returned value 'subset_index'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:19: No type or annotation for parameter 'age'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:20: No type or annotation for parameter 'capacities'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:23: No type or annotation for returned value 'subset_index'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:42: No type or annotation for parameter 'age'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:43: No type or annotation for parameter 'min_age'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:44: No type or annotation for parameter 'max_age'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/distributor/numba_helpers.py:47: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/geographical_unit.py:117: No type or annotation for parameter 'other'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/geographical_unit.py:64: No type or annotation for parameter 'level'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/geographical_unit.py:67: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/geography.py:47: No type or annotation for parameter 'file_path'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/geography.py:50: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:297: No type or annotation for parameter 'child'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:168: No type or annotation for parameter 'person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:169: No type or annotation for parameter 'subset_key'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:170: No type or annotation for parameter 'activity_name'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:171: No type or annotation for parameter 'activity_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:317: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:326: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:235: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:73: No type or annotation for parameter 'capacity_config'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:74: No type or annotation for parameter '**attributes'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:77: No type or annotation for returned value 'int'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:271: No type or annotation for parameter 'categories'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:274: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:369: No type or annotation for returned value 'int'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:339: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:383: No type or annotation for returned value 'int'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:360: No type or annotation for returned value 'bool'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue.py:351: No type or annotation for returned value 'bool'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:115: No type or annotation for parameter 'parent_venue'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:116: No type or annotation for parameter 'child_venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:117: No type or annotation for parameter 'properties'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:118: No type or annotation for parameter 'geo_unit'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:121: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:70: No type or annotation for parameter 'venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:71: No type or annotation for parameter 'geo_unit'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:72: No type or annotation for parameter 'properties'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:75: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:149: No type or annotation for parameter 'parent_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:150: No type or annotation for parameter 'geo_unit'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:151: No type or annotation for parameter 'children_spec'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:155: No type or annotation for parameter 'properties'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:158: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:663: No type or annotation for returned value 'str'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:786: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:638: No type or annotation for parameter 'venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:641: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:746: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:606: No type or annotation for parameter 'venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:607: No type or annotation for parameter 'venue_id'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:610: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:387: No type or annotation for parameter 'venue_types'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:452: No type or annotation for parameter 'config_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:351: No type or annotation for parameter 'venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/geography/venue_manager.py:352: No type or annotation for parameter 'filename'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/io/world_io.py:136: No type or annotation for returned value 'list'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/io/world_io.py:87: No type or annotation for returned value 'World'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/io/world_io.py:30: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/person.py:59: Confusing indentation for continuation line 10 in docstring, should be 4 * 2 = 8 spaces, not 6
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/person.py:61: Confusing indentation for continuation line 12 in docstring, should be 4 * 2 = 8 spaces, not 6
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/person.py:66: Confusing indentation for continuation line 17 in docstring, should be 4 * 2 = 8 spaces, not 6
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/person.py:195: No type or annotation for parameter 'default'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/person.py:198: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:282: No type or annotation for parameter '**kwargs'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:365: No type or annotation for returned value 'list'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:402: No type or annotation for returned value 'list'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:378: No type or annotation for returned value 'list'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:414: No type or annotation for returned value 'list'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:390: No type or annotation for returned value 'list'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:356: No type or annotation for returned value 'Person'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/population/population.py:426: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/relationships/friendship_builder.py:189: No type or annotation for parameter 'world'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/allocation_strategy.py:28: No type or annotation for parameter 'population'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/allocation_strategy.py:29: No type or annotation for parameter 'venues'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/allocation_strategy.py:30: No type or annotation for parameter 'household_distributor'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/allocation_strategy.py:34: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_excess_handler.py:26: No type or annotation for parameter 'household_distributor'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_excess_handler.py:62: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_excess_handler.py:283: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_promoter.py:25: No type or annotation for parameter 'household_distributor'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_promoter.py:153: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_promoter.py:362: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_round_distributor.py:22: No type or annotation for parameter 'household_distributor'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/household_round_distributor.py:136: No type or annotation for returned value 'dict'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/residence/relationship_rules.py:64: No type or annotation for parameter 'geography'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:31: No type or annotation for parameter 'config_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:178: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:133: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:190: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:124: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:157: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:145: No type or annotation for parameter 'venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/serialization_config.py:148: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/world_loader.py:68: No type or annotation for parameter 'input_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/world_loader.py:69: No type or annotation for parameter 'config_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/world_loader.py:72: No type or annotation for returned value 'World'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/serialization/world_serializer.py:30: No type or annotation for parameter 'config_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/clustered_graph.py:137: No type or annotation for parameter '*args'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/clustered_graph.py:141: No type or annotation for parameter '**kwargs'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/clustered_graph.py:144: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/clustered_graph.py:69: No type or annotation for parameter '**kwargs'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/clustered_graph.py:72: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/clustered_graph.py:45: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/clustered_graph.py:18: No type or annotation for returned value 'Callable'
+INFO    -  Doc file 'may/social_networks/clustered_graph.md' contains an unrecognized relative link '10', it was left as is.
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/geo_neighbors.py:175: No type or annotation for parameter '*args'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/geo_neighbors.py:178: No type or annotation for parameter '**kwargs'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/social_networks/geo_neighbors.py:63: No type or annotation for returned value 'Callable'
+WARNING -  Doc file 'may/social_networks/geo_neighbors.md' contains a link 'units, 10.0', but the target 'may/social_networks/units, 10.0' is not found among documentation files.
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/stats/print_world_examples.py:22: No type or annotation for parameter 'world'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:52: No type or annotation for parameter 'parent_venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:53: No type or annotation for parameter 'child_venue_type'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:54: No type or annotation for parameter 'group_by_attribute'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:55: No type or annotation for parameter 'max_capacity'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:56: No type or annotation for parameter 'min_capacity'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:57: No type or annotation for parameter 'child_properties'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:58: No type or annotation for parameter 'distribution_strategy'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:59: No type or annotation for parameter 'attribute_mapping'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:62: No type or annotation for parameter 'activity_map_key'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:64: No type or annotation for parameter 'subset_key'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:66: No type or annotation for parameter 'replace_parent_activity'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:68: No type or annotation for parameter 'remove_from_parent'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:70: No type or annotation for parameter 'member_filters'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:157: No type or annotation for parameter 'world'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:160: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:456: No type or annotation for parameter 'world'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:457: No type or annotation for parameter 'output_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:114: No type or annotation for parameter 'yaml_file'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_child_creator/venue_child_creator.py:117: No type or annotation for returned value 1
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_distributor/multi_venue_distributor.py:445: No type or annotation for parameter 'world'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_distributor/multi_venue_distributor.py:660: No type or annotation for parameter 'world'
+WARNING -  griffe: /home/gavin/Documents/MAY2/june_zero/may/venue_distributor/venue_distributor.py:530: No type or annotation for returned value 1
+ERROR   -  mkdocstrings: tests.test_unit.test_household_excess_handler could not be found
+ERROR   -  Error reading page 'tests/test_unit/test_household_excess_handler.md':
+ERROR   -  Could not collect 'tests.test_unit.test_household_excess_handler'
+
+ERROR conda.cli.main_run:execute(127): `conda run mkdocs serve -f mkdocs.yml` failed. (See above for error)
+
+Aborted with a BuildError!
+
