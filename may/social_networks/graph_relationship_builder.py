@@ -8,7 +8,15 @@ then maps edges to relationships between Person objects.
 import logging
 from typing import Optional
 
+import numpy as np
+import networkx as nx
+
 from .clustered_graph import create_clustered_graph
+from .filters import (
+    ConnectionFilter,
+    build_local_attribute_arrays,
+    check_connection_filters,
+)
 from may.population.person import Person
 
 from random import sample
@@ -38,6 +46,9 @@ class GraphRelationshipBuilder:
         mean_connections_per_person: int = 6,
         clustering_level: float = 0.7,
         storage_key: str = "social_contacts",
+        connection_filters: Optional[list] = None,
+        symmetric: bool = True,
+        max_rewire_attempts: int = 10,
         **kwargs,
     ):
         """
@@ -52,9 +63,12 @@ class GraphRelationshipBuilder:
         """
         self.people = people
         self.n_people = len(people)
-        self.mean_connections_per_person = mean_connections_per_person 
+        self.mean_connections_per_person = mean_connections_per_person
         self.clustering_level = clustering_level
         self.storage_key = storage_key
+        self.connection_filters = connection_filters or []
+        self.symmetric = symmetric
+        self.max_rewire_attempts = max_rewire_attempts
 
         # Create mapping from index to person id
         self._idx_to_person_id = {i: person.id for i, person in enumerate(people)}
@@ -103,6 +117,30 @@ class GraphRelationshipBuilder:
             **self.kwargs,
         )
 
+        # Apply connection filters with rewiring on rejection
+        if self.connection_filters:
+            local_attr_arrays = build_local_attribute_arrays(self.people, self.connection_filters)
+            all_nodes = list(G.nodes())
+            kept_edges = []
+            for node_u, node_v in G.edges():
+                if check_connection_filters(node_u, node_v, self.connection_filters, local_attr_arrays):
+                    kept_edges.append((node_u, node_v))
+                else:
+                    neighbours_u = set(G.neighbors(node_u))
+                    rewired = False
+                    for _ in range(self.max_rewire_attempts):
+                        w = all_nodes[np.random.randint(len(all_nodes))]
+                        if w == node_u or w in neighbours_u:
+                            continue
+                        if check_connection_filters(node_u, w, self.connection_filters, local_attr_arrays):
+                            kept_edges.append((node_u, w))
+                            rewired = True
+                            break
+                    # if not rewired: edge dropped, accept shortfall
+            G = nx.Graph()
+            G.add_nodes_from(range(self.n_people))
+            G.add_edges_from(kept_edges)
+
         # Convert graph edges to relationships
         relationships: dict[int, list[int]] = {person.id: [] for person in self.people}
 
@@ -111,7 +149,8 @@ class GraphRelationshipBuilder:
             person_id_v = self._idx_to_person_id[node_v]
 
             relationships[person_id_u].append(person_id_v)
-            relationships[person_id_v].append(person_id_u)
+            if self.symmetric:
+                relationships[person_id_v].append(person_id_u)
 
         # Store in person properties if requested
         if store:
@@ -143,6 +182,9 @@ class GraphRelationshipBuilder:
         clustering_level: float = 0.7,
         storage_key: str = "social_contacts",
         store: bool = True,
+        connection_filters: Optional[list] = None,
+        symmetric: bool = True,
+        max_rewire_attempts: int = 10,
         **kwargs,
     ) -> dict[int, list[int]]:
         """
@@ -150,29 +192,22 @@ class GraphRelationshipBuilder:
 
         Args:
             people (list[Person]): List of Person objects.
-            mean_connections_per_person (int): Average connections per person (will be made even).
+            mean_connections_per_person (int): Average connections per person.
             clustering_level (float): 0.0 (low clustering) to 1.0 (high clustering).
             storage_key (str): Key for storing in person.properties.
             store (bool): Whether to store relationships in person objects.
-
-        Returns:
-            dict[int, list[int]]: Mapping of person_id to list of connected person_ids.
-
-        Example:
-            >>> from may.population.person import Person
-            >>> people = [Person(age=30, sex='male') for _ in range(100)]
-            >>> relationships = GraphRelationshipBuilder.build_graph_relationships(
-            ...     people,
-            ...     mean_connections_per_person=8,
-            ...     clustering_level=0.8
-            ... )
-            >>> print(f"Person 0 has {len(relationships[0])} connections")
+            connection_filters (list[ConnectionFilter] | None): Pairwise edge filters.
+            symmetric (bool): If True, both u→v and v→u are stored per edge.
+            max_rewire_attempts (int): Retry cap when an edge fails connection_filters.
         """
         builder = GraphRelationshipBuilder(
             people=people,
             mean_connections_per_person=mean_connections_per_person,
             clustering_level=clustering_level,
             storage_key=storage_key,
+            connection_filters=connection_filters,
+            symmetric=symmetric,
+            max_rewire_attempts=max_rewire_attempts,
             **kwargs,
         )
         return builder.build_all(store=store)

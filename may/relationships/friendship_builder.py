@@ -10,6 +10,13 @@ import yaml
 from collections import defaultdict
 from typing import Any, Optional
 
+from may.social_networks.algorithm_source import (
+    AlgorithmSourceProcessor,
+    parse_algorithm_source_config,
+    collect_pool_filters,
+)
+from may.social_networks.filters import build_attribute_arrays
+
 logger = logging.getLogger("friendships")
 
 
@@ -265,6 +272,12 @@ class FriendshipBuilder:
         # Convert venue data to flattened arrays for Numba
         self._venue_data = self._flatten_groups(people_by_venue)
 
+        # Pre-compute attribute arrays for any algorithm sources' pool_filters
+        all_pool_filters = collect_pool_filters(self.config.get('sources', []))
+        self._pool_attr_arrays = build_attribute_arrays(
+            list(self.world.population.people), all_pool_filters
+        )
+
         # Log summary
         level_summary = ", ".join([f"{len(self._geo_level_data[l][0])} {l}s" for l in geo_levels])
         logger.info(f"Arrays built: {n_people:,} people, {level_summary}, {len(venue_to_idx)} venues")
@@ -380,6 +393,9 @@ class FriendshipBuilder:
         all_connections = np.full((n_people, max_connections), -1, dtype=np.int32)
         current_counts = np.zeros(n_people, dtype=np.int8)
 
+        # Accumulates results from algorithm sources (processed outside Numba)
+        algorithm_connections: dict = defaultdict(list)
+
         # Process each source with weight_fraction = 1.0
         # Each source tries to fill up to target, stopping when full
         total_sources = len(sources)
@@ -402,6 +418,30 @@ class FriendshipBuilder:
 
             # Use weight_fraction = 1.0 so each source fills remaining slots
             weight_fraction = np.float64(1.0)
+
+            # Algorithm sources bypass the Numba path entirely
+            if 'algorithm' in source:
+                source_cfg = parse_algorithm_source_config(source)
+                if pool_type.startswith('geographic'):
+                    level = source['pool'].get('level')
+                    found_level = None
+                    for available_level in self._geo_level_data.keys():
+                        if available_level.upper() == (level or '').upper():
+                            found_level = available_level
+                            break
+                    if found_level is None:
+                        logger.warning(f"    Unknown geographic level '{level}' for algorithm source '{source_name}'. Skipping.")
+                        continue
+                    starts, ends, people_flat = self._geo_level_data[found_level]
+                else:
+                    starts, ends, people_flat = self._venue_data
+                processor = AlgorithmSourceProcessor(self.world, source_cfg, self._pool_attr_arrays)
+                group_result = processor.run(starts, ends, people_flat)
+                for pid, conns in group_result.items():
+                    algorithm_connections[pid].extend(conns)
+                connections_so_far = int(current_counts.sum())
+                logger.info(f"    ✓ Completed {source_name} (algorithm): {connections_so_far:,} Numba connections + {sum(len(v) for v in algorithm_connections.values()):,} algorithm connections so far")
+                continue
 
             if pool_type == 'activity':
                 starts, ends, people_flat = self._venue_data
@@ -453,6 +493,7 @@ class FriendshipBuilder:
         for i, person in enumerate(self.world.population.people):
             n_conn = current_counts[i]
             connections = all_connections[i, :n_conn].tolist()
+            connections += algorithm_connections.get(person.id, [])
             relationships[person.id] = connections
 
             if store:
