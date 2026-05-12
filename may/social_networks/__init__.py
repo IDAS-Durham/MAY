@@ -22,3 +22,4 @@ from .filters import (
 )
 from .algorithm_source import AlgorithmSourceProcessor, AlgorithmSourceConfig, parse_algorithm_source_config
 from .social_networks import network_type_builders, register_network_type, SocialNetworkBuilder
+from . import network_builders  # noqa: F401 — triggers @register_network_type decorators
