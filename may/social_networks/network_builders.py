@@ -136,6 +136,107 @@ def _build_activity_peers(world, network_config: dict) -> dict:
 
 
 # ============================================================================
-# PHASE 8: local_social_network, spatial_social_network, bounded_distance
-# (wrapping create_networks.py — added in Phase 8)
+# CREATE_NETWORKS BUILDERS  (wrap create_networks.py spatial/W-S functions)
 # ============================================================================
+
+_TEMP_KEY = "__network_builder_tmp__"
+
+
+def _collect_and_pop(world, key: str) -> dict:
+    """Read results stored by a create_networks function, then remove the key."""
+    results = {}
+    for person in world.population.people:
+        results[person.id] = person.properties.pop(key, [])
+    return results
+
+
+@register_network_type("local_social_network")
+def _build_local_social_network_registered(world, network_config: dict) -> dict:
+    """
+    Watts-Strogatz social network within the smallest geo units.
+
+    Required network_config keys:
+        mean_count       – mean connections per person
+    Optional:
+        clustering_level – rewiring probability (default 0.8)
+    """
+    from may.social_networks.create_networks import _build_local_social_network
+
+    mean_count = network_config["mean_count"]
+    clustering_level = network_config.get("clustering_level", 0.8)
+
+    _build_local_social_network(
+        world.geography,
+        mean_connections_per_person=mean_count,
+        clustering_level=clustering_level,
+        storage_key=_TEMP_KEY,
+        store=True,
+    )
+    return _collect_and_pop(world, _TEMP_KEY)
+
+
+@register_network_type("spatial_social_network")
+def _build_spatial_social_network_registered(world, network_config: dict) -> dict:
+    """
+    Spatial Watts-Strogatz between geo units in an annulus.
+
+    Required network_config keys:
+        mean_count   – mean connections per person
+        pool.min_km  – inner radius (km)
+        pool.max_km  – outer radius (km)
+    Optional:
+        clustering_level  – rewiring probability (default 0.9)
+        pool.level        – geo unit level (defaults to smallest)
+    """
+    from may.social_networks.create_networks import _build_spatial_social_network
+
+    pool_config = network_config.get("pool", {})
+    mean_count = network_config["mean_count"]
+    clustering_level = network_config.get("clustering_level", 0.9)
+    min_km = pool_config.get("min_km", 0.0)
+    max_km = pool_config.get("max_km", 10.0)
+    geo_unit_level = pool_config.get("level", None)
+
+    _build_spatial_social_network(
+        world.geography,
+        min_radius_km=min_km,
+        max_radius_km=max_km,
+        mean_connections_per_person=mean_count,
+        clustering_level=clustering_level,
+        geo_unit_level=geo_unit_level,
+        storage_key=_TEMP_KEY,
+        store=True,
+    )
+    return _collect_and_pop(world, _TEMP_KEY)
+
+
+@register_network_type("bounded_distance")
+def _build_bounded_distance_registered(world, network_config: dict) -> dict:
+    """
+    Random contacts within a geographic radius.
+
+    Required network_config keys:
+        mean_count   – mean connections per person
+        pool.max_km  – search radius (km)
+    Optional:
+        clustering_level  – clustering coefficient (default 0.7)
+        pool.level        – geo unit level (defaults to smallest)
+    """
+    from may.social_networks.create_networks import _build_bounded_distance_social_network
+
+    pool_config = network_config.get("pool", {})
+    mean_count = network_config["mean_count"]
+    clustering_level = network_config.get("clustering_level", 0.7)
+    max_km = pool_config.get("max_km", 5.0)
+    geo_unit_level = pool_config.get("level", None)
+
+    _build_bounded_distance_social_network(
+        world.geography,
+        radius_km=max_km,
+        mean_connections_per_person=mean_count,
+        clustering_level=clustering_level,
+        geo_unit_level=geo_unit_level,
+        storage_key=_TEMP_KEY,
+        store=True,
+    )
+    return _collect_and_pop(world, _TEMP_KEY)

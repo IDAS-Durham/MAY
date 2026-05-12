@@ -45,9 +45,30 @@ class _Population:
         self.people = people
 
 
+class _GeoUnit_WithPeople(_GeoUnit):
+    """Extended _GeoUnit that supports get_people() and get_units_by_level()."""
+    def __init__(self, name, level, parent=None):
+        super().__init__(name, level, parent)
+        self.people = []
+        self.children = []
+
+    def get_people(self):
+        result = set(self.people)
+        for child in self.children:
+            result.update(child.get_people())
+        return result
+
+
 class _Geography:
     def __init__(self, levels):
         self.levels = levels
+        self._units_by_level: dict = {}
+
+    def register_unit(self, unit):
+        self._units_by_level.setdefault(unit.level, {})[unit.name] = unit
+
+    def get_units_by_level(self, level):
+        return self._units_by_level.get(level, {})
 
 
 class _World:
@@ -85,4 +106,28 @@ def toy_world():
     # person 5 has no primary_activity
 
     geography = _Geography(levels=["SGU", "MGU", "LGU"])
+    return _World(_Population(people), geography)
+
+
+@pytest.fixture
+def toy_world_local_net():
+    """
+    World compatible with create_networks.py functions (unit.people + get_units_by_level).
+
+    Structure:
+      SGU_A: persons 0, 1, 2, 3  (need >=4 for W-S k=2)
+      SGU_B: persons 4, 5, 6, 7
+    """
+    geography = _Geography(levels=["SGU", "MGU", "LGU"])
+
+    sgu_a = _GeoUnit_WithPeople("SGU_A", "SGU")
+    sgu_b = _GeoUnit_WithPeople("SGU_B", "SGU")
+    geography.register_unit(sgu_a)
+    geography.register_unit(sgu_b)
+
+    people = [_Person(i, 20 + i, sgu_a if i < 4 else sgu_b) for i in range(8)]
+
+    sgu_a.people = people[:4]
+    sgu_b.people = people[4:]
+
     return _World(_Population(people), geography)
