@@ -1060,6 +1060,8 @@ class WorldSerializer:
                 val = obj.properties.get(prop_name)
                 if val is None:
                     chunk_vals.append(fill_value)
+                elif isinstance(val, set):
+                    chunk_vals.append(json.dumps([p.id for p in val]))
                 elif isinstance(val, (list, dict)):
                     chunk_vals.append(json.dumps(val))
                 else:
