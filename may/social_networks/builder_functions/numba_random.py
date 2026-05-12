@@ -187,7 +187,25 @@ def _extract_age_range(connection_filters: list) -> np.int32:
     return np.int32(-1)
 
 
-def _run_random_numba(world, groups: list, mean_count: int,
+def _build_connection_counts(n_people: int, network_config: dict) -> np.ndarray:
+    """
+    Build per-person target connection count array from network_config.
+
+    Uses mean_count as the default; degree_variants entries override a random
+    fraction of people. Variants are applied in order — later variants overwrite
+    earlier ones for the same person.
+    """
+    default = min(network_config["mean_count"], 127)
+    counts = np.full(n_people, default, dtype=np.int8)
+    for variant in network_config.get("degree_variants", []):
+        prob = variant["probability"]
+        count = min(variant["count"], 127)
+        mask = np.random.random(n_people) < prob
+        counts[mask] = count
+    return counts
+
+
+def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
                       connection_filters: list | None = None) -> dict:
     """
     Run the Numba random-connection builder over pre-built groups.
@@ -204,7 +222,6 @@ def _run_random_numba(world, groups: list, mean_count: int,
     ages = np.array([p.age for p in people], dtype=np.int32)
     subsets = np.zeros(n_people, dtype=np.int32)
 
-    connection_counts = np.full(n_people, min(mean_count, 127), dtype=np.int8)
     max_connections = int(connection_counts.max())
 
     all_connections = np.full((n_people, max_connections), -1, dtype=np.int32)
@@ -242,15 +259,17 @@ def build_intra_geo_unit(world, network_config: dict) -> dict:
         pool_type   – must be "geographic"
         pool.level  – e.g. "SGU", "MGU"
         mean_count  – target mean connections per person
-        algorithm   – "random" (only supported value)
+    Optional:
+        degree_variants – list of {probability, count} for heterogeneous degree
     """
     pool_config = network_config.get("pool", {})
     pool_type = network_config["pool_type"]
-    mean_count = network_config["mean_count"]
+    n_people = len(list(world.population.people))
 
     groups = build_pool(world, pool_type, pool_config)
     connection_filters = parse_constraints(network_config.get("constraints", []))
-    return _run_random_numba(world, groups, mean_count, connection_filters)
+    connection_counts = _build_connection_counts(n_people, network_config)
+    return _run_random_numba(world, groups, connection_counts, connection_filters)
 
 
 def build_activity_peers(world, network_config: dict) -> dict:
@@ -261,12 +280,14 @@ def build_activity_peers(world, network_config: dict) -> dict:
         pool_type        – must be "activity"
         pool.activity    – activity key in person.activity_map
         mean_count       – target mean connections per person
-        algorithm        – "random" (only supported value)
+    Optional:
+        degree_variants – list of {probability, count} for heterogeneous degree
     """
     pool_config = network_config.get("pool", {})
     pool_type = network_config["pool_type"]
-    mean_count = network_config["mean_count"]
+    n_people = len(list(world.population.people))
 
     groups = build_pool(world, pool_type, pool_config)
     connection_filters = parse_constraints(network_config.get("constraints", []))
-    return _run_random_numba(world, groups, mean_count, connection_filters)
+    connection_counts = _build_connection_counts(n_people, network_config)
+    return _run_random_numba(world, groups, connection_counts, connection_filters)

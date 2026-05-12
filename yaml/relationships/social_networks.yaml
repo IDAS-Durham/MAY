@@ -22,6 +22,9 @@ networks:
       activity: primary_activity
     algorithm: random
     mean_count: 3
+    degree_variants:
+      - probability: 0.10
+        count: 6       # 10% of people get double contacts
     storage_key: friendships
     constraints:
       - type: numerical_attribute_difference
