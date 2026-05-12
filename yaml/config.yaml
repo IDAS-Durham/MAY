@@ -215,7 +215,7 @@ relationship_pipeline:
 
   relationships:
     # Friendships network (for disease transmission)
-    - config: "yaml/relationships/friendships.yaml"
+    - config: "yaml/relationships/social_networks.yaml"
 
   # Notes:
   # - Each relationship config defines a different type of network

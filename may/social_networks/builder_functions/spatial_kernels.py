@@ -1,12 +1,13 @@
 """
-File with functions designed to build networks of contacts (usually social contacts, but could be any form of contact).
+Numba-accelerated kernels and Python driver functions for building
+local and spatial Watts-Strogatz social networks.
 """
 
 import logging
 from typing import TYPE_CHECKING
 
-from .graph_relationship_builder import GraphRelationshipBuilder
-from .geo_neighbors import find_neighbours, _extract_coordinates, _km_to_degrees_adjusted, EARTH_RADIUS_KM
+from ..graph_relationship_builder import GraphRelationshipBuilder
+from ..geo_neighbors import find_neighbours, _extract_coordinates, _km_to_degrees_adjusted, EARTH_RADIUS_KM
 
 from debug_output import export_relationships
 
@@ -210,26 +211,24 @@ def _build_local_social_network(
         geography: "Geography",
         mean_connections_per_person: float,
         clustering_level: float,
+        geo_unit_level: str = None,
         storage_key: str = "social_contacts_local",
         store: bool = True,
         assign_activity_map: bool = False,
         **kwargs,
 ) -> None:
     """
-    Build a Watts-Strogatz social network within each smallest geographical unit (SGU).
+    Build a Watts-Strogatz social network within each smallest geographical unit.
 
     Each person connects to their `mean_connections_per_person` nearest neighbours in
-    circular order within their SGU (ring lattice), then each connection is rewired
-    with probability `1 - clustering_level` to a random person in the same SGU.
-
-    Uses Numba JIT-compiled kernels operating over all SGUs in a single parallel pass,
-    with vectorised edge symmetrisation and deduplication. Contacts are stored as
-    Person objects (not IDs).
+    circular order within their unit (ring lattice), then each connection is rewired
+    with probability `1 - clustering_level` to a random person in the same unit.
 
     Args:
         geography (Geography): Geography object containing geo_units and population.
         mean_connections_per_person (float): Target average connections per person (k).
         clustering_level (float): 1.0 = pure ring lattice; 0.0 = fully random rewire.
+        geo_unit_level (str): Level to use. Defaults to geography.levels[0].
         storage_key (str): Key used to store connections in person.properties.
         store (bool): If True, store relationships in person.properties[storage_key].
         assign_activity_map: If True (and store=True), also populate person.activities
@@ -238,7 +237,9 @@ def _build_local_social_network(
     Returns:
         None — relationships stored in person.properties[storage_key].
     """
-    units = list(geography.get_units_by_level(geography.levels[0]).values())
+    if geo_unit_level is None:
+        geo_unit_level = geography.levels[0]
+    units = list(geography.get_units_by_level(geo_unit_level).values())
     all_people, unit_starts, unit_ends, unit_people_flat, person_unit = _build_people_csr(units)
 
     if not all_people:
@@ -267,33 +268,27 @@ def _allocate_random_bounded_distance_contacts(
         geography: "Geography",
         radius_km: float,
         mean_connections_per_person: float,
-        geo_unit_level = None,
-        storage_key: str=None,
-        store: bool=True,
-        method: str='libpysal',
+        geo_unit_level=None,
+        storage_key: str = None,
+        store: bool = True,
+        method: str = 'libpysal',
         **kwargs,
-        ) -> None:
+) -> None:
     """
     Allocates contacts randomly to people within a specified radius.
 
-    Faster than build_bounded_distance_social_network, as it does not make a graph for everyone. Only creating connections with those outside the area. Simply gathers all people from within the set radius, and sets random contacts. No filters applied. Need to add capacity to filter.
-
-    geography (Geography): Geography object. Contains all the geo_units.
-    radius_km (float): The cut-off radius within which to assign contacts.
-    mean_connections_per_person (float): The mean number of contacts to assign each person.
+    Faster than _build_bounded_distance_social_network — no graph constructed.
+    Simply gathers all people from within the set radius and sets random contacts.
+    No filters applied.
     """
     if storage_key is None:
         storage_key = f'social_contacts_radius_{radius_km}'
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
 
-    # Create the geo_units_distance_network
     geo_units = geography.get_units_by_level(geo_unit_level)
+    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km=radius_km)
 
-    # Get geo_unit neighbours
-    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km = radius_km)
-
-    # Go through each geographical unit, collect people and randomly assign contacts.
     if store:
         rng_generator = np.random.default_rng()
         for geo_unit_id, connected_ids in geo_unit_neighbours.items():
@@ -308,16 +303,16 @@ def _allocate_random_bounded_distance_contacts(
                         person.properties[storage_key] = random.sample(people_to_connect_to,
                             k=rng_generator.poisson(lam=mean_connections_per_person))
 
+
 def _build_bounded_distance_social_network(
         geography: "Geography",
         radius_km: float,
         mean_connections_per_person: float,
         clustering_level: float,
         geo_unit_level: str = None,
-
-        storage_key: str=None,
-        store: bool=True,
-        method: str='libpysal',
+        storage_key: str = None,
+        store: bool = True,
+        method: str = 'libpysal',
         **kwargs,
 ) -> None:
     """
@@ -339,17 +334,6 @@ def _build_bounded_distance_social_network(
 
     Returns:
         None: Relationships are stored in person.properties[storage_key].
-
-    Example:
-        >>> from may.geography import Geography
-        >>> geography = Geography(data_dir="data/geography")
-        >>> geography.load_from_csv()
-        >>> build_bounded_distance_social_network(
-        ...     geography,
-        ...     radius_km=10.0,
-        ...     mean_connections_per_person=4,
-        ...     clustering_level=0.7
-        ... )
     """
     if storage_key is None:
         storage_key = f"social_contacts_radius_km_{radius_km}"
@@ -357,18 +341,14 @@ def _build_bounded_distance_social_network(
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
 
-    # Create the geo_units distance network
     geo_units = geography.get_units_by_level(geo_unit_level)
+    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km=radius_km, method=method)
 
-    # Get geo_unit neighbours
-    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km = radius_km, method=method)
-
-    # Go through each geographical unit, collect people and make a network.
     for geo_unit_id, connected_ids in geo_unit_neighbours.items():
         people_in_network = _collate_people_in_geo_units(geography, connected_ids)
-        relationships = GraphRelationshipBuilder.build_graph_relationships(
+        GraphRelationshipBuilder.build_graph_relationships(
             people_in_network,
-            mean_connections_per_person=mean_connections_per_person / 2,  # the /2 is because this process will happen twice due to double-counting.
+            mean_connections_per_person=mean_connections_per_person / 2,
             clustering_level=clustering_level,
             storage_key=storage_key,
             store=store,
@@ -480,17 +460,15 @@ def _build_spatial_social_network(
 
     Args:
         geography: Geography object containing geo_units and population.
-        min_radius_km: Exclusive lower distance bound — connections to same-unit or
-            immediately-adjacent units below this distance are excluded.
-        max_radius_km: Hard upper cutoff — no connections beyond this distance.
+        min_radius_km: Exclusive lower distance bound.
+        max_radius_km: Hard upper cutoff.
         mean_connections_per_person: Target mean degree k (default 6).
         clustering_level: 1.0 = no rewiring (pure lattice); 0.0 = full random rewire.
         geo_unit_level: Level of geo_units to use. Defaults to the smallest level.
         storage_key: Key for person.properties storage. Auto-generated if None.
         store: If True, store contacts in person.properties[storage_key].
         assign_activity_map: If True (and store=True), also populate person.activities and
-            person.activity_map[storage_key] with contacts' residence venue mappings
-            in the same pass as contact storage.
+            person.activity_map[storage_key] with contacts' residence venue mappings.
 
     Returns:
         None — contacts stored as lists of Person objects in person.properties[storage_key].

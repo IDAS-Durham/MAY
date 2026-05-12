@@ -16,7 +16,7 @@ from may.population import PopulationManager
 from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
-from may.relationships import FriendshipBuilder
+#from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
 from world_specific_code.MedievalYaml.travel_assignment import assign_travel_activities, assign_guest_houses, assign_sailing_activities
 from world_specific_code.MedievalYaml.lords_land_assignment import assign_lords_land_venues
@@ -249,7 +249,7 @@ def main():
 
         config_path = relationship_config.get(
             "config",
-            "world_specific_code/MedievalYaml/yaml/relationships/social_networks.yaml",
+            "../my_may/world_specific_code/MedievalYaml/yaml/relationships/social_networks.yaml",
         )
         builder = SocialNetworkBuilder.from_yaml(world, config_path)
         builder.build_all()
