@@ -247,12 +247,21 @@ def main():
         logger.info("RELATIONSHIP PIPELINE")
         logger.info("=" * 60)
 
-        config_path = relationship_config.get(
-            "config",
-            "../my_may/world_specific_code/MedievalYaml/yaml/relationships/social_networks.yaml",
-        )
-        builder = SocialNetworkBuilder.from_yaml(world, config_path)
-        builder.build_all()
+        relationship_configs = relationship_config.get("relationships", [])
+
+        for rel_config in relationship_configs:
+            config_path = rel_config.get("config")
+
+            logger.info("")
+            logger.info(f"[RELATIONSHIP] {config_path}")
+
+            try:
+                builder = SocialNetworkBuilder.from_yaml(world, config_path)
+                builder.build_all()
+
+            except Exception as e:
+                logger.error(f"Failed to build relationships from {config_path}: {e}")
+                logger.exception(e)
 
 
     logger.info("")
