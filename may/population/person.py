@@ -20,9 +20,9 @@ class Person:
         age (int): Age in years
         sex (str): Sex category (e.g., "male", "female")
         geographical_unit (GeographicalUnit): SGU where person lives
-        activities (list): List of activity names this person can do
+        activities (set): Set of activity names this person can do
         properties (dict): Extensible dictionary for additional attributes
-        activity_map (defaultdict):
+        activity_map (dict[str, dict[str, list[Subset]]], optional):
     """
 
     _id_counter = 0
@@ -43,7 +43,7 @@ class Person:
         age: float,
         sex: str,
         geographical_unit: Optional["GeographicalUnit"] = None,
-        activities: Optional[list[str]] = None,
+        activities: Optional[set[str]] = None,
         properties: Optional[dict[str, Any]] = None,
         activity_map: Optional[dict[str, dict[str, list["Subset"]]]] = None
     ) -> None:
@@ -54,7 +54,7 @@ class Person:
             age (int): Age in years
             sex (str): Sex category
             geographical_unit (GeographicalUnit, optional): SGU where person lives
-            activities (list[str], optional): List of activity names
+            activities (set[str], optional): Set of activity names
             properties (dict, optional): Additional attributes
             activity_map (dict[str, dict[str, list[Subset]]], optional):
               UNIFIED STRUCTURE: Nested dictionary mapping:
@@ -90,7 +90,7 @@ class Person:
 
     def add_activity(self, activity: str) -> None:
         """
-        Add an activity to this person's activity list.
+        Add an activity to this person's activity set.
 
         Args:
             activity (str): Name of the activity to add
