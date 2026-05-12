@@ -266,3 +266,78 @@ def check_connection_filters(
             if val_u != val_v:
                 return False
     return True
+
+
+# ============================================================================
+# NUMBA-COMPATIBLE CONNECTION FILTER ENCODING
+# ============================================================================
+
+def encode_connection_filters_for_numba(
+    connection_filters: list,
+    local_attr_arrays: dict,
+) -> tuple:
+    """
+    Pre-encode ConnectionFilter objects and attribute arrays for Numba.
+
+    Returns:
+        stacked_attr_matrix: (n_people, n_filters) float64 — one column per filter
+        filter_match_types:  (n_filters,) int8 — 0=range, 1=same
+        filter_attr_indices: (n_filters,) int32 — column index in stacked matrix
+        filter_range_values: (n_filters,) float64 — threshold (range filters only)
+    """
+    n_filters = len(connection_filters)
+    n_people = 0
+    for arr in local_attr_arrays.values():
+        n_people = len(arr)
+        break
+
+    stacked = np.zeros((n_people, n_filters), dtype=np.float64)
+    match_types = np.zeros(n_filters, dtype=np.int8)
+    attr_indices = np.arange(n_filters, dtype=np.int32)
+    range_values = np.zeros(n_filters, dtype=np.float64)
+
+    for col, f in enumerate(connection_filters):
+        arr = local_attr_arrays.get(f.attribute)
+        if arr is None:
+            continue
+        if f.match == 'range':
+            match_types[col] = 0
+            stacked[:, col] = arr.astype(np.float64)
+            range_values[col] = float(f.range)
+        else:
+            match_types[col] = 1
+            # Encode categorical values as contiguous integers for Numba.
+            code_map: dict = {}
+            next_code = 0
+            encoded = np.zeros(n_people, dtype=np.float64)
+            for i, v in enumerate(arr):
+                if v not in code_map:
+                    code_map[v] = next_code
+                    next_code += 1
+                encoded[i] = float(code_map[v])
+            stacked[:, col] = encoded
+
+    return stacked, match_types, attr_indices, range_values
+
+
+@nb.njit(cache=True)
+def _check_connection_filters_numba(
+    u_idx: int,
+    v_idx: int,
+    stacked_attr_matrix: np.ndarray,
+    filter_match_types: np.ndarray,
+    filter_attr_indices: np.ndarray,
+    filter_range_values: np.ndarray,
+) -> bool:
+    """AND-combine all encoded connection filters for edge (u, v). Numba JIT."""
+    for i in range(len(filter_match_types)):
+        col = filter_attr_indices[i]
+        val_u = stacked_attr_matrix[u_idx, col]
+        val_v = stacked_attr_matrix[v_idx, col]
+        if filter_match_types[i] == 0:
+            if abs(val_u - val_v) > filter_range_values[i]:
+                return False
+        else:
+            if val_u != val_v:
+                return False
+    return True

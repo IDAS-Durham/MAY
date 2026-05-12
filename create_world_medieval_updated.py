@@ -3,6 +3,9 @@ import os
 import logging
 import pstats
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "my_may"))
+
 import numpy as np
 import numba as nb
 import pandas as pd
@@ -19,10 +22,10 @@ from world_specific_code.MedievalYaml.travel_assignment import assign_travel_act
 from world_specific_code.MedievalYaml.lords_land_assignment import assign_lords_land_venues
 
 # Gavin social network version
-from may.social_networks import (
-    allocate_random_bounded_distance_contacts,
-    build_local_social_network,
-    build_spatial_social_network,
+from may.social_networks.create_networks import (
+    _allocate_random_bounded_distance_contacts as allocate_random_bounded_distance_contacts,
+    _build_local_social_network as build_local_social_network,
+    _build_spatial_social_network as build_spatial_social_network,
 )
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -72,8 +75,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="world_specific_code/MedievalYaml/config.yaml",
-        help="Path to configuration YAML file (default: world_specific_code/MedievalYaml/config.yaml)"
+        default="../my_may/world_specific_code/MedievalYaml/config.yaml",
+        help="Path to configuration YAML file (default: ../my_may/world_specific_code/MedievalYaml/config.yaml)"
     )
     args = parser.parse_args()
 
@@ -90,9 +93,9 @@ def main():
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir=config.get("venues", {}).get("data_dir", "world_specific_code/MedievalYaml/data/venues"))
+    venues = VenueManager(geography=geo, data_dir=config.get("venues", {}).get("data_dir", "../my_may/world_specific_code/MedievalYaml/data/venues"))
     venue_config = config.get("venues", {})
-    yaml_config_file = venue_config.get("config_file", "world_specific_code/MedievalYaml/yaml/venues/venues_config.yaml")
+    yaml_config_file = venue_config.get("config_file", "../my_may/world_specific_code/MedievalYaml/yaml/venues/venues_config.yaml")
     venues.load_from_yaml_config(yaml_config_file)
 
     # Load population
@@ -101,7 +104,7 @@ def main():
     pop_config = config.get("population", {})
     population = PopulationManager(
         geography=geo,
-        data_dir=pop_config.get("data_dir", "world_specific_code/MedievalYaml/data/population")
+        data_dir=pop_config.get("data_dir", "../my_may/world_specific_code/MedievalYaml/data/population")
     )
 
     # Load demographic data
@@ -122,12 +125,12 @@ def main():
     logger.info(world)
 
     # Assign guest house property to random households in large geo units
-    assign_guest_houses(world, "world_specific_code/MedievalYaml/data/large_geo_units.csv")
+    assign_guest_houses(world, "../my_may/world_specific_code/MedievalYaml/data/large_geo_units.csv")
 
     # Assign travel itineraries to a fraction of residents in source geo_units
     assign_travel_activities(
         world,
-        paths_names_json_path="world_specific_code/MedievalYaml/data/travel/paths_names_full.json",
+        paths_names_json_path="../my_may/world_specific_code/MedievalYaml/data/travel/paths_names_full.json",
         travel_fraction=0.10,
         min_age=18,
         max_age=70,
@@ -135,8 +138,8 @@ def main():
 
     assign_sailing_activities(
         world,
-        paths_names_ports_json_path="world_specific_code/MedievalYaml/data/travel/paths_names_ports.json",
-        port_manor_map_csv_path="world_specific_code/MedievalYaml/data/travel/port_manor_map.csv",
+        paths_names_ports_json_path="../my_may/world_specific_code/MedievalYaml/data/travel/paths_names_ports.json",
+        port_manor_map_csv_path="../my_may/world_specific_code/MedievalYaml/data/travel/port_manor_map.csv",
         sailing_fraction=0.05,
         min_age=18,
         max_age=70,
@@ -197,7 +200,7 @@ def main():
         if attribute_config.get("enabled", True):
             configs = attribute_config.get("configs")
             if configs is None:
-                configs = [attribute_config.get("config", "world_specific_code/MedievalYaml/yaml/attributes/attribute_assignment.yaml")]
+                configs = [attribute_config.get("config", "../my_may/world_specific_code/MedievalYaml/yaml/attributes/attribute_assignment.yaml")]
 
             for config_path in configs:
                 logger.info(f"Assigning attributes from: {config_path}")
@@ -300,7 +303,7 @@ def main():
     # Export world to HDF5 for C++ simulation
     world.export_to_hdf5(
         "world_state_medieval.h5",
-        config_file="world_specific_code/MedievalYaml/yaml/serialization_config.yaml",
+        config_file="../my_may/world_specific_code/MedievalYaml/yaml/serialization_config.yaml",
     )
 
     return world

@@ -206,7 +206,7 @@ def _collate_people_in_geo_units(
     return people
 
 
-def build_local_social_network(
+def _build_local_social_network(
         geography: "Geography",
         mean_connections_per_person: float,
         clustering_level: float,
@@ -263,7 +263,7 @@ def build_local_social_network(
         _store_contacts_from_matrix(all_people, all_connections, storage_key, assign_activity_map)
 
 
-def allocate_random_bounded_distance_contacts(
+def _allocate_random_bounded_distance_contacts(
         geography: "Geography",
         radius_km: float,
         mean_connections_per_person: float,
@@ -308,7 +308,7 @@ def allocate_random_bounded_distance_contacts(
                         person.properties[storage_key] = random.sample(people_to_connect_to,
                             k=rng_generator.poisson(lam=mean_connections_per_person))
 
-def build_bounded_distance_social_network(
+def _build_bounded_distance_social_network(
         geography: "Geography",
         radius_km: float,
         mean_connections_per_person: float,
@@ -459,7 +459,7 @@ def _haversine_km(lon1_deg, lat1_deg, lon2_deg, lat2_deg):
     return 2.0 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
 
 
-def build_spatial_social_network(
+def _build_spatial_social_network(
         geography: "Geography",
         min_radius_km: float,
         max_radius_km: float,

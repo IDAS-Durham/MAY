@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 import numpy as np
+import numba as nb
 import networkx as nx
 
 from .clustered_graph import create_clustered_graph
@@ -16,12 +17,97 @@ from .filters import (
     ConnectionFilter,
     build_local_attribute_arrays,
     check_connection_filters,
+    encode_connection_filters_for_numba,
 )
 from may.population.person import Person
 
 from random import sample
 
 logger = logging.getLogger("graph_relationships")
+
+
+@nb.njit(cache=True)
+def _apply_filters_and_rewire(
+    edge_array: np.ndarray,
+    adj_indices: np.ndarray,
+    adj_indptr: np.ndarray,
+    n_nodes: int,
+    stacked_attr_matrix: np.ndarray,
+    filter_match_types: np.ndarray,
+    filter_attr_indices: np.ndarray,
+    filter_range_values: np.ndarray,
+    max_rewire_attempts: int,
+    rng_seed: int,
+) -> np.ndarray:
+    """
+    Validate edges against encoded connection filters, rewiring failures.
+
+    For each edge (u, v): keep if filters pass, else try up to max_rewire_attempts
+    random replacements (u, w). Drops the edge if no valid w is found.
+    Returns (n_kept, 2) int32 array of kept/rewired edges.
+    """
+    np.random.seed(rng_seed)
+    n_edges = len(edge_array)
+    n_filters = len(filter_match_types)
+
+    kept = np.empty((n_edges, 2), dtype=np.int32)
+    n_kept = 0
+
+    for e in range(n_edges):
+        u = int(edge_array[e, 0])
+        v = int(edge_array[e, 1])
+
+        # Check whether this edge passes all filters
+        passes = True
+        for i in range(n_filters):
+            col = filter_attr_indices[i]
+            diff = stacked_attr_matrix[u, col] - stacked_attr_matrix[v, col]
+            if filter_match_types[i] == 0:
+                if abs(diff) > filter_range_values[i]:
+                    passes = False
+                    break
+            else:
+                if diff != 0.0:
+                    passes = False
+                    break
+
+        if passes:
+            kept[n_kept, 0] = u
+            kept[n_kept, 1] = v
+            n_kept += 1
+        else:
+            for _ in range(max_rewire_attempts):
+                w = int(np.random.random() * n_nodes)
+                if w == u:
+                    continue
+                # Reject if w is already a neighbour of u
+                is_neighbour = False
+                for k in range(adj_indptr[u], adj_indptr[u + 1]):
+                    if adj_indices[k] == w:
+                        is_neighbour = True
+                        break
+                if is_neighbour:
+                    continue
+                # Check filters for (u, w)
+                passes_w = True
+                for i in range(n_filters):
+                    col = filter_attr_indices[i]
+                    diff = stacked_attr_matrix[u, col] - stacked_attr_matrix[w, col]
+                    if filter_match_types[i] == 0:
+                        if abs(diff) > filter_range_values[i]:
+                            passes_w = False
+                            break
+                    else:
+                        if diff != 0.0:
+                            passes_w = False
+                            break
+                if passes_w:
+                    kept[n_kept, 0] = u
+                    kept[n_kept, 1] = w
+                    n_kept += 1
+                    break
+
+    return kept[:n_kept]
 
 
 class GraphRelationshipBuilder:
@@ -117,29 +203,23 @@ class GraphRelationshipBuilder:
             **self.kwargs,
         )
 
-        # Apply connection filters with rewiring on rejection
+        # Apply connection filters with Numba-accelerated rewiring on rejection
         if self.connection_filters:
             local_attr_arrays = build_local_attribute_arrays(self.people, self.connection_filters)
-            all_nodes = list(G.nodes())
-            kept_edges = []
-            for node_u, node_v in G.edges():
-                if check_connection_filters(node_u, node_v, self.connection_filters, local_attr_arrays):
-                    kept_edges.append((node_u, node_v))
-                else:
-                    neighbours_u = set(G.neighbors(node_u))
-                    rewired = False
-                    for _ in range(self.max_rewire_attempts):
-                        w = all_nodes[np.random.randint(len(all_nodes))]
-                        if w == node_u or w in neighbours_u:
-                            continue
-                        if check_connection_filters(node_u, w, self.connection_filters, local_attr_arrays):
-                            kept_edges.append((node_u, w))
-                            rewired = True
-                            break
-                    # if not rewired: edge dropped, accept shortfall
+            stacked, match_types, attr_indices, range_values = encode_connection_filters_for_numba(
+                self.connection_filters, local_attr_arrays
+            )
+            adj = nx.to_scipy_sparse_array(G, nodelist=range(self.n_people), format='csr', dtype=np.int32)
+            edge_array = np.array(list(G.edges()), dtype=np.int32)
+            rng_seed = int(np.random.randint(0, 2**31))
+            kept_array = _apply_filters_and_rewire(
+                edge_array, adj.indices, adj.indptr, self.n_people,
+                stacked, match_types, attr_indices, range_values,
+                self.max_rewire_attempts, rng_seed,
+            )
             G = nx.Graph()
             G.add_nodes_from(range(self.n_people))
-            G.add_edges_from(kept_edges)
+            G.add_edges_from(kept_array.tolist())
 
         # Convert graph edges to relationships
         relationships: dict[int, list[int]] = {person.id: [] for person in self.people}
@@ -165,7 +245,6 @@ class GraphRelationshipBuilder:
         avg_actual = total_connections / self.n_people if self.n_people > 0 else 0
 
         try:
-            import networkx as nx
             actual_clustering = nx.average_clustering(G)
             logger.debug(f"Built {total_connections:,} total connections "
                        f"(avg {avg_actual:.1f} per person, clustering={actual_clustering:.3f})")
