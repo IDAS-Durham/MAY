@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from ..graph_relationship_builder import GraphRelationshipBuilder
 from ..geo_neighbors import find_neighbours, _extract_coordinates, _km_to_degrees_adjusted, EARTH_RADIUS_KM
+from .store import store_contacts
 
 from debug_output import export_relationships
 
@@ -63,20 +64,20 @@ def _build_people_csr(units):
     return all_people, unit_starts, unit_ends, unit_people_flat, person_unit
 
 
-def _store_contacts_from_matrix(all_people, all_connections, storage_key, assign_activity_map=False):
+def _store_contacts_from_matrix(all_people, all_connections, storage_key,
+                                activity_config=None):
     """
-    Symmetrise a directed (N, k) connection matrix and store contacts in person.properties.
+    Symmetrise a directed (N, k) connection matrix and store contacts via store_contacts.
 
     Extracts valid directed edges from all_connections (entries >= 0), removes
-    self-loops, adds reciprocal edges, deduplicates, then assigns each person a list
-    of Person objects. Optionally populates person.activity_map[storage_key] with
-    contacts' residence venue mappings.
+    self-loops, adds reciprocal edges, deduplicates, then calls store_contacts
+    for each person.
 
     Args:
-        all_people:          flat list of Person objects (length N).
-        all_connections:     (N, k) int32 array; -1 = empty slot.
-        storage_key:         key for person.properties and optionally person.activity_map.
-        assign_activity_map: if True, also populate person.activity_map[storage_key].
+        all_people:      flat list of Person objects (length N).
+        all_connections: (N, k) int32 array; -1 = empty slot.
+        storage_key:     key for person.properties.
+        activity_config: optional dict passed through to store_contacts.
     """
     N = len(all_people)
 
@@ -105,16 +106,8 @@ def _store_contacts_from_matrix(all_people, all_connections, storage_key, assign
     for i, person in enumerate(all_people):
         contact_indices = all_dst[starts[i]:ends[i]]
         contacts = [all_people[int(j)] for j in contact_indices]
-        person.properties[storage_key] = contacts
+        store_contacts(person, contacts, storage_key, activity_config)
         total_connections += len(contacts)
-
-        if assign_activity_map and contacts:
-            person.activities.add(storage_key)
-            activity_dict = {}
-            for contact in contacts:
-                if 'residence' in contact.activity_map:
-                    activity_dict.update(contact.activity_map['residence'])
-            person.activity_map[storage_key] = activity_dict
 
     avg_deg = total_connections / N if N > 0 else 0.0
     logger.info(f"Stored {storage_key!r}: {total_connections:,} connections, avg ~{avg_deg:.1f} per person")
@@ -213,8 +206,7 @@ def _build_local_social_network(
         clustering_level: float,
         geo_unit_level: str = None,
         storage_key: str = "social_contacts_local",
-        store: bool = True,
-        assign_activity_map: bool = False,
+        activity_config: dict = None,
         **kwargs,
 ) -> None:
     """
@@ -230,9 +222,7 @@ def _build_local_social_network(
         clustering_level (float): 1.0 = pure ring lattice; 0.0 = fully random rewire.
         geo_unit_level (str): Level to use. Defaults to geography.levels[0].
         storage_key (str): Key used to store connections in person.properties.
-        store (bool): If True, store relationships in person.properties[storage_key].
-        assign_activity_map: If True (and store=True), also populate person.activities
-            and person.activity_map[storage_key] with contacts' residence venue mappings.
+        activity_config: optional assign_activity config passed to store_contacts.
 
     Returns:
         None — relationships stored in person.properties[storage_key].
@@ -260,8 +250,7 @@ def _build_local_social_network(
         _local_ws_rewire(unit_starts, unit_ends, unit_people_flat, person_unit,
                          all_connections, rewire_prob)
 
-    if store:
-        _store_contacts_from_matrix(all_people, all_connections, storage_key, assign_activity_map)
+    _store_contacts_from_matrix(all_people, all_connections, storage_key, activity_config)
 
 
 def _allocate_random_bounded_distance_contacts(
@@ -270,7 +259,6 @@ def _allocate_random_bounded_distance_contacts(
         mean_connections_per_person: float,
         geo_unit_level=None,
         storage_key: str = None,
-        store: bool = True,
         method: str = 'libpysal',
         **kwargs,
 ) -> None:
@@ -289,19 +277,15 @@ def _allocate_random_bounded_distance_contacts(
     geo_units = geography.get_units_by_level(geo_unit_level)
     geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km=radius_km)
 
-    if store:
-        rng_generator = np.random.default_rng()
-        for geo_unit_id, connected_ids in geo_unit_neighbours.items():
-            people_to_connect_to = list(_collate_people_in_geo_units(geography, connected_ids))
-            people_to_connect_from = geography.units_by_id[geo_unit_id].get_people()
-            if people_to_connect_to and people_to_connect_from:
-                for person in people_to_connect_from:
-                    if storage_key in person.properties:
-                        person.properties[storage_key].extend(random.sample(people_to_connect_to,
-                            k=rng_generator.poisson(lam=mean_connections_per_person)))
-                    else:
-                        person.properties[storage_key] = random.sample(people_to_connect_to,
-                            k=rng_generator.poisson(lam=mean_connections_per_person))
+    rng_generator = np.random.default_rng()
+    for geo_unit_id, connected_ids in geo_unit_neighbours.items():
+        people_to_connect_to = list(_collate_people_in_geo_units(geography, connected_ids))
+        people_to_connect_from = geography.units_by_id[geo_unit_id].get_people()
+        if people_to_connect_to and people_to_connect_from:
+            for person in people_to_connect_from:
+                contacts = random.sample(people_to_connect_to,
+                    k=rng_generator.poisson(lam=mean_connections_per_person))
+                store_contacts(person, contacts, storage_key)
 
 
 def _build_bounded_distance_social_network(
@@ -311,7 +295,6 @@ def _build_bounded_distance_social_network(
         clustering_level: float,
         geo_unit_level: str = None,
         storage_key: str = None,
-        store: bool = True,
         method: str = 'libpysal',
         **kwargs,
 ) -> None:
@@ -351,7 +334,6 @@ def _build_bounded_distance_social_network(
             mean_connections_per_person=mean_connections_per_person / 2,
             clustering_level=clustering_level,
             storage_key=storage_key,
-            store=store,
             **kwargs,
         )
 
@@ -447,8 +429,7 @@ def _build_spatial_social_network(
         clustering_level: float = 0.7,
         geo_unit_level: str = None,
         storage_key: str = None,
-        store: bool = True,
-        assign_activity_map: bool = False,
+        activity_config: dict = None,
 ) -> None:
     """
     Build an inter-geo-unit social network using a Spatial Watts-Strogatz algorithm.
@@ -466,12 +447,10 @@ def _build_spatial_social_network(
         clustering_level: 1.0 = no rewiring (pure lattice); 0.0 = full random rewire.
         geo_unit_level: Level of geo_units to use. Defaults to the smallest level.
         storage_key: Key for person.properties storage. Auto-generated if None.
-        store: If True, store contacts in person.properties[storage_key].
-        assign_activity_map: If True (and store=True), also populate person.activities and
-            person.activity_map[storage_key] with contacts' residence venue mappings.
+        activity_config: optional assign_activity config passed to store_contacts.
 
     Returns:
-        None — contacts stored as lists of Person objects in person.properties[storage_key].
+        None — contacts stored as sets of Person objects in person.properties[storage_key].
     """
     from scipy.spatial import cKDTree
 
@@ -560,5 +539,4 @@ def _build_spatial_social_network(
         )
 
     # ---- Symmetrize and store (vectorised) ------------------------------------
-    if store:
-        _store_contacts_from_matrix(all_people, all_connections, storage_key, assign_activity_map)
+    _store_contacts_from_matrix(all_people, all_connections, storage_key, activity_config)

@@ -68,7 +68,7 @@ def test_parse_constraints_unknown_type_raises():
 def test_age_constraint_enforced_intra_geo_unit(toy_world):
     SocialNetworkBuilder(toy_world, _config_with_age_constraint(max_diff=5)).build_all()
     for person in toy_world.population.people:
-        for contact in person.properties["contacts"]:
+        for contact in person.properties.get("contacts", set()):
             assert abs(person.age - contact.age) <= 5
 
 
@@ -118,5 +118,5 @@ def test_age_constraint_enforced_activity_peers(toy_world):
     )
     SocialNetworkBuilder(toy_world, config).build_all()
     for person in toy_world.population.people:
-        for contact in person.properties["work_contacts"]:
+        for contact in person.properties.get("work_contacts", set()):
             assert abs(person.age - contact.age) <= 5

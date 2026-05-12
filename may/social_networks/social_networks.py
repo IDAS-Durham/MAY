@@ -98,20 +98,10 @@ class SocialNetworkBuilder:
     def build_all(self) -> None:
         for entry in self.config.get("networks", []):
             network_name = entry.get("name", entry["storage_key"])
-            storage_key = entry["storage_key"]
             logger.info(f"Building network '{network_name}' "
                         f"(network_type={entry['network_type']}, "
                         f"pool_type={entry['pool_type']}, "
-                        f"storage_key={storage_key})")
+                        f"storage_key={entry['storage_key']})")
             builder_fn = network_type_builders[entry["network_type"]]
-            results = builder_fn(self.world, entry)
-            self._store_connections(results, storage_key)
-            logger.info(f"  Stored '{network_name}' → '{storage_key}'")
-
-    def _store_connections(self, results: dict, storage_key: str) -> None:
-        for person in self.world.population.people:
-            new_contacts = set(results.get(person.id, []))
-            if storage_key in person.properties:
-                person.properties[storage_key].update(new_contacts)
-            else:
-                person.properties[storage_key] = new_contacts
+            builder_fn(self.world, entry)
+            logger.info(f"  Stored '{network_name}' → '{entry['storage_key']}'")

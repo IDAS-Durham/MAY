@@ -9,6 +9,7 @@ import numba as nb
 
 from ..filters import build_pool
 from ..constraints import parse_constraints
+from .store import store_contacts
 
 
 # ============================================================================
@@ -206,10 +207,11 @@ def _build_connection_counts(n_people: int, network_config: dict) -> np.ndarray:
 
 
 def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
-                      connection_filters: list | None = None) -> dict:
+                      storage_key: str, connection_filters: list | None = None,
+                      activity_config: dict | None = None) -> None:
     """
     Run the Numba random-connection builder over pre-built groups.
-    Returns dict[person_id, list[Person]].
+    Writes contacts directly to person.properties via store_contacts.
     """
     people = list(world.population.people)
     n_people = len(people)
@@ -236,22 +238,22 @@ def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
         np.float64(1.0), age_range, False, True,
     )
 
-    results = {}
     for i, person in enumerate(people):
         n_conn = int(current_counts[i])
-        results[person.id] = [
+        contacts = [
             idx_to_person[int(idx)]
             for idx in all_connections[i, :n_conn]
             if idx >= 0
         ]
-    return results
+        if contacts:
+            store_contacts(person, contacts, storage_key, activity_config)
 
 
 # ============================================================================
 # BUILDER IMPLEMENTATIONS
 # ============================================================================
 
-def build_intra_geo_unit(world, network_config: dict) -> dict:
+def build_intra_geo_unit(world, network_config: dict) -> None:
     """
     Random connections within geographic units at a specified level.
 
@@ -259,20 +261,25 @@ def build_intra_geo_unit(world, network_config: dict) -> dict:
         pool_type   – must be "geographic"
         pool.level  – e.g. "SGU", "MGU"
         mean_count  – target mean connections per person
+        storage_key – key for person.properties
     Optional:
-        degree_variants – list of {probability, count} for heterogeneous degree
+        degree_variants  – list of {probability, count} for heterogeneous degree
+        assign_activity  – dict with contact_activity_key and activity_key
     """
     pool_config = network_config.get("pool", {})
     pool_type = network_config["pool_type"]
+    storage_key = network_config["storage_key"]
+    activity_config = network_config.get("assign_activity", None)
     n_people = len(list(world.population.people))
 
     groups = build_pool(world, pool_type, pool_config)
     connection_filters = parse_constraints(network_config.get("constraints", []))
     connection_counts = _build_connection_counts(n_people, network_config)
-    return _run_random_numba(world, groups, connection_counts, connection_filters)
+    _run_random_numba(world, groups, connection_counts, storage_key,
+                      connection_filters, activity_config)
 
 
-def build_activity_peers(world, network_config: dict) -> dict:
+def build_activity_peers(world, network_config: dict) -> None:
     """
     Random connections among people sharing an activity venue.
 
@@ -280,14 +287,19 @@ def build_activity_peers(world, network_config: dict) -> dict:
         pool_type        – must be "activity"
         pool.activity    – activity key in person.activity_map
         mean_count       – target mean connections per person
+        storage_key      – key for person.properties
     Optional:
-        degree_variants – list of {probability, count} for heterogeneous degree
+        degree_variants  – list of {probability, count} for heterogeneous degree
+        assign_activity  – dict with contact_activity_key and activity_key
     """
     pool_config = network_config.get("pool", {})
     pool_type = network_config["pool_type"]
+    storage_key = network_config["storage_key"]
+    activity_config = network_config.get("assign_activity", None)
     n_people = len(list(world.population.people))
 
     groups = build_pool(world, pool_type, pool_config)
     connection_filters = parse_constraints(network_config.get("constraints", []))
     connection_counts = _build_connection_counts(n_people, network_config)
-    return _run_random_numba(world, groups, connection_counts, connection_filters)
+    _run_random_numba(world, groups, connection_counts, storage_key,
+                      connection_filters, activity_config)

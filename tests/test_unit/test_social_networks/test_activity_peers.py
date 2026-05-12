@@ -30,8 +30,10 @@ def test_activity_peers_populates_properties(toy_world):
 def test_activity_peers_no_self_connections(toy_world):
     SocialNetworkBuilder(toy_world, _config()).build_all()
     for person in toy_world.population.people:
-        ids = [c.id for c in person.properties["work_contacts"]]
-        assert person.id not in ids
+        if "work_contacts" in person.properties:
+            ids = [c.id for c in person.properties["work_contacts"]]
+            assert person.id not in ids
+    assert "work_contacts" not in toy_world.population.people[5].properties
 
 
 def test_activity_peers_connects_same_venue(toy_world):
@@ -53,15 +55,10 @@ def test_activity_peers_connects_same_venue(toy_world):
             assert venue_ids(contact) & person_venues
 
 
-def test_activity_peers_excludes_person_without_activity(toy_world):
-    # person 5 has no primary_activity — should have no work contacts
-    SocialNetworkBuilder(toy_world, _config()).build_all()
-    person_5 = toy_world.population.people[5]
-    assert person_5.properties["work_contacts"] == set()
-
-
 def test_activity_peers_no_duplicates(toy_world):
     SocialNetworkBuilder(toy_world, _config(mean_count=10)).build_all()
     for person in toy_world.population.people:
-        ids = [c.id for c in person.properties["work_contacts"]]
-        assert len(ids) == len(set(ids))
+        if "work_contacts" in person.properties:
+            ids = [c.id for c in person.properties["work_contacts"]]
+            assert len(ids) == len(set(ids))
+    assert "work_contacts" not in toy_world.population.people[5].properties

@@ -19,6 +19,7 @@ from .filters import (
     check_connection_filters,
     encode_connection_filters_for_numba,
 )
+from .builder_functions.store import store_contacts
 from may.population.person import Person
 
 from random import sample
@@ -161,19 +162,16 @@ class GraphRelationshipBuilder:
         self._person_id_to_idx = {person.id: i for i, person in enumerate(people)}
         self.kwargs = kwargs
 
-    def build_all(self, store: bool = True) -> dict[int, list[int]]:
+    def build_all(self) -> dict[int, list[Person]]:
         """
         Build relationships for all people using graph-based approach.
 
-        Args:
-            store (bool): If True, store relationships in person.properties[storage_key].
-
         Returns:
-            dict[int, list[int]]: Mapping of person_id to list of connected person_ids.
+            dict[int, list[Person]]: Mapping of person_id to list of connected Person objects.
 
         Example:
             >>> builder = GraphRelationshipBuilder(people, mean_connections_per_person=6)
-            >>> relationships = builder.build_all(store=True)
+            >>> relationships = builder.build_all()
             >>> print(f"Person 0 connected to {len(relationships[0])} others")
         """
         logger.debug(f"Building graph-based relationships for {self.n_people:,} people")
@@ -221,24 +219,20 @@ class GraphRelationshipBuilder:
             G.add_nodes_from(range(self.n_people))
             G.add_edges_from(kept_array.tolist())
 
-        # Convert graph edges to relationships
-        relationships: dict[int, list[int]] = {person.id: [] for person in self.people}
+        # Convert graph edges to relationships (Person objects, not IDs)
+        relationships: dict[int, list[Person]] = {person.id: [] for person in self.people}
 
         for node_u, node_v in G.edges():
-            person_id_u = self._idx_to_person_id[node_u]
-            person_id_v = self._idx_to_person_id[node_v]
+            person_u = self.people[node_u]
+            person_v = self.people[node_v]
 
-            relationships[person_id_u].append(person_id_v)
+            relationships[person_u.id].append(person_v)
             if self.symmetric:
-                relationships[person_id_v].append(person_id_u)
+                relationships[person_v.id].append(person_u)
 
-        # Store in person properties if requested
-        if store:
-            for person in self.people:
-                if self.storage_key in person.properties:
-                    person.properties[self.storage_key].extend(relationships[person.id])
-                else:
-                    person.properties[self.storage_key] = relationships[person.id]
+        for person in self.people:
+            if relationships[person.id]:
+                store_contacts(person, relationships[person.id], self.storage_key)
 
         # Log statistics
         total_connections = sum(len(conns) for conns in relationships.values())
@@ -260,12 +254,11 @@ class GraphRelationshipBuilder:
         mean_connections_per_person: int = 6,
         clustering_level: float = 0.7,
         storage_key: str = "social_contacts",
-        store: bool = True,
         connection_filters: Optional[list] = None,
         symmetric: bool = True,
         max_rewire_attempts: int = 10,
         **kwargs,
-    ) -> dict[int, list[int]]:
+    ) -> dict[int, list[Person]]:
         """
         Convenience static method to build graph-based relationships.
 
@@ -274,7 +267,6 @@ class GraphRelationshipBuilder:
             mean_connections_per_person (int): Average connections per person.
             clustering_level (float): 0.0 (low clustering) to 1.0 (high clustering).
             storage_key (str): Key for storing in person.properties.
-            store (bool): Whether to store relationships in person objects.
             connection_filters (list[ConnectionFilter] | None): Pairwise edge filters.
             symmetric (bool): If True, both u→v and v→u are stored per edge.
             max_rewire_attempts (int): Retry cap when an edge fails connection_filters.
@@ -289,7 +281,7 @@ class GraphRelationshipBuilder:
             max_rewire_attempts=max_rewire_attempts,
             **kwargs,
         )
-        return builder.build_all(store=store)
+        return builder.build_all()
 
 
 if __name__ == "__main__":

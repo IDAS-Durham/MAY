@@ -10,18 +10,8 @@ from .spatial_kernels import (
     _build_bounded_distance_social_network,
 )
 
-_TEMP_KEY = "__network_builder_tmp__"
 
-
-def _collect_and_pop(world, key: str) -> dict:
-    """Read results stored by a spatial_kernels function, then remove the key."""
-    results = {}
-    for person in world.population.people:
-        results[person.id] = person.properties.pop(key, [])
-    return results
-
-
-def build_local_social_network(world, network_config: dict) -> dict:
+def build_local_social_network(world, network_config: dict) -> None:
     """
     Watts-Strogatz social network within the smallest geo units.
 
@@ -30,24 +20,26 @@ def build_local_social_network(world, network_config: dict) -> dict:
     Optional:
         pool.level       – geo unit level (defaults to geography.levels[0])
         clustering_level – rewiring probability (default 0.8)
+        assign_activity  – dict with contact_activity_key and activity_key
     """
     pool_config = network_config.get("pool", {})
     geo_unit_level = pool_config.get("level", None)
     mean_count = network_config["mean_count"]
     clustering_level = network_config.get("clustering_level", 0.8)
+    storage_key = network_config["storage_key"]
+    activity_config = network_config.get("assign_activity", None)
 
     _build_local_social_network(
         world.geography,
         mean_connections_per_person=mean_count,
         clustering_level=clustering_level,
         geo_unit_level=geo_unit_level,
-        storage_key=_TEMP_KEY,
-        store=True,
+        storage_key=storage_key,
+        activity_config=activity_config,
     )
-    return _collect_and_pop(world, _TEMP_KEY)
 
 
-def build_spatial_social_network(world, network_config: dict) -> dict:
+def build_spatial_social_network(world, network_config: dict) -> None:
     """
     Spatial Watts-Strogatz between geo units in an annulus.
 
@@ -58,6 +50,7 @@ def build_spatial_social_network(world, network_config: dict) -> dict:
     Optional:
         clustering_level  – rewiring probability (default 0.9)
         pool.level        – geo unit level (defaults to smallest)
+        assign_activity   – dict with contact_activity_key and activity_key
     """
     pool_config = network_config.get("pool", {})
     mean_count = network_config["mean_count"]
@@ -65,6 +58,8 @@ def build_spatial_social_network(world, network_config: dict) -> dict:
     min_km = pool_config.get("min_km", 0.0)
     max_km = pool_config.get("max_km", 10.0)
     geo_unit_level = pool_config.get("level", None)
+    storage_key = network_config["storage_key"]
+    activity_config = network_config.get("assign_activity", None)
 
     _build_spatial_social_network(
         world.geography,
@@ -73,13 +68,12 @@ def build_spatial_social_network(world, network_config: dict) -> dict:
         mean_connections_per_person=mean_count,
         clustering_level=clustering_level,
         geo_unit_level=geo_unit_level,
-        storage_key=_TEMP_KEY,
-        store=True,
+        storage_key=storage_key,
+        activity_config=activity_config,
     )
-    return _collect_and_pop(world, _TEMP_KEY)
 
 
-def build_bounded_distance(world, network_config: dict) -> dict:
+def build_bounded_distance(world, network_config: dict) -> None:
     """
     Random contacts within a geographic radius.
 
@@ -95,6 +89,7 @@ def build_bounded_distance(world, network_config: dict) -> dict:
     clustering_level = network_config.get("clustering_level", 0.7)
     max_km = pool_config.get("max_km", 5.0)
     geo_unit_level = pool_config.get("level", None)
+    storage_key = network_config["storage_key"]
 
     _build_bounded_distance_social_network(
         world.geography,
@@ -102,7 +97,5 @@ def build_bounded_distance(world, network_config: dict) -> dict:
         mean_connections_per_person=mean_count,
         clustering_level=clustering_level,
         geo_unit_level=geo_unit_level,
-        storage_key=_TEMP_KEY,
-        store=True,
+        storage_key=storage_key,
     )
-    return _collect_and_pop(world, _TEMP_KEY)

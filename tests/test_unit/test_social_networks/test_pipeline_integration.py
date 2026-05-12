@@ -34,9 +34,14 @@ def _two_network_config():
 
 def test_both_keys_written_for_every_person(toy_world):
     SocialNetworkBuilder(toy_world, _two_network_config()).build_all()
-    for person in toy_world.population.people:
+    people = toy_world.population.people
+    # All people are in an SGU — contacts_local always present.
+    # Person 5 has no primary_activity — contacts_work key is absent for them.
+    for person in people:
         assert "contacts_local" in person.properties
+    for person in people[:5]:
         assert "contacts_work" in person.properties
+    assert "contacts_work" not in people[5].properties
 
 
 def test_both_networks_have_connections(toy_world):
@@ -45,31 +50,10 @@ def test_both_networks_have_connections(toy_world):
         len(p.properties["contacts_local"]) for p in toy_world.population.people
     )
     work_total = sum(
-        len(p.properties["contacts_work"]) for p in toy_world.population.people
+        len(p.properties.get("contacts_work", set())) for p in toy_world.population.people
     )
     assert local_total > 0
     assert work_total > 0
-
-
-def test_keys_are_independent(toy_world):
-    SocialNetworkBuilder(toy_world, _two_network_config()).build_all()
-    people = toy_world.population.people
-    # person 5 has no activity → empty work contacts but may have local contacts
-    person_5 = people[5]
-    assert person_5.properties["contacts_work"] == set()
-    assert len(person_5.properties["contacts_local"]) >= 0  # may or may not connect
-
-
-def test_same_person_can_appear_in_both_keys(toy_world):
-    SocialNetworkBuilder(toy_world, _two_network_config()).build_all()
-    people = toy_world.population.people
-    # persons 0-2 share SGU_1 AND venue_school — so person 1 may appear in
-    # both contacts_local and contacts_work of person 0
-    p0_local_ids = {c.id for c in people[0].properties["contacts_local"]}
-    p0_work_ids = {c.id for c in people[0].properties["contacts_work"]}
-    overlap = p0_local_ids & p0_work_ids
-    # Not asserting overlap exists (small world, stochastic) — just that both keys exist
-    assert isinstance(overlap, set)
 
 
 def test_ordering_respected_first_network_built_first(toy_world):
@@ -123,7 +107,11 @@ def test_three_networks_all_keys_present(toy_world):
         ]
     }
     SocialNetworkBuilder(toy_world, config).build_all()
-    for person in toy_world.population.people:
+    people = toy_world.population.people
+    for person in people:
         assert "key_a" in person.properties
         assert "key_b" in person.properties
+    # key_c: persons with primary_activity only; person 5 has none
+    for person in people[:5]:
         assert "key_c" in person.properties
+    assert "key_c" not in people[5].properties
