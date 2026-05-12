@@ -24,6 +24,7 @@ import logging
 
 from may.social_networks.social_networks import register_network_type
 from may.social_networks.filters import build_pool
+from may.social_networks.constraints import parse_constraints
 from may.relationships.friendship_builder import _process_all_groups_numba
 
 logger = logging.getLogger("network_builders")
@@ -53,7 +54,16 @@ def _groups_to_csr(groups: list, person_id_to_idx: dict):
     return starts, ends, people_flat
 
 
-def _run_random_numba(world, groups: list, mean_count: int) -> dict:
+def _extract_age_range(connection_filters: list) -> np.int32:
+    """Extract age max_difference from parsed ConnectionFilters (-1 = no filter)."""
+    for cf in connection_filters:
+        if cf.attribute == "age" and cf.match == "range":
+            return np.int32(cf.range)
+    return np.int32(-1)
+
+
+def _run_random_numba(world, groups: list, mean_count: int,
+                      connection_filters: list | None = None) -> dict:
     """
     Run the Numba random-connection builder over pre-built groups.
     Returns dict[person_id, list[Person]].
@@ -75,11 +85,13 @@ def _run_random_numba(world, groups: list, mean_count: int) -> dict:
     all_connections = np.full((n_people, max_connections), -1, dtype=np.int32)
     current_counts = np.zeros(n_people, dtype=np.int8)
 
+    age_range = _extract_age_range(connection_filters or [])
+
     _process_all_groups_numba(
         starts, ends, people_flat,
         ages, subsets,
         all_connections, current_counts, connection_counts,
-        np.float64(1.0), np.int32(-1), False, True,
+        np.float64(1.0), age_range, False, True,
     )
 
     results = {}
@@ -113,7 +125,8 @@ def _build_intra_geo_unit(world, network_config: dict) -> dict:
     mean_count = network_config["mean_count"]
 
     groups = build_pool(world, pool_type, pool_config)
-    return _run_random_numba(world, groups, mean_count)
+    connection_filters = parse_constraints(network_config.get("constraints", []))
+    return _run_random_numba(world, groups, mean_count, connection_filters)
 
 
 @register_network_type("activity_peers")
@@ -132,7 +145,8 @@ def _build_activity_peers(world, network_config: dict) -> dict:
     mean_count = network_config["mean_count"]
 
     groups = build_pool(world, pool_type, pool_config)
-    return _run_random_numba(world, groups, mean_count)
+    connection_filters = parse_constraints(network_config.get("constraints", []))
+    return _run_random_numba(world, groups, mean_count, connection_filters)
 
 
 # ============================================================================

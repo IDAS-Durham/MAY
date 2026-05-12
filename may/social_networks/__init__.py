@@ -20,6 +20,7 @@ from .filters import (
     register_pool_type,
     build_pool,
 )
+from .constraints import parse_constraints
 from .algorithm_source import AlgorithmSourceProcessor, AlgorithmSourceConfig, parse_algorithm_source_config
 from .social_networks import network_type_builders, register_network_type, SocialNetworkBuilder
 from . import network_builders  # noqa: F401 — triggers @register_network_type decorators
