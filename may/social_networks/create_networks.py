@@ -518,21 +518,22 @@ def _build_spatial_social_network(
     max_deg = _km_to_degrees_adjusted(max_radius_km, coordinates) * 1.2
     tree = cKDTree(coordinates)
 
+    candidates_list = tree.query_ball_point(coordinates, max_deg)
     all_neighbors = []
-    for i in range(U):
-        candidate_indices = tree.query_ball_point(coordinates[i], max_deg)
-        neighbors_with_dist = []
-        for j in candidate_indices:
-            if j == i:
-                continue
-            dist = _haversine_km(
-                coordinates[i, 0], coordinates[i, 1],
-                coordinates[j, 0], coordinates[j, 1],
-            )
-            if min_radius_km <= dist <= max_radius_km:
-                neighbors_with_dist.append((dist, j))
-        neighbors_with_dist.sort()
-        all_neighbors.append([j for _, j in neighbors_with_dist])
+    for i, raw_cands in enumerate(candidates_list):
+        cands = np.array([j for j in raw_cands if j != i], dtype=np.int32)
+        if len(cands) == 0:
+            all_neighbors.append([])
+            continue
+        dists = _haversine_km(
+            coordinates[i, 0], coordinates[i, 1],
+            coordinates[cands, 0], coordinates[cands, 1],
+        )
+        mask = (dists >= min_radius_km) & (dists <= max_radius_km)
+        valid_cands = cands[mask]
+        valid_dists = dists[mask]
+        order = np.argsort(valid_dists)
+        all_neighbors.append(valid_cands[order].tolist())
 
     # Flatten into CSR
     neighbor_starts = np.zeros(U, dtype=np.int32)
