@@ -4,6 +4,16 @@ Filters for social network construction.
 Defines PoolFilter (absolute single-person thresholds) and ConnectionFilter
 (pairwise edge checks), with Numba-accelerated pool filtering.
 
+Also provides the pool_type register: decorator-based registry of pool-building
+functions that group world population into candidate sets for network building.
+
+To add a new pool type:
+
+    @register_pool_type("my_pool")
+    def build_my_pool(world, pool_config: dict):
+        # Return a list of groups (each group is a list of Person objects)
+        ...
+
 Design mirrors may/residence/models.py (Category) and
 may/residence/relationship_rules.py (_get_attribute_getter pattern).
 """
@@ -12,11 +22,40 @@ import numpy as np
 import numba as nb
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from functools import wraps
+from typing import Optional, Callable, Any
 
 from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("social_network_filters")
+
+
+# ============================================================================
+# POOL TYPE REGISTRY
+# ============================================================================
+
+PoolTypeBuilder = Callable[[Any, dict], list]
+
+pool_type_builders: dict[str, PoolTypeBuilder] = {}
+
+
+def register_pool_type(name: str):
+    """
+    Decorator to register a pool-building function in the pool_type_builders registry.
+
+    Example:
+        >>> @register_pool_type("my_pool")
+        ... def build_my_pool(world, pool_config):
+        ...     return [list_of_people]
+        >>> pool_type_builders["my_pool"](world, config)
+    """
+    def decorator(func: PoolTypeBuilder):
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return func(*args, **kwargs)
+        pool_type_builders[name] = wrapper
+        return wrapper
+    return decorator
 
 
 # ============================================================================
