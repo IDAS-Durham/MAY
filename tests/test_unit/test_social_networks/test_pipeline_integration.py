@@ -56,7 +56,7 @@ def test_keys_are_independent(toy_world):
     people = toy_world.population.people
     # person 5 has no activity → empty work contacts but may have local contacts
     person_5 = people[5]
-    assert person_5.properties["contacts_work"] == []
+    assert person_5.properties["contacts_work"] == set()
     assert len(person_5.properties["contacts_local"]) >= 0  # may or may not connect
 
 

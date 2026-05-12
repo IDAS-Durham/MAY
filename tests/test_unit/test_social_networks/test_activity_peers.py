@@ -57,7 +57,7 @@ def test_activity_peers_excludes_person_without_activity(toy_world):
     # person 5 has no primary_activity — should have no work contacts
     SocialNetworkBuilder(toy_world, _config()).build_all()
     person_5 = toy_world.population.people[5]
-    assert person_5.properties["work_contacts"] == []
+    assert person_5.properties["work_contacts"] == set()
 
 
 def test_activity_peers_no_duplicates(toy_world):

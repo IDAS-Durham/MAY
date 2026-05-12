@@ -97,7 +97,7 @@ def test_unconnected_persons_get_empty_list(toy_world):
 
     people = toy_world.population.people
     for person in people[2:]:
-        assert person.properties["test_contacts"] == []
+        assert person.properties["test_contacts"] == set()
 
 
 def test_empty_network_gives_empty_lists(toy_world):
@@ -106,7 +106,7 @@ def test_empty_network_gives_empty_lists(toy_world):
     )).build_all()
 
     for person in toy_world.population.people:
-        assert person.properties["empty_key"] == []
+        assert person.properties["empty_key"] == set()
 
 
 # ---------------------------------------------------------------------------
@@ -150,3 +150,46 @@ def test_two_keys_are_independent(toy_world):
     people = toy_world.population.people
     assert len(people[0].properties["key_a"]) > 0
     assert len(people[0].properties["key_b"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Shared storage key — multiple networks appended into one set
+# ---------------------------------------------------------------------------
+
+@register_network_type("_connects_second_and_third")
+def _connects_second_and_third(world, network_config):
+    """Person 0 ↔ Person 2, Person 1 ↔ Person 3."""
+    people = world.population.people
+    if len(people) < 4:
+        return {}
+    return {people[0].id: [people[2]], people[2].id: [people[0]],
+            people[1].id: [people[3]], people[3].id: [people[1]]}
+
+
+def test_two_networks_same_key_accumulate(toy_world):
+    """Two networks writing to the same key — contacts accumulate into one set."""
+    config = _make_config(
+        _entry("_connects_first_two", "shared_key"),
+        _entry("_connects_second_and_third", "shared_key"),
+    )
+    SocialNetworkBuilder(toy_world, config).build_all()
+
+    people = toy_world.population.people
+    # p0 gains p1 from first network, p2 from second network
+    p0_contacts = people[0].properties["shared_key"]
+    assert people[1] in p0_contacts
+    assert people[2] in p0_contacts
+
+
+def test_two_networks_same_key_no_duplicates(toy_world):
+    """Shared key: same contact added by both networks appears only once."""
+    config = _make_config(
+        _entry("_connects_first_two", "shared_key"),
+        _entry("_connects_first_two", "shared_key"),
+    )
+    SocialNetworkBuilder(toy_world, config).build_all()
+
+    people = toy_world.population.people
+    p0_contacts = people[0].properties["shared_key"]
+    contact_ids = [c.id for c in p0_contacts]
+    assert len(contact_ids) == len(set(contact_ids))

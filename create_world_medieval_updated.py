@@ -21,12 +21,7 @@ from debug_output import export_venue_allocations, export_people, print_world_ex
 from world_specific_code.MedievalYaml.travel_assignment import assign_travel_activities, assign_guest_houses, assign_sailing_activities
 from world_specific_code.MedievalYaml.lords_land_assignment import assign_lords_land_venues
 
-# Gavin social network version
-from may.social_networks.create_networks import (
-    _allocate_random_bounded_distance_contacts as allocate_random_bounded_distance_contacts,
-    _build_local_social_network as build_local_social_network,
-    _build_spatial_social_network as build_spatial_social_network,
-)
+from may.social_networks import SocialNetworkBuilder
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -249,41 +244,15 @@ def main():
     if relationship_config.get("enabled", True):
         logger.info("")
         logger.info("=" * 60)
-        logger.info("RELATIONSHIP PIPELINE (Gavin Version)")
+        logger.info("RELATIONSHIP PIPELINE")
         logger.info("=" * 60)
 
-        # Builds a local network based on a particular clustering algorithm.
-        # This creates realistic closed graphs. 
-        # Must be run after household allocation as it maps to the contact's household.
-        build_local_social_network(
-            world.geography,
-            mean_connections_per_person=4,
-            clustering_level=0.8,
-            storage_key='social_contacts_local',
-            assign_activity_map=True,
+        config_path = relationship_config.get(
+            "config",
+            "world_specific_code/MedievalYaml/yaml/relationships/social_networks.yaml",
         )
-
-        # Near-range inter-unit network: annulus [0.01, 15] km, W-S clustering
-        build_spatial_social_network(
-            world.geography,
-            min_radius_km=0.01, # small but nonzero so that it is distinguished from people in literally the same manor. 
-            max_radius_km=4.0, # a reasonable distance to walk in an afternoon I would say. 
-            mean_connections_per_person=4,
-            clustering_level=0.9,
-            storage_key='social_contacts_near',
-            assign_activity_map=True,
-        )
-
-        # Far-range inter-unit network: annulus [6, 20] km, W-S clustering
-        build_spatial_social_network(
-            world.geography,
-            min_radius_km=3.0,
-            max_radius_km=12.0,
-            mean_connections_per_person=4,
-            clustering_level=0.9,
-            storage_key='social_contacts_med',
-            assign_activity_map=True,
-        )
+        builder = SocialNetworkBuilder.from_yaml(world, config_path)
+        builder.build_all()
 
 
     logger.info("")

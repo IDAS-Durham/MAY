@@ -12,7 +12,7 @@ from may.population import PopulationManager
 from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
-from may.relationships import FriendshipBuilder
+from may.social_networks import SocialNetworkBuilder
 from debug_output import export_residence_venues
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
@@ -294,12 +294,8 @@ def main():
             logger.info(f"[RELATIONSHIP] {config_path}")
 
             try:
-                builder = FriendshipBuilder(world, config_path)
-                builder.build_all(store=True)
-
-                # Export relationships to CSV
-                storage_key = builder.config.get('storage', {}).get('key', builder.name)
-                #export_relationships(world, storage_key, f"{storage_key}.csv")
+                builder = SocialNetworkBuilder.from_yaml(world, config_path)
+                builder.build_all()
 
             except Exception as e:
                 logger.error(f"Failed to build relationships from {config_path}: {e}")
