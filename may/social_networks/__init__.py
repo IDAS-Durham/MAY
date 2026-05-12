@@ -18,6 +18,7 @@ from .filters import (
     parse_connection_filter,
     pool_type_builders,
     register_pool_type,
+    build_pool,
 )
 from .algorithm_source import AlgorithmSourceProcessor, AlgorithmSourceConfig, parse_algorithm_source_config
 from .social_networks import network_type_builders, register_network_type, SocialNetworkBuilder

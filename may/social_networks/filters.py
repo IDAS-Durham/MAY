@@ -58,6 +58,78 @@ def register_pool_type(name: str):
     return decorator
 
 
+def build_pool(world, pool_type: str, pool_config: dict) -> list[list]:
+    """Dispatch to a registered pool builder. Returns list of person groups."""
+    if pool_type not in pool_type_builders:
+        raise ValueError(
+            f"Unknown pool_type '{pool_type}'. Registered: {sorted(pool_type_builders)}"
+        )
+    return pool_type_builders[pool_type](world, pool_config)
+
+
+# ============================================================================
+# BUILT-IN POOL TYPE BUILDERS
+# ============================================================================
+
+def _navigate_to_level(unit, target_level: str):
+    """Walk up the geographic hierarchy until unit.level matches target_level."""
+    current = unit
+    while current is not None:
+        if current.level == target_level:
+            return current
+        current = current.parent
+    return None
+
+
+@register_pool_type("geographic")
+def _build_geographic_pool(world, pool_config: dict) -> list[list]:
+    """
+    Group people by their geographic unit at a specified level.
+
+    Required pool_config keys:
+        level  – e.g. "SGU", "MGU", "LGU"
+    """
+    target_level = pool_config.get("level")
+    available_levels = world.geography.levels if world.geography else []
+    if target_level not in available_levels:
+        raise ValueError(
+            f"Geographic level '{target_level}' not found. "
+            f"Available: {available_levels}"
+        )
+
+    groups: dict = {}
+    for person in world.population.people:
+        unit = _navigate_to_level(person.geographical_unit, target_level)
+        key = unit.name if unit is not None else "__unknown__"
+        groups.setdefault(key, []).append(person)
+
+    return list(groups.values())
+
+
+@register_pool_type("activity")
+def _build_activity_pool(world, pool_config: dict) -> list[list]:
+    """
+    Group people by their activity venue.
+
+    Required pool_config keys:
+        activity  – activity key in person.activity_map (e.g. "primary_activity")
+    """
+    activity_key = pool_config.get("activity", "primary_activity")
+
+    groups: dict = {}
+    for person in world.population.people:
+        activity = person.activity_map.get(activity_key)
+        if activity is None:
+            continue
+        for venue_type, subsets in activity.items():
+            for subset in subsets:
+                if subset is not None and hasattr(subset, "venue"):
+                    venue_id = subset.venue.id
+                    groups.setdefault(venue_id, []).append(person)
+
+    return list(groups.values())
+
+
 # ============================================================================
 # DATACLASSES
 # ============================================================================
