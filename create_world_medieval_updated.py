@@ -17,7 +17,7 @@ from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 #from may.relationships import FriendshipBuilder
-from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
+from may.utils.debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
 from world_specific_code.MedievalYaml.travel_assignment import assign_travel_activities, assign_guest_houses, assign_sailing_activities
 from world_specific_code.MedievalYaml.lords_land_assignment import assign_lords_land_venues
 

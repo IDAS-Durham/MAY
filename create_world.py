@@ -13,7 +13,7 @@ from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
-from debug_output import export_residence_venues
+from may.utils.debug_output import export_residence_venues
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -63,8 +63,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="yaml/config.yaml",
-        help="Path to configuration YAML file (default: yaml/config.yaml)"
+        default="configs/2021/config.yaml",
+        help="Path to configuration YAML file (default: configs/2021/config.yaml)"
     )
     parser.add_argument(
         "--filename",
@@ -211,7 +211,7 @@ def main():
             configs = attribute_config.get("configs")
             if configs is None:
                 # Legacy: single config
-                configs = [attribute_config.get("config", "yaml/attribute_assignment.yaml")]
+                configs = [attribute_config.get("config", "configs/2021/attribute_assignment.yaml")]
 
             # Assign each attribute in sequence
             for config_path in configs:
@@ -312,7 +312,7 @@ def main():
         logger.info("ROMANTIC RELATIONSHIPS")
         logger.info("=" * 60)
 
-        config_path = romantic_config.get("config", "yaml/relationships/romantic_relationships.yaml")
+        config_path = romantic_config.get("config", "configs/2021/relationships/romantic_relationships.yaml")
 
         try:
             from may.relationships.romantic_relationships import RomanticDistributor

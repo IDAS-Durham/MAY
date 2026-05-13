@@ -4,7 +4,7 @@ This guide is for users who want to **generate a synthetic population world** (e
 
 The whole pipeline is driven by:
 
-1. **YAML config files** in `yaml/` — control *what* the simulation does and *how*.
+1. **YAML config files** in `configs/` — control *what* the simulation does and *how*.
 2. **CSV data files** in `data/` — provide the *raw inputs* (geography, demographics, venues, etc.).
 3. **One command** — `python create_world.py` — runs everything end-to-end and writes `world_state.h5`.
 
@@ -73,11 +73,11 @@ This downloads `data_may.zip` from the project's data server, unpacks it into `d
 Once the environment is active:
 
 ```bash
-# Run with the default config (yaml/config.yaml)
+# Run with the default config (configs/2021/config.yaml)
 python create_world.py
 
 # Or point at a custom config / output file
-python create_world.py --config yaml/config.yaml --filename world_state.h5
+python create_world.py --config configs/2021/config.yaml --filename world_state.h5
 ```
 
 CLI arguments:

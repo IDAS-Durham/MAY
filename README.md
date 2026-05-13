@@ -42,11 +42,11 @@ This downloads and unpacks the dataset into `data/`.
 ## Run
 
 ```bash
-# Default config (yaml/config.yaml)
+# Default config (configs/2021/config.yaml)
 python create_world.py
 
 # Custom config / output file
-python create_world.py --config yaml/config.yaml --filename world_state.h5
+python create_world.py --config configs/2021/config.yaml --filename world_state.h5
 ```
 
 Output: `world_state.h5` (HDF5) at the project root.
@@ -56,7 +56,7 @@ Output: `world_state.h5` (HDF5) at the project root.
 ```
 MAY/
 ├── create_world.py     # Main entry point
-├── yaml/               # All user-facing configuration
+├── configs/               # All user-facing configuration
 ├── data/               # Input CSVs (census-style)
 ├── may/                # Core engine (generic, world-agnostic)
 ├── world_specific_code/# World-specific extensions (Modern_Day_UK, MedievalYaml, …)
