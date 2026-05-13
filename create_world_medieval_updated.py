@@ -3,6 +3,9 @@ import os
 import logging
 import pstats
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "my_may"))
+
 import numpy as np
 import numba as nb
 import pandas as pd
@@ -13,17 +16,12 @@ from may.population import PopulationManager
 from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
-from may.relationships import FriendshipBuilder
+#from may.relationships import FriendshipBuilder
 from debug_output import export_venue_allocations, export_people, print_world_examples, export_relationships
 from world_specific_code.MedievalYaml.travel_assignment import assign_travel_activities, assign_guest_houses, assign_sailing_activities
 from world_specific_code.MedievalYaml.lords_land_assignment import assign_lords_land_venues
 
-# Gavin social network version
-from may.social_networks import (
-    allocate_random_bounded_distance_contacts,
-    build_local_social_network,
-    build_spatial_social_network,
-)
+from may.social_networks import SocialNetworkBuilder
 
 if os.environ.get('PYTHONHASHSEED') is None:
     os.environ['PYTHONHASHSEED'] = '0'
@@ -72,8 +70,8 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="world_specific_code/MedievalYaml/config.yaml",
-        help="Path to configuration YAML file (default: world_specific_code/MedievalYaml/config.yaml)"
+        default="../my_may/world_specific_code/MedievalYaml/config.yaml",
+        help="Path to configuration YAML file (default: ../my_may/world_specific_code/MedievalYaml/config.yaml)"
     )
     args = parser.parse_args()
 
@@ -90,9 +88,9 @@ def main():
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venues = VenueManager(geography=geo, data_dir=config.get("venues", {}).get("data_dir", "world_specific_code/MedievalYaml/data/venues"))
+    venues = VenueManager(geography=geo, data_dir=config.get("venues", {}).get("data_dir", "../my_may/world_specific_code/MedievalYaml/data/venues"))
     venue_config = config.get("venues", {})
-    yaml_config_file = venue_config.get("config_file", "world_specific_code/MedievalYaml/yaml/venues/venues_config.yaml")
+    yaml_config_file = venue_config.get("config_file", "../my_may/world_specific_code/MedievalYaml/yaml/venues/venues_config.yaml")
     venues.load_from_yaml_config(yaml_config_file)
 
     # Load population
@@ -101,7 +99,7 @@ def main():
     pop_config = config.get("population", {})
     population = PopulationManager(
         geography=geo,
-        data_dir=pop_config.get("data_dir", "world_specific_code/MedievalYaml/data/population")
+        data_dir=pop_config.get("data_dir", "../my_may/world_specific_code/MedievalYaml/data/population")
     )
 
     # Load demographic data
@@ -122,12 +120,12 @@ def main():
     logger.info(world)
 
     # Assign guest house property to random households in large geo units
-    assign_guest_houses(world, "world_specific_code/MedievalYaml/data/large_geo_units.csv")
+    assign_guest_houses(world, "../my_may/world_specific_code/MedievalYaml/data/large_geo_units.csv")
 
     # Assign travel itineraries to a fraction of residents in source geo_units
     assign_travel_activities(
         world,
-        paths_names_json_path="world_specific_code/MedievalYaml/data/travel/paths_names_full.json",
+        paths_names_json_path="../my_may/world_specific_code/MedievalYaml/data/travel/paths_names_full.json",
         travel_fraction=0.10,
         min_age=18,
         max_age=70,
@@ -135,8 +133,8 @@ def main():
 
     assign_sailing_activities(
         world,
-        paths_names_ports_json_path="world_specific_code/MedievalYaml/data/travel/paths_names_ports.json",
-        port_manor_map_csv_path="world_specific_code/MedievalYaml/data/travel/port_manor_map.csv",
+        paths_names_ports_json_path="../my_may/world_specific_code/MedievalYaml/data/travel/paths_names_ports.json",
+        port_manor_map_csv_path="../my_may/world_specific_code/MedievalYaml/data/travel/port_manor_map.csv",
         sailing_fraction=0.05,
         min_age=18,
         max_age=70,
@@ -197,7 +195,7 @@ def main():
         if attribute_config.get("enabled", True):
             configs = attribute_config.get("configs")
             if configs is None:
-                configs = [attribute_config.get("config", "world_specific_code/MedievalYaml/yaml/attributes/attribute_assignment.yaml")]
+                configs = [attribute_config.get("config", "../my_may/world_specific_code/MedievalYaml/yaml/attributes/attribute_assignment.yaml")]
 
             for config_path in configs:
                 logger.info(f"Assigning attributes from: {config_path}")
@@ -246,41 +244,24 @@ def main():
     if relationship_config.get("enabled", True):
         logger.info("")
         logger.info("=" * 60)
-        logger.info("RELATIONSHIP PIPELINE (Gavin Version)")
+        logger.info("RELATIONSHIP PIPELINE")
         logger.info("=" * 60)
 
-        # Builds a local network based on a particular clustering algorithm.
-        # This creates realistic closed graphs. 
-        # Must be run after household allocation as it maps to the contact's household.
-        build_local_social_network(
-            world.geography,
-            mean_connections_per_person=4,
-            clustering_level=0.8,
-            storage_key='social_contacts_local',
-            assign_activity_map=True,
-        )
+        relationship_configs = relationship_config.get("relationships", [])
 
-        # Near-range inter-unit network: annulus [0.01, 15] km, W-S clustering
-        build_spatial_social_network(
-            world.geography,
-            min_radius_km=0.01, # small but nonzero so that it is distinguished from people in literally the same manor. 
-            max_radius_km=4.0, # a reasonable distance to walk in an afternoon I would say. 
-            mean_connections_per_person=4,
-            clustering_level=0.9,
-            storage_key='social_contacts_near',
-            assign_activity_map=True,
-        )
+        for rel_config in relationship_configs:
+            config_path = rel_config.get("config")
 
-        # Far-range inter-unit network: annulus [6, 20] km, W-S clustering
-        build_spatial_social_network(
-            world.geography,
-            min_radius_km=3.0,
-            max_radius_km=12.0,
-            mean_connections_per_person=4,
-            clustering_level=0.9,
-            storage_key='social_contacts_med',
-            assign_activity_map=True,
-        )
+            logger.info("")
+            logger.info(f"[RELATIONSHIP] {config_path}")
+
+            try:
+                builder = SocialNetworkBuilder.from_yaml(world, config_path)
+                builder.build_all()
+
+            except Exception as e:
+                logger.error(f"Failed to build relationships from {config_path}: {e}")
+                logger.exception(e)
 
 
     logger.info("")
@@ -300,7 +281,7 @@ def main():
     # Export world to HDF5 for C++ simulation
     world.export_to_hdf5(
         "world_state_medieval.h5",
-        config_file="world_specific_code/MedievalYaml/yaml/serialization_config.yaml",
+        config_file="../my_may/world_specific_code/MedievalYaml/yaml/serialization_config.yaml",
     )
 
     return world

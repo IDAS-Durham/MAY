@@ -38,7 +38,7 @@ def export_relationships(world, property_key, output_file):
                 sgu,
                 subset_name,
                 len(connections),
-                ';'.join(map(str, connections))
+                ';'.join(str(p.id) for p in connections)
             ])
 
     logger.info(f"Exported {len(world.population.people):,} people's relationships to {output_file}")
