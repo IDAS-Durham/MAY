@@ -58,7 +58,7 @@ def _convert_numpy_value(value):
     return value
 
 
-def load_world_from_hdf5(input_file, config_file="yaml/serialization_config.yaml", slim=False):
+def load_world_from_hdf5(input_file, config_file="configs/2021/serialization_config.yaml", slim=False):
     """
     Load a World object from an HDF5 file created by export_to_hdf5.
 
