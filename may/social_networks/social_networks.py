@@ -23,7 +23,7 @@ import yaml
 from functools import wraps
 from typing import Callable, Any
 
-from may.social_networks.filters import pool_type_builders
+from may.social_networks.builder_functions.filters_and_constraints.filters import pool_type_builders
 
 logger = logging.getLogger("social_networks")
 

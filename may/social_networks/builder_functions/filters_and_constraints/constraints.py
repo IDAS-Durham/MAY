@@ -13,7 +13,7 @@ Supported types:
         max_difference – maximum allowed absolute difference
 """
 
-from may.social_networks.filters import ConnectionFilter
+from .filters import ConnectionFilter
 
 
 def parse_constraints(constraints: list) -> list:

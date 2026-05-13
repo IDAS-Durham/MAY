@@ -13,13 +13,13 @@ import numba as nb
 import networkx as nx
 
 from .clustered_graph import create_clustered_graph
-from .filters import (
+from ..filters_and_constraints.filters import (
     ConnectionFilter,
     build_local_attribute_arrays,
     check_connection_filters,
     encode_connection_filters_for_numba,
 )
-from .builder_functions.store import store_contacts
+from ..store import store_contacts
 from may.population.person import Person
 
 from random import sample

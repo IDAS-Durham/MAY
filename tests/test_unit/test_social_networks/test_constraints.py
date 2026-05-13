@@ -14,8 +14,8 @@ With max_difference=5 on age:
 import pytest
 
 from may.social_networks import SocialNetworkBuilder
-from may.social_networks.constraints import parse_constraints
-from may.social_networks.filters import ConnectionFilter
+from may.social_networks.builder_functions.filters_and_constraints.constraints import parse_constraints
+from may.social_networks.builder_functions.filters_and_constraints.filters import ConnectionFilter
 
 
 def _config_with_age_constraint(max_diff, network_type="intra_geo_unit",

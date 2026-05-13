@@ -7,8 +7,8 @@ Implements the intra_geo_unit and activity_peers network types.
 import numpy as np
 import numba as nb
 
-from ..filters import build_pool
-from ..constraints import parse_constraints
+from .filters_and_constraints.filters import build_pool
+from .filters_and_constraints.constraints import parse_constraints
 from .store import store_contacts
 
 

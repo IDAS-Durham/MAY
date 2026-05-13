@@ -1,4 +1,4 @@
-from .clustered_graph import (
+from .builder_functions.graph.clustered_graph import (
     graph_creators,
     register_graph_creator,
     create_clustered_graph,
@@ -9,9 +9,9 @@ from .clustered_graph import (
     create_clustered_graph_gnm_random_graph,
     create_clustered_graph_gnp_random_graph,
 )
-from .graph_relationship_builder import GraphRelationshipBuilder
-from .geo_neighbors import find_neighbours
-from .filters import (
+from .builder_functions.graph.graph_relationship_builder import GraphRelationshipBuilder
+from .builder_functions.geo.geo_neighbors import find_neighbours
+from .builder_functions.filters_and_constraints.filters import (
     PoolFilter,
     ConnectionFilter,
     parse_pool_filter,
@@ -20,7 +20,6 @@ from .filters import (
     register_pool_type,
     build_pool,
 )
-from .constraints import parse_constraints
-from .algorithm_source import AlgorithmSourceProcessor, AlgorithmSourceConfig, parse_algorithm_source_config
+from .builder_functions.filters_and_constraints.constraints import parse_constraints
 from .social_networks import network_type_builders, register_network_type, SocialNetworkBuilder
 from . import network_builders  # noqa: F401 — triggers @register_network_type decorators

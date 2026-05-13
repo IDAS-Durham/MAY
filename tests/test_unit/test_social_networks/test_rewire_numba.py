@@ -3,8 +3,8 @@ import pytest
 import networkx as nx
 import scipy.sparse
 
-from may.social_networks.filters import ConnectionFilter, encode_connection_filters_for_numba
-from may.social_networks.graph_relationship_builder import _apply_filters_and_rewire
+from may.social_networks.builder_functions.filters_and_constraints.filters import ConnectionFilter, encode_connection_filters_for_numba
+from may.social_networks.builder_functions.graph.graph_relationship_builder import _apply_filters_and_rewire
 
 
 # ---------------------------------------------------------------------------

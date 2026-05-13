@@ -6,8 +6,8 @@ local and spatial Watts-Strogatz social networks.
 import logging
 from typing import TYPE_CHECKING
 
-from ..graph_relationship_builder import GraphRelationshipBuilder
-from ..geo_neighbors import find_neighbours, _extract_coordinates, _km_to_degrees_adjusted, EARTH_RADIUS_KM
+from .graph.graph_relationship_builder import GraphRelationshipBuilder
+from .geo.geo_neighbors import find_neighbours, _extract_coordinates, _km_to_degrees_adjusted, EARTH_RADIUS_KM
 from .store import store_contacts
 
 from debug_output import export_relationships

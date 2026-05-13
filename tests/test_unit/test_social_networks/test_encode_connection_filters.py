@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from may.social_networks.filters import (
+from may.social_networks.builder_functions.filters_and_constraints.filters import (
     ConnectionFilter,
     encode_connection_filters_for_numba,
     _check_connection_filters_numba,
@@ -117,7 +117,7 @@ class TestCheckConnectionFiltersNumba:
 
     def test_round_trip_consistency(self):
         """Numba and Python check_connection_filters agree on all pairs."""
-        from may.social_networks.filters import check_connection_filters
+        from may.social_networks.builder_functions.filters_and_constraints.filters import check_connection_filters
 
         filters = [_range_filter('age', 8.0)]
         ages = [20.0, 25.0, 35.0, 50.0]
