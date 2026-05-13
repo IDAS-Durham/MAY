@@ -1,5 +1,5 @@
 """
-World module for June Zero.
+World module for MAY.
 
 The World class is the main container for geography and population.
 This module also contains setup functions for orchestrating world creation.
@@ -210,7 +210,7 @@ class World:
 
         return stats
 
-    def export_to_hdf5(self, output_file, config_file="yaml/serialization_config.yaml"):
+    def export_to_hdf5(self, output_file, config_file="configs/2021/serialization_config.yaml"):
         """
         Export world state to HDF5 file for C++ simulation.
 
@@ -287,18 +287,30 @@ def setup_households(geo, population, venues, config):
     # Distribute households and venues based on configuration mode
     strategy_file = household_config.get("strategy_file")
 
+    debug_outputs_enabled = config.get("debug_outputs", {}).get("enabled", False)
+
     if strategy_file:
         # Mode 1: Unified strategy (households + venues in order)
         logger.info(f"Using unified allocation strategy from {strategy_file}")
-        execute_allocation_strategy(population, venues, household_distributor, strategy_file)
+        execute_allocation_strategy(
+            population,
+            venues,
+            household_distributor,
+            strategy_file,
+            export_debug_csv=debug_outputs_enabled,
+        )
 
-    # Export household allocations
-    export_file = household_config.get("export_file", "household_allocations.csv")
-    household_distributor.export_households_to_csv(export_file)
+    # Export household + venue allocation CSVs (debug aid; skipped for large worlds
+    # because each builds a DataFrame across the whole population/venue set).
 
-    # Export venue allocations
-    venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
-    venues.export_venues_to_csv(venue_export_file)
+    if debug_outputs_enabled:
+        export_file = household_config.get("export_file", "household_allocations.csv")
+        household_distributor.export_households_to_csv(export_file)
+
+        venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
+        venues.export_venues_to_csv(venue_export_file)
+    else:
+        logger.info("Skipping household/venue allocation CSV exports (debug_outputs.enabled=false)")
 
     # Show where households are located and examples
     logger.info("")

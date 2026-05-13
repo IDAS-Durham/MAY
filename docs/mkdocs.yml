@@ -28,3 +28,7 @@ theme:
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
+
+validation:
+  links:
+    not_found: ignore

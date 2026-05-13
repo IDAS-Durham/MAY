@@ -1,0 +1,64 @@
+# ============================================================================
+# Social Networks Configuration
+# ============================================================================
+# Three networks accumulated into a single 'friendships' key, approximating
+# the behaviour of the old FriendshipBuilder (friendships.yaml).
+#
+# Mean counts are proportional to the old source weights (0.6 / 0.3 / 0.1)
+# applied to a target of ~6 contacts per person.
+# Contacts are stored as a set — duplicate contacts across networks are
+# automatically deduplicated.
+# ============================================================================
+
+networks:
+
+  # --------------------------------------------------------------------------
+  # 1. Activity peers — same venue, similar age  (old weight: 60%)
+  # --------------------------------------------------------------------------
+  - name: activity_peers
+    network_type: activity_peers
+    pool_type: activity
+    pool:
+      activity: primary_activity
+    algorithm: random
+    mean_count: 3
+    degree_variants:
+      - probability: 0.10
+        count: 6       # 10% of people get double contacts
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 5
+
+  # --------------------------------------------------------------------------
+  # 2. Local geographic — same SGU, similar age  (old weight: 30%)
+  # --------------------------------------------------------------------------
+  - name: geographic_local
+    network_type: intra_geo_unit
+    pool_type: geographic
+    pool:
+      level: SGU
+    algorithm: random
+    mean_count: 2
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 10
+
+  # --------------------------------------------------------------------------
+  # 3. Community — same MGU, broader age range  (old weight: 10%)
+  # --------------------------------------------------------------------------
+  - name: geographic_community
+    network_type: intra_geo_unit
+    pool_type: geographic
+    pool:
+      level: MGU
+    algorithm: random
+    mean_count: 1
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 15

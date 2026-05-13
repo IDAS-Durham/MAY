@@ -1,6 +1,6 @@
 from __future__ import annotations
 """
-Population manager for June Zero.
+Population manager for MAY.
 
 Handles population generation and distribution across geographical units.
 """
@@ -247,10 +247,14 @@ class PopulationManager:
                     # Treat as a generic property
                     properties[target] = val
 
-            # Add all other columns not in mapping to properties
+            # Add all other columns not in mapping to properties.
+            # The geographical column drives `geographical_unit`; it must not
+            # also be duplicated as a property (parallel with VenueManager,
+            # which excludes its geo column from the property dict).
             mapped_csv_cols = set(target_to_csv.values())
+            reserved_cols = mapped_csv_cols | {actual_geo_col}
             for col, val in row_dict.items():
-                if col not in mapped_csv_cols:
+                if col not in reserved_cols:
                     properties[col] = val
 
             # Create and add person

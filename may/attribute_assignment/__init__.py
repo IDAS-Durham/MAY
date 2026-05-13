@@ -1,5 +1,5 @@
 """
-Attribute Assignment System for June Zero.
+Attribute Assignment System for MAY.
 
 This module provides a generic, rule-based system for assigning attributes
 (ethnicity, religion, language, etc.) to people AFTER they have been allocated

@@ -1,148 +1,87 @@
 # MAY
 
-A high-performance population simulation framework for modeling geographical hierarchies and distributing people across venues (households, schools, hospitals, etc.). **Completely generic** - works with any geographical structure worldwide, past or present.
+A high-performance, **configuration-driven** population simulation framework for building synthetic populations and distributing them across geography, residences, schools, workplaces, and other venues. Generic by design: works with any administrative hierarchy, any era, any country.
 
-## Features
+The shipped configuration targets **modern-day UK** (e.g. England 2021).
 
-- **Universal Geography System** - Generic S.G.U/M.G.U/L.G.U levels work with any administrative boundaries
-- **Precise Demographics** - Age/sex distributions per smallest geographical unit
-- **Flexible Venue System** - Households, care homes, student dorms, prisons, schools, hospitals, and more
-- **Multi-Pass Distribution** - Intelligent household expansion with configurable thresholds
-- **Extensible Design** - Easy to add new venue types and distribution strategies
+## What it does
 
-## Project Structure
+Given census-style inputs — a geographical hierarchy, age × sex demographics per smallest unit, household composition counts, and venue inventories — `create_world.py` produces a single HDF5 file (`world_state.h5`) containing the full synthetic world: every person, where they live, where they go to school / work / receive care, and the friendship and romantic-partnership networks between them.
 
-```
-june_zero/
-├── may/                          # Core framework. Should not need to be changed when using a new world.
-│   ├── geography/               # Geography and venue classes
-│   ├── population/              # Population and person classes
-│   ├── distributor/             # Generic distribution system
-│   └── stats/                   # Statistics and reporting
-├── world_specific_code/         # Code specific to the world being created. Will need edited for each new world. 
-│   ├── household_distributors/  # Household distribution
-│   ├── care_home_distributor/   # Care home distribution
-│   ├── student_dorms/           # Student dorm distribution
-│   └── prisons/                 # Prison distribution
-├── data/                        # Data used to create the world (e.g. census information). 
-│   ├── geography/               # Hierarchy and coordinates
-│   ├── population/              # Demographics (age/sex)
-│   ├── venues/                  # Venue data (schools, hospitals, etc.)
-│   └── households/              # Household compositions
-└── create_world_households.py   # Main entry point
+The whole pipeline is driven by **YAML configuration files**. The Python code does not need to be edited to build a new world; users edit YAMLs and CSVs only.
+
+## Install
+
+Requires Python 3.13+. Use any environment manager you like — Conda is recommended:
+
+```bash
+conda create -n MayEnv python=3.13 -y
+conda activate MayEnv
+pip install -r requirements.txt
 ```
 
-## Key Concepts
+Or with `venv`:
 
-### Geography Hierarchy
-The Geographical Units are able to expand or contract, creating a tree-structure that can be as large as desired. 
+```bash
+python3.13 -m venv .venv
+source .venv/bin/activate          # macOS / Linux
+.venv\Scripts\activate             # Windows
+pip install -r requirements.txt
+```
 
-The default levels are
-- **SGU** (Smallest Geographical Unit) - Base level where people are generated
-- **MGU** (Medium Geographical Unit) - Middle administrative level
-- **LGU** (Largest Geographical Unit) - Top level (e.g., country, region)
-Additional levels can be created simply by adding them to the hierarchy data file. 
+## Get the data
 
-Parent-child tree structure: `SGU → MGU → LGU`
+The repo ships without the bulky census/venue CSVs. Fetch them once with:
 
-### Venue System
-For each activity a Person is given, they need to be assigned a suitable Venue and Subset.
-The Venues are the locations the person will go to in order to do that activity.
-Subsets are a descriptor used in the creation of the world, to help decide what attributes people have giving them access to a venue.
-For example, if for a given venue (e.g. a household) we know the breakdown of members by age category (e.g. 'kids', 'adults', 'elderly'), then the subsets would correspond to these age categories.
-If, however, a given venue has a certain number of members by activity they do there (e.g. a known number of inmates and staff, for prisons) then the subsets would correspond to those categories.
-Subsets are used to help make sure the composition of people who can go to a venue are accurate when building the world.
+```bash
+bash scripts/get_data.sh
+```
 
-Venues contain **Subsets** (groups within venues):
-- Household: `['kids', 'independent children', 'adults', 'elderly']`
-- Care Home: Age/sex-based subsets
-- Prison: `['inmates', 'staff']`
+This downloads and unpacks the dataset into `data/`.
 
-People are assigned to Subsets, not directly to Venues.
+## Run
 
-These subsets will then be mapped to interaction_sets, which are decided by the interaction dynamics.
+```bash
+# Default config (configs/2021/config.yaml)
+python create_world.py
 
+# Custom config / output file
+python create_world.py --config configs/2021/config.yaml --filename world_state.h5
+```
 
-### Distribution Process
-1. Load geography and demographics
-2. Generate people with precise age/sex distributions per SGU
-3. Load venues and create subsets
-4. Distribute people using multi-pass algorithm:
-   - Student dorms → Care homes → Households (with a little expansion) → Prisons → Households (final expansion)
+Output: `world_state.h5` (HDF5) at the project root.
 
-## Data Format
+## Project layout
 
-### Geography (`data/geography/`)
-- `hierarchy.csv`: SGU, MGU, LGU columns
-- `coord_sgu.csv`: SGU, latitude, longitude
-- `coord_mgu.csv`: MGU, latitude, longitude
+```
+MAY/
+├── create_world.py     # Main entry point
+├── configs/               # All user-facing configuration
+├── data/               # Input CSVs (census-style)
+├── may/                # Core engine (generic, world-agnostic)
+├── world_specific_code/# World-specific extensions (Modern_Day_UK, MedievalYaml, …)
+└── world_state.h5      # Output
+```
 
-### Population (`data/population/`)
-- `demographics_male.csv`: Rows=geo_units, Columns=ages (0-100)
-- `demographics_female.csv`: Same structure
+## Documentation
 
-### Venues (`data/venues/`)
-Each `{type}s.csv` requires:
-- `geo_unit` (required)
-- `name` (required)
-- `latitude`, `longitude` (optional)
-- Custom properties as needed
-
-### Households (`data/households/`)
-- `households.csv` with `composition` column (e.g., `'0 0 2 0'` = 2 adults, no kids)
-- Format: `kids independent_children adults elderly`
+- **[USER_GUIDE.md](USER_GUIDE.md)** — full walkthrough of every YAML and CSV: how to configure geography filters, edit household allocation, swap census years, disable debug outputs, etc. Read this before changing any config.
 
 ## Testing
 
 ```bash
-# Run all tests
-pytest
-
-# Run specific module
-pytest tests/test_units/may/population/
-
-# Verbose output
-pytest -v
+pytest                                          # all tests
+pytest tests/test_units/may/population/         # specific module
 ```
 
-## Performance
-
-Current benchmarks (95,231 people, 36,443 households):
-- **Total runtime**: ~1.5s
-- Geography loading: ~0.01s
-- Population generation: ~0.3s
-- Venue generation: ~0.3s
-- Venue distribution: ~0.8s
-
-## Development
-
-### Adding a New Venue Type
-
-1. Create CSV in `data/venues/{type}s.csv`
-2. Create `{Type}SubsetDistributor` in `world_specific_code/`
-3. Create `{Type}Distributor` extending `Distributor`
-4. Add to `create_world_households.py` distribution chain
-
-### Adding Custom Person Properties
-
-```python
-person = Person(age=30, sex='male', geographical_unit=sgu, activities=['home'])
-person.properties['occupation'] = 'teacher'
-person.properties['income'] = 50000
-```
+Note: `pytest` is not in `requirements.txt`. Install separately if you want to run the suite.
 
 ## Requirements
 
-- Python 3.13+
-- pandas
-- numpy
-- numba (for optimizations)
+Python 3.13+ and the packages pinned in `requirements.txt` (`numpy`, `pandas`, `scipy`, `numba`, `h5py`, `PyYAML`).
 
 ## License
 
-[Add license information]
+GNU General Public License v3.0 — see [LICENSE](LICENSE).
 
-## Citation
-
-[Add citation information if applicable]
-
+Copyright (C) 2026 Martha Correa. This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.

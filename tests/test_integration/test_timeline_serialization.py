@@ -191,7 +191,7 @@ class TestWorldHDF5PayloadIntegrity:
             assert f.attrs['num_venues'] == 3
             assert f.attrs['num_geo_units'] == 3
             assert 'serialization_version' in f.attrs
-            assert 'june_zero_version' in f.attrs
+            assert 'MAY_version' in f.attrs
             
             # --- Geography Integrity ---
             assert 'geography' in f
