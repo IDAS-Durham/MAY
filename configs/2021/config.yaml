@@ -243,6 +243,12 @@ romantic_relationships:
   # - Uses ethnicity partnership probabilities from data/population/ethnicity/
   # - Exports detailed CSVs: romantic_relationships_detailed.csv and cheating_network_detailed.csv
 
+serialization:
+  enabled: true
+  config_file: "configs/2021/serialization_config.yaml"
+  output_dir: "output/2021"
+  filename: "world_state.h5"
+
 # ========================================
 # EXAMPLES
 # ========================================

@@ -210,7 +210,7 @@ class World:
 
         return stats
 
-    def export_to_hdf5(self, output_file, config_file="yaml/serialization_config.yaml"):
+    def export_to_hdf5(self, output_file, config_file="configs/2021/serialization_config.yaml"):
         """
         Export world state to HDF5 file for C++ simulation.
 
