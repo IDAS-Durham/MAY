@@ -1,5 +1,5 @@
 """
-World module for June Zero.
+World module for MAY.
 
 The World class is the main container for geography and population.
 This module also contains setup functions for orchestrating world creation.
@@ -210,7 +210,7 @@ class World:
 
         return stats
 
-    def export_to_hdf5(self, output_file, config_file="yaml/serialization_config.yaml"):
+    def export_to_hdf5(self, output_file, config_file="configs/2021/serialization_config.yaml"):
         """
         Export world state to HDF5 file for C++ simulation.
 

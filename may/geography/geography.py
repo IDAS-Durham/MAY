@@ -87,6 +87,21 @@ class Geography:
             logger.info(f"Available columns: {hierarchy_df.columns.tolist()}")
             raise ValueError(f"Missing columns {missing_levels} in {hierarchy_path}")
 
+        # Reject rows that are missing a value at any configured level. A
+        # blank/NaN cell silently produced a ghost unit literally named "nan"
+        # and corrupted the parent chain.
+        invalid_mask = hierarchy_df[self.levels].isna().any(axis=1) | \
+            hierarchy_df[self.levels].apply(
+                lambda col: col.astype(str).str.strip() == "", axis=0
+            ).any(axis=1)
+        if invalid_mask.any():
+            invalid_count = int(invalid_mask.sum())
+            logger.warning(
+                f"Dropping {invalid_count} hierarchy row(s) with blank/NaN values "
+                f"in configured level columns {self.levels}"
+            )
+            hierarchy_df = hierarchy_df[~invalid_mask].reset_index(drop=True)
+
         # 2. Apply filters if specified
         if self.filters and self.filters.get('codes'):
             filter_level = self.filters['level']
@@ -107,71 +122,108 @@ class Geography:
                 f"reduced from {original_size} to {len(hierarchy_df)} rows"
             )
 
-        # 3. Load coordinates for each level
+        # 3. Load coordinates for each level, restricted to names present in
+        # the (post-filter) hierarchy. Reading the entire SGU coord file when
+        # only a small filter is in effect was a real cost on the production
+        # run — the log shows 239,023 SGU coords loaded for a 2,152-SGU world.
+        names_per_level = {
+            level: set(hierarchy_df[level].unique()) for level in self.levels
+        }
         coords = {}
         for level in self.levels:
             level_lower = level.replace(".", "").lower()  # "S.G.U" -> "sgu"
             coord_file = os.path.join(self.data_dir, f"coord_{level_lower}.csv")
 
-            if os.path.exists(coord_file):
-                coord_df = pd.read_csv(coord_file)
-                # Convert to dict: {name: (lat, lon)}
-                name_col = coord_df.columns[0]  # First column is the name
-                coords[level] = dict(zip(
-                    coord_df[name_col],
-                    zip(coord_df['latitude'], coord_df['longitude'])
-                ))
-                logger.info(f"Loaded {len(coords[level])} coordinates for {level}")
-            else:
+            if not os.path.exists(coord_file):
                 coords[level] = {}
                 logger.warning(f"No coordinate file found for {level}")
+                continue
+
+            coord_df = pd.read_csv(coord_file)
+            self._validate_coord_columns(coord_df, coord_file, level)
+            name_col = coord_df.columns[0]
+
+            wanted = names_per_level[level]
+            if wanted:
+                coord_df = coord_df[coord_df[name_col].isin(wanted)]
+            coords[level] = dict(zip(
+                coord_df[name_col],
+                zip(coord_df['latitude'], coord_df['longitude'])
+            ))
+            logger.info(f"Loaded {len(coords[level])} coordinates for {level}")
 
         # 4. Create all units from hierarchy
-        # Create units for each level independently of column order
         for level in self.levels:
             unique_names = hierarchy_df[level].unique()
-
             for name in unique_names:
-                # Check if unit already exists AT THIS LEVEL to allow same names across levels
-                if name not in self.units_by_level[level]:
-                    # Get coordinates as tuple (lat, lon) or None
-                    coordinates = coords[level].get(name, None)
-                    # Generate unique ID
-                    unit_id = self._generate_id()
-                    unit = GeographicalUnit(
-                        id=unit_id,
-                        name=name,
-                        level=level,
-                        coordinates=coordinates
-                    )
-                    self.add_geo_unit(unit)                    
+                if name in self.units_by_level[level]:
+                    continue
+                coordinates = coords[level].get(name, None)
+                unit = GeographicalUnit(
+                    id=self._generate_id(),
+                    name=name,
+                    level=level,
+                    coordinates=coordinates,
+                )
+                self.add_geo_unit(unit)
 
-        logger.info(f"Created {len(self.units)} total units")
+        logger.info(f"Created {len(self.units_by_id)} total units")
 
-        # 5. Build parent-child relationships from hierarchy
-        # Use explicit level pairs instead of column offsets
-        for _, row in hierarchy_df.iterrows():
-            # Link each level to its parent
-            for i in range(len(self.levels) - 1):
-                child_level = self.levels[i]
-                parent_level = self.levels[i+1]
-                
-                child_name = row[child_level]
-                parent_name = row[parent_level]
-
-                # Get units from their specific levels
-                child = self.units_by_level[child_level].get(child_name)
-                parent = self.units_by_level[parent_level].get(parent_name)
-
-                if child and parent and child.parent is None:
-                    parent.add_child(child)
+        # 5. Build parent-child relationships, vectorized per level pair.
+        # Each (child, parent) pair appears once after drop_duplicates, so we
+        # don't iterate every hierarchy row.
+        for i in range(len(self.levels) - 1):
+            child_level = self.levels[i]
+            parent_level = self.levels[i + 1]
+            pairs = hierarchy_df[[child_level, parent_level]].drop_duplicates()
+            child_index = self.units_by_level[child_level]
+            parent_index = self.units_by_level[parent_level]
+            for child_name, parent_name in pairs.itertuples(index=False, name=None):
+                child = child_index.get(child_name)
+                parent = parent_index.get(parent_name)
+                if child is None or parent is None or child.parent is not None:
+                    continue
+                parent.add_child(child)
 
         logger.info("Built hierarchical relationships")
         self._log_summary()
 
+    @staticmethod
+    def _validate_coord_columns(coord_df, coord_file, level):
+        """
+        Verify a coordinate CSV has the columns we rely on. Without this, a
+        typo in the header surfaces as a mid-load KeyError far from the cause.
+        """
+        required = {"latitude", "longitude"}
+        missing = required.difference(coord_df.columns)
+        if missing:
+            raise ValueError(
+                f"Coordinate file {coord_file} for level {level} is missing "
+                f"required column(s) {sorted(missing)}; found {list(coord_df.columns)}"
+            )
+        if len(coord_df.columns) < 3:
+            raise ValueError(
+                f"Coordinate file {coord_file} for level {level} must have a "
+                f"name column followed by latitude and longitude; "
+                f"found columns {list(coord_df.columns)}"
+            )
+
     def add_geo_unit(self, unit: "GeographicalUnit"):
-        if unit.name not in self.units:
+        existing = self.units.get(unit.name)
+        if existing is None:
             self.units[unit.name] = unit
+        elif existing.level != unit.level:
+            logger.warning(
+                f"Name collision across levels: '{unit.name}' exists at "
+                f"{existing.level} (id={existing.id}) and {unit.level} (id={unit.id}); "
+                f"get_unit('{unit.name}') will continue to return the {existing.level} unit. "
+                f"Use get_units_by_level() to disambiguate."
+            )
+        elif existing.id != unit.id:
+            logger.warning(
+                f"Duplicate unit at {unit.level}: '{unit.name}' already registered with "
+                f"id={existing.id}; ignoring new id={unit.id}."
+            )
         self.units_by_id[unit.id] = unit
         self.units_by_level[unit.level][unit.name] = unit
 
@@ -180,21 +232,8 @@ class Geography:
             self.add_geo_unit(unit)
         
     def get_unit(self, name):
-        """Get a unit by its name"""
+        """Get a unit by its name (or `code` in datasets that use codes as names)."""
         return self.units.get(name)
-
-    def get_geo_unit(self, code):
-        """
-        Get a geographical unit by its code/name.
-        Alias for get_unit() for clarity in distributor context.
-
-        Args:
-            code: Geographical unit code (e.g., "E00001551")
-
-        Returns:
-            GeographicalUnit or None if not found
-        """
-        return self.get_unit(code)
 
     def get_unit_by_id(self, id):
         """Get a unit by its numeric ID"""
@@ -226,11 +265,13 @@ class Geography:
         return f"<Geography: {len(self.units)} units across {len(self.levels)} levels>"
 
     def __eq__(self, other):
-        for attribute in ['units','levels']:
+        if not isinstance(other, Geography):
+            return NotImplemented
+        for attribute in ['units', 'levels']:
             if getattr(self, attribute) != getattr(other, attribute):
                 return False
         return True
 
     def __hash__(self):
-        return hash((self.data_dir, self.levels))
+        return hash((self.data_dir, tuple(self.levels)))
 

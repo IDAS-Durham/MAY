@@ -58,8 +58,8 @@ class TestPopulationManagerInitialization:
     """Test PopulationManager initialization."""
 
     def test_init_basic(self, mock_geography):
-        """Test basic initialization."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        """data_dir is whatever the caller passes; nothing is defaulted."""
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         assert pop_manager.geography == mock_geography
         assert pop_manager.data_dir == "data/population"
@@ -73,9 +73,15 @@ class TestPopulationManagerInitialization:
 
         assert pop_manager.data_dir == "custom/path"
 
+    def test_data_dir_is_required(self, mock_geography):
+        """PopulationManager has no default for data_dir; production callers
+        always provide one (see create_world.py and the integration tests)."""
+        with pytest.raises(TypeError, match="data_dir"):
+            PopulationManager(geography=mock_geography)
+
     def test_len_initially_zero(self, mock_geography):
         """Test that initial population size is zero."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         assert len(pop_manager) == 0
 
@@ -156,7 +162,7 @@ class TestPopulationGeneration:
 
     def test_generate_population_without_demographics(self, mock_geography, caplog):
         """Test that generation fails gracefully without demographics."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         pop_manager.generate_population()
 
@@ -165,7 +171,7 @@ class TestPopulationGeneration:
 
     def test_generate_population_basic(self, mock_geography):
         """Test basic population generation from demographics."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         # Manually set up simple demographics
         pop_manager.precise_demographics = {
@@ -187,7 +193,7 @@ class TestPopulationGeneration:
 
     def test_generate_population_age_ordering(self, mock_geography):
         """Test that people are generated in age order."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         pop_manager.precise_demographics = {
             'E00000001': {
@@ -209,7 +215,7 @@ class TestPopulationGeneration:
 
     def test_generate_population_with_kwargs(self, mock_geography):
         """Test population generation with additional kwargs."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         pop_manager.precise_demographics = {
             'E00000001': {
@@ -225,13 +231,13 @@ class TestPopulationGeneration:
             properties=test_properties
         )
 
-        # Check that kwargs were passed to Person creation
-        assert pop_manager.people[0].activities == test_activities
+        # Person stores activities as a set (no duplicates, order-independent)
+        assert pop_manager.people[0].activities == set(test_activities)
         assert pop_manager.people[0].properties == test_properties
 
     def test_generate_population_assigns_to_geo_units(self, mock_geography):
         """Test that people are assigned to their geographical units."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         pop_manager.precise_demographics = {
             'E00000001': {
@@ -256,7 +262,7 @@ class TestQueryMethods:
     @pytest.fixture
     def populated_manager(self, mock_geography):
         """Create a population manager with some people."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         # Create some people directly
         unit1 = mock_geography.get_unit('E00000001')
@@ -368,7 +374,7 @@ class TestStatistics:
     @pytest.fixture
     def populated_manager(self, mock_geography):
         """Create a population manager with some people."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         unit1 = mock_geography.get_unit('E00000001')
 
@@ -387,7 +393,7 @@ class TestStatistics:
 
     def test_get_statistics_empty_population(self, mock_geography):
         """Test statistics with empty population."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         stats = pop_manager.get_statistics()
 
@@ -482,7 +488,7 @@ class TestPopulationManagerIntegration:
 
     def test_len_after_population_generation(self, mock_geography):
         """Test __len__ returns correct count after generation."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         pop_manager.precise_demographics = {
             'E00000001': {
@@ -504,7 +510,7 @@ class TestPopulationManagerEdgeCases:
 
     def test_empty_population_queries(self, mock_geography):
         """Test querying empty population."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         assert pop_manager.get_all_people() == []
         assert pop_manager.get_people_by_age_range(0, 100) == []
@@ -513,7 +519,7 @@ class TestPopulationManagerEdgeCases:
 
     def test_demographics_with_zero_counts(self, mock_geography):
         """Test demographics where some age/sex combinations have zero count."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         pop_manager.precise_demographics = {
             'E00000001': {
@@ -529,7 +535,7 @@ class TestPopulationManagerEdgeCases:
 
     def test_single_person_population(self, mock_geography):
         """Test population with single person."""
-        pop_manager = PopulationManager(geography=mock_geography)
+        pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
         pop_manager.precise_demographics = {
             'E00000001': {

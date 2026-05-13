@@ -106,6 +106,14 @@ class RelationshipRulesValidator:
         with open(config_file, 'r') as f:
             config = yaml.safe_load(f)
 
+        # An empty YAML body parses to None. Treat it the same as a missing
+        # file: leave the validator disabled with no rules, rather than
+        # crashing world creation with AttributeError.
+        if config is None:
+            logger.warning(f"Empty relationship rules config: {config_file}")
+            logger.warning("Relationship rules disabled")
+            return
+
         self.enabled = config.get('enabled', False)
         self.selection_strategy = config.get('selection_strategy', {})
         self.track_statistics = config.get('track_statistics', False)

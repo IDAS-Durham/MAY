@@ -117,7 +117,7 @@ class WorldSerializer:
 
         # Version info
         f.attrs['serialization_version'] = '1.0'
-        f.attrs['june_zero_version'] = '0.1.0'
+        f.attrs['MAY_version'] = '0.1.0'
 
     def _write_geography(self, f, world):
         """Write geography hierarchy to HDF5."""
@@ -1060,6 +1060,8 @@ class WorldSerializer:
                 val = obj.properties.get(prop_name)
                 if val is None:
                     chunk_vals.append(fill_value)
+                elif isinstance(val, set):
+                    chunk_vals.append(json.dumps([p.id for p in val]))
                 elif isinstance(val, (list, dict)):
                     chunk_vals.append(json.dumps(val))
                 else:

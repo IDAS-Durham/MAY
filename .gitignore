@@ -105,6 +105,7 @@ world_map/medieval_map.html
 
 # Built mkdocs site output
 docs/site/
+docs/docs/may/
 
 world_map/data/
 
