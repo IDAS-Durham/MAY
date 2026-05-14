@@ -1,3 +1,26 @@
-/* Hide dark-mode logo in light mode, and vice versa */
+/* Custom header colour for light mode */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #FFD600;
+  --md-primary-fg-color--light: #ffe033;
+  --md-primary-fg-color--dark: #e6c000;
+  --md-primary-bg-color: #1a1a1a;
+  --md-primary-bg-color--light: rgba(0, 0, 0, 0.54);
+}
+
+/* Swap header logo per colour scheme */
+[data-md-color-scheme="default"] .md-header__button.md-logo img {
+  content: url('../images/May_docs_logo_dark.svg');
+}
+
+[data-md-color-scheme="slate"] .md-header__button.md-logo img {
+  content: url('../images/May_docs_logo_white.svg');
+}
+
+/* Hide site name text but preserve space — keeps search and toggle aligned right */
+.md-header__title {
+  visibility: hidden;
+}
+
+/* Hide dark-mode in-content logo in light mode, and vice versa */
 [data-md-color-scheme="default"] .logo-dark-mode { display: none; }
 [data-md-color-scheme="slate"] .logo-light-mode { display: none; }
