@@ -69,8 +69,8 @@ def main():
     parser.add_argument(
         "--filename",
         type=str,
-        default="world_state.h5",
-        help="Path to the saved file (default world_state.h5)"
+        default=None,
+        help="Output HDF5 filename. Overrides serialization.filename in config. Defaults to world_state.h5 if neither is set."
     )
     args = parser.parse_args()
 
@@ -337,7 +337,7 @@ def main():
         logger.info("")
         logger.info("Exporting world to HDF5...")
         output_dir = serial_config.get("output_dir", ".")
-        filename = serial_config.get("filename", args.filename)
+        filename = args.filename or serial_config.get("filename", "world_state.h5")
         
         if output_dir != ".":
             os.makedirs(output_dir, exist_ok=True)
