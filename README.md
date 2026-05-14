@@ -10,6 +10,11 @@ Given census-style inputs — a geographical hierarchy, age × sex demographics 
 
 The whole pipeline is driven by **YAML configuration files**. The Python code does not need to be edited to build a new world; users edit YAMLs and CSVs only.
 
+## Documentation
+
+- **[Docs Page](https://mtcorread.github.io/MAY/)** - Full documentation.
+- **[USER_GUIDE.md](USER_GUIDE.md)** — walkthrough of every YAML and CSV: how to configure geography filters, edit household allocation, swap census years, disable debug outputs, etc. Read this before changing any config.
+
 ## Install
 
 Requires Python 3.13+. Use any environment manager you like — Conda is recommended:
@@ -63,9 +68,6 @@ MAY/
 └── world_state.h5      # Output
 ```
 
-## Documentation
-
-- **[USER_GUIDE.md](USER_GUIDE.md)** — full walkthrough of every YAML and CSV: how to configure geography filters, edit household allocation, swap census years, disable debug outputs, etc. Read this before changing any config.
 
 ## Testing
 

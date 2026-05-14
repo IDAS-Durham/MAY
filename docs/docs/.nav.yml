@@ -3,6 +3,7 @@ nav:
   - LICENSE: LICENSE.md
   - About: about.md
   - User Guide: USER_GUIDE.md
+  - World Creation Pipeline: create-world.md
   - Configuration Reference:
     - Overview: configs/index.md
     - Master Config: configs/master-config.md
