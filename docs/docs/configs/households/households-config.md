@@ -1,90 +1,54 @@
 # households_config.yaml
 
-Defines population age categories and the global demotion/promotion rules applied when census household counts and demographic counts do not agree.
+Defines the age categories used in household composition patterns, and the global demotion and promotion rules applied when census household counts and demographic counts disagree.
 
 **Topic:** [Households](index.md)  
 **Path:** `configs/2021/households/households_config.yaml`
 
 ---
 
-## Full Schema
+## Keys
+
+| Key | Description |
+|---|---|
+| `categories` | Named age (or attribute) bands used in composition pattern slots |
+| `demotion` | Rules for relaxing household patterns when the population is too small to fill them |
+| `promotion` | Rules for loosening household patterns when surplus people remain after allocation |
+
+---
+
+## `categories`
 
 ```yaml
-# ============================================================
-# CATEGORIES
-# ============================================================
-# Named age (or attribute) bands used in composition patterns.
-# The order here defines the slot order in patterns:
-#   e.g. four categories → patterns of the form "K YA A OA"
-# Any number of categories may be defined; names are arbitrary.
-
 categories:
-  - name: "Kids"            # human-readable label; used in rules and distribution keys
-    symbol: "K"             # short symbol used in composition pattern strings
-    attribute: "age"        # person attribute to categorise
+  - name: "Kids"
+    symbol: "K"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 0
+      max: 17
+```
 
-    type: "numerical"       # "numerical" | "categorical"
+Each entry defines one slot in a composition pattern. The order of entries here determines the slot order in pattern strings — so four categories produce patterns of the form `"K YA A OA"`. The `symbol` is what appears in those strings. `attribute` is any person property (most commonly `"age"`); `type` is `"numerical"` or `"categorical"`. For numerical types, `min` and `max` are inclusive bounds; `null` means no upper limit. For categorical types, `allowed_values` lists the accepted values.
 
-    numerical:              # required when type is "numerical"
-      min: 0                # inclusive lower bound
-      max: 17               # inclusive upper bound; null → no upper limit
+Adding, removing, or reordering categories changes the meaning of every pattern string in `allocation_strategy.yaml` and `relationship_rules.yaml`, so both files must be updated in step.
 
-    # categorical:          # required when type is "categorical"
-    #   allowed_values: ["male", "m", "M"]
+---
 
+## `demotion`
 
-# ============================================================
-# DEMOTION
-# ============================================================
-# When a geo-unit lacks enough people to fill a household pattern,
-# the engine relaxes the pattern (e.g. ">=2" → ">=1" → ">=0")
-# until a viable composition is found or attempts are exhausted.
-
+```yaml
 demotion:
-  enabled: true             # false → skip demotion; unresolvable patterns are discarded
-
-  max_attempts: 10          # maximum demotion iterations per pattern
-
-  min_household_size: 1     # discard patterns that would produce fewer members than this
-
-  priority:                 # which category to demote first; lower number = first
+  enabled: true
+  max_attempts: 10
+  min_household_size: 1
+  priority:
     Kids: 1
     Young Adults: 2
     Old Adults: 3
-    Adults: 4               # demote Adults last — essential for supervision
-
-  validation_rules:         # constraints enforced after every demotion step
-    - name: "Kids require adult supervision"
-      condition:
-        category: "Kids"    # category name from the list above
-        operator: ">="      # ">=" | ">" | "==" | "<=" | "<"
-        value: 1
-      requirement:
-        category: "Adults"
-        operator: ">="
-        value: 1
-    # Add further rules as needed
-
-
-# ============================================================
-# PROMOTION
-# ============================================================
-# When leftover people remain after all allocation steps,
-# the engine loosens existing households (e.g. "0" → ">=0")
-# to absorb the surplus.
-
-promotion:
-  enabled: true             # false → skip promotion
-
-  max_attempts: 4           # maximum promotion iterations per household
-
-  priority:                 # which category to promote first; lower number = first
-    Young Adults: 1
-    Adults: 2
-    Old Adults: 3
-    Kids: 4                 # promote Kids last — need adult supervision
-
-  validation_rules:         # same format as demotion.validation_rules
+    Adults: 4
+  validation_rules:
     - name: "Kids require adult supervision"
       condition:
         category: "Kids"
@@ -96,14 +60,35 @@ promotion:
         value: 1
 ```
 
+Demotion fires when a geo-unit lacks enough people in a given category to satisfy a household pattern. The engine relaxes the pattern step by step — reducing `>=N` bounds downward, then reducing exact counts — until either a viable pattern is found or `max_attempts` is exhausted. Patterns that would produce fewer than `min_household_size` members are discarded rather than demoted further.
+
+`priority` controls which category is relaxed first. Lower number means demoted first — `Kids` are relaxed before `Adults` because the engine prioritises preserving at least one supervising adult. `validation_rules` gate every demotion step: if a relaxed pattern would violate a rule (e.g. kids without an adult), that pattern is rejected and demotion continues. Any number of rules may be added; each rule specifies a `condition` and a `requirement` using the operators `>=`, `>`, `==`, `<=`, `<`.
+
 ---
 
-## Composition Pattern Format
+## `promotion`
 
-Patterns appear in `allocation_strategy.yaml` and throughout relationship rules. Each slot corresponds to one category in the order defined above:
+```yaml
+promotion:
+  enabled: true
+  max_attempts: 4
+  priority:
+    Young Adults: 1
+    Adults: 2
+    Old Adults: 3
+    Kids: 4
+  validation_rules:
+    - name: "Kids require adult supervision"
+      condition:
+        category: "Kids"
+        operator: ">="
+        value: 1
+      requirement:
+        category: "Adults"
+        operator: ">="
+        value: 1
+```
 
-```
-"K YA A OA"        exact counts: 2 adults, 0 others → "0 0 2 0"
-">=2 >=0 2 0"      2+ kids, any young adults, exactly 2 adults, 0 elderly
-"1 >=0 >=0 >=0"    1 kid, flexible adults of any kind
-```
+Promotion fires when leftover people remain after all allocation steps. The engine loosens existing households by converting fixed slots (`0` or `N`) to flexible slots (`>=0` or `>=N`), allowing them to absorb surplus people. `max_attempts` caps how many times any single household can be loosened.
+
+`priority` controls which category is promoted into first. `validation_rules` use the same format as demotion and are enforced after every promotion step. Kids are promoted last (priority 4) to avoid creating households where children lack an adult.

@@ -1,138 +1,90 @@
 # venues_config.yaml
 
-Catalogue of all venue types the engine will load. Each entry under `venue_types` defines one type; the name is the key used throughout distributor and serialization configs.
+Catalogue of all venue types the engine will load. Each named entry under `venue_types` defines one type; the name is the key used throughout distributor and serialisation configs.
 
 **Topic:** [Venues](index.md)  
 **Path:** `configs/2021/venues/venues_config.yaml`
 
 ---
 
-## Full Schema
+## Keys
 
-```yaml
-# ============================================================
-# GLOBAL SETTINGS
-# ============================================================
-settings:
-  filter_by_geography: true     # true  → only load venues whose geo_unit is in the
-                                #          loaded geographical hierarchy
-                                # false → load all venues regardless of geography
-
-
-# ============================================================
-# VENUE TYPES
-# ============================================================
-venue_types:
-
-  {venue_type_name}:            # arbitrary key; used as venue_type in distributors
-
-    enabled: true | false       # false → skip loading this type entirely
-
-    description: "..."          # optional — human-readable label
-
-    is_residence: false         # true → agents live here (affects household pipeline)
-
-    # ----------------------------------------------------------
-    # Standard CSV loading (default mode)
-    # ----------------------------------------------------------
-    filename: "path/to/file.csv"   # optional — path under venues.data_dir
-                                   # default: {venue_type_name}s.csv
-
-    # ----------------------------------------------------------
-    # Batch mode loading (alternative)
-    # Used when all venue types share a single CSV, distinguished by a column value.
-    # ----------------------------------------------------------
-    batch_mode: true               # optional — enables batch loading
-    filter_column: "BTCode"        # column in the shared CSV to filter on
-    filter_values: ["C", "D"]      # rows whose filter_column matches any of these
-                                   # values are loaded as this venue type
-
-    subset_key: "resident"         # optional — default subset name assigned to
-                                   # residents of this venue (used by distributors)
-
-    subset_categories:             # optional — define named age/attribute subsets
-      - name: "Kids"               # subset label
-        attribute: "age"           # person attribute to filter on
-        type: "numerical"          # "numerical" | "categorical"
-        numerical:
-          min: 0
-          max: 17                  # null → no upper bound
-
-    # ----------------------------------------------------------
-    # Capacity configuration
-    # ----------------------------------------------------------
-    capacity_config:
-
-      total_capacity_column: "capacity"
-                                   # CSV column holding total capacity for this venue
-                                   # used as hard ceiling when track_capacity is true
-
-      # -- Attribute-aware capacity (optional) --
-      # Breaks total capacity into age/sex slots defined in the CSV.
-      attribute_capacities:
-
-        filter_attributes:         # attributes used to match a person to a slot
-          - name: "age"
-            type: "age_band"       # "age_band" | "categorical"
-          - name: "sex"
-            type: "categorical"
-
-        column_mappings:           # maps CSV column → attribute values for that slot
-          age_50_64_male:
-            age_band: [50, 64]     # inclusive [min, max]
-            sex: "male"
-          age_50_64_female:
-            age_band: [50, 64]
-            sex: "female"
-          # ... one entry per CSV capacity column
-
-      # -- Hard per-person attribute constraints (optional) --
-      # Prevents a person being placed here unless their attribute falls
-      # within the range defined by CSV columns on the venue.
-      attribute_constraints:
-        age:
-          min_column: "StatutoryLowAge"   # CSV column holding per-venue minimum
-          max_column: "StatutoryHighAge"  # CSV column holding per-venue maximum
-                                          # both bounds are inclusive
-
-      fallback_strategy: "flexible" | "strict" | "total_capacity"
-                                   # behaviour when a specific age/sex slot is full:
-                                   # "flexible"       → overflow into other slots
-                                   # "strict"         → reject person if slot full
-                                   # "total_capacity" → use total_capacity_column only,
-                                   #                    ignore per-slot breakdowns
-```
+| Key | Description |
+|---|---|
+| `settings` | Global loading options applied to all venue types |
+| `venue_types` | Dict of venue type definitions, keyed by venue type name |
 
 ---
 
-## Minimal Examples
+## `settings`
 
-**Simple venue (no capacity tracking):**
+```yaml
+settings:
+  filter_by_geography: true
+```
+
+`filter_by_geography` — when `true`, only venues whose `geo_unit` column matches a unit in the loaded geographical hierarchy are created. Set `false` to load all venues in the CSV regardless of geography. Defaults to `true`.
+
+---
+
+## `venue_types`
+
+Each entry under `venue_types` uses the venue type name as its key. That name is referenced throughout distributor configs (`venue_type:`), serialisation config, and allocation strategy venue steps. The following sub-keys are available on each entry.
+
+---
+
+### Core keys
+
 ```yaml
 venue_types:
-  pub:
+  hospital:
     enabled: true
-    filename: leisure/pubs.csv
+    filename: "medical/hospitals.csv"
+    description: "Healthcare facilities"
     is_residence: false
 ```
 
-**Venue with total capacity only:**
+`enabled` — set `false` to skip loading this venue type entirely; the type still exists in the registry but contains no venues. `filename` is the path to the CSV under `venues.data_dir`; if omitted, the engine defaults to `{venue_type_name}s.csv` in `data_dir`. `description` is a human-readable label for logging. `is_residence` marks whether agents live here; this affects how the household pipeline treats residents and is stored on each venue object.
+
+---
+
+### Batch mode loading
+
+```yaml
+venue_types:
+  church:
+    enabled: true
+    batch_mode: true
+    filter_column: "BTCode"
+    filter_values: ["CH"]
+    is_residence: false
+    subset_key: "priest"
+```
+
+When `batch_mode: true`, venues of this type are loaded from a shared CSV (the same file used by other batch-mode types in the same config) rather than from a type-specific file. `filter_column` names the CSV column used to distinguish types; `filter_values` is the list of values in that column that belong to this venue type. Rows not matching any listed value are ignored for this type.
+
+`subset_key` is an optional default subset name attached to the venue. For residence types, this becomes the subset that residents are placed into during allocation. `subset_categories` (less common) defines named age-band slots directly on the venue — used in the 1911 configs where household composition is encoded in the venue CSV rather than derived from a separate file.
+
+---
+
+### Capacity config — total capacity
+
 ```yaml
 venue_types:
   school:
-    enabled: true
-    filename: primary_activities/Schools_EW.csv
     capacity_config:
       total_capacity_column: "SchoolCapacity"
 ```
 
-**Residence with attribute-aware slots:**
+`total_capacity_column` names the CSV column holding the venue's total capacity. When a distributor has `track_capacity: true`, the engine reads this column and prevents allocation once the count is reached. If the column is missing or zero on a given venue, the distributor's `capacity_handling` settings determine what happens (ignore, skip, or use a default).
+
+---
+
+### Capacity config — attribute-aware slots
+
 ```yaml
 venue_types:
   care_home:
-    enabled: true
-    filename: residences/care_homes.csv
-    is_residence: true
     capacity_config:
       total_capacity_column: "capacity"
       attribute_capacities:
@@ -151,13 +103,27 @@ venue_types:
       fallback_strategy: "total_capacity"
 ```
 
-**Batch-mode venue (shared CSV, filter by column):**
+Attribute-aware capacity breaks the total into demographic slots, each mapped to a CSV column. The engine reads `total_capacity_column` as an overall ceiling, then uses `column_mappings` to direct people into specific slots. Each mapping entry names a CSV column and specifies the attribute criteria (`age_band` with inclusive `[min, max]` bounds, and/or a `categorical` attribute value) that a person must match to fill that slot.
+
+`filter_attributes` declares which person attributes the engine inspects when matching slots — typically `age` with type `"age_band"` and `sex` with type `"categorical"`. This block is only needed for slot matching; it does not filter eligibility.
+
+`fallback_strategy` controls what happens when a specific slot is full:
+- `"flexible"` — overflow into other age/sex slots as long as total capacity allows.
+- `"strict"` — reject the person if their exact slot is full.
+- `"total_capacity"` — ignore per-slot limits entirely and use only the total capacity ceiling.
+
+---
+
+### Capacity config — attribute constraints
+
 ```yaml
 venue_types:
-  church:
-    enabled: true
-    batch_mode: true
-    filter_column: "BTCode"
-    filter_values: ["CH"]
-    is_residence: false
+  boarding_school:
+    capacity_config:
+      attribute_constraints:
+        age:
+          min_column: "StatutoryLowAge"
+          max_column: "StatutoryHighAge"
 ```
+
+Attribute constraints prevent a person being placed in a venue if their attribute value falls outside the range defined by per-venue CSV columns. Unlike slot capacity (which limits *how many* people of a given type), constraints control *who is eligible at all*. `min_column` and `max_column` name CSV columns on the venue; the engine reads those values from the venue's properties and checks the person's attribute against them. Both bounds are inclusive. Either `min_column` or `max_column` may be omitted to apply only a one-sided constraint.

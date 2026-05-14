@@ -1,109 +1,111 @@
 # social_networks.yaml
 
-Defines one or more social contact networks. Each entry in the `networks:` list is built independently and written to a `storage_key` on each person. Multiple networks sharing the same key are merged (contacts deduplicated).
+Defines one or more social contact networks to build after venue allocation. Each network entry is built independently and contacts are written to `storage_key` on each person. Multiple networks sharing the same `storage_key` are merged with deduplication.
 
 **Topic:** [Relationships](index.md)  
 **Path:** `configs/2021/relationships/social_networks.yaml`
 
 ---
 
-## Full Schema
+## Keys
 
-```yaml
-networks:
-
-  - name: "activity_peers"            # arbitrary label for logging
-
-    # ----------------------------------------------------------
-    # Pool selection
-    # ----------------------------------------------------------
-    network_type: "activity_peers"    # how the candidate pool is constructed:
-                                      # "activity_peers"       — people sharing the same venue activity
-                                      # "intra_geo_unit"       — people in the same geo unit
-                                      # "local_social_network" — all people in a geo unit (Watts-Strogatz)
-                                      # "spatial_social_network" — people within a distance annulus
-
-    pool_type: "activity"             # "activity" | "geographic"
-
-    pool:
-      # -- activity pool --
-      activity: "primary_activity"    # activity_map key to match on
-
-      # -- geographic pool --
-      level: "SGU"                    # geo level: SGU / MGU / LGU / XLGU / custom name
-      min_km: 0.01                    # optional — minimum distance in km (spatial networks only)
-      max_km: 4.0                     # optional — maximum distance in km (spatial networks only)
-
-    # ----------------------------------------------------------
-    # Algorithm
-    # ----------------------------------------------------------
-    algorithm: "random"               # "random"        — uniform random sampling
-                                      # "watts_strogatz" — clustered small-world graph
-
-    clustering_level: 0.8             # optional — rewiring probability for watts_strogatz (0–1)
-                                      # higher = more clustered, lower = more random
-
-    # ----------------------------------------------------------
-    # Contact counts
-    # ----------------------------------------------------------
-    mean_count: 3                     # mean contacts per person from this network
-
-    degree_variants:                  # optional — override count for a subset of people
-      - probability: 0.10             # fraction of people receiving this count
-        count: 6
-
-    # ----------------------------------------------------------
-    # Storage
-    # ----------------------------------------------------------
-    storage_key: "friendships"        # person property key where contacts are stored
-                                      # networks sharing the same key are merged
-
-    assign_activity:                  # optional — create an activity_map entry per contact
-      contact_activity_key: "residence"   # activity on the contact to link to
-      activity_key: "social_contacts_local"  # key written to the person's activity_map
-
-    # ----------------------------------------------------------
-    # Constraints
-    # ----------------------------------------------------------
-    constraints:                      # optional — filters on who can be paired
-      - type: "numerical_attribute_difference"
-        attribute: "age"
-        max_difference: 5             # |age_1 - age_2| must not exceed this
-        # min_difference: 0           # optional lower bound
-```
+| Key | Description |
+|---|---|
+| `networks` | List of network definitions; each entry builds one network |
 
 ---
 
-## Minimal Examples
+## `networks`
 
-**Random activity-peer network:**
+Each entry in the list is one network. The required keys are `network_type`, `pool_type`, `storage_key`, and `mean_count`. All other keys are optional.
+
+---
+
+### `name`
+
 ```yaml
-networks:
-  - name: activity_peers
-    network_type: activity_peers
-    pool_type: activity
-    pool:
-      activity: primary_activity
-    algorithm: random
-    mean_count: 4
-    storage_key: friendships
+- name: "activity_peers"
 ```
 
-**Spatial Watts-Strogatz network (clustered within distance annulus):**
+Arbitrary label used in logs. Defaults to the value of `storage_key` if omitted.
+
+---
+
+### `network_type` and `pool_type`
+
 ```yaml
-networks:
-  - name: near_neighbours
-    network_type: spatial_social_network
-    pool_type: geographic
-    pool:
-      level: SGU
-      min_km: 0.01
-      max_km: 4.0
-    algorithm: watts_strogatz
-    mean_count: 4
-    clustering_level: 0.8
-    storage_key: social_contacts_near
-    assign_activity:
-      contact_activity_key: residence
-      activity_key: social_contacts_near
+network_type: "activity_peers"
+pool_type: "activity"
+pool:
+  activity: "primary_activity"
 ```
+
+`network_type` selects the algorithm used to build edges. Five types are registered:
+
+- **`activity_peers`** — connects people who share the same venue activity. Requires `pool_type: "activity"` and `pool.activity` naming the `activity_map` key to match on (e.g. `"primary_activity"`). Uses the fast random builder.
+- **`intra_geo_unit`** — connects people within the same geographical unit. Requires `pool_type: "geographic"` and `pool.level` naming the hierarchy level (e.g. `"SGU"`, `"MGU"`). Uses the fast random builder.
+- **`local_social_network`** — Watts-Strogatz clustered graph over all people in a geo unit. Requires `pool_type: "geographic"` and `pool.level`. Produces more realistic clustering than the random builders. `clustering_level` defaults to `0.8`.
+- **`spatial_social_network`** — Watts-Strogatz graph over people within a distance annulus. Requires `pool_type: "geographic"`, `pool.level`, `pool.min_km`, and `pool.max_km`. `clustering_level` defaults to `0.9`.
+- **`bounded_distance`** — clustered graph over people within a radius. Requires `pool_type: "geographic"`, `pool.level`, and `pool.max_km` (no inner radius). `clustering_level` defaults to `0.7`.
+
+`pool_type` must be either `"activity"` or `"geographic"`. It controls how the candidate pool is assembled before edges are drawn.
+
+---
+
+### `mean_count` and `degree_variants`
+
+```yaml
+mean_count: 3
+degree_variants:
+  - probability: 0.10
+    count: 6
+```
+
+`mean_count` is the target mean number of contacts per person from this network. For the random builders it is used directly as the expected draw count; for Watts-Strogatz builders it sets the base ring degree before rewiring.
+
+`degree_variants` overrides the contact count for a subset of people. Each entry specifies a `probability` (fraction of the population) who receive `count` connections instead of `mean_count`. Multiple variants may be listed; probabilities are applied independently so a person can satisfy more than one variant, with the last matched count winning.
+
+---
+
+### `storage_key`
+
+```yaml
+storage_key: "friendships"
+```
+
+The key under which contacts are stored in `person.properties`. Networks sharing the same key accumulate contacts into the same set; duplicate contacts across networks are removed. The key must also be listed in `serialization_config.yaml` under `population.properties` to appear in the HDF5 output.
+
+---
+
+### `constraints`
+
+```yaml
+constraints:
+  - type: "numerical_attribute_difference"
+    attribute: "age"
+    max_difference: 5
+```
+
+An optional list of filters applied when drawing edges. Only `"numerical_attribute_difference"` is currently supported: it rejects a candidate edge if `|person_attr − candidate_attr|` exceeds `max_difference`. `min_difference` may also be specified for a lower bound.
+
+---
+
+### `clustering_level`
+
+```yaml
+clustering_level: 0.8
+```
+
+Used only by the Watts-Strogatz builders (`local_social_network`, `spatial_social_network`, `bounded_distance`). Controls the rewiring probability: `0.0` produces a perfectly regular ring lattice; `1.0` produces a random graph. Values around `0.7`–`0.9` produce the small-world regime with high clustering and short path lengths. Has no effect on the random builders (`activity_peers`, `intra_geo_unit`).
+
+---
+
+### `assign_activity`
+
+```yaml
+assign_activity:
+  contact_activity_key: "residence"
+  activity_key: "social_contacts_local"
+```
+
+When present, creates an additional `activity_map` entry on each person for every contact. `contact_activity_key` names the activity on the *contact* whose venue is used; `activity_key` is the key written to the *person's* `activity_map`. This allows the simulation engine to treat social contact venues as explicit activities. Omit this block if activity-map linking is not needed.

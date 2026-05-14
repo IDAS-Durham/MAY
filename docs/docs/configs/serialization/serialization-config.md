@@ -1,91 +1,114 @@
 # serialization_config.yaml
 
-Specifies which fields are written to `world_state.h5`. Core attributes (agent id, age, sex, geo unit; venue id, name, type, geo unit) are always included. All other fields are opt-in.
+Controls which fields are written to the HDF5 world-state file. Several fields are always written regardless of this config (see below). Everything else is opt-in.
 
-**Topic:** [Serialization](index.md)  
+**Always written — population:** `id`, `age`, `sex`, `geographical_unit`  
+**Always written — venues:** `id`, `name`, `type`, `geographical_unit`, parent/child relationships  
+**Always written — subsets:** `venue_id`, `subset_index`, `subset_name`, member list
+
+**Topic:** [Serialisation](index.md)  
 **Path:** `configs/2021/serialization_config.yaml`
 
 ---
 
-## Full Schema
+## Keys
+
+| Key | Description |
+|---|---|
+| `population` | Additional `person.properties` keys to include |
+| `geography` | Coordinate export and additional `geographical_unit.properties` keys |
+| `venues` | Global venue flags and per-type property lists |
+| `subsets` | Additional subset properties (rarely needed) |
+| `relationships` | Flags for activity map and hierarchy exports |
+| `output` | HDF5 compression and metadata settings |
+
+---
+
+## `population`
 
 ```yaml
-# ============================================================
-# POPULATION
-# ============================================================
-# Core attributes always written: id, age, sex, geographical_unit
-
 population:
-  properties:               # additional keys from person.properties to include
+  properties:
     - ethnicity
     - comorbidities
-    - work_mode
     - friendships
     - sexual_orientation
-    - cohabiting_couple
-    - romantic_partners
     - relationship_status
-    # Any property assigned via attribute YAMLs may be listed here.
-    # Dict/list values are serialised as JSON strings.
+```
 
+A list of keys from `person.properties` to include in the export. Any property assigned by an attribute YAML or social network builder may be listed here. Properties whose values are dicts or lists are serialised as JSON strings. Omitting a property from this list does not delete it from the world at runtime — it simply is not written to disk.
 
-# ============================================================
-# GEOGRAPHY
-# ============================================================
-# Core attributes always written: id, name, level, parent/child relationships
+---
 
+## `geography`
+
+```yaml
 geography:
-  include_coordinates: true     # true → write latitude/longitude for each geo unit
-  properties: []                # additional keys from geographical_unit.properties
+  include_coordinates: true
+  properties: []
+```
 
+`include_coordinates` — when `true`, writes `latitude` and `longitude` for each geographical unit. `properties` lists any additional keys from `geographical_unit.properties` to include; typically empty.
 
-# ============================================================
-# VENUES
-# ============================================================
-# Core attributes always written for ALL venues:
-#   id, name, type, geographical_unit, parent/child relationships
+---
 
+## `venues`
+
+```yaml
 venues:
   global:
-    include_coordinates: true       # true → write lat/lon for venues that have them
-    include_is_residence: true      # true → write is_residence flag
-
-  types:                            # per venue-type property lists
-    {venue_type_name}:              # must match a key in venues_config.yaml
+    include_coordinates: true
+    include_is_residence: true
+  types:
+    school:
       properties:
-        - column_name               # CSV column or venue property to include
-        # Any column loaded from the venue CSV may be listed here.
+        - Gender
+    company:
+      properties:
+        - work_sector
+    classroom:
+      properties:
+        - capacity
+```
 
+`global` sets flags applied to all venue types: `include_coordinates` writes latitude/longitude where available; `include_is_residence` writes the `is_residence` flag.
 
-# ============================================================
-# SUBSETS
-# ============================================================
-# Core attributes always written: venue reference, subset_index,
-# subset_name, members list
+`types` maps venue type names (matching keys in `venues_config.yaml`) to lists of CSV column names or venue properties to include. Any column loaded from the venue CSV may be listed. Child venue types (e.g. `classroom`, `office`) may also have entries here.
 
+---
+
+## `subsets`
+
+```yaml
 subsets:
-  properties: []                # additional subset properties (rarely needed)
+  properties: []
+```
 
+Additional properties to write for each venue subset. Core attributes (venue reference, subset index, subset name, member list) are always written. This list is almost always empty.
 
-# ============================================================
-# RELATIONSHIPS
-# ============================================================
+---
+
+## `relationships`
+
+```yaml
 relationships:
-  include_activity_map: true        # write person → venue activity_map entries
-  include_venue_hierarchy: true     # write venue parent → child links
-  include_geography_hierarchy: true # write geography parent → child links
+  include_activity_map: true
+  include_venue_hierarchy: true
+  include_geography_hierarchy: true
+```
 
+`include_activity_map` — writes each person's `activity_map` entries (person → venue links for each activity key). `include_venue_hierarchy` — writes parent → child venue links. `include_geography_hierarchy` — writes parent → child geography links. All three default to `true`; set `false` to reduce output size.
 
-# ============================================================
-# OUTPUT SETTINGS
-# ============================================================
+---
+
+## `output`
+
+```yaml
 output:
-  compression: "gzip"               # optional — HDF5 compression codec; omit for none
-  compression_level: 4              # optional — 0 (none) to 9 (maximum); default 4
-
-  include_metadata: true            # optional — write a metadata group to the HDF5
-
-  metadata:                         # optional — which metadata fields to write
+  compression: "gzip"
+  compression_level: 4
+  include_metadata: true
+  metadata:
     - random_seed
     - creation_timestamp
     - config_files_used
@@ -93,3 +116,7 @@ output:
     - num_venues
     - num_geo_units
 ```
+
+`compression` names the HDF5 compression codec; `"gzip"` is the standard choice. Omit for no compression. `compression_level` ranges from `0` (no compression) to `9` (maximum); `4` is a reasonable default balancing size and speed.
+
+`include_metadata` — when `true`, writes a metadata group to the HDF5 file. `metadata` lists which fields to include; the available fields are `random_seed`, `creation_timestamp`, `config_files_used`, `num_people`, `num_venues`, and `num_geo_units`.

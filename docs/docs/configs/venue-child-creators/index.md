@@ -1,9 +1,7 @@
 # Venue Child Creators
 
-Sub-divides a parent venue into smaller child venues after agents have been distributed to it. Each file targets one parent venue type and produces one child venue type.
+Sub-divides a large parent venue into smaller child venues after agents have been distributed to it. Each child venue holds a subset of the parent's members; agents interact only within their assigned child. This models situations where agents in the same large venue (school, university, company) form smaller day-to-day interaction groups (classrooms, year groups, offices).
 
-| File | Parent → Child | Groups by |
-|---|---|---|
-| [`school_classrooms.yaml`](school-classrooms.md) | school → classroom | age |
-| [`university_uni_years.yaml`](university-uni-years.md) | university → uni_groups_by_year | age (with custom mapping) |
-| [`company_offices.yaml`](company-offices.md) | company → office | none (all employees together) |
+| File | Purpose |
+|---|---|
+| [`venue-child-creators.md`](venue-child-creators.md) | Full schema — covers schools, universities, and companies |
