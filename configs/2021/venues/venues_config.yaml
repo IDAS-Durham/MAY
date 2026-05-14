@@ -237,6 +237,7 @@ venue_types:
     description: "Leisure location"
     is_residence: false
 
+fig.yaml
 
 # Global venue settings
 settings:

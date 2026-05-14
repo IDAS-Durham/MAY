@@ -76,21 +76,38 @@ Once the environment is active:
 # Run with the default config (configs/2021/config.yaml)
 python create_world.py
 
-# Or point at a custom config / output file
-python create_world.py --config configs/2021/config.yaml --filename world_state.h5
+# Or point at a custom config
+python create_world.py --config configs/2021/config.yaml
+
+# Override the output filename
+python create_world.py --filename my_world.h5
 ```
 
 CLI arguments:
 
 | Flag | Default | Description |
 |---|---|---|
-| `--config` | `yaml/config.yaml` | Path to the master config file. |
-| `--filename` | `world_state.h5` | Output HDF5 file containing the built world. |
+| `--config` | `configs/2021/config.yaml` | Path to the master config file. |
+| `--filename` | *(see below)* | Output HDF5 filename. Overrides `serialization.filename` in config. Falls back to `world_state.h5` if neither is set. |
+
+### Output path
+
+The output location is controlled by two keys in the `serialization:` section of `config.yaml`:
+
+```yaml
+serialization:
+  enabled: true
+  config_file: "configs/2021/serialization_config.yaml"
+  output_dir: "output/2021"   # directory; created automatically if absent
+  filename: "world_state.h5"  # filename within that directory
+```
+
+The default 2021 config writes to **`output/2021/world_state.h5`**. If you pass `--filename` on the command line it takes precedence over `serialization.filename` in the config; `output_dir` is always taken from the config.
 
 When the run finishes you will have:
 
-- `world_state.h5` — the serialized world (people, geography, venues, relationships). **This is the canonical output.**
-- *(opt-in)* debug CSVs — `household_allocations.csv`, `venue_allocations.csv`, `residence_venues.csv`, `unallocated_people.csv`. These are **off by default** because each one builds a DataFrame the size of the population/venue set, which can blow memory on country-scale runs. Enable them only for small worlds via `debug_outputs.enabled: true` in `yaml/config.yaml`.
+- `output/2021/world_state.h5` — the serialized world (people, geography, venues, relationships). **This is the canonical output.**
+- *(opt-in)* debug CSVs — `household_allocations.csv`, `venue_allocations.csv`, `residence_venues.csv`, `unallocated_people.csv`. These are **off by default** because each one builds a DataFrame the size of the population/venue set, which can blow memory on country-scale runs. Enable them only for small worlds via `debug_outputs.enabled: true` in `configs/2021/config.yaml`.
 
 ---
 
@@ -98,19 +115,21 @@ When the run finishes you will have:
 
 ```
 MAY/
-├── yaml/   ← edit YAMLs to change behaviour, scope, scenarios
-└── data/   ← edit CSVs to change the input statistics / locations
+├── configs/   ← edit YAMLs to change behaviour, scope, scenarios
+└── data/      ← edit CSVs to change the input statistics / locations
 ```
 
 Everything else (`may/`, `world_specific_code/`, `create_world.py`) is the engine. **You do not need to touch Python code.**
 
+The `configs/` folder contains subdirectories for each world scenario. You can edit any files under `configs/`. The rest of this guide focuses on `configs/2021/` (modern-day UK). See §5 for a description of what else is in `configs/`.
+
 ---
 
-## 4. The Master Config — `yaml/config.yaml`
+## 4. The Master Config — `configs/2021/config.yaml`
 
-`yaml/config.yaml` is the single entry point. It points to all the other YAMLs and tells the engine which steps to run. Open it and edit in place.
+`configs/2021/config.yaml` is the single entry point. It points to all the other YAMLs and tells the engine which steps to run. Open it and edit in place.
 
-It has six top-level sections:
+It has seven top-level sections:
 
 ### 4.1 `geography:` — which area to build
 
@@ -155,7 +174,7 @@ The two CSVs are matrices: rows = SGU codes, columns = ages 0–99.
 ```yaml
 venues:
   data_dir: "data/venues"
-  config_file: "yaml/venues/venues_config.yaml"   # which venue types to load
+  config_file: "configs/2021/venues/venues_config.yaml"   # which venue types to load
   export_file: "venue_allocations.csv"
 ```
 See **§5.1** to enable/disable venue types and §6 for the CSVs they read.
@@ -166,8 +185,8 @@ See **§5.1** to enable/disable venue types and §6 for the CSVs they read.
 households:
   data_dir: "data/households"
   data_file: "households.csv"
-  config_file: "yaml/households/households_config.yaml"
-  strategy_file: "yaml/households/allocation_strategy.yaml"
+  config_file: "configs/2021/households/households_config.yaml"
+  strategy_file: "configs/2021/households/allocation_strategy.yaml"
   export_file: "household_allocations.csv"
 ```
 
@@ -179,37 +198,69 @@ The `timeline.steps` list is the **execution order** of the entire simulation. E
 - `type: distributor` — place people into venues (school, hospital, company, leisure).
 - `type: child_creator` — sub-divide a venue (school → classrooms; company → offices).
 
-Each step references a YAML in `yaml/attributes/`, `yaml/distributors/`, or `yaml/venue_child_creators/`.
+Each step references a YAML in `configs/2021/attributes/`, `configs/2021/distributors/`, or `configs/2021/venue_child_creators/`.
 
 **To skip a step**, comment it out. **To reorder**, move the YAML block. Order matters — for example, in the **default** pipeline, schools/universities are assigned **before** workplaces, because workplace assignment skips anyone who already has a `primary_activity`. This is just how things are wired right now; with enough tinkering across the related YAMLs (eligibility filters, attribute dependencies, `require_unassigned`, etc.) the steps can in principle be reordered to suit a different scenario — but the order documented here is what currently ships.
 
-### 4.6 `relationship_pipeline:` and `romantic_relationships:`
+### 4.6 `relationship_pipeline:`, `romantic_relationships:`, and `serialization:`
 
-Build social and romantic networks **after** venues are assigned. Set `enabled: false` on either to skip.
+**`relationship_pipeline:`** builds social networks after venues are assigned. It takes a `relationships:` list; each entry points to a network config YAML. Set `enabled: false` to skip all networks.
+
+```yaml
+relationship_pipeline:
+  enabled: true
+  relationships:
+    - config: "configs/2021/relationships/social_networks.yaml"
+    # add further network configs here
+```
+
+**`romantic_relationships:`** builds sexual orientation and partnership networks. Set `enabled: false` to skip.
+
+```yaml
+romantic_relationships:
+  enabled: true
+  config: "configs/2021/relationships/romantic_relationships.yaml"
+```
+
+**`serialization:`** controls where the output HDF5 is written and which serialization config to use.
+
+```yaml
+serialization:
+  enabled: true
+  config_file: "configs/2021/serialization_config.yaml"
+  output_dir: "output/2021"
+  filename: "world_state.h5"
+```
 
 ---
 
 ## 5. The Other YAMLs — what each folder controls
 
 ```
-yaml/
-├── config.yaml                       # master config (above)
-├── serialization_config.yaml         # what gets exported to world_state.h5
-├── venues/venues_config.yaml         # venue types catalogue
-├── households/
-│   ├── households_config.yaml        # age categories + demotion/promotion rules
-│   ├── allocation_strategy.yaml      # household allocation order
-│   └── relationship_rules.yaml       # how people inside a household relate
-├── attributes/                       # one YAML per attribute to assign
-├── distributors/                     # one YAML per venue distributor
-├── venue_child_creators/             # rules to break venues into sub-venues
-├── relationships/
-│   ├── friendships.yaml
-│   └── romantic_relationships.yaml
-└── 1911/                             # alternative configs (1911 census world)
+configs/
+├── 2021/                             # modern-day UK world (this guide)
+│   ├── config.yaml                       # master config (above)
+│   ├── serialization_config.yaml         # what gets exported to world_state.h5
+│   ├── venues/venues_config.yaml         # venue types catalogue
+│   ├── households/
+│   │   ├── households_config.yaml        # age categories + demotion/promotion rules
+│   │   ├── allocation_strategy.yaml      # household allocation order
+│   │   └── relationship_rules.yaml       # how people inside a household relate
+│   ├── attributes/                       # one YAML per attribute to assign
+│   ├── distributors/                     # one YAML per venue distributor
+│   ├── venue_child_creators/             # rules to break venues into sub-venues
+│   └── relationships/
+│       ├── social_networks.yaml
+│       └── romantic_relationships.yaml
+└── 1911/                             # example configs for building a portion of the UK in 1911
+    └── *.yaml                            # flat layout — no subfolders
 ```
 
-### 5.1 `yaml/venues/venues_config.yaml`
+`configs/1911/` contains a flat set of YAML files for building a historical 1911 UK world. Its structure and keys differ from `configs/2021/`; it is provided as an example and is not covered further in this guide.
+
+The rest of this section documents each file under `configs/2021/`.
+
+### 5.1 `configs/2021/venues/venues_config.yaml`
 
 Catalogue of all venue types. For each one:
 
@@ -229,9 +280,9 @@ Household allocation is the most intricate part of the pipeline, so it gets its 
 
 | File | Role |
 |---|---|
-| `yaml/households/households_config.yaml` | Defines **what** people are (age categories) and the global **demotion/promotion** safety nets. |
-| `yaml/households/allocation_strategy.yaml` | Defines **the ordered list of steps** that places people into households (and into communal residences). |
-| `yaml/households/relationship_rules.yaml` | Defines **how members of a household relate to each other** (parent–child age gaps, couple compatibility, multi-generational structure). |
+| `configs/2021/households/households_config.yaml` | Defines **what** people are (age categories) and the global **demotion/promotion** safety nets. |
+| `configs/2021/households/allocation_strategy.yaml` | Defines **the ordered list of steps** that places people into households (and into communal residences). |
+| `configs/2021/households/relationship_rules.yaml` | Defines **how members of a household relate to each other** (parent–child age gaps, couple compatibility, multi-generational structure). |
 
 #### Why is the pipeline so elaborate?
 
@@ -336,7 +387,7 @@ The selection engine uses **backtracking** (`max_backtracks: 3`) before resortin
 | Change couple age gap | `relationship_rules.yaml` → `pair_matching.numerical_attribute` |
 | Change same-sex couple probability | `relationship_rules.yaml` → `same_category_sources` formula, or the per-rule `same_category_probability_fallback` if you have no per-area data |
 
-### 5.3 `yaml/attributes/*.yaml`
+### 5.3 `configs/2021/attributes/*.yaml`
 
 One file per attribute the simulation assigns:
 
@@ -350,7 +401,7 @@ One file per attribute the simulation assigns:
 
 Each YAML declares its **dependencies** (e.g. comorbidities require ethnicity), **filters** (who is eligible), and **data sources** (which CSV provides the probabilities).
 
-### 5.4 `yaml/distributors/*.yaml`
+### 5.4 `configs/2021/distributors/*.yaml`
 
 One file per venue distribution step. Each tells the engine:
 
@@ -360,18 +411,100 @@ One file per venue distribution step. Each tells the engine:
 - selection logic (distance, capacity, attribute matching),
 - subset assignment (e.g. school → "student" subset).
 
-Common distributors: `school_distributor.yaml`, `university_distributor.yaml`, `company_distributor.yaml`, `hospital_distributor.yaml`, `multi_venue_distributor.yaml` (leisure), `specific_workplace_*` (Q-sector → hospitals/care homes, P-sector → schools).
+Common distributors:
 
-### 5.5 `yaml/venue_child_creators/*.yaml`
+| File | Purpose |
+|---|---|
+| `school_distributor.yaml` | Assigns children to schools. |
+| `university_distributor.yaml` | Assigns students to universities. |
+| `company_distributor.yaml` | Assigns working-age adults to companies. |
+| `hospital_distributor.yaml` | Assigns people to a registered hospital (non-resident). |
+| `multi_venue_distributor.yaml` | Assigns leisure venues (cinemas, gyms, pubs, etc.). |
+| `specific_workplace_hospitals_distributor.yaml` | Q-sector workers → hospitals as workplace. |
+| `specific_workplace_care_homes_distributor.yaml` | Q-sector workers → care homes as workplace. |
+| `specific_workplace_classrooms_distributor.yaml` | P-sector workers → schools as workplace. |
+| `care_home_visits_distributor.yaml` | Links households of care home residents to visit that care home as a leisure activity. |
+
+### 5.5 `configs/2021/venue_child_creators/*.yaml`
 
 Break a parent venue into children. Examples: `school_classrooms.yaml` (school → classrooms by age), `university_uni_years.yaml` (university → year groups), `company_offices.yaml` (company → offices by sizeband).
 
-### 5.6 `yaml/relationships/*.yaml`
+### 5.6 `configs/2021/relationships/*.yaml`
 
-- **`friendships.yaml`** — generic peer network. Configurable: connections per person, source mix (activity peers, neighbours), filters (same role, age range).
-- **`romantic_relationships.yaml`** — sexual orientation + partnership probabilities. For UK runs, leaves the `data_sources` block enabled to use ONS-derived MSOA-level orientation data.
+#### `social_networks.yaml`
 
-### 5.7 `yaml/serialization_config.yaml`
+Defines one or more social networks to build. The file contains a top-level `networks:` list; each entry is one network. The 2021 config builds three networks that all write into the same `friendships` storage key, so contacts across networks are automatically deduplicated:
+
+```yaml
+networks:
+  - name: activity_peers
+    network_type: activity_peers      # same venue, similar age
+    pool_type: activity
+    pool:
+      activity: primary_activity
+    algorithm: random
+    mean_count: 3                     # mean contacts per person from this network
+    degree_variants:
+      - probability: 0.10
+        count: 6                      # 10% of people get double contacts
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 5
+
+  - name: geographic_local
+    network_type: intra_geo_unit      # same SGU (Output Area)
+    pool_type: geographic
+    pool:
+      level: SGU
+    algorithm: random
+    mean_count: 2
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 10
+
+  - name: geographic_community
+    network_type: intra_geo_unit      # same MGU (MSOA)
+    pool_type: geographic
+    pool:
+      level: MGU
+    algorithm: random
+    mean_count: 1
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 15
+```
+
+Key knobs per network entry:
+
+| Key | What it does |
+|---|---|
+| `network_type` | Pool selection strategy. `activity_peers`: same venue. `intra_geo_unit`: same geographic unit. Other types (e.g. `spatial_social_network`, `local_social_network` with Watts-Strogatz) exist for other world configs. |
+| `algorithm` | Contact-sampling algorithm. `random`: uniform random draw. `watts_strogatz`: clustered small-world graph (used in other configs). |
+| `mean_count` | Mean number of contacts per person from this network. |
+| `degree_variants` | Optional list of `{probability, count}` overrides — gives a subset of people a different contact count. |
+| `storage_key` | Where contacts are stored on the person. Multiple networks sharing the same key are merged (deduplicated). |
+| `constraints` | List of filters on who can be paired. `numerical_attribute_difference` enforces a max gap on a numeric attribute (e.g. age). |
+
+To **add a new network**, append a new entry to `networks:`. To **change total contacts**, adjust `mean_count` across entries. To **skip social networks entirely**, set `relationship_pipeline.enabled: false` in `config.yaml`.
+
+#### `romantic_relationships.yaml`
+
+Controls sexual orientation assignment and partnership formation. Key sections:
+
+- `data_sources:` — for UK runs, reads ONS-derived prevalence and per-MSOA orientation marginals to compute orientation probabilities. Worlds without UK MSOA codes should omit this block and use the `probabilities:` fallback below.
+- `sexual_orientations.probabilities:` — fallback national-level orientation probabilities by sex, used when `data_sources` is absent or an MSOA isn't in the table.
+- `sexual_orientations.age_adjustments:` — multiplicative tweaks to orientation probabilities by age band.
+- `sexual_orientations.compatibility:` — which orientations can pair with which.
+- `storage:` — keys under which orientation and relationship status are stored on the person.
+- `diagnostics.verbose:` — set `true` to log detailed national vs. empirical orientation comparisons. Leave `false` for production runs.
+
+### 5.7 `configs/2021/serialization_config.yaml`
 
 Controls **what is written to `world_state.h5`**. Edit to:
 
@@ -458,17 +591,17 @@ You do **not** need to change YAML structure unless you change column names or c
 
 | You want to… | Edit |
 |---|---|
-| Build only one region | `yaml/config.yaml` → `geography.filter` |
-| Skip leisure venues | In `yaml/config.yaml` timeline, comment out the `multi_venue_distributor` step |
-| Disable a venue type | `yaml/venues/venues_config.yaml` → set `enabled: false` |
-| Change age categories | `yaml/households/households_config.yaml` → `categories` |
-| Change household allocation order | `yaml/households/allocation_strategy.yaml` → reorder `steps` |
-| Add a new attribute to HDF5 export | `yaml/serialization_config.yaml` → `population.properties` |
-| Turn off romantic relationships | `yaml/config.yaml` → `romantic_relationships.enabled: false` |
-| Turn off friendships | `yaml/config.yaml` → `relationship_pipeline.enabled: false` |
-| Re-enable the debug CSV outputs (small worlds only) | `yaml/config.yaml` → `debug_outputs.enabled: true` |
-| Change number of friend connections | `yaml/relationships/friendships.yaml` → `connections.default` |
-| Filter who can go to leisure venues | `yaml/distributors/multi_venue_distributor.yaml` → `eligibility.global_filters` |
+| Build only one region | `configs/2021/config.yaml` → `geography.filter` |
+| Skip leisure venues | In `configs/2021/config.yaml` timeline, comment out the `multi_venue_distributor` step |
+| Disable a venue type | `configs/2021/venues/venues_config.yaml` → set `enabled: false` |
+| Change age categories | `configs/2021/households/households_config.yaml` → `categories` |
+| Change household allocation order | `configs/2021/households/allocation_strategy.yaml` → reorder `steps` |
+| Add a new attribute to HDF5 export | `configs/2021/serialization_config.yaml` → `population.properties` |
+| Turn off romantic relationships | `configs/2021/config.yaml` → `romantic_relationships.enabled: false` |
+| Turn off friendships | `configs/2021/config.yaml` → `relationship_pipeline.enabled: false` |
+| Re-enable the debug CSV outputs (small worlds only) | `configs/2021/config.yaml` → `debug_outputs.enabled: true` |
+| Change number of friend connections | `configs/2021/relationships/social_networks.yaml` → `mean_count` on the relevant network entry |
+| Filter who can go to leisure venues | `configs/2021/distributors/multi_venue_distributor.yaml` → `eligibility.global_filters` |
 
 ---
 
@@ -477,7 +610,7 @@ You do **not** need to change YAML structure unless you change column names or c
 After `python create_world.py` finishes, sanity-check:
 
 1. **Console summary** — the script logs counts of people, venues, and allocations.
-2. **`world_state.h5`** — open in Python with `h5py` to inspect the exported groups (`population`, `geography`, `venues`, `relationships`).
+2. **`output/2021/world_state.h5`** — open in Python with `h5py` to inspect the exported groups (`population`, `geography`, `venues`, `relationships`).
 3. **`data/venues/venue_allocations.csv`** and **`data/households/household_allocations.csv`** — quick CSV-level checks (totals, distribution).
 4. **Detailed romantic CSVs** (if enabled) — `romantic_relationships_detailed.csv`, `cheating_network_detailed.csv`.
 
@@ -493,14 +626,14 @@ Tests live in `tests/`. Run `pytest` to verify nothing is broken before/after a 
 | Many people unallocated to households | Population doesn't match `households.csv` totals; check demotion/promotion settings in `households_config.yaml`. |
 | `if_no_match: error` from school distributor | Boarding-school name in residences CSV doesn't match a school in `Schools_EW.csv`. |
 | Workplace step assigns no one | Education steps haven't been run before workplace assignment, or `primary_activity` filter is excluding everyone. |
-| Property missing from `world_state.h5` | Add it to `yaml/serialization_config.yaml`. |
+| Property missing from `world_state.h5` | Add it to `configs/2021/serialization_config.yaml`. |
 | Geography filter returns 0 areas | `filter.level` doesn't match the level the codes belong to (e.g. LAD codes with `level: MGU`). |
 
 ---
 
 ## 10. Example: building England 2021
 
-A minimal `yaml/config.yaml` change for an England-wide 2021 run:
+A minimal `configs/2021/config.yaml` change for an England-wide 2021 run:
 
 The shipped geography data covers the whole UK (England + Scotland + Wales + Northern Ireland), so to restrict the build to **England only** filter on the `XLGU` (region) level and list every English region explicitly:
 
@@ -527,5 +660,5 @@ population:
 Then ensure all CSVs under `data/` reflect 2021 inputs (see §6.3) and run:
 
 ```bash
-python create_world.py --config yaml/config.yaml --filename england_2021.h5
+python create_world.py --config configs/2021/config.yaml --filename england_2021.h5
 ```
