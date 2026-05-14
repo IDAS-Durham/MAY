@@ -3,5 +3,46 @@ nav:
   - LICENSE: LICENSE.md
   - About: about.md
   - User Guide: USER_GUIDE.md
+  - Configuration Reference:
+    - Overview: configs/index.md
+    - Master Config: configs/master-config.md
+    - Venues:
+      - configs/venues/index.md
+      - configs/venues/venues-config.md
+    - Households:
+      - configs/households/index.md
+      - configs/households/households-config.md
+      - configs/households/allocation-strategy.md
+      - configs/households/relationship-rules.md
+    - Attributes:
+      - configs/attributes/index.md
+      - configs/attributes/attribute-assignment.md
+      - configs/attributes/comorbidity-assignment.md
+      - configs/attributes/workplace-assignment.md
+      - configs/attributes/workplace-sgu-assignment.md
+      - configs/attributes/work-sector-assignment.md
+    - Distributors:
+      - configs/distributors/index.md
+      - configs/distributors/school-distributor.md
+      - configs/distributors/university-distributor.md
+      - configs/distributors/company-distributor.md
+      - configs/distributors/hospital-distributor.md
+      - configs/distributors/multi-venue-distributor.md
+      - configs/distributors/specific-workplace-hospitals.md
+      - configs/distributors/specific-workplace-care-homes.md
+      - configs/distributors/specific-workplace-classrooms.md
+      - configs/distributors/care-home-visits.md
+    - Venue Child Creators:
+      - configs/venue-child-creators/index.md
+      - configs/venue-child-creators/school-classrooms.md
+      - configs/venue-child-creators/university-uni-years.md
+      - configs/venue-child-creators/company-offices.md
+    - Relationships:
+      - configs/relationships/index.md
+      - configs/relationships/social-networks.md
+      - configs/relationships/romantic-relationships.md
+    - Serialization:
+      - configs/serialization/index.md
+      - configs/serialization/serialization-config.md
   - may:
     - "*"
