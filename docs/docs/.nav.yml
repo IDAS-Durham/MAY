@@ -3,5 +3,37 @@ nav:
   - LICENSE: LICENSE.md
   - About: about.md
   - User Guide: USER_GUIDE.md
+  - World Creation Pipeline: create-world.md
+  - Configuration Reference:
+    - Overview: configs/index.md
+    - Master Config: configs/master-config.md
+    - Venues:
+      - configs/venues/index.md
+      - configs/venues/venues-config.md
+    - Households:
+      - configs/households/index.md
+      - configs/households/households-config.md
+      - configs/households/allocation-strategy.md
+      - configs/households/relationship-rules.md
+    - Attributes:
+      - configs/attributes/index.md
+      - configs/attributes/attribute-assignment.md
+      - configs/attributes/workplace-assignment.md
+    - Distributors:
+      - configs/distributors/index.md
+      - configs/distributors/venue-distributor.md
+      - configs/distributors/multi-venue-distributor.md
+      - configs/distributors/specific-workplace-distributors.md
+      - configs/distributors/care-home-visits.md
+    - Venue Child Creators:
+      - configs/venue-child-creators/index.md
+      - configs/venue-child-creators/venue-child-creators.md
+    - Relationships:
+      - configs/relationships/index.md
+      - configs/relationships/social-networks.md
+      - configs/relationships/romantic-relationships.md
+    - Serialization:
+      - configs/serialization/index.md
+      - configs/serialization/serialization-config.md
   - may:
     - "*"
