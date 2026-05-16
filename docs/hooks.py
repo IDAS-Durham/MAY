@@ -1,8 +1,8 @@
 import re
 
 LOGO_HTML = """<p align="center">
-  <img src="assets/images/May_logo_dark.svg" alt="MAY logo" width="300" class="logo-light-mode">
-  <img src="assets/images/May_logo_white.svg" alt="MAY logo" width="300" class="logo-dark-mode">
+  <img src="assets/images/May_dark_path.svg" alt="MAY logo" width="300" class="logo-light-mode">
+  <img src="assets/images/May_white_path.svg" alt="MAY logo" width="300" class="logo-dark-mode">
 </p>
 
 """
