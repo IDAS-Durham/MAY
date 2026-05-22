@@ -304,7 +304,13 @@ class HouseholdPromoter:
                         
                         for pid in ids_to_take:
                             person = available_people.pop(pid)
-                            household.add_to_subset(person)
+                            # Key by the person's actual age category; the keyless
+                            # fallback would dump them into the household's first
+                            # subset and mislabel them (see add_to_subset).
+                            household.add_to_subset(
+                                person,
+                                subset_key=self.distributor._get_person_category_name(person),
+                            )
                             self.distributor.allocated_people.add(person.id)
                             added_to_this += 1
                             people_added += 1
@@ -468,7 +474,13 @@ class HouseholdPromoter:
                                 break
                             
                             person = available_people.pop(pid)
-                            household.add_to_subset(person)
+                            # Key by the person's actual age category; the keyless
+                            # fallback would dump them into the household's first
+                            # subset and mislabel them (see add_to_subset).
+                            household.add_to_subset(
+                                person,
+                                subset_key=self.distributor._get_person_category_name(person),
+                            )
                             self.distributor.allocated_people.add(person.id)
                             added_to_this_household += 1
                             people_added += 1

@@ -237,8 +237,6 @@ venue_types:
     description: "Leisure location"
     is_residence: false
 
-fig.yaml
-
 # Global venue settings
 settings:
   # Filter venues to only include those in loaded geographical units

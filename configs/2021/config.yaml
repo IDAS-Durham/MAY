@@ -73,6 +73,11 @@ households:
   # Configuration file for age categories and demotion rules
   config_file: "configs/2021/households/households_config.yaml"
 
+  # Relationship rules (couple/family pair matching, age constraints).
+  # Required for rules to apply. If this key is omitted, relationship rules
+  # are disabled — there is no implicit lookup.
+  rules_file: "configs/2021/households/relationship_rules.yaml"
+
   # =============================================
   # ALLOCATION MODE (choose one)
   # =============================================
@@ -190,8 +195,16 @@ timeline:
     - type: child_creator
       config: "configs/2021/venue_child_creators/company_offices.yaml"
 
+    #-----------------------------------------
+    # 6. Commute assignment
+    #-----------------------------------------
+    # Runs AFTER all workplace distributors so it can gate on the actually-assigned
+    # workplace venue (office/classroom/hospital/care_home, worker subset).
+    - type: attribute
+      config: "configs/2021/attributes/commute_mode_assignment.yaml"
+
     # ----------------------------------------
-    # 6. Other Services
+    # 7. Other Services
     # ----------------------------------------
     - type: distributor
       config: "configs/2021/distributors/hospital_distributor.yaml"

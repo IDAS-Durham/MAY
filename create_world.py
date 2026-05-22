@@ -13,7 +13,7 @@ from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
-from may.utils.debug_output import export_residence_venues
+from may.utils.debug_output import export_residence_venues, export_commute_mode_debug
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -199,6 +199,15 @@ def main():
                     
             else:
                 logger.warning(f"Unknown timeline step type: {step_type}")
+
+        # Commute-mode verification dump (after all assignments/distributors)
+        if config.get("debug_outputs", {}).get("enabled", False):
+            serial_config = config.get("serialization", {})
+            output_dir = serial_config.get("output_dir", ".")
+            os.makedirs(output_dir, exist_ok=True)
+            export_commute_mode_debug(
+                world, os.path.join(output_dir, "commute_mode_debug.csv")
+            )
 
     else:
         # FALLBACK: LEGACY BEHAVIOR

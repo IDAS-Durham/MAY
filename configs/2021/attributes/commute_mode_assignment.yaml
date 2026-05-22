@@ -1,0 +1,145 @@
+# ============================================================================
+# Commute Mode Assignment Configuration
+# ============================================================================
+# Assigns method of travel to work from UK Census 2021 TS061, sampled on the
+# person's residence OA (= SGU). Residence-side mode mix (D2). Excludes the
+# "Work mainly at or from home" column and renormalizes over the remaining 10
+# modes (D3) — work_mode stays authoritative, assigned earlier.
+#
+# Assignment Level: person
+# Dependencies: work_mode (from workplace_assignment), residence geographical_unit
+# ============================================================================
+
+attribute:
+  name: "commute_mode"
+  description: "Method of travel to work (TS061), residence-side"
+  data_type: "categorical"
+  assignment_level: "person"
+
+# ============================================================================
+# Filters
+# ============================================================================
+# Assign commute_mode only to people who ACTUALLY got a physical workplace
+# venue assigned (this config runs after the workplace distributors). All four
+# workplace distributors place workers in the "worker" subset, so the gate is:
+# a primary_activity venue of type office/classroom/hospital/care_home in a
+# worker subset. This naturally excludes students (classroom, non-worker subset),
+# care-home residents, hospital patients, and any worker who never got placed.
+#
+# work_mode keeps the From_Home workers out (work_mode is authoritative, D3) in
+# case any were placed in a workplace venue.
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    description: "Working age population"
+    numerical:
+      min: 18
+      max: 64
+
+  work_mode:
+    attribute: "work_mode"
+    type: "categorical"
+    description: "Only commuters who travel to a workplace (exclude From_Home)"
+    categorical:
+      values: ["Normal", "Hybrid"]
+
+  workplace_venue:
+    type: "activity_venue"
+    description: "Must have an assigned workplace venue, as a worker"
+    activity: "primary_activity"
+    venue_types: ["office", "classroom", "hospital", "care_home"]
+    subset_names: ["worker"]
+
+# ============================================================================
+# Required Attributes (Dependencies)
+# ============================================================================
+required_attributes:
+  - name: "work_mode"
+    description: "Work mode must be assigned first (workplace_assignment)"
+    required: true
+    error_if_missing: true
+
+# ============================================================================
+# Data Sources
+# ============================================================================
+data_sources:
+  travel_to_work_mode:
+    type: "csv_lookup"
+    description: "TS061 method-of-travel-to-work counts by residence OA (SGU)"
+
+    files:
+      - path: "data/activities/commute/26484461147236643.csv"
+
+        # Key = residence OA code. The dict key MUST equal the CSV header so the
+        # MultiKeyLookupSource can read row["2021 output area"]. Resolved from the
+        # person's residence SGU (get_ancestor_by_level('SGU') returns self).
+        key_columns:
+          "2021 output area":
+            attribute: "geographical_unit"
+            type: "ancestor_lookup"
+            level: "SGU"
+            property: "name"
+
+        # Output category -> CSV column. WFH + Total deliberately omitted (D3):
+        # the remaining 10 counts are renormalized to probabilities at lookup.
+        # One category per non-WFH column preserves the census mode shares (D1).
+        # Only tube/train/bus get a distributor + venue in task 8; the rest are
+        # terminal modes with no commute venue.
+        value_columns:
+          tube:          "Underground, metro, light rail, tram"
+          train:         "Train"
+          bus:           "Bus, minibus or coach"
+          taxi:          "Taxi"
+          motorcycle:    "Motorcycle, scooter or moped"
+          car_solo:      "Driving a car or van"
+          car_passenger: "Passenger in a car or van"
+          bike:          "Bicycle"
+          walk:          "On foot"
+          other:         "Other method of travel to work"
+
+    # National TS061 shares (WFH-excluded), used when an OA is missing.
+    fallback:
+      tube:          0.04
+      train:         0.05
+      bus:           0.07
+      taxi:          0.01
+      motorcycle:    0.01
+      car_solo:      0.58
+      car_passenger: 0.05
+      bike:          0.03
+      walk:          0.15
+      other:         0.01
+
+# ============================================================================
+# Assignment Rules (Person-Level)
+# ============================================================================
+assignment_rules:
+  person:
+    description: "Sample one travel-to-work mode from residence-OA distribution"
+    rules:
+      - description: "Probabilistic mode assignment from TS061 (WFH excluded)"
+        priority: 1
+        assignment:
+          strategy: "categorical_sampler"
+          data_source: "travel_to_work_mode"
+
+# ============================================================================
+# Settings
+# ============================================================================
+settings:
+  random_seed: null
+  normalize_probabilities: true
+  cache_lookups: true
+
+  error_handling:
+    missing_geo_unit: "use_fallback"
+    missing_lookup_data: "use_fallback"
+    missing_filter_activity: "skip_person"
+
+  logging:
+    level: "INFO"
+    detailed_assignment_logging: false
+    show_samples: true
+    sample_size: 10
+    show_attribute_distribution: true
