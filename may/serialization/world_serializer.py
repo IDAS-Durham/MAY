@@ -896,6 +896,14 @@ class WorldSerializer:
             people_sorted = getattr(self, '_people_sorted', world.population.people)
             self._write_activity_map(rel_group, world, people_sorted)
 
+        # Generic per-membership numeric metadata side-table (Design B). Rows
+        # only for subsets whose Subset.member_metadata dict is populated (e.g.
+        # transport-line legs carrying (t_board_min, t_alight_min)). Leaving
+        # the 4-col activity_data untouched lets old JUNE builds load new
+        # files, and new JUNE builds load old files where this dataset is
+        # absent. See COMMUTE_PLAN.md D11.
+        self._write_membership_metadata(rel_group, world)
+
     def _write_activity_map(self, rel_group, world, people_sorted):
         """
         Write activity_map data with chunked processing for memory efficiency.
@@ -1003,6 +1011,88 @@ class WorldSerializer:
         for name in activity_names:
             logger.info(f"                                           - {name}")
         logger.info(f"    Total activity mappings: {total_mappings:,}")
+
+    def _write_membership_metadata(self, rel_group, world):
+        """Write Subset.member_metadata as a generic side-table.
+
+        Produces /activity_mappings/membership_metadata with one row per
+        (person, venue) membership that carries metadata:
+            person_id    : int32
+            venue_id     : int32 (global venue id, matches activity_data col 2)
+            <field_name> : float32 — one column per metadata field name found
+
+        Field names are discovered by scanning all subsets' member_metadata
+        dicts. Datasets are float32 to accept both ints and floats; -1.0 is
+        the sentinel for "field absent for this row" (rare; should not occur
+        unless different memberships in the same export carry disjoint
+        metadata schemas).
+        """
+        # First pass: collect rows and the union of field names.
+        person_ids = []
+        venue_ids = []
+        per_field = defaultdict(list)
+        field_names = []  # preserve discovery order
+        field_set = set()
+
+        venue_to_global_id = self._venue_to_global_id
+
+        for venue in world.venues.get_all_venues_list():
+            global_id = venue_to_global_id.get(id(venue))
+            if global_id is None:
+                continue
+            for subset in venue.subsets.values():
+                meta = getattr(subset, 'member_metadata', None)
+                if not meta:
+                    continue
+                for pid, fields in meta.items():
+                    person_ids.append(pid)
+                    venue_ids.append(global_id)
+                    # Register any newly seen field name.
+                    for fname in fields.keys():
+                        if fname not in field_set:
+                            field_set.add(fname)
+                            field_names.append(fname)
+                    # Append this row's value for every known field so far.
+                    # Use index of last appended row to back-fill on next pass.
+                    for fname in field_names:
+                        per_field[fname].append(float(fields[fname]) if fname in fields else -1.0)
+                    # Back-fill any new fields onto previous rows
+                    # (handled below in a single pass for efficiency).
+
+        if not person_ids:
+            logger.info("  No membership_metadata to serialise (no subsets populated)")
+            return
+
+        n_rows = len(person_ids)
+        # Back-fill: any field list shorter than n_rows means it was discovered
+        # after some rows had already been appended — pad the head with the
+        # absent-sentinel.
+        for fname in field_names:
+            short = n_rows - len(per_field[fname])
+            if short > 0:
+                per_field[fname] = [-1.0] * short + per_field[fname]
+
+        meta_group = rel_group.create_group('membership_metadata')
+        self._create_dataset(
+            meta_group, 'person_ids', np.array(person_ids, dtype=np.int32),
+        )
+        self._create_dataset(
+            meta_group, 'venue_ids', np.array(venue_ids, dtype=np.int32),
+        )
+        # Field-name registry (string array, ordered) so consumers can iterate.
+        self._create_dataset(
+            meta_group, 'field_names',
+            np.array(field_names, dtype=h5py.string_dtype()),
+        )
+        for fname in field_names:
+            self._create_dataset(
+                meta_group, fname,
+                np.array(per_field[fname], dtype=np.float32),
+            )
+        logger.info(
+            f"  Wrote membership_metadata side-table: {n_rows:,} rows × "
+            f"{len(field_names)} fields {field_names}"
+        )
 
     def _write_property_array(self, group, prop_name, objects):
         """

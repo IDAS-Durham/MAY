@@ -191,9 +191,17 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
     logger.info(f"Exporting commute-mode debug to {output_file}...")
 
     WORKPLACE_VENUES = {"office", "classroom", "hospital", "care_home"}
+    SHARED_TRANSPORT_MODES = {"train", "tube", "bus"}
 
     rows = []
     people = world.population.get_all_people()
+
+    # Bookkeeping for the task 8/9 cross-checks (per §12).
+    leg_count_by_mode = Counter()
+    leg_count_distribution = Counter()    # n_legs -> count of people
+    walk_with_venue = 0
+    bad_timing = 0                         # legs where t_board >= t_alight
+    sample_bad_timing = []
 
     for person in people:
         primary = person.activity_map.get("primary_activity", {})
@@ -209,6 +217,32 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
                 break
 
         commute_mode = person.properties.get("commute_mode")
+
+        # Inspect commute legs (post-RouteDistributor). The activity_map shape
+        # for shared-transport riders is: person.activity_map["commute"][
+        # "transport_line"] = [Subset, Subset, ...] — one subset per leg.
+        commute = person.activity_map.get("commute", {})
+        leg_subsets = []
+        if isinstance(commute, dict):
+            leg_subsets = list(commute.get("transport_line", []))
+        n_legs = len(leg_subsets)
+
+        # Collect (t_board, t_alight) for inspection / sanity checks.
+        leg_timings = []
+        for s in leg_subsets:
+            md = getattr(s, "member_metadata", {}).get(person.id, {})
+            leg_timings.append((md.get("t_board_min"), md.get("t_alight_min")))
+            tb, ta = md.get("t_board_min"), md.get("t_alight_min")
+            if tb is None or ta is None or not (tb < ta):
+                bad_timing += 1
+                if len(sample_bad_timing) < 5:
+                    sample_bad_timing.append((person.id, s.venue.name, tb, ta))
+
+        if commute_mode in SHARED_TRANSPORT_MODES:
+            leg_count_by_mode[commute_mode] += n_legs
+        leg_count_distribution[n_legs] += 1
+        if commute_mode == "walk" and n_legs > 0:
+            walk_with_venue += 1
 
         # Only keep people who are interesting for this proof: anyone who has a
         # work_mode (i.e. went through the workplace pipeline) or got a venue or
@@ -226,6 +260,11 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
             "primary_activity_venues": "|".join(pa_venue_types),
             "is_workplace_worker": is_workplace_worker,
             "commute_mode": commute_mode,
+            "n_commute_legs": n_legs,
+            "commute_legs": ";".join(
+                f"{s.venue.name}({tb}-{ta})"
+                for s, (tb, ta) in zip(leg_subsets, leg_timings)
+            ),
         })
 
     # ---- Aggregate tables (the actual proof) -------------------------------
@@ -282,6 +321,33 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
     emit("commute_mode count by assigned primary_activity venue(s):")
     for vt, c in venue_mode.most_common():
         emit(f"  {vt:<22}: {c:,}")
+    emit("")
+    # ---- Route distributor (task 8/9) cross-checks ------------------------
+    emit("ROUTE DISTRIBUTOR — VERIFICATION (tasks 8/9, per §12)")
+    transport_line_venues = world.venues.get_venues_by_type("transport_line")
+    n_routed = sum(c for n, c in leg_count_distribution.items() if n > 0)
+    n_multi = sum(c for n, c in leg_count_distribution.items() if n > 1)
+    emit(f"  transport_line venues materialised : {len(transport_line_venues):,}")
+    emit(f"  People with >=1 commute leg        : {n_routed:,}")
+    emit(f"  People with >=2 commute legs       : {n_multi:,}")
+    emit("  Leg-count distribution (n_legs -> n_people):")
+    for n in sorted(leg_count_distribution.keys()):
+        emit(f"    {n} -> {leg_count_distribution[n]:,}")
+    emit("  Total legs written by mode:")
+    for mode in sorted(leg_count_by_mode.keys()):
+        emit(f"    {mode:<6}: {leg_count_by_mode[mode]:,}")
+    # Assertions (D12): people whose final commute_mode is walk MUST have no
+    # commute venue.
+    if walk_with_venue:
+        emit(f"  ⚠ walk-mode people with a commute venue: {walk_with_venue}  (expected: 0)")
+    else:
+        emit("  ✓ walk-mode people with a commute venue: 0 (D12 fallback consistent)")
+    if bad_timing:
+        emit(f"  ⚠ legs with bad timing (t_board >= t_alight or missing): {bad_timing}")
+        for pid, name, tb, ta in sample_bad_timing:
+            emit(f"      person={pid} line={name} t_board={tb} t_alight={ta}")
+    else:
+        emit("  ✓ all legs satisfy t_board < t_alight")
     emit("=" * 60)
 
     # ---- Write CSV ----------------------------------------------------------
@@ -291,6 +357,7 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
             fieldnames = [
                 "PersonID", "Age", "Sex", "work_mode", "work_sector",
                 "primary_activity_venues", "is_workplace_worker", "commute_mode",
+                "n_commute_legs", "commute_legs",
             ]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()

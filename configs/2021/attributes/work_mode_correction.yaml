@@ -1,0 +1,99 @@
+# ============================================================================
+# Work Mode Correction Configuration
+# ============================================================================
+# OVERRIDES `work_mode` for workers whose actually-assigned workplace venue
+# requires on-site presence (hospital, care_home, classroom). These workers
+# may have been tagged From_Home or Hybrid in `workplace_assignment.yaml` —
+# which samples from an LGU-level O-D matrix and is therefore sector-blind.
+# Here we force them to Normal, after the workplace distributors have placed
+# them in a physical venue.
+#
+# Office workers (companies) are left untouched: they keep whatever work_mode
+# was sampled from the O-D matrix. Only people in venues that physically
+# require attendance are corrected.
+#
+# Assignment Level: person
+# Dependencies: work_mode (workplace_assignment), workplace venue (distributors)
+# ============================================================================
+#
+# Why this works as a second assignment of `work_mode`:
+# The person-level assignment path in may/attribute_assignment/assigner.py
+# (`_assign_all_people_batch` / `_assign_all_people_sequential`) assigns
+# `person.properties[self.attribute_name] = value` unconditionally — it does
+# not skip already-assigned attributes. So a second attribute step with
+# `attribute.name: work_mode` overwrites cleanly.
+#
+# ============================================================================
+
+attribute:
+  name: "work_mode"
+  description: "Force Normal for workers in on-site venues (hospital/care_home/classroom)"
+  data_type: "categorical"
+  assignment_level: "person"
+
+# ============================================================================
+# Filters
+# ============================================================================
+# Working age + must be a *worker* in one of the on-site venue types. The
+# activity_venue filter inspects the person's primary_activity venue and the
+# subset they were added to. The four workplace distributors all add workers
+# to the "worker" subset, so this gate naturally excludes:
+#   - students (classroom, non-worker subset)
+#   - care-home residents (care_home, resident subset)
+#   - hospital patients (hospital, patient subset)
+#   - office workers (venue type "office" — not listed here)
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    description: "Working age population"
+    numerical:
+      min: 18
+      max: 64
+
+  on_site_workplace_venue:
+    type: "activity_venue"
+    description: "Worker in a venue that requires on-site attendance"
+    activity: "primary_activity"
+    venue_types: ["hospital", "care_home", "classroom"]
+    subset_names: ["worker"]
+
+# ============================================================================
+# Required Attributes (Dependencies)
+# ============================================================================
+required_attributes:
+  - name: "work_mode"
+    description: "work_mode must already be assigned by workplace_assignment"
+    required: true
+    error_if_missing: true
+
+# ============================================================================
+# Assignment Rules (Person-Level)
+# ============================================================================
+assignment_rules:
+  person:
+    description: "Force work_mode = Normal for on-site venue workers"
+
+    rules:
+      - description: "Constant override to Normal"
+        priority: 1
+        assignment:
+          strategy: "constant"
+          value: "Normal"
+
+# ============================================================================
+# Settings
+# ============================================================================
+settings:
+  random_seed: null
+  cache_lookups: false
+
+  error_handling:
+    missing_filter_activity: "skip_person"
+
+  logging:
+    level: "INFO"
+    detailed_assignment_logging: false
+    show_samples: true
+    sample_size: 10
+    show_attribute_distribution: true
