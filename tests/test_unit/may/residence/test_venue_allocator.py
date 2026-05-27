@@ -467,6 +467,22 @@ class TestAttributeAwareAllocation:
             "allocation_mode": "attribute_aware",
             "eligibility": [{"attribute": "age", "min": 50}],
             "strategy": "oldest_first",
+            "capacity_config": {
+                "attribute_capacities": {
+                    "column_mappings": {
+                        "age_50_64_male":   {"age_band": [50, 64], "sex": "male"},
+                        "age_50_64_female": {"age_band": [50, 64], "sex": "female"},
+                        "age_65_74_male":   {"age_band": [65, 74], "sex": "male"},
+                        "age_65_74_female": {"age_band": [65, 74], "sex": "female"},
+                        "age_75_84_male":   {"age_band": [75, 84], "sex": "male"},
+                        "age_75_84_female": {"age_band": [75, 84], "sex": "female"},
+                        "age_85_94_male":   {"age_band": [85, 94], "sex": "male"},
+                        "age_85_94_female": {"age_band": [85, 94], "sex": "female"},
+                        "age_95_plus_male":   {"age_band": [95, 120], "sex": "male"},
+                        "age_95_plus_female": {"age_band": [95, 120], "sex": "female"},
+                    }
+                }
+            },
         }
 
     def test_only_eligible_ages_placed_in_care_homes(self, hd):
@@ -506,8 +522,7 @@ class TestAttributeAwareAllocation:
         """The number of residents in any slot must not exceed that slot's CSV capacity."""
         cfg = self._care_home_config()
         _allocate_with_attributes("care_home", cfg, hd.population, hd.venue_manager, hd)
-        capacity_config = hd.venue_manager.get_capacity_config("care_home")
-        column_mappings = capacity_config["attribute_capacities"]["column_mappings"]
+        column_mappings = cfg["capacity_config"]["attribute_capacities"]["column_mappings"]
         care_homes = hd.venue_manager.get_venues_by_type("care_home")
         for ch in care_homes:
             for col in column_mappings:
@@ -582,12 +597,13 @@ class TestAttributeAwareAllocation:
             "allocation_mode": "attribute_aware",
             "eligibility": [],
             "strategy": "random",
-        }
-        # Manually inject a capacity_config but no venues
-        hd.venue_manager.capacity_configs["ghost_venue"] = {
-            "attribute_capacities": {
-                "column_mappings": {"slot_a": {"age_band": [0, 99]}}
-            }
+            # Capacity config is now owned by the allocation step itself,
+            # not by venue_manager.
+            "capacity_config": {
+                "attribute_capacities": {
+                    "column_mappings": {"slot_a": {"age_band": [0, 99]}}
+                }
+            },
         }
         stats = _allocate_with_attributes("ghost_venue", cfg, hd.population, hd.venue_manager, hd)
         assert stats["venues"] == 0
@@ -607,6 +623,22 @@ class TestBoardingSchoolAttributeConstraints:
             "allocation_mode": "attribute_aware",
             "eligibility": [{"attribute": "age", "max": 24}],
             "strategy": "youngest_first",
+            "capacity_config": {
+                "attribute_capacities": {
+                    "column_mappings": {
+                        "n_0_15_female":  {"age_band": [0, 15],  "sex": "female"},
+                        "n_0_15_male":    {"age_band": [0, 15],  "sex": "male"},
+                        "n_16_24_female": {"age_band": [16, 24], "sex": "female"},
+                        "n_16_24_male":   {"age_band": [16, 24], "sex": "male"},
+                    }
+                },
+                "attribute_constraints": {
+                    "age": {
+                        "min_column": "StatutoryLowAge",
+                        "max_column": "StatutoryHighAge",
+                    }
+                },
+            },
         }
 
     def test_child_below_statutory_minimum_not_placed(self, hd):
@@ -660,8 +692,7 @@ class TestBoardingSchoolAttributeConstraints:
         _allocate_with_attributes(
             "boarding_school", cfg, hd.population, hd.venue_manager, hd
         )
-        capacity_config = hd.venue_manager.get_capacity_config("boarding_school")
-        column_mappings = capacity_config["attribute_capacities"]["column_mappings"]
+        column_mappings = cfg["capacity_config"]["attribute_capacities"]["column_mappings"]
         schools = hd.venue_manager.get_venues_by_type("boarding_school")
         for school in schools:
             for col in column_mappings:
