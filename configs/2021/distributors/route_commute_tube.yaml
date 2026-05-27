@@ -1,7 +1,5 @@
 # Tube/metro/light-rail commute legs (RouteDistributor; see route_commute_train.yaml
-# for the full schema discussion). In a Durham-only world this falls back to
-# walk for every tube commuter because no tube O-D pair has both endpoints
-# loaded — that's exactly D12 working as designed.
+# for the full schema discussion). 
 distributor_type: "route"
 distributor_name: "route_commute_tube"
 
@@ -9,8 +7,8 @@ activity_map_key: "commute"
 leg_venue_type: "tube_line"
 leg_subset_key: "rider"
 
-routes_table: "data/transport/routes.csv"
-legs_table:   "data/transport/route_legs.csv"
+routes_table: "data/activities/commute/routes.csv"
+legs_table:   "data/activities/commute/route_legs.csv"
 
 origin_source:
   type: "ancestor"
@@ -35,7 +33,7 @@ leg_metadata:
 
 on_miss:
   set:
-    commute_mode: "walk"
+    commute_mode: "car_solo"
 
 settings:
   verbose: true

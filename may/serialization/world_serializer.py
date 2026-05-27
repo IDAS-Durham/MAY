@@ -901,7 +901,7 @@ class WorldSerializer:
         # transport-line legs carrying (t_board_min, t_alight_min)). Leaving
         # the 4-col activity_data untouched lets old JUNE builds load new
         # files, and new JUNE builds load old files where this dataset is
-        # absent. See COMMUTE_PLAN.md D11.
+        # absent.
         self._write_membership_metadata(rel_group, world)
 
     def _write_activity_map(self, rel_group, world, people_sorted):

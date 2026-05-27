@@ -192,6 +192,8 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
 
     WORKPLACE_VENUES = {"office", "classroom", "hospital", "care_home"}
     SHARED_TRANSPORT_MODES = {"train", "tube", "bus"}
+    # Per-mode leg venue types written by route_commute_{train,tube,bus}.yaml.
+    LEG_VENUE_TYPES = ("train_line", "tube_line", "bus_line")
 
     rows = []
     people = world.population.get_all_people()
@@ -220,11 +222,14 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
 
         # Inspect commute legs (post-RouteDistributor). The activity_map shape
         # for shared-transport riders is: person.activity_map["commute"][
-        # "transport_line"] = [Subset, Subset, ...] — one subset per leg.
+        # "<mode>_line"] = [Subset, Subset, ...] — one subset per leg. Each
+        # route_commute_<mode>.yaml writes its own venue type, so we union
+        # across train_line / tube_line / bus_line.
         commute = person.activity_map.get("commute", {})
         leg_subsets = []
         if isinstance(commute, dict):
-            leg_subsets = list(commute.get("transport_line", []))
+            for vt in LEG_VENUE_TYPES:
+                leg_subsets.extend(commute.get(vt, []))
         n_legs = len(leg_subsets)
 
         # Collect (t_board, t_alight) for inspection / sanity checks.
@@ -324,10 +329,15 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
     emit("")
     # ---- Route distributor (task 8/9) cross-checks ------------------------
     emit("ROUTE DISTRIBUTOR — VERIFICATION (tasks 8/9, per §12)")
-    transport_line_venues = world.venues.get_venues_by_type("transport_line")
+    venues_by_type = {
+        vt: world.venues.get_venues_by_type(vt) for vt in LEG_VENUE_TYPES
+    }
+    total_line_venues = sum(len(v) for v in venues_by_type.values())
     n_routed = sum(c for n, c in leg_count_distribution.items() if n > 0)
     n_multi = sum(c for n, c in leg_count_distribution.items() if n > 1)
-    emit(f"  transport_line venues materialised : {len(transport_line_venues):,}")
+    emit(f"  Line venues materialised (total)   : {total_line_venues:,}")
+    for vt in LEG_VENUE_TYPES:
+        emit(f"    {vt:<12}: {len(venues_by_type[vt]):,}")
     emit(f"  People with >=1 commute leg        : {n_routed:,}")
     emit(f"  People with >=2 commute legs       : {n_multi:,}")
     emit("  Leg-count distribution (n_legs -> n_people):")

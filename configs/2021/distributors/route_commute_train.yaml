@@ -1,9 +1,9 @@
-# Train commute legs (RouteDistributor instance — see D10/D11/D12 in COMMUTE_PLAN.md).
+# Train commute legs
 #
-# Looks up data/transport/route_legs.csv by (origin_mgu, dest_mgu, mode_class)
+# Looks up data/activities/commute/route_legs.csv by (origin_mgu, dest_mgu, mode_class)
 # for every person whose commute_mode == "train", and places them on each leg
 # of their journey as a `train_line.rider`, attaching (t_board_min,
-# t_alight_min) as per-membership metadata. Misses fall back to walk.
+# t_alight_min) as per-membership metadata. Misses fall back to car_solo.
 distributor_type: "route"
 distributor_name: "route_commute_train"
 
@@ -11,8 +11,8 @@ activity_map_key: "commute"
 leg_venue_type: "train_line"
 leg_subset_key: "rider"
 
-routes_table: "data/transport/routes.csv"
-legs_table:   "data/transport/route_legs.csv"
+routes_table: "data/activities/commute/routes.csv"
+legs_table:   "data/activities/commute/route_legs.csv"
 
 # Person -> routing-table key. MGUs in the routing table are MSOA codes
 # (E02XXXXXX) and match GeographicalUnit.name directly.
@@ -42,11 +42,11 @@ leg_metadata:
   t_board_min:  "t_board_min"
   t_alight_min: "t_alight_min"
 
-# D12 — route-miss fallback. Overwrite commute_mode to walk; no venue is
+# route-miss fallback. Overwrite commute_mode to walk; no venue is
 # assigned (so zero commute transmission).
 on_miss:
   set:
-    commute_mode: "walk"
+    commute_mode: "car_solo"
 
 settings:
   verbose: true

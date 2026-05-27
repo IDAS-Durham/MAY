@@ -9,14 +9,6 @@ per-membership metadata, what to do on a miss).
 
 Commute is one instance of this distributor; future use-cases (school buses,
 freight routes, ferries) plug in by writing a new YAML config — no code change.
-
-Design references (in COMMUTE_PLAN.md):
-- D10 — generic distributor, all domain-specific knobs live in YAML.
-- D11 — per-membership timing is written via Subset.member_metadata, then
-  serialised to a separate HDF5 side-table (see WorldSerializer); we do NOT
-  mutate the shared 4-column activity_data array.
-- D12 — route-miss fallback: set a configured person attribute (e.g.
-  commute_mode = "walk"), no venue, count the miss.
 """
 
 import logging
