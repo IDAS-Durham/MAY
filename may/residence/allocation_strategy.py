@@ -422,6 +422,8 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         # Attribute-aware allocation settings
         'allocation_mode': step_config.get('allocation_mode', 'simple'),
         'use_attribute_capacities': step_config.get('use_attribute_capacities', False),
+        # Capacity rules for this step — owned by the step, not the venue type.
+        'capacity_config': step_config.get('capacity_config', {}),
         # Subset configuration
         'subset_key': step_config.get('subset_key')
     }

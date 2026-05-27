@@ -408,14 +408,22 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     """
     logger.info(f"  Using attribute-aware allocation for {venue_type}")
 
-    # Get capacity config from VenueManager
-    capacity_config = venues.get_capacity_config(venue_type)
+    # Read capacity config from this allocation step. Each step owns its own
+    # capacity rules — venues_config.yaml no longer carries them.
+    capacity_config = allocation_config.get('capacity_config') or {}
     if not capacity_config:
-        logger.warning(f"  No capacity_config found for {venue_type}, falling back to simple allocation")
+        logger.warning(
+            f"  No capacity_config on the allocation step for {venue_type}, "
+            "falling back to simple allocation"
+        )
         # Fall back to simple mode
         allocation_config['allocation_mode'] = 'simple'
         allocation_config['use_attribute_capacities'] = False
         return _allocate_to_venue_type(venue_type, allocation_config, population, venues, household_distributor)
+
+    # Cache on the venue manager so post-allocation reporting/debug code
+    # (export_residence_venues, debug_output) can still find it.
+    venues.capacity_configs[venue_type] = capacity_config
 
     # Get all venues of this type
     venue_list = venues.get_venues_by_type(venue_type)
