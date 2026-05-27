@@ -1,0 +1,34 @@
+# Serialization Configuration — NZ 1918
+# Minimal: only core fields (id, age, sex, geographical_unit) are emitted.
+
+population:
+  properties: []
+
+geography:
+  include_coordinates: false
+  properties: []
+
+venues:
+  global:
+    include_coordinates: false
+    include_is_residence: false
+  types: {}
+
+subsets:
+  properties: []
+
+relationships:
+  include_activity_map: false
+  include_venue_hierarchy: false
+  include_geography_hierarchy: true
+
+output:
+  compression: "gzip"
+  compression_level: 4
+  include_metadata: true
+  metadata:
+    - random_seed
+    - creation_timestamp
+    - config_files_used
+    - num_people
+    - num_geo_units

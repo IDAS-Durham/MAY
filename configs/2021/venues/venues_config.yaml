@@ -237,7 +237,33 @@ venue_types:
     description: "Leisure location"
     is_residence: false
 
-fig.yaml
+  # =============================================
+  # SPECIAL: Transport-line venues (created dynamically by RouteDistributor)
+  # =============================================
+  # Materialised lazily by RouteDistributor — one venue per train/tube/bus
+  # line_id, populated with `rider` subsets that carry per-membership
+  # (t_board_min, t_alight_min) metadata (see Subset.member_metadata, and the
+  # /activity_mappings/membership_metadata HDF5 side-table from Design B).
+  #
+  # Split per-mode (train/tube/bus) so JUNE's per-mode contact matrices in
+  # contact_matrices.yaml (train_line / tube_line / bus_line) match. Each
+  # RouteDistributor instance writes legs into its mode-specific type.
+  #
+  # supports_partial_presence is consumed JUNE-side via JUNE's own config
+  # (contact_matrices.yaml-style declaration keyed by venue type name);
+  # it is not serialised from here.
+  train_line:
+    enabled: false  # Not loaded from CSV (created dynamically by RouteDistributor)
+    is_residence: false
+    description: "Per-line commute venue (train / rail)"
+  tube_line:
+    enabled: false
+    is_residence: false
+    description: "Per-line commute venue (tube / metro / light rail)"
+  bus_line:
+    enabled: false
+    is_residence: false
+    description: "Per-line commute venue (bus pseudo-route)"
 
 # Global venue settings
 settings:

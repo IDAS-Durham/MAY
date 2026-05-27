@@ -47,7 +47,7 @@ class HouseholdDistributor:
 
     def __init__(self, geography: Geography, population: PopulationManager,
                  venue_manager: VenueManager,
-                 data_dir, config_file):
+                 data_dir, config_file, rules_file: Optional[str] = None):
         """
         Initialize the household distributor.
 
@@ -56,6 +56,9 @@ class HouseholdDistributor:
             population: PopulationManager with generated population
             data_dir: Directory containing household data files
             config_file: Path to YAML configuration file (relative to data_dir)
+            rules_file: Path to relationship_rules.yaml. When None (i.e. the
+                world config did not set `households.rules_file`), relationship
+                rules are disabled — no implicit lookup is performed.
         """
         self.geography = geography
         self.population = population
@@ -89,13 +92,17 @@ class HouseholdDistributor:
         self.current_round: int = 0
         self.pools_prepared: bool = False
 
-        # Initialize relationship rules validator
-        # Look for relationship_rules.yaml in the same directory as config_file
-        config_dir = os.path.dirname(config_path)
-        rules_config_path = os.path.join(config_dir, "relationship_rules.yaml")
-        if not os.path.exists(rules_config_path):
-            # Fallback to data_dir if not found next to config
-            rules_config_path = os.path.join(data_dir, "relationship_rules.yaml")
+        # Initialize relationship rules validator. The path must come from the
+        # world config's `households.rules_file`. If unset, the validator is
+        # constructed with an empty path and disables itself (no implicit lookup).
+        if rules_file:
+            if os.path.isabs(rules_file) or os.path.exists(rules_file):
+                rules_config_path = rules_file
+            else:
+                rules_config_path = os.path.join(data_dir, rules_file)
+        else:
+            logger.warning("households.rules_file is not set; relationship rules disabled")
+            rules_config_path = ""
 
         self.relationship_rules = RelationshipRulesValidator(
             categories=self.categories,

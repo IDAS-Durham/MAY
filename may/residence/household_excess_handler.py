@@ -418,7 +418,13 @@ class HouseholdExcessHandler:
                             break
 
                         person = available_people[global_people_index]
-                        household.add_to_subset(person)
+                        # Key the subset by the person's actual age category, otherwise
+                        # add_to_subset() falls back to the household's first existing
+                        # subset and contaminates it (e.g. an adult landing in "Kids").
+                        household.add_to_subset(
+                            person,
+                            subset_key=self.distributor._get_person_category_name(person),
+                        )
                         self.distributor.allocated_people.add(person.id)
                         global_people_index += 1
                         added_to_hh += 1

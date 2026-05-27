@@ -1,0 +1,39 @@
+# Tube/metro/light-rail commute legs (RouteDistributor; see route_commute_train.yaml
+# for the full schema discussion). 
+distributor_type: "route"
+distributor_name: "route_commute_tube"
+
+activity_map_key: "commute"
+leg_venue_type: "tube_line"
+leg_subset_key: "rider"
+
+routes_table: "data/activities/commute/routes.csv"
+legs_table:   "data/activities/commute/route_legs.csv"
+
+origin_source:
+  type: "ancestor"
+  from: "geographical_unit"
+  level: "MGU"
+destination_source:
+  type: "ancestor"
+  from: "properties.workplace_sgu"
+  level: "MGU"
+
+class_source: "properties.commute_mode"
+class_filter: "tube"
+class_map:
+  tube: "tube"
+
+require_properties:
+  - "commute_mode"
+
+leg_metadata:
+  t_board_min:  "t_board_min"
+  t_alight_min: "t_alight_min"
+
+on_miss:
+  set:
+    commute_mode: "car_solo"
+
+settings:
+  verbose: true

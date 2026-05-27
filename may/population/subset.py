@@ -8,6 +8,7 @@ class Subset(AbstractSet):
         "subset_index",
         'subset_name',
         'members',
+        'member_metadata',
     )
 
     def __init__(self,
@@ -27,6 +28,11 @@ class Subset(AbstractSet):
         self.subset_index = subset_index
         self.subset_name = subset_name if subset_name is not None else str(self.subset_index)
         self.members= members if members is not None else set()
+        # Generic per-member numeric metadata (Design B side-table). Keyed by
+        # person.id, value is a dict of named numeric fields (e.g.
+        # {"t_board_min": 0, "t_alight_min": 20} for a transport leg). Empty by
+        # default; populated by distributors that need per-membership state.
+        self.member_metadata = {}
 
     def _collate(self, attribute: str, ifnot=False) -> list["Person"]:
         """Collates Persons from self.members that have a particular attribute == True.

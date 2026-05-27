@@ -21,8 +21,9 @@ from .multi_venue_distributor import MultiVenueDistributor
 from .social_contact_visit_distributor import SocialContactVisitDistributor
 from .resident_linked_distributor import ResidentLinkedDistributor
 from .property_matching_distributor import PropertyMatchingDistributor
+from .route_distributor import RouteDistributor
 
-__all__ = ['VenueDistributor', 'MultiVenueDistributor', 'SocialContactVisitDistributor', 'ResidentLinkedDistributor', 'PropertyMatchingDistributor', 'distributor_from_yaml']
+__all__ = ['VenueDistributor', 'MultiVenueDistributor', 'SocialContactVisitDistributor', 'ResidentLinkedDistributor', 'PropertyMatchingDistributor', 'RouteDistributor', 'distributor_from_yaml']
 
 
 def distributor_from_yaml(yaml_path: str):
@@ -62,6 +63,8 @@ def distributor_from_yaml(yaml_path: str):
         return ResidentLinkedDistributor(yaml_path)
     elif distributor_type == 'property_matching':
         return PropertyMatchingDistributor(yaml_path)
+    elif distributor_type == 'route':
+        return RouteDistributor(yaml_path)
     else:
         # Default to single-venue distributor
         return VenueDistributor(yaml_path)

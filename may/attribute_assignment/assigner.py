@@ -68,18 +68,34 @@ class AttributeAssigner:
         # Pre-compute filter configuration
         self._has_filters = hasattr(config, 'filters') and config.filters
         self._optimized_filters = []
+        # Filters that inspect the person's activity_map (assigned venues/subsets)
+        # rather than a scalar attribute. Populated below.
+        self._activity_venue_filters = []
         if self._has_filters:
             for name, cfg in config.filters.items():
                 if name == 'activities':
                     continue
+                # activity_venue: require an assigned venue of a given type
+                # (optionally in a given subset) under some activity.
+                if cfg.get('type') == 'activity_venue':
+                    self._activity_venue_filters.append({
+                        'activity': cfg.get('activity', 'primary_activity'),
+                        'venue_types': set(cfg.get('venue_types', [])),
+                        'subset_names': set(cfg.get('subset_names', [])),
+                    })
+                    continue
                 attr = cfg.get('attribute')
                 ftype = cfg.get('type')
                 num = cfg.get('numerical', {})
+                # Categorical "include" values: accept either nested
+                # (categorical: {values: [...]}) or flat (values: [...]) form.
+                cat_values = cfg.get('categorical', {}).get('values', cfg.get('values'))
                 self._optimized_filters.append({
                     'attr': attr,
                     'type': ftype,
                     'min': num.get('min'),
                     'max': num.get('max'),
+                    'values': cat_values,
                     'is_age': attr == 'age',
                     'is_sex': attr == 'sex'
                 })
@@ -325,6 +341,10 @@ class AttributeAssigner:
                 vmax = f['max']
                 if vmax is not None and person_value > vmax:
                     return False
+            elif f['type'] == 'categorical':
+                values = f['values']
+                if values is not None and person_value not in values:
+                    return False
 
         # 2. Activity filters (Fast set intersection check)
         if self._include_activities or self._exclude_activities:
@@ -345,6 +365,27 @@ class AttributeAssigner:
                 for a in self._exclude_activities:
                     if a in person_activities:
                         return False
+
+        # 2b. Activity-venue filters: require an actually-assigned venue of a
+        # given type (optionally in a given subset) under some activity. Used to
+        # gate commute on people who genuinely got a workplace venue.
+        for f in self._activity_venue_filters:
+            venue_map = person.activity_map.get(f['activity'], {})
+            venue_types = f['venue_types']
+            subset_names = f['subset_names']
+            matched = False
+            for vt, subsets in venue_map.items():
+                if venue_types and vt not in venue_types:
+                    continue
+                if subset_names:
+                    if any(getattr(s, 'subset_name', None) in subset_names for s in subsets):
+                        matched = True
+                        break
+                elif subsets:
+                    matched = True
+                    break
+            if not matched:
+                return False
 
         # 3. Required attributes
         for attr_name, attr_config in self._required_attrs:

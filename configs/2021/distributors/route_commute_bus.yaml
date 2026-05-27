@@ -1,0 +1,42 @@
+# Bus commute legs (RouteDistributor). NOTE: bus routes have not been
+# generated yet (D8 — synthetic per-LGU pseudo-routes, deferred). The routing
+# table contains no mode_class=bus rows, so every bus commuter is a miss and
+# falls back to walk via on_miss. This config is wired in now so adding the
+# bus routes later is a data-only change.
+distributor_type: "route"
+distributor_name: "route_commute_bus"
+
+activity_map_key: "commute"
+leg_venue_type: "bus_line"
+leg_subset_key: "rider"
+
+routes_table: "data/activities/commute/routes.csv"
+legs_table:   "data/activities/commute/route_legs.csv"
+
+origin_source:
+  type: "ancestor"
+  from: "geographical_unit"
+  level: "MGU"
+destination_source:
+  type: "ancestor"
+  from: "properties.workplace_sgu"
+  level: "MGU"
+
+class_source: "properties.commute_mode"
+class_filter: "bus"
+class_map:
+  bus: "bus"
+
+require_properties:
+  - "commute_mode"
+
+leg_metadata:
+  t_board_min:  "t_board_min"
+  t_alight_min: "t_alight_min"
+
+on_miss:
+  set:
+    commute_mode: "car_solo"
+
+settings:
+  verbose: true

@@ -73,6 +73,11 @@ households:
   # Configuration file for age categories and demotion rules
   config_file: "configs/2021/households/households_config.yaml"
 
+  # Relationship rules (couple/family pair matching, age constraints).
+  # Required for rules to apply. If this key is omitted, relationship rules
+  # are disabled — there is no implicit lookup.
+  rules_file: "configs/2021/households/relationship_rules.yaml"
+
   # =============================================
   # ALLOCATION MODE (choose one)
   # =============================================
@@ -109,7 +114,7 @@ households:
 #   - unallocated_people.csv      (one row per person not placed in a household)
 
 debug_outputs:
-  enabled: false
+  enabled: true
 
 # ========================================
 # ATTRIBUTES
@@ -190,8 +195,40 @@ timeline:
     - type: child_creator
       config: "configs/2021/venue_child_creators/company_offices.yaml"
 
+    #-----------------------------------------
+    # 6. Work mode correction
+    #-----------------------------------------
+    # Overrides `work_mode` for workers placed in on-site venues
+    # (hospital/care_home/classroom) — forces them to Normal regardless of
+    # what the area-level O-D matrix in workplace_assignment sampled.
+    # Office workers are left untouched.
+    - type: attribute
+      config: "configs/2021/attributes/work_mode_correction.yaml"
+
+    #-----------------------------------------
+    # 7. Commute assignment
+    #-----------------------------------------
+    # Runs AFTER all workplace distributors so it can gate on the actually-assigned
+    # workplace venue (office/classroom/hospital/care_home, worker subset).
+    - type: attribute
+      config: "configs/2021/attributes/commute_mode_assignment.yaml"
+
+    # Route legs for shared-transport modes. Each instance is a generic
+    # RouteDistributor (D10) filtered to one mode_class — places riders on the
+    # transport_line venues their journey traverses and records per-leg
+    # (t_board_min, t_alight_min) on Subset.member_metadata (D11 / Design B).
+    # Route misses fall back to commute_mode=walk (D12).
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_train.yaml"
+
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_tube.yaml"
+
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_bus.yaml"
+
     # ----------------------------------------
-    # 6. Other Services
+    # 8. Other Services
     # ----------------------------------------
     - type: distributor
       config: "configs/2021/distributors/hospital_distributor.yaml"

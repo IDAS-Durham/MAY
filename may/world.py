@@ -277,7 +277,8 @@ def setup_households(geo, population, venues, config):
         population=population,
         venue_manager=venues,
         data_dir=household_config.get("data_dir", "data/households"),
-        config_file=household_config.get("config_file", "households_config.yaml")
+        config_file=household_config.get("config_file", "households_config.yaml"),
+        rules_file=household_config.get("rules_file"),
     )
 
     # Load household data

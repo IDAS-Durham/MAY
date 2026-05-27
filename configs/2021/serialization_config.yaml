@@ -108,6 +108,21 @@ venues:
       properties:
         - capacity
 
+    # Transport-line venues (created dynamically by RouteDistributor — one
+    # per train/tube/bus line_id). No per-venue properties: the line_id is
+    # already serialised as the venue's name (/metadata/names/venues), and
+    # JUNE's RuntimeBinAllocator derives runtime bin counts at simulation
+    # time from N_riders + target_group_size (a JUNE-side config), so no
+    # capacity / carriage-count metadata is needed from MAY.
+    train_line:
+      properties: []
+
+    tube_line:
+      properties: []
+
+    bus_line:
+      properties: []
+
 # =============================================
 # SUBSETS
 # =============================================
