@@ -201,6 +201,37 @@ steps:
     # People will be sorted into age-band slots based on capacity_config
     eligibility: {}
 
+    # Capacity rules for this step (was previously under venues_config.yaml).
+    # Each allocation step owns its own capacity rules — the same venue type
+    # could be used by a different step with different capacity semantics.
+    capacity_config:
+      total_capacity_column: "n_total"
+      attribute_capacities:
+        filter_attributes:
+          - name: "age"
+            type: "age_band"
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_0_15_male:
+            age_band: [0, 15]
+            sex: "male"
+          n_0_15_female:
+            age_band: [0, 15]
+            sex: "female"
+          n_16_24_male:
+            age_band: [16, 24]
+            sex: "male"
+          n_16_24_female:
+            age_band: [16, 24]
+            sex: "female"
+      # Per-venue hard limits from CSV columns (inclusive ranges).
+      attribute_constraints:
+        age:
+          min_column: "StatutoryLowAge"
+          max_column: "StatutoryHighAge"
+      fallback_strategy: "flexible"
+
     strategy: "random"
     max_allocations: null
 
@@ -226,6 +257,48 @@ steps:
       - attribute: "age"
         min: 50  # Minimum age to consider for care homes
 
+    # Capacity rules for this step (was previously under venues_config.yaml).
+    capacity_config:
+      total_capacity_column: "capacity"
+      attribute_capacities:
+        filter_attributes:
+          - name: "age"
+            type: "age_band"
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          age_50_64_male:
+            age_band: [50, 64]
+            sex: "male"
+          age_50_64_female:
+            age_band: [50, 64]
+            sex: "female"
+          age_65_74_male:
+            age_band: [65, 74]
+            sex: "male"
+          age_65_74_female:
+            age_band: [65, 74]
+            sex: "female"
+          age_75_84_male:
+            age_band: [75, 84]
+            sex: "male"
+          age_75_84_female:
+            age_band: [75, 84]
+            sex: "female"
+          age_85_94_male:
+            age_band: [85, 94]
+            sex: "male"
+          age_85_94_female:
+            age_band: [85, 94]
+            sex: "female"
+          age_95_plus_male:
+            age_band: [95, 120]
+            sex: "male"
+          age_95_plus_female:
+            age_band: [95, 120]
+            sex: "female"
+      fallback_strategy: "total_capacity"
+
     strategy: "oldest_first"  # Prioritize oldest within each age/sex group
     max_allocations: null
 
@@ -250,6 +323,26 @@ steps:
     eligibility:
       - attribute: "age"
         min: 16
+
+    # Capacity rules for this step (was previously under venues_config.yaml).
+    capacity_config:
+      total_capacity_column: "n_total"
+      attribute_capacities:
+        filter_attributes:
+          - name: "age"
+            type: "age_band"
+        column_mappings:
+          n_16_24:
+            age_band: [18, 24]
+          n_25_34:
+            age_band: [25, 34]
+          n_35_49:
+            age_band: [35, 49]
+          n_50_64:
+            age_band: [50, 64]
+          n_65_99:
+            age_band: [65, 99]
+      fallback_strategy: "flexible"
 
     strategy: "random"
     max_allocations: null
