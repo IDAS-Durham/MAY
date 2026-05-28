@@ -4737,7 +4737,97 @@ Exports data in Structure-of-Arrays (SoA) format for efficient C++ loading.</p>
 <span class="normal">1149</span>
 <span class="normal">1150</span>
 <span class="normal">1151</span>
-<span class="normal">1152</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">WorldSerializer</span><span class="p">:</span>
+<span class="normal">1152</span>
+<span class="normal">1153</span>
+<span class="normal">1154</span>
+<span class="normal">1155</span>
+<span class="normal">1156</span>
+<span class="normal">1157</span>
+<span class="normal">1158</span>
+<span class="normal">1159</span>
+<span class="normal">1160</span>
+<span class="normal">1161</span>
+<span class="normal">1162</span>
+<span class="normal">1163</span>
+<span class="normal">1164</span>
+<span class="normal">1165</span>
+<span class="normal">1166</span>
+<span class="normal">1167</span>
+<span class="normal">1168</span>
+<span class="normal">1169</span>
+<span class="normal">1170</span>
+<span class="normal">1171</span>
+<span class="normal">1172</span>
+<span class="normal">1173</span>
+<span class="normal">1174</span>
+<span class="normal">1175</span>
+<span class="normal">1176</span>
+<span class="normal">1177</span>
+<span class="normal">1178</span>
+<span class="normal">1179</span>
+<span class="normal">1180</span>
+<span class="normal">1181</span>
+<span class="normal">1182</span>
+<span class="normal">1183</span>
+<span class="normal">1184</span>
+<span class="normal">1185</span>
+<span class="normal">1186</span>
+<span class="normal">1187</span>
+<span class="normal">1188</span>
+<span class="normal">1189</span>
+<span class="normal">1190</span>
+<span class="normal">1191</span>
+<span class="normal">1192</span>
+<span class="normal">1193</span>
+<span class="normal">1194</span>
+<span class="normal">1195</span>
+<span class="normal">1196</span>
+<span class="normal">1197</span>
+<span class="normal">1198</span>
+<span class="normal">1199</span>
+<span class="normal">1200</span>
+<span class="normal">1201</span>
+<span class="normal">1202</span>
+<span class="normal">1203</span>
+<span class="normal">1204</span>
+<span class="normal">1205</span>
+<span class="normal">1206</span>
+<span class="normal">1207</span>
+<span class="normal">1208</span>
+<span class="normal">1209</span>
+<span class="normal">1210</span>
+<span class="normal">1211</span>
+<span class="normal">1212</span>
+<span class="normal">1213</span>
+<span class="normal">1214</span>
+<span class="normal">1215</span>
+<span class="normal">1216</span>
+<span class="normal">1217</span>
+<span class="normal">1218</span>
+<span class="normal">1219</span>
+<span class="normal">1220</span>
+<span class="normal">1221</span>
+<span class="normal">1222</span>
+<span class="normal">1223</span>
+<span class="normal">1224</span>
+<span class="normal">1225</span>
+<span class="normal">1226</span>
+<span class="normal">1227</span>
+<span class="normal">1228</span>
+<span class="normal">1229</span>
+<span class="normal">1230</span>
+<span class="normal">1231</span>
+<span class="normal">1232</span>
+<span class="normal">1233</span>
+<span class="normal">1234</span>
+<span class="normal">1235</span>
+<span class="normal">1236</span>
+<span class="normal">1237</span>
+<span class="normal">1238</span>
+<span class="normal">1239</span>
+<span class="normal">1240</span>
+<span class="normal">1241</span>
+<span class="normal">1242</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">WorldSerializer</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Serializes World object to HDF5 format for C++ consumption.</span>
 
@@ -5618,6 +5708,14 @@ Exports data in Structure-of-Arrays (SoA) format for efficient C++ loading.</p>
             <span class="n">people_sorted</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_people_sorted&#39;</span><span class="p">,</span> <span class="n">world</span><span class="o">.</span><span class="n">population</span><span class="o">.</span><span class="n">people</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_write_activity_map</span><span class="p">(</span><span class="n">rel_group</span><span class="p">,</span> <span class="n">world</span><span class="p">,</span> <span class="n">people_sorted</span><span class="p">)</span>
 
+        <span class="c1"># Generic per-membership numeric metadata side-table (Design B). Rows</span>
+        <span class="c1"># only for subsets whose Subset.member_metadata dict is populated (e.g.</span>
+        <span class="c1"># transport-line legs carrying (t_board_min, t_alight_min)). Leaving</span>
+        <span class="c1"># the 4-col activity_data untouched lets old JUNE builds load new</span>
+        <span class="c1"># files, and new JUNE builds load old files where this dataset is</span>
+        <span class="c1"># absent.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_write_membership_metadata</span><span class="p">(</span><span class="n">rel_group</span><span class="p">,</span> <span class="n">world</span><span class="p">)</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">_write_activity_map</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rel_group</span><span class="p">,</span> <span class="n">world</span><span class="p">,</span> <span class="n">people_sorted</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Write activity_map data with chunked processing for memory efficiency.</span>
@@ -5725,6 +5823,88 @@ Exports data in Structure-of-Arrays (SoA) format for efficient C++ loading.</p>
         <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">activity_names</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;                                           - </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;    Total activity mappings: </span><span class="si">{</span><span class="n">total_mappings</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_write_membership_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">rel_group</span><span class="p">,</span> <span class="n">world</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write Subset.member_metadata as a generic side-table.</span>
+
+<span class="sd">        Produces /activity_mappings/membership_metadata with one row per</span>
+<span class="sd">        (person, venue) membership that carries metadata:</span>
+<span class="sd">            person_id    : int32</span>
+<span class="sd">            venue_id     : int32 (global venue id, matches activity_data col 2)</span>
+<span class="sd">            &lt;field_name&gt; : float32 — one column per metadata field name found</span>
+
+<span class="sd">        Field names are discovered by scanning all subsets&#39; member_metadata</span>
+<span class="sd">        dicts. Datasets are float32 to accept both ints and floats; -1.0 is</span>
+<span class="sd">        the sentinel for &quot;field absent for this row&quot; (rare; should not occur</span>
+<span class="sd">        unless different memberships in the same export carry disjoint</span>
+<span class="sd">        metadata schemas).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># First pass: collect rows and the union of field names.</span>
+        <span class="n">person_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">venue_ids</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">per_field</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">list</span><span class="p">)</span>
+        <span class="n">field_names</span> <span class="o">=</span> <span class="p">[]</span>  <span class="c1"># preserve discovery order</span>
+        <span class="n">field_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+
+        <span class="n">venue_to_global_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_venue_to_global_id</span>
+
+        <span class="k">for</span> <span class="n">venue</span> <span class="ow">in</span> <span class="n">world</span><span class="o">.</span><span class="n">venues</span><span class="o">.</span><span class="n">get_all_venues_list</span><span class="p">():</span>
+            <span class="n">global_id</span> <span class="o">=</span> <span class="n">venue_to_global_id</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">venue</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">global_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">for</span> <span class="n">subset</span> <span class="ow">in</span> <span class="n">venue</span><span class="o">.</span><span class="n">subsets</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+                <span class="n">meta</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">subset</span><span class="p">,</span> <span class="s1">&#39;member_metadata&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">meta</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">for</span> <span class="n">pid</span><span class="p">,</span> <span class="n">fields</span> <span class="ow">in</span> <span class="n">meta</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                    <span class="n">person_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
+                    <span class="n">venue_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">global_id</span><span class="p">)</span>
+                    <span class="c1"># Register any newly seen field name.</span>
+                    <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">fields</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
+                        <span class="k">if</span> <span class="n">fname</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">field_set</span><span class="p">:</span>
+                            <span class="n">field_set</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+                            <span class="n">field_names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fname</span><span class="p">)</span>
+                    <span class="c1"># Append this row&#39;s value for every known field so far.</span>
+                    <span class="c1"># Use index of last appended row to back-fill on next pass.</span>
+                    <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">:</span>
+                        <span class="n">per_field</span><span class="p">[</span><span class="n">fname</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">fields</span><span class="p">[</span><span class="n">fname</span><span class="p">])</span> <span class="k">if</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">fields</span> <span class="k">else</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">)</span>
+                    <span class="c1"># Back-fill any new fields onto previous rows</span>
+                    <span class="c1"># (handled below in a single pass for efficiency).</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">person_ids</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;  No membership_metadata to serialise (no subsets populated)&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+
+        <span class="n">n_rows</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">person_ids</span><span class="p">)</span>
+        <span class="c1"># Back-fill: any field list shorter than n_rows means it was discovered</span>
+        <span class="c1"># after some rows had already been appended — pad the head with the</span>
+        <span class="c1"># absent-sentinel.</span>
+        <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">:</span>
+            <span class="n">short</span> <span class="o">=</span> <span class="n">n_rows</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">per_field</span><span class="p">[</span><span class="n">fname</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">short</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">per_field</span><span class="p">[</span><span class="n">fname</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mf">1.0</span><span class="p">]</span> <span class="o">*</span> <span class="n">short</span> <span class="o">+</span> <span class="n">per_field</span><span class="p">[</span><span class="n">fname</span><span class="p">]</span>
+
+        <span class="n">meta_group</span> <span class="o">=</span> <span class="n">rel_group</span><span class="o">.</span><span class="n">create_group</span><span class="p">(</span><span class="s1">&#39;membership_metadata&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_create_dataset</span><span class="p">(</span>
+            <span class="n">meta_group</span><span class="p">,</span> <span class="s1">&#39;person_ids&#39;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">person_ids</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_create_dataset</span><span class="p">(</span>
+            <span class="n">meta_group</span><span class="p">,</span> <span class="s1">&#39;venue_ids&#39;</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">venue_ids</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="c1"># Field-name registry (string array, ordered) so consumers can iterate.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_create_dataset</span><span class="p">(</span>
+            <span class="n">meta_group</span><span class="p">,</span> <span class="s1">&#39;field_names&#39;</span><span class="p">,</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">field_names</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">h5py</span><span class="o">.</span><span class="n">string_dtype</span><span class="p">()),</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">fname</span> <span class="ow">in</span> <span class="n">field_names</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_create_dataset</span><span class="p">(</span>
+                <span class="n">meta_group</span><span class="p">,</span> <span class="n">fname</span><span class="p">,</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">per_field</span><span class="p">[</span><span class="n">fname</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;  Wrote membership_metadata side-table: </span><span class="si">{</span><span class="n">n_rows</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> rows × &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">field_names</span><span class="p">)</span><span class="si">}</span><span class="s2"> fields </span><span class="si">{</span><span class="n">field_names</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_write_property_array</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">prop_name</span><span class="p">,</span> <span class="n">objects</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>

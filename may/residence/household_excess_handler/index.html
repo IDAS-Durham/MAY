@@ -4126,7 +4126,13 @@
 <span class="normal">522</span>
 <span class="normal">523</span>
 <span class="normal">524</span>
-<span class="normal">525</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HouseholdExcessHandler</span><span class="p">:</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HouseholdExcessHandler</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Handles excess and overflow people allocation to households.&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">household_distributor</span><span class="p">):</span>
@@ -4528,7 +4534,13 @@
                             <span class="k">break</span>
 
                         <span class="n">person</span> <span class="o">=</span> <span class="n">available_people</span><span class="p">[</span><span class="n">global_people_index</span><span class="p">]</span>
-                        <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span><span class="n">person</span><span class="p">)</span>
+                        <span class="c1"># Key the subset by the person&#39;s actual age category, otherwise</span>
+                        <span class="c1"># add_to_subset() falls back to the household&#39;s first existing</span>
+                        <span class="c1"># subset and contaminates it (e.g. an adult landing in &quot;Kids&quot;).</span>
+                        <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span>
+                            <span class="n">person</span><span class="p">,</span>
+                            <span class="n">subset_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">_get_person_category_name</span><span class="p">(</span><span class="n">person</span><span class="p">),</span>
+                        <span class="p">)</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">allocated_people</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
                         <span class="n">global_people_index</span> <span class="o">+=</span> <span class="mi">1</span>
                         <span class="n">added_to_hh</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -5714,7 +5726,13 @@ across eligible households, optionally biasing certain patterns.</p>
 <span class="normal">466</span>
 <span class="normal">467</span>
 <span class="normal">468</span>
-<span class="normal">469</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">allocate_overflow_to_households</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+<span class="normal">469</span>
+<span class="normal">470</span>
+<span class="normal">471</span>
+<span class="normal">472</span>
+<span class="normal">473</span>
+<span class="normal">474</span>
+<span class="normal">475</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">allocate_overflow_to_households</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
                                    <span class="n">target_patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
                                    <span class="n">add_category</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
                                    <span class="n">pattern_bias</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5876,7 +5894,13 @@ across eligible households, optionally biasing certain patterns.</p>
                         <span class="k">break</span>
 
                     <span class="n">person</span> <span class="o">=</span> <span class="n">available_people</span><span class="p">[</span><span class="n">global_people_index</span><span class="p">]</span>
-                    <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span><span class="n">person</span><span class="p">)</span>
+                    <span class="c1"># Key the subset by the person&#39;s actual age category, otherwise</span>
+                    <span class="c1"># add_to_subset() falls back to the household&#39;s first existing</span>
+                    <span class="c1"># subset and contaminates it (e.g. an adult landing in &quot;Kids&quot;).</span>
+                    <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span>
+                        <span class="n">person</span><span class="p">,</span>
+                        <span class="n">subset_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">_get_person_category_name</span><span class="p">(</span><span class="n">person</span><span class="p">),</span>
+                    <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">allocated_people</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
                     <span class="n">global_people_index</span> <span class="o">+=</span> <span class="mi">1</span>
                     <span class="n">added_to_hh</span> <span class="o">+=</span> <span class="mi">1</span>

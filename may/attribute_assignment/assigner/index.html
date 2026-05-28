@@ -4520,7 +4520,48 @@
 <span class="normal">944</span>
 <span class="normal">945</span>
 <span class="normal">946</span>
-<span class="normal">947</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AttributeAssigner</span><span class="p">:</span>
+<span class="normal">947</span>
+<span class="normal">948</span>
+<span class="normal">949</span>
+<span class="normal">950</span>
+<span class="normal">951</span>
+<span class="normal">952</span>
+<span class="normal">953</span>
+<span class="normal">954</span>
+<span class="normal">955</span>
+<span class="normal">956</span>
+<span class="normal">957</span>
+<span class="normal">958</span>
+<span class="normal">959</span>
+<span class="normal">960</span>
+<span class="normal">961</span>
+<span class="normal">962</span>
+<span class="normal">963</span>
+<span class="normal">964</span>
+<span class="normal">965</span>
+<span class="normal">966</span>
+<span class="normal">967</span>
+<span class="normal">968</span>
+<span class="normal">969</span>
+<span class="normal">970</span>
+<span class="normal">971</span>
+<span class="normal">972</span>
+<span class="normal">973</span>
+<span class="normal">974</span>
+<span class="normal">975</span>
+<span class="normal">976</span>
+<span class="normal">977</span>
+<span class="normal">978</span>
+<span class="normal">979</span>
+<span class="normal">980</span>
+<span class="normal">981</span>
+<span class="normal">982</span>
+<span class="normal">983</span>
+<span class="normal">984</span>
+<span class="normal">985</span>
+<span class="normal">986</span>
+<span class="normal">987</span>
+<span class="normal">988</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AttributeAssigner</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Main orchestrator for attribute assignment.</span>
 
@@ -4548,18 +4589,34 @@
         <span class="c1"># Pre-compute filter configuration</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_has_filters</span> <span class="o">=</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s1">&#39;filters&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">filters</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_optimized_filters</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># Filters that inspect the person&#39;s activity_map (assigned venues/subsets)</span>
+        <span class="c1"># rather than a scalar attribute. Populated below.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_activity_venue_filters</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_filters</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">cfg</span> <span class="ow">in</span> <span class="n">config</span><span class="o">.</span><span class="n">filters</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;activities&#39;</span><span class="p">:</span>
                     <span class="k">continue</span>
+                <span class="c1"># activity_venue: require an assigned venue of a given type</span>
+                <span class="c1"># (optionally in a given subset) under some activity.</span>
+                <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;activity_venue&#39;</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_activity_venue_filters</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                        <span class="s1">&#39;activity&#39;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;activity&#39;</span><span class="p">,</span> <span class="s1">&#39;primary_activity&#39;</span><span class="p">),</span>
+                        <span class="s1">&#39;venue_types&#39;</span><span class="p">:</span> <span class="nb">set</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;venue_types&#39;</span><span class="p">,</span> <span class="p">[])),</span>
+                        <span class="s1">&#39;subset_names&#39;</span><span class="p">:</span> <span class="nb">set</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subset_names&#39;</span><span class="p">,</span> <span class="p">[])),</span>
+                    <span class="p">})</span>
+                    <span class="k">continue</span>
                 <span class="n">attr</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;attribute&#39;</span><span class="p">)</span>
                 <span class="n">ftype</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
                 <span class="n">num</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;numerical&#39;</span><span class="p">,</span> <span class="p">{})</span>
+                <span class="c1"># Categorical &quot;include&quot; values: accept either nested</span>
+                <span class="c1"># (categorical: {values: [...]}) or flat (values: [...]) form.</span>
+                <span class="n">cat_values</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;categorical&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;values&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;values&#39;</span><span class="p">))</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_optimized_filters</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
                     <span class="s1">&#39;attr&#39;</span><span class="p">:</span> <span class="n">attr</span><span class="p">,</span>
                     <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="n">ftype</span><span class="p">,</span>
                     <span class="s1">&#39;min&#39;</span><span class="p">:</span> <span class="n">num</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;min&#39;</span><span class="p">),</span>
                     <span class="s1">&#39;max&#39;</span><span class="p">:</span> <span class="n">num</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;max&#39;</span><span class="p">),</span>
+                    <span class="s1">&#39;values&#39;</span><span class="p">:</span> <span class="n">cat_values</span><span class="p">,</span>
                     <span class="s1">&#39;is_age&#39;</span><span class="p">:</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;age&#39;</span><span class="p">,</span>
                     <span class="s1">&#39;is_sex&#39;</span><span class="p">:</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;sex&#39;</span>
                 <span class="p">})</span>
@@ -4805,6 +4862,10 @@
                 <span class="n">vmax</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;max&#39;</span><span class="p">]</span>
                 <span class="k">if</span> <span class="n">vmax</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">person_value</span> <span class="o">&gt;</span> <span class="n">vmax</span><span class="p">:</span>
                     <span class="k">return</span> <span class="kc">False</span>
+            <span class="k">elif</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;type&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;categorical&#39;</span><span class="p">:</span>
+                <span class="n">values</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;values&#39;</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">values</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">person_value</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">False</span>
 
         <span class="c1"># 2. Activity filters (Fast set intersection check)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_include_activities</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exclude_activities</span><span class="p">:</span>
@@ -4825,6 +4886,27 @@
                 <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_exclude_activities</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">person_activities</span><span class="p">:</span>
                         <span class="k">return</span> <span class="kc">False</span>
+
+        <span class="c1"># 2b. Activity-venue filters: require an actually-assigned venue of a</span>
+        <span class="c1"># given type (optionally in a given subset) under some activity. Used to</span>
+        <span class="c1"># gate commute on people who genuinely got a workplace venue.</span>
+        <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_activity_venue_filters</span><span class="p">:</span>
+            <span class="n">venue_map</span> <span class="o">=</span> <span class="n">person</span><span class="o">.</span><span class="n">activity_map</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="s1">&#39;activity&#39;</span><span class="p">],</span> <span class="p">{})</span>
+            <span class="n">venue_types</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;venue_types&#39;</span><span class="p">]</span>
+            <span class="n">subset_names</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s1">&#39;subset_names&#39;</span><span class="p">]</span>
+            <span class="n">matched</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">for</span> <span class="n">vt</span><span class="p">,</span> <span class="n">subsets</span> <span class="ow">in</span> <span class="n">venue_map</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">venue_types</span> <span class="ow">and</span> <span class="n">vt</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">venue_types</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="n">subset_names</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="s1">&#39;subset_name&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">in</span> <span class="n">subset_names</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">subsets</span><span class="p">):</span>
+                        <span class="n">matched</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+                <span class="k">elif</span> <span class="n">subsets</span><span class="p">:</span>
+                    <span class="n">matched</span> <span class="o">=</span> <span class="kc">True</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">matched</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
 
         <span class="c1"># 3. Required attributes</span>
         <span class="k">for</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_config</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_required_attrs</span><span class="p">:</span>
@@ -5563,7 +5645,23 @@
 <span class="normal">106</span>
 <span class="normal">107</span>
 <span class="normal">108</span>
-<span class="normal">109</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">AttributeAssignmentConfig</span><span class="p">,</span> <span class="n">data_manager</span><span class="p">:</span> <span class="n">DataSourceManager</span><span class="p">):</span>
+<span class="normal">109</span>
+<span class="normal">110</span>
+<span class="normal">111</span>
+<span class="normal">112</span>
+<span class="normal">113</span>
+<span class="normal">114</span>
+<span class="normal">115</span>
+<span class="normal">116</span>
+<span class="normal">117</span>
+<span class="normal">118</span>
+<span class="normal">119</span>
+<span class="normal">120</span>
+<span class="normal">121</span>
+<span class="normal">122</span>
+<span class="normal">123</span>
+<span class="normal">124</span>
+<span class="normal">125</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">config</span><span class="p">:</span> <span class="n">AttributeAssignmentConfig</span><span class="p">,</span> <span class="n">data_manager</span><span class="p">:</span> <span class="n">DataSourceManager</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Initialize attribute assigner.</span>
 
@@ -5584,18 +5682,34 @@
     <span class="c1"># Pre-compute filter configuration</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_has_filters</span> <span class="o">=</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="s1">&#39;filters&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">config</span><span class="o">.</span><span class="n">filters</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_optimized_filters</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1"># Filters that inspect the person&#39;s activity_map (assigned venues/subsets)</span>
+    <span class="c1"># rather than a scalar attribute. Populated below.</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_activity_venue_filters</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_has_filters</span><span class="p">:</span>
         <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">cfg</span> <span class="ow">in</span> <span class="n">config</span><span class="o">.</span><span class="n">filters</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;activities&#39;</span><span class="p">:</span>
                 <span class="k">continue</span>
+            <span class="c1"># activity_venue: require an assigned venue of a given type</span>
+            <span class="c1"># (optionally in a given subset) under some activity.</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;activity_venue&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_activity_venue_filters</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
+                    <span class="s1">&#39;activity&#39;</span><span class="p">:</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;activity&#39;</span><span class="p">,</span> <span class="s1">&#39;primary_activity&#39;</span><span class="p">),</span>
+                    <span class="s1">&#39;venue_types&#39;</span><span class="p">:</span> <span class="nb">set</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;venue_types&#39;</span><span class="p">,</span> <span class="p">[])),</span>
+                    <span class="s1">&#39;subset_names&#39;</span><span class="p">:</span> <span class="nb">set</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;subset_names&#39;</span><span class="p">,</span> <span class="p">[])),</span>
+                <span class="p">})</span>
+                <span class="k">continue</span>
             <span class="n">attr</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;attribute&#39;</span><span class="p">)</span>
             <span class="n">ftype</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;type&#39;</span><span class="p">)</span>
             <span class="n">num</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;numerical&#39;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="c1"># Categorical &quot;include&quot; values: accept either nested</span>
+            <span class="c1"># (categorical: {values: [...]}) or flat (values: [...]) form.</span>
+            <span class="n">cat_values</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;categorical&#39;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;values&#39;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;values&#39;</span><span class="p">))</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_optimized_filters</span><span class="o">.</span><span class="n">append</span><span class="p">({</span>
                 <span class="s1">&#39;attr&#39;</span><span class="p">:</span> <span class="n">attr</span><span class="p">,</span>
                 <span class="s1">&#39;type&#39;</span><span class="p">:</span> <span class="n">ftype</span><span class="p">,</span>
                 <span class="s1">&#39;min&#39;</span><span class="p">:</span> <span class="n">num</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;min&#39;</span><span class="p">),</span>
                 <span class="s1">&#39;max&#39;</span><span class="p">:</span> <span class="n">num</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;max&#39;</span><span class="p">),</span>
+                <span class="s1">&#39;values&#39;</span><span class="p">:</span> <span class="n">cat_values</span><span class="p">,</span>
                 <span class="s1">&#39;is_age&#39;</span><span class="p">:</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;age&#39;</span><span class="p">,</span>
                 <span class="s1">&#39;is_sex&#39;</span><span class="p">:</span> <span class="n">attr</span> <span class="o">==</span> <span class="s1">&#39;sex&#39;</span>
             <span class="p">})</span>
@@ -5698,23 +5812,7 @@
 
             <details class="quote">
               <summary>Source code in <code>may/attribute_assignment/assigner.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">134</span>
-<span class="normal">135</span>
-<span class="normal">136</span>
-<span class="normal">137</span>
-<span class="normal">138</span>
-<span class="normal">139</span>
-<span class="normal">140</span>
-<span class="normal">141</span>
-<span class="normal">142</span>
-<span class="normal">143</span>
-<span class="normal">144</span>
-<span class="normal">145</span>
-<span class="normal">146</span>
-<span class="normal">147</span>
-<span class="normal">148</span>
-<span class="normal">149</span>
-<span class="normal">150</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">150</span>
 <span class="normal">151</span>
 <span class="normal">152</span>
 <span class="normal">153</span>
@@ -5724,7 +5822,23 @@
 <span class="normal">157</span>
 <span class="normal">158</span>
 <span class="normal">159</span>
-<span class="normal">160</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">assign_all</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">venue_manager</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="normal">160</span>
+<span class="normal">161</span>
+<span class="normal">162</span>
+<span class="normal">163</span>
+<span class="normal">164</span>
+<span class="normal">165</span>
+<span class="normal">166</span>
+<span class="normal">167</span>
+<span class="normal">168</span>
+<span class="normal">169</span>
+<span class="normal">170</span>
+<span class="normal">171</span>
+<span class="normal">172</span>
+<span class="normal">173</span>
+<span class="normal">174</span>
+<span class="normal">175</span>
+<span class="normal">176</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">assign_all</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">venue_manager</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Assign attribute based on assignment level (household or person).</span>
 

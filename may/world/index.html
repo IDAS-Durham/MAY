@@ -5526,7 +5526,8 @@ world.export_to_hdf5("output/world.h5", "custom_serialization.yaml")</p>
 <span class="normal">376</span>
 <span class="normal">377</span>
 <span class="normal">378</span>
-<span class="normal">379</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">setup_households</span><span class="p">(</span><span class="n">geo</span><span class="p">,</span> <span class="n">population</span><span class="p">,</span> <span class="n">venues</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
+<span class="normal">379</span>
+<span class="normal">380</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">setup_households</span><span class="p">(</span><span class="n">geo</span><span class="p">,</span> <span class="n">population</span><span class="p">,</span> <span class="n">venues</span><span class="p">,</span> <span class="n">config</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Setup and distribute households based on configuration.</span>
 
@@ -5554,7 +5555,8 @@ world.export_to_hdf5("output/world.h5", "custom_serialization.yaml")</p>
         <span class="n">population</span><span class="o">=</span><span class="n">population</span><span class="p">,</span>
         <span class="n">venue_manager</span><span class="o">=</span><span class="n">venues</span><span class="p">,</span>
         <span class="n">data_dir</span><span class="o">=</span><span class="n">household_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;data_dir&quot;</span><span class="p">,</span> <span class="s2">&quot;data/households&quot;</span><span class="p">),</span>
-        <span class="n">config_file</span><span class="o">=</span><span class="n">household_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;config_file&quot;</span><span class="p">,</span> <span class="s2">&quot;households_config.yaml&quot;</span><span class="p">)</span>
+        <span class="n">config_file</span><span class="o">=</span><span class="n">household_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;config_file&quot;</span><span class="p">,</span> <span class="s2">&quot;households_config.yaml&quot;</span><span class="p">),</span>
+        <span class="n">rules_file</span><span class="o">=</span><span class="n">household_config</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;rules_file&quot;</span><span class="p">),</span>
     <span class="p">)</span>
 
     <span class="c1"># Load household data</span>

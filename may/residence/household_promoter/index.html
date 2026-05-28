@@ -4145,7 +4145,19 @@
 <span class="normal">522</span>
 <span class="normal">523</span>
 <span class="normal">524</span>
-<span class="normal">525</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HouseholdPromoter</span><span class="p">:</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">HouseholdPromoter</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Handles household promotion and final people allocation.&quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">household_distributor</span><span class="p">):</span>
@@ -4434,7 +4446,13 @@
 
                         <span class="k">for</span> <span class="n">pid</span> <span class="ow">in</span> <span class="n">ids_to_take</span><span class="p">:</span>
                             <span class="n">person</span> <span class="o">=</span> <span class="n">available_people</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
-                            <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span><span class="n">person</span><span class="p">)</span>
+                            <span class="c1"># Key by the person&#39;s actual age category; the keyless</span>
+                            <span class="c1"># fallback would dump them into the household&#39;s first</span>
+                            <span class="c1"># subset and mislabel them (see add_to_subset).</span>
+                            <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span>
+                                <span class="n">person</span><span class="p">,</span>
+                                <span class="n">subset_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">_get_person_category_name</span><span class="p">(</span><span class="n">person</span><span class="p">),</span>
+                            <span class="p">)</span>
                             <span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">allocated_people</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
                             <span class="n">added_to_this</span> <span class="o">+=</span> <span class="mi">1</span>
                             <span class="n">people_added</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -4598,7 +4616,13 @@
                                 <span class="k">break</span>
 
                             <span class="n">person</span> <span class="o">=</span> <span class="n">available_people</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
-                            <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span><span class="n">person</span><span class="p">)</span>
+                            <span class="c1"># Key by the person&#39;s actual age category; the keyless</span>
+                            <span class="c1"># fallback would dump them into the household&#39;s first</span>
+                            <span class="c1"># subset and mislabel them (see add_to_subset).</span>
+                            <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span>
+                                <span class="n">person</span><span class="p">,</span>
+                                <span class="n">subset_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">_get_person_category_name</span><span class="p">(</span><span class="n">person</span><span class="p">),</span>
+                            <span class="p">)</span>
                             <span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">allocated_people</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
                             <span class="n">added_to_this_household</span> <span class="o">+=</span> <span class="mi">1</span>
                             <span class="n">people_added</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -5051,7 +5075,13 @@
 <span class="normal">339</span>
 <span class="normal">340</span>
 <span class="normal">341</span>
-<span class="normal">342</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">promote_and_allocate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+<span class="normal">342</span>
+<span class="normal">343</span>
+<span class="normal">344</span>
+<span class="normal">345</span>
+<span class="normal">346</span>
+<span class="normal">347</span>
+<span class="normal">348</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">promote_and_allocate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
                         <span class="n">target_categories</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
                         <span class="n">refresh_pools</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                         <span class="n">round_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
@@ -5222,7 +5252,13 @@
 
                     <span class="k">for</span> <span class="n">pid</span> <span class="ow">in</span> <span class="n">ids_to_take</span><span class="p">:</span>
                         <span class="n">person</span> <span class="o">=</span> <span class="n">available_people</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
-                        <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span><span class="n">person</span><span class="p">)</span>
+                        <span class="c1"># Key by the person&#39;s actual age category; the keyless</span>
+                        <span class="c1"># fallback would dump them into the household&#39;s first</span>
+                        <span class="c1"># subset and mislabel them (see add_to_subset).</span>
+                        <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span>
+                            <span class="n">person</span><span class="p">,</span>
+                            <span class="n">subset_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">_get_person_category_name</span><span class="p">(</span><span class="n">person</span><span class="p">),</span>
+                        <span class="p">)</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">allocated_people</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
                         <span class="n">added_to_this</span> <span class="o">+=</span> <span class="mi">1</span>
                         <span class="n">people_added</span> <span class="o">+=</span> <span class="mi">1</span>
@@ -5375,13 +5411,7 @@
 
             <details class="quote">
               <summary>Source code in <code>may/residence/household_promoter.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">344</span>
-<span class="normal">345</span>
-<span class="normal">346</span>
-<span class="normal">347</span>
-<span class="normal">348</span>
-<span class="normal">349</span>
-<span class="normal">350</span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal">350</span>
 <span class="normal">351</span>
 <span class="normal">352</span>
 <span class="normal">353</span>
@@ -5556,7 +5586,19 @@
 <span class="normal">522</span>
 <span class="normal">523</span>
 <span class="normal">524</span>
-<span class="normal">525</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">promote_with_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+<span class="normal">525</span>
+<span class="normal">526</span>
+<span class="normal">527</span>
+<span class="normal">528</span>
+<span class="normal">529</span>
+<span class="normal">530</span>
+<span class="normal">531</span>
+<span class="normal">532</span>
+<span class="normal">533</span>
+<span class="normal">534</span>
+<span class="normal">535</span>
+<span class="normal">536</span>
+<span class="normal">537</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">promote_with_rules</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
                       <span class="n">promotion_rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">],</span>
                       <span class="n">refresh_pools</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
                       <span class="n">round_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
@@ -5683,7 +5725,13 @@
                             <span class="k">break</span>
 
                         <span class="n">person</span> <span class="o">=</span> <span class="n">available_people</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
-                        <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span><span class="n">person</span><span class="p">)</span>
+                        <span class="c1"># Key by the person&#39;s actual age category; the keyless</span>
+                        <span class="c1"># fallback would dump them into the household&#39;s first</span>
+                        <span class="c1"># subset and mislabel them (see add_to_subset).</span>
+                        <span class="n">household</span><span class="o">.</span><span class="n">add_to_subset</span><span class="p">(</span>
+                            <span class="n">person</span><span class="p">,</span>
+                            <span class="n">subset_key</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">_get_person_category_name</span><span class="p">(</span><span class="n">person</span><span class="p">),</span>
+                        <span class="p">)</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">distributor</span><span class="o">.</span><span class="n">allocated_people</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
                         <span class="n">added_to_this_household</span> <span class="o">+=</span> <span class="mi">1</span>
                         <span class="n">people_added</span> <span class="o">+=</span> <span class="mi">1</span>
