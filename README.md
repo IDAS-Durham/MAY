@@ -12,7 +12,7 @@ The whole pipeline is driven by **YAML configuration files**. The Python code do
 
 ## Documentation
 
-- **[Docs Page](https://mtcorread.github.io/MAY/)** - Full documentation.
+- **[Docs Page](https://idas-durham.github.io/MAY/)** - Full documentation.
 - **[USER_GUIDE.md](USER_GUIDE.md)** — walkthrough of every YAML and CSV: how to configure geography filters, edit household allocation, swap census years, disable debug outputs, etc. Read this before changing any config.
 
 ## Install
