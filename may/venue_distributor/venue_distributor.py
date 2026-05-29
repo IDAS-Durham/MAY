@@ -16,6 +16,7 @@ from .fallbacks import FallbackManager
 from .matcher import VenueMatcher
 from .allocation_engine import AllocationEngine
 from .reporting import ReportingManager
+from may.utils import path_resolver as pr
 
 import logging
 import numpy as np
@@ -144,13 +145,11 @@ class VenueDistributor(BaseDistributor):
                 continue
 
             # Load CSV file
-            full_path = Path(file_path)
+            full_path = Path(pr.resolve(file_path))
             if not full_path.is_absolute() and self.config_path:
                 # Make relative to project root
-                # config_path is yaml/distributors/xxx.yaml
-                # We need to go up to yaml/, then up to project root
                 project_root = self.config_path.parent.parent.parent
-                full_path = project_root / file_path
+                full_path = project_root / pr.resolve(file_path)
             elif not self.config_path:
                 logger.warning(f"Cannot resolve relative path '{file_path}' for probability file without a config_file path. Assuming absolute path.")
 

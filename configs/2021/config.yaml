@@ -1,8 +1,15 @@
 # MAY Configuration File
 
+# ========================================
+# ROOTS — set these for your machine
+# ========================================
+# config_root: /absolute/path/to/configs/2021  # optional; defaults to this file's directory
+data_root: data                                  # set to absolute path for collaboration
+# output_root: /absolute/path/to/output         # optional; defaults to {CWD}/output
+
 geography:
   # Path to geography data files
-  data_dir: "data/geography"
+  data_dir: "${data_root}/geography"
 
   # Define hierarchy levels (smallest to largest)
   # If not specified, defaults to ["SGU", "MGU", "LGU"]
@@ -38,7 +45,7 @@ geography:
 
 population:
   # Path to population data files
-  data_dir: "data/population"
+  data_dir: "${data_root}/population"
 
   # Demographics files (matrix format: rows=geo_units, columns=ages)
   demographics_male_file: "demographics_male.csv"
@@ -51,10 +58,10 @@ population:
 
 venues:
   # Path to venue files
-  data_dir: "data/venues"
+  data_dir: "${data_root}/venues"
 
   # Path to YAML configuration file (relative to project root or absolute path)
-  config_file: "configs/2021/venues/venues_config.yaml"
+  config_file: "${config_root}/venues/venues_config.yaml"
 
   # Export file for venue allocations (automatically created after allocation)
   export_file: "venue_allocations.csv"
@@ -65,18 +72,18 @@ venues:
 
 households:
   # Path to household data files
-  data_dir: "data/households"
+  data_dir: "${data_root}/households"
 
   # Household composition data file (CSV with patterns like ">=2 >=0 2 0")
   data_file: "households.csv"
 
   # Configuration file for age categories and demotion rules
-  config_file: "configs/2021/households/households_config.yaml"
+  config_file: "${config_root}/households/households_config.yaml"
 
   # Relationship rules (couple/family pair matching, age constraints).
   # Required for rules to apply. If this key is omitted, relationship rules
   # are disabled — there is no implicit lookup.
-  rules_file: "configs/2021/households/relationship_rules.yaml"
+  rules_file: "${config_root}/households/relationship_rules.yaml"
 
   # =============================================
   # ALLOCATION MODE (choose one)
@@ -85,7 +92,7 @@ households:
   # Option 1: Unified strategy (RECOMMENDED - controls everything in one place)
   #   - Defines both household AND venue allocations in order
   #   - File: data/households/allocation_strategy.yaml
-  strategy_file: "configs/2021/households/allocation_strategy.yaml"
+  strategy_file: "${config_root}/households/allocation_strategy.yaml"
 
   # Option 2: Multi-round households only (household rounds, no venue integration)
   #   - Only household allocation rounds
@@ -134,66 +141,66 @@ timeline:
     # 1. Initial Attributes (Ethnicity, Comorbidities)
     # ----------------------------------------
     - type: attribute
-      config: "configs/2021/attributes/attribute_assignment.yaml"
+      config: "${config_root}/attributes/attribute_assignment.yaml"
       
     - type: attribute
-      config: "configs/2021/attributes/comorbidity_assignment.yaml"
+      config: "${config_root}/attributes/comorbidity_assignment.yaml"
 
     # ----------------------------------------
     # 2. Education (Assigns primary_activity = school/university)
     # ----------------------------------------
     # School distribution
     - type: distributor
-      config: "configs/2021/distributors/school_distributor.yaml"
+      config: "${config_root}/distributors/school_distributor.yaml"
       
     - type: child_creator
-      config: "configs/2021/venue_child_creators/school_classrooms.yaml"
+      config: "${config_root}/venue_child_creators/school_classrooms.yaml"
 
     # University distribution
     - type: distributor
-      config: "configs/2021/distributors/university_distributor.yaml"
+      config: "${config_root}/distributors/university_distributor.yaml"
       
     - type: child_creator
-      config: "configs/2021/venue_child_creators/university_uni_years.yaml"
+      config: "${config_root}/venue_child_creators/university_uni_years.yaml"
 
     # ----------------------------------------
     # 3. Employment (Filters out people with primary_activity)
     # ----------------------------------------
     # Workplace location assignment (LGU + Work Mode)
     - type: attribute
-      config: "configs/2021/attributes/workplace_assignment.yaml"
+      config: "${config_root}/attributes/workplace_assignment.yaml"
       
     # Workplace SGU assignment (within LGU)
     - type: attribute
-      config: "configs/2021/attributes/workplace_sgu_assignment.yaml"
+      config: "${config_root}/attributes/workplace_sgu_assignment.yaml"
       
     # Work sector assignment
     - type: attribute
-      config: "configs/2021/attributes/work_sector_assignment.yaml"
+      config: "${config_root}/attributes/work_sector_assignment.yaml"
 
     # ----------------------------------------
     # 4. Specific Workplaces (Hospitals, Care Homes, Schools, etc.)
     # ----------------------------------------
     # Q sector -> Hospitals
     - type: distributor
-      config: "configs/2021/distributors/specific_workplace_hospitals_distributor.yaml"
+      config: "${config_root}/distributors/specific_workplace_hospitals_distributor.yaml"
       
     # Q sector -> Care Homes
     - type: distributor
-      config: "configs/2021/distributors/specific_workplace_care_homes_distributor.yaml"
+      config: "${config_root}/distributors/specific_workplace_care_homes_distributor.yaml"
       
     # P sector -> Schools
     - type: distributor
-      config: "configs/2021/distributors/specific_workplace_classrooms_distributor.yaml"
+      config: "${config_root}/distributors/specific_workplace_classrooms_distributor.yaml"
       
     # ----------------------------------------
     # 5. General Employment (Companies)
     # ----------------------------------------
     - type: distributor
-      config: "configs/2021/distributors/company_distributor.yaml"
+      config: "${config_root}/distributors/company_distributor.yaml"
 
     - type: child_creator
-      config: "configs/2021/venue_child_creators/company_offices.yaml"
+      config: "${config_root}/venue_child_creators/company_offices.yaml"
 
     #-----------------------------------------
     # 6. Work mode correction
@@ -203,7 +210,7 @@ timeline:
     # what the area-level O-D matrix in workplace_assignment sampled.
     # Office workers are left untouched.
     - type: attribute
-      config: "configs/2021/attributes/work_mode_correction.yaml"
+      config: "${config_root}/attributes/work_mode_correction.yaml"
 
     #-----------------------------------------
     # 7. Commute assignment
@@ -211,7 +218,7 @@ timeline:
     # Runs AFTER all workplace distributors so it can gate on the actually-assigned
     # workplace venue (office/classroom/hospital/care_home, worker subset).
     - type: attribute
-      config: "configs/2021/attributes/commute_mode_assignment.yaml"
+      config: "${config_root}/attributes/commute_mode_assignment.yaml"
 
     # Route legs for shared-transport modes. Each instance is a generic
     # RouteDistributor (D10) filtered to one mode_class — places riders on the
@@ -219,27 +226,27 @@ timeline:
     # (t_board_min, t_alight_min) on Subset.member_metadata (D11 / Design B).
     # Route misses fall back to commute_mode=walk (D12).
     - type: distributor
-      config: "configs/2021/distributors/route_commute_train.yaml"
+      config: "${config_root}/distributors/route_commute_train.yaml"
 
     - type: distributor
-      config: "configs/2021/distributors/route_commute_tube.yaml"
+      config: "${config_root}/distributors/route_commute_tube.yaml"
 
     - type: distributor
-      config: "configs/2021/distributors/route_commute_bus.yaml"
+      config: "${config_root}/distributors/route_commute_bus.yaml"
 
     # ----------------------------------------
     # 8. Other Services
     # ----------------------------------------
     - type: distributor
-      config: "configs/2021/distributors/hospital_distributor.yaml"
+      config: "${config_root}/distributors/hospital_distributor.yaml"
 
     # Leisure (multi-venue)
     - type: distributor
-      config: "configs/2021/distributors/multi_venue_distributor.yaml"
+      config: "${config_root}/distributors/multi_venue_distributor.yaml"
 
     # Care Home Visits (linked to residents)
     - type: distributor
-      config: "configs/2021/distributors/care_home_visits_distributor.yaml"
+      config: "${config_root}/distributors/care_home_visits_distributor.yaml"
 
 # ========================================
 # RELATIONSHIP PIPELINE - Build agent networks
@@ -252,7 +259,7 @@ relationship_pipeline:
 
   relationships:
     # Friendships network (for disease transmission)
-    - config: "configs/2021/relationships/social_networks.yaml"
+    - config: "${config_root}/relationships/social_networks.yaml"
 
   # Notes:
   # - Each relationship config defines a different type of network
@@ -272,7 +279,7 @@ relationship_pipeline:
 
 romantic_relationships:
   enabled: true  # Set to false to skip romantic relationship distribution
-  config: "configs/2021/relationships/romantic_relationships.yaml"
+  config: "${config_root}/relationships/romantic_relationships.yaml"
 
   # Notes:
   # - Runs AFTER household distribution and social relationships
@@ -282,8 +289,8 @@ romantic_relationships:
 
 serialization:
   enabled: true
-  config_file: "configs/2021/serialization_config.yaml"
-  output_dir: "output/2021"
+  config_file: "${config_root}/serialization_config.yaml"
+  output_dir: "${output_root}/2021"
   filename: "world_state.h5"
 
 # ========================================

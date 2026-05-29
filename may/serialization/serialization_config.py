@@ -8,6 +8,7 @@ to include when exporting world state to HDF5.
 import logging
 import yaml
 import os
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("serialization_config")
 
@@ -31,7 +32,7 @@ class SerializationConfig:
         Args:
             config_file: Path to YAML configuration file
         """
-        self.config_file = config_file
+        self.config_file = pr.resolve(config_file)
         self.config = None
 
         # Parsed configuration sections

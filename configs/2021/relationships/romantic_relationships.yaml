@@ -17,8 +17,8 @@ max_age: 120
 # UK MSOA codes (e.g. MedievalYaml) should override this YAML and omit
 # `data_sources` to fall back to the YAML-only path.
 data_sources:
-  prevalence_path: "data/population/sexual_orientation/orientation_prevalence_extended.csv"
-  msoa_marginal_path: "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+  prevalence_path: "${data_root}/population/sexual_orientation/orientation_prevalence_extended.csv"
+  msoa_marginal_path: "${data_root}/population/sexual_orientation/orientation_by_msoa_normalized.csv"
   geo_level: "MGU"
 
 # Verification logging. OFF for production runs (the heavy diagnostics walk

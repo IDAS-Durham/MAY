@@ -7,6 +7,7 @@ import logging
 import argparse
 import yaml
 from may.geography import Geography
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("config_loader")
 
@@ -218,7 +219,7 @@ def setup_geography(args=None, config=None):
 
     # Get data directory and levels from config
     geo_config = config.get('geography', {})
-    data_dir = geo_config.get('data_dir', 'data/geography')
+    data_dir = pr.resolve(geo_config.get('data_dir', 'data/geography'))
     levels = geo_config.get('levels', None)  # None = use Geography default
 
     # Create Geography object

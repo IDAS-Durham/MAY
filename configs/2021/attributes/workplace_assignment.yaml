@@ -56,7 +56,7 @@ data_sources:
     description: "Commuting likelihood from residence to workplace (LGU to LGU)"
 
     files:
-      - path: "data/activities/work/EW-work-destination-likelihood.csv"
+      - path: "${data_root}/activities/work/EW-work-destination-likelihood.csv"
 
         # Special output format: origin-destination matrix
         output_format: "origin_destination_matrix"
