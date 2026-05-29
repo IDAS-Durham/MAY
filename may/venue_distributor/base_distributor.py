@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
 from scipy.spatial import cKDTree
 import logging
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class BaseDistributor:
             config_dict: Dictionary config (alternative to file)
         """
         if config_file:
+            config_file = pr.resolve(str(config_file))
             self.config = self._load_config(config_file)
             self.config_path = Path(config_file)
         elif config_dict:

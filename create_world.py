@@ -14,6 +14,7 @@ from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
 from may.utils.debug_output import export_residence_venues, export_commute_mode_debug
+from may.utils import path_resolver as pr
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 if os.environ.get('PYTHONHASHSEED') is None:
@@ -78,6 +79,15 @@ def main():
     with open(args.config, "r") as f:
         config = yaml.safe_load(f)
 
+    # Initialise path resolver from roots declared in config.yaml
+    from pathlib import Path as _Path
+    _config_yaml_dir = str(_Path(args.config).resolve().parent)
+    pr.init(
+        config_root=config.get("config_root", _config_yaml_dir),
+        data_root=config.get("data_root", None),
+        output_root=config.get("output_root", str(_Path.cwd() / "output")),
+    )
+
     # Setup geography from config and command-line arguments
     geo, _ = setup_geography(config=config)
 
@@ -89,11 +99,11 @@ def main():
     logger.info("Loading venues...")
     venue_config = config.get("venues", {})
     venues = VenueManager(
-        geography=geo, 
-        data_dir=venue_config.get("data_dir", "data/venues")
+        geography=geo,
+        data_dir=pr.resolve(venue_config.get("data_dir", "data/venues"))
     )
-    
-    yaml_config_file = venue_config.get("config_file", "venues_config.yaml")
+
+    yaml_config_file = pr.resolve(venue_config.get("config_file", "venues_config.yaml"))
     venues.load_from_yaml_config(yaml_config_file)
 
     # Load population
@@ -102,7 +112,7 @@ def main():
     pop_config = config.get("population", {})
     population = PopulationManager(
         geography=geo,
-        data_dir=pop_config.get("data_dir", "data/population")
+        data_dir=pr.resolve(pop_config.get("data_dir", "data/population"))
     )
 
     pop_type = pop_config.get("type", "matrix")
@@ -159,8 +169,8 @@ def main():
         
         for step in timeline_config.get("steps", []):
             step_type = step.get("type")
-            step_config = step.get("config")
-            
+            step_config = pr.resolve(step.get("config"))
+
             if step_type == "attribute":
                 logger.info("")
                 logger.info(f"[ATTRIBUTE] {step_config}")
@@ -180,7 +190,7 @@ def main():
                         and config.get("debug_outputs", {}).get("enabled", False)
                     ):
                         serial_config = config.get("serialization", {})
-                        output_dir = serial_config.get("output_dir", ".")
+                        output_dir = pr.resolve(serial_config.get("output_dir", "."))
                         res_export_file = os.path.join(output_dir, "residence_venues.csv")
                         export_residence_venues(world, res_export_file)
                 except Exception as e:
@@ -203,7 +213,7 @@ def main():
         # Commute-mode verification dump (after all assignments/distributors)
         if config.get("debug_outputs", {}).get("enabled", False):
             serial_config = config.get("serialization", {})
-            output_dir = serial_config.get("output_dir", ".")
+            output_dir = pr.resolve(serial_config.get("output_dir", "."))
             os.makedirs(output_dir, exist_ok=True)
             export_commute_mode_debug(
                 world, os.path.join(output_dir, "commute_mode_debug.csv")
@@ -244,7 +254,7 @@ def main():
                 # Execute each step in sequence
                 for step in pipeline_steps:
                     step_type = step.get("type")
-                    step_config = step.get("config")
+                    step_config = pr.resolve(step.get("config"))
 
                     if step_type == "distributor":
                         logger.info("")
@@ -297,7 +307,7 @@ def main():
         relationship_configs = relationship_config.get("relationships", [])
 
         for rel_config in relationship_configs:
-            config_path = rel_config.get("config")
+            config_path = pr.resolve(rel_config.get("config"))
 
             logger.info("")
             logger.info(f"[RELATIONSHIP] {config_path}")
@@ -321,7 +331,7 @@ def main():
         logger.info("ROMANTIC RELATIONSHIPS")
         logger.info("=" * 60)
 
-        config_path = romantic_config.get("config", "configs/2021/relationships/romantic_relationships.yaml")
+        config_path = pr.resolve(romantic_config.get("config", "configs/2021/relationships/romantic_relationships.yaml"))
 
         try:
             from may.relationships.romantic_relationships import RomanticDistributor
@@ -345,14 +355,14 @@ def main():
     if serial_config.get("enabled", True):
         logger.info("")
         logger.info("Exporting world to HDF5...")
-        output_dir = serial_config.get("output_dir", ".")
+        output_dir = pr.resolve(serial_config.get("output_dir", "."))
         filename = args.filename or serial_config.get("filename", "world_state.h5")
-        
+
         if output_dir != ".":
             os.makedirs(output_dir, exist_ok=True)
-            
+
         export_path = os.path.join(output_dir, filename)
-        config_file = serial_config.get("config_file")
+        config_file = pr.resolve(serial_config.get("config_file")) if serial_config.get("config_file") else None
         if config_file:
             world.export_to_hdf5(export_path, config_file=config_file)
         else:

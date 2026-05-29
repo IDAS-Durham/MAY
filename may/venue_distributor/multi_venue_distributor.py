@@ -25,6 +25,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 from .base_distributor import BaseDistributor
 from may.population import Subset
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,7 @@ class MultiVenueDistributor(BaseDistributor):
             venue_type: Type of venue
             filter_config: Participation filter configuration from YAML
         """
-        data_file = filter_config.get('data_file')
+        data_file = pr.resolve(filter_config.get('data_file', '')) or None
         if not data_file:
             logger.warning(f"No data_file specified for {venue_type} participation filter")
             return

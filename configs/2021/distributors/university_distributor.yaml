@@ -55,7 +55,7 @@ eligibility:
         # Probability of allocation (reflects that not all 18-22 year olds attend university)
         probability_config:
           type: "file"
-          file_path: "data/activities/university/university_probabilities.csv"
+          file_path: "${data_root}/activities/university/university_probabilities.csv"
 
           # Which column in CSV to match against
           lookup_column: "geo_unit"
@@ -88,7 +88,7 @@ eligibility:
         # Probability of allocation (reflects that not all 18-22 year olds attend university)
         probability_config:
           type: "file"
-          file_path: "data/activities/university/university_probabilities.csv"
+          file_path: "${data_root}/activities/university/university_probabilities.csv"
 
           # Which column in CSV to match against
           lookup_column: "geo_unit"
@@ -116,7 +116,7 @@ eligibility:
         # Probability of allocation for postgrad students
         probability_config:
           type: "file"
-          file_path: "data/activities/university/university_probabilities.csv"
+          file_path: "${data_root}/activities/university/university_probabilities.csv"
           lookup_column: "geo_unit"
           lookup_attribute: "geographical_unit.name"
           probability_column: "prob_uni_23_24"

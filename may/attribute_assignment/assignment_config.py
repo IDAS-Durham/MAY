@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from functools import lru_cache
 from may.residence.composition_pattern import CompositionPattern
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("may.attribute_assignment.config")
 
@@ -324,7 +325,7 @@ class AttributeAssignmentConfig:
 
     def __init__(self, config_path: Path):
         """Load configuration from YAML."""
-        self.config_path = Path(config_path)
+        self.config_path = Path(pr.resolve(str(config_path)))
 
         with open(self.config_path, 'r') as f:
             self.raw_config = yaml.safe_load(f)

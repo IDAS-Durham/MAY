@@ -12,6 +12,7 @@ import logging
 import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("may.attribute_assignment.data_sources")
 
@@ -134,7 +135,7 @@ class GeoDistributionSource(DataSource):
 
         # Process file configuration (should be just one file now)
         for file_config in self._file_configs:
-            file_path = Path(file_config['path'])
+            file_path = Path(pr.resolve(file_config['path']))
 
             # Load and process CSV
             if file_path.exists():
@@ -252,7 +253,7 @@ class DiversitySource(DataSource):
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
-            file_path = Path(file_config['path'])
+            file_path = Path(pr.resolve(file_config['path']))
 
             if file_path.exists():
                 try:
@@ -335,7 +336,7 @@ class PairProbabilitySource(DataSource):
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
-            file_path = Path(file_config['path'])
+            file_path = Path(pr.resolve(file_config['path']))
 
             if geo_units:
                 # Partnership data covers all areas, just filter
@@ -458,7 +459,7 @@ class MultiKeyLookupSource(DataSource):
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
-            file_path = Path(file_config['path'])
+            file_path = Path(pr.resolve(file_config['path']))
 
             if file_path.exists():
                 try:
@@ -683,7 +684,7 @@ class OriginDestinationMatrixSource(DataSource):
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
-            file_path = Path(file_config['path'])
+            file_path = Path(pr.resolve(file_config['path']))
 
             if file_path.exists():
                 try:
@@ -825,7 +826,7 @@ class GUSamplerSource(DataSource):
         logger.info(f"Loading data for source '{self.name}'...")
 
         for file_config in self._file_configs:
-            file_path = Path(file_config['path'])
+            file_path = Path(pr.resolve(file_config['path']))
 
             if file_path.exists():
                 try:

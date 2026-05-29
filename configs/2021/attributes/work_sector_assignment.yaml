@@ -53,7 +53,7 @@ data_sources:
     description: "Industry distribution by workplace LGU and sex for demographic accuracy"
 
     files:
-      - path: "data/activities/work/EW_industry_sex_lad.csv"
+      - path: "${data_root}/activities/work/EW_industry_sex_lad.csv"
 
         # Multi-key lookup: LGU name + Sex
         key_columns:

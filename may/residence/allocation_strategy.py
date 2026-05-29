@@ -10,6 +10,7 @@ import yaml
 from typing import Dict, List
 from .venue_allocator import _allocate_to_venue_type
 from may.venue_distributor import distributor_from_yaml
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("allocation_strategy")
 
@@ -39,7 +40,8 @@ def execute_allocation_strategy(population,
     logger.info("Executing Unified Allocation Strategy")
     logger.info("=" * 60)
 
-    # Handle relative paths - try as-is first, then relative to data/ directory
+    # Resolve template variables, then fall back to data/ prefix for bare relative paths
+    strategy_file = pr.resolve(strategy_file)
     if not os.path.isabs(strategy_file):
         if not os.path.exists(strategy_file):
             strategy_file = f"data/{strategy_file}"

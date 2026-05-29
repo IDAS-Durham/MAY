@@ -35,7 +35,7 @@ same_category_sources:
   # same-sex half the time; heterosexuals never. Adjust the weights below if
   # you prefer a different mapping.
   - attribute: "sex"
-    csv_path: "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+    csv_path: "${data_root}/population/sexual_orientation/orientation_by_msoa_normalized.csv"
     geo_code_column: "geo_unit"
     geo_level: "MGU"
     formula:

@@ -80,13 +80,15 @@ class RouteDistributor(BaseDistributor):
 
     # ---------------------------------------------------------------- helpers
     def _resolve_path(self, p: str) -> str:
-        path = Path(p)
+        from may.utils import path_resolver as pr
+        resolved = pr.resolve(p)
+        path = Path(resolved)
         if path.is_absolute() or path.exists():
             return str(path)
         # configs/2021/distributors/foo.yaml -> project root = parent.parent.parent
         if self.config_path is not None:
             project_root = self.config_path.parent.parent.parent
-            candidate = project_root / p
+            candidate = project_root / resolved
             if candidate.exists():
                 return str(candidate)
         return str(path)

@@ -10,8 +10,8 @@ activity_map_key: "commute"
 leg_venue_type: "bus_line"
 leg_subset_key: "rider"
 
-routes_table: "data/activities/commute/routes.csv"
-legs_table:   "data/activities/commute/route_legs.csv"
+routes_table: "${data_root}/activities/commute/routes.csv"
+legs_table:   "${data_root}/activities/commute/route_legs.csv"
 
 origin_source:
   type: "ancestor"
