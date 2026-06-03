@@ -33,9 +33,14 @@ logger = logging.getLogger("relationship_rules")
 
 @dataclass
 class RelationshipRule:
-    """A relationship rule for a specific household pattern."""
+    """A relationship rule, resolved by name from allocation steps.
+
+    Rules are looked up via `get_rule_by_name` (allocation steps reference
+    them by `rule:`); they do not carry their own pattern list. Which
+    patterns a rule runs on is owned entirely by the allocation step
+    (`patterns:` / `target_patterns:`), the single source of truth.
+    """
     name: str
-    patterns: List[str]
     roles: Dict[str, Dict]  # role_name -> {categories: [...], count: ...}
     selection_order: List[str]
     constraints: List[Dict]
@@ -120,9 +125,11 @@ class RelationshipRulesValidator:
 
         # Parse rules
         for rule_config in config.get('rules', []):
+            # A rule's `patterns:` list (if present in older configs) is
+            # intentionally ignored: it is redundant with the allocation
+            # step's own patterns and is no longer read anywhere.
             rule = RelationshipRule(
                 name=rule_config.get('name', 'Unnamed rule'),
-                patterns=rule_config.get('patterns', []),
                 roles=rule_config.get('roles', {}),
                 selection_order=rule_config.get('selection_order', []),
                 constraints=rule_config.get('constraints', [])
@@ -223,25 +230,6 @@ class RelationshipRulesValidator:
         if ancestor is None:
             return default
         return source["by_code"].get(ancestor.name, default)
-
-    def get_rule_for_pattern(self, pattern_str: str) -> Optional[RelationshipRule]:
-        """
-        Get relationship rule for a household pattern.
-
-        Args:
-            pattern_str: Household composition pattern (e.g., ">=2 >=0 2 0")
-
-        Returns:
-            RelationshipRule or None if pattern not found
-        """
-        if not self.enabled:
-            return None
-
-        for rule in self.rules:
-            if pattern_str in rule.patterns:
-                return rule
-
-        return None
 
     def get_rule_by_name(self, rule_name: str) -> Optional[RelationshipRule]:
         """
@@ -362,11 +350,35 @@ class RelationshipRulesValidator:
         min_diff = constraint.get('min_difference', 0)
         max_diff = constraint.get('max_difference', 100)
 
-        # Override max based on categorical attribute if specified
+        # Override max based on categorical attribute if specified.
+        #
+        # `max_difference_by_categorical_attribute` raises/lowers max_diff based
+        # on a categorical value (e.g. a father may be up to 50y older than a
+        # child, a mother 45y). By default that value is read off the *candidate*.
+        # That is correct at creation (selection_order makes the parent the
+        # candidate) but wrong on the household_excess path, where the candidate
+        # is the person being *added* — adding a Kid would silently key the
+        # father/mother cap onto the child's sex.
+        #
+        # `categorical_from: <role>` lets the rule pin the override to a specific
+        # role. When it names the *other* role (the existing members), the cap is
+        # per-member, so other_people cannot be collapsed to a bare min/max — we
+        # evaluate each member individually below. When it names the candidate's
+        # own role, or is absent, behaviour is identical to before.
         max_diff_by_cat = constraint.get('max_difference_by_categorical_attribute', {})
         getter = self._get_attribute_getter(attribute)
-        
-        if max_diff_by_cat:
+
+        cat_from = constraint.get('categorical_from')
+        candidate_role = constraint.get('role_1') if is_role_1 else constraint.get('role_2')
+        other_role = constraint.get('role_2') if is_role_1 else constraint.get('role_1')
+        cat_keyed_on_other = (
+            bool(max_diff_by_cat)
+            and cat_from is not None
+            and cat_from == other_role
+            and cat_from != candidate_role
+        )
+
+        if max_diff_by_cat and not cat_keyed_on_other:
             cat_attr_name = max_diff_by_cat.get('attribute')
             cat_values = max_diff_by_cat.get('values', {})
             cat_getter = self._get_attribute_getter(cat_attr_name)
@@ -376,6 +388,31 @@ class RelationshipRulesValidator:
 
         # Get attribute values
         candidate_value = getter(candidate)
+
+        if cat_keyed_on_other:
+            # Per-member evaluation: the categorical cap comes from each existing
+            # member of the other role (e.g. the existing parent's sex), so we
+            # must compare against each member rather than a collapsed min/max.
+            cat_attr_name = max_diff_by_cat.get('attribute')
+            cat_values = max_diff_by_cat.get('values', {})
+            cat_getter = self._get_attribute_getter(cat_attr_name)
+            worst_penalty = 0.0
+            for p in other_people:
+                other_value = getter(p)
+                p_cat = cat_getter(p)
+                p_max_diff = cat_values.get(p_cat, max_diff) if p_cat else max_diff
+                diff = (candidate_value - other_value) if is_role_1 else (other_value - candidate_value)
+                if diff < min_diff:
+                    worst_penalty = max(worst_penalty, min_diff - diff)
+                    if log_rejection:
+                        logger.debug(f"      ✗ Rejected: {candidate} vs {p} - difference too small (diff={diff} < min={min_diff})")
+                elif diff > p_max_diff:
+                    worst_penalty = max(worst_penalty, diff - p_max_diff)
+                    if log_rejection:
+                        logger.debug(f"      ✗ Rejected: {candidate} vs {p} - difference too large (diff={diff} > max={p_max_diff} for {cat_attr_name}={p_cat})")
+            if worst_penalty > 0:
+                return (False, worst_penalty)
+            return (True, 0.0)
 
         # Use cached min/max values if provided
         if cached_values and attribute in cached_values:
@@ -498,6 +535,72 @@ class RelationshipRulesValidator:
             return z_score ** 2
         else:
             return z_score
+
+    def couple_compatible_candidates(self,
+                                     existing_partner: Person,
+                                     candidates: List[Person],
+                                     pair_constraint: Dict,
+                                     geo_unit_code: Optional[str] = None) -> List[Person]:
+        """Filter ``candidates`` to those that could partner ``existing_partner``
+        under a ``pair_matching`` constraint, best-match first.
+
+        This is the household_excess analogue of the second-person selection in
+        :meth:`select_pair`: the first partner already exists in the household,
+        so instead of picking two people we pick the *one* compatible partner.
+        It applies the same two pair signals:
+
+        - **categorical** (e.g. sex): roll same/different by the (per-area)
+          ``same_category_probability`` and keep only candidates whose value
+          matches the rolled outcome relative to the existing partner;
+        - **numerical** (e.g. age): keep only candidates within the pair's
+          ``max_absolute_difference`` of the partner, ordered by closeness to
+          ``mean_difference``.
+
+        Returns a (possibly empty) list. The caller still applies any role-level
+        ``numerical_attribute_difference`` constraints (vs other roles) via
+        :meth:`select_person_with_constraint`, and tags the couple.
+        """
+        if not candidates:
+            return []
+
+        cat_attr_config = pair_constraint.get('categorical_attribute', {})
+        cat_attribute = cat_attr_config.get('attribute', 'sex')
+        fallback_prob = cat_attr_config.get(
+            'same_category_probability_fallback',
+            cat_attr_config.get('same_category_probability', 0.05),
+        )
+        same_category_prob = self._resolve_same_category_prob(
+            cat_attribute, geo_unit_code, default=fallback_prob,
+        )
+        is_same_category = np.random.random() < same_category_prob
+
+        cat_getter = self._get_attribute_getter(cat_attribute)
+        partner_cat = cat_getter(existing_partner)
+        if is_same_category:
+            required_cat_value = partner_cat
+        elif cat_attribute == 'sex':
+            required_cat_value = 'male' if partner_cat == 'female' else 'female'
+        else:
+            others = {cat_getter(p) for p in candidates if cat_getter(p) != partner_cat}
+            required_cat_value = np.random.choice(sorted(others)) if others else partner_cat
+
+        partner_id = existing_partner.id
+        scored: List[Tuple[float, Person]] = []
+        for p in candidates:
+            if p.id == partner_id or cat_getter(p) != required_cat_value:
+                continue
+            ok, _ = self.validate_pair_numerical_attribute_difference(
+                existing_partner, p, pair_constraint
+            )
+            if not ok:
+                continue
+            penalty = self.calculate_pair_numerical_attribute_penalty(
+                existing_partner, p, pair_constraint
+            )
+            scored.append((penalty, p))
+
+        scored.sort(key=lambda t: t[0])
+        return [p for _, p in scored]
 
     def select_person_with_constraint(self,
                                      candidates: List[Person],

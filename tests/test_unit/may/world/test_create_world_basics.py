@@ -50,13 +50,14 @@ def test_main_cli_arg_parsing(mock_setup_geography):
     test_config_path = "tests/test_data/micro_world/test_micro_config.yaml"
     
     # First, test default arguments (no args passed). We mock sys.argv.
-    # We expect a FileNotFoundError because it defaults to yaml/config.yaml which
-    # may or may not exist in the test env, but let's mock open to be safe.
+    # We expect a FileNotFoundError because it defaults to configs/2021/config.yaml
+    # (see create_world.py argparse default) which may or may not exist in the
+    # test env, but let's mock open to be safe.
     with patch('sys.argv', ['create_world.py']):
         with patch('builtins.open', side_effect=FileNotFoundError) as mock_open:
             with pytest.raises(FileNotFoundError):
                 main()
-            mock_open.assert_called_with("yaml/config.yaml", "r")
+            mock_open.assert_called_with("configs/2021/config.yaml", "r")
 
     # Second, test custom command line arguments.
     with patch('sys.argv', ['create_world.py', '--config', test_config_path, '--filename', 'test_out.h5']):

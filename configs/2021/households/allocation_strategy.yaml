@@ -628,7 +628,7 @@ steps:
     add_distribution: null
 
     max_per_household: null  # No hard limit (constraints handle max)
-    refresh_pools: true  # Refresh to pick up any unallocated people from step 22 
+    refresh_pools: true 
   
   - name: "Add Old Adults to flexible households"
     type: "household_excess"
@@ -702,8 +702,8 @@ steps:
       - "0 >=0 0 0"
       - "0 >=1 2 0"       # Some other pattern
       - "0 >=1 1 0"
-      - "2 >=0 2 0"
-      - "2 >=0 1 0"
+      - ">=2 >=0 2 0"
+      - ">=2 >=0 1 0"
       - "1 >=0 >=0 >=0"
       - ">=2 >=0 >=0 >=0"
 

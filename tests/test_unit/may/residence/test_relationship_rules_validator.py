@@ -106,6 +106,69 @@ def test_validate_numerical_attribute_difference_categorical_override(validator)
     )
     assert is_valid_f is False
 
+def test_categorical_from_keys_override_on_existing_member(validator):
+    """§10: on the household_excess path the candidate is the person being
+    *added* (here a Child), but `max_difference_by_categorical_attribute` is
+    conceptually about the *parent's* sex. `categorical_from` pins the override
+    onto the existing role so the father/mother age cap is honored correctly,
+    per-member (other_people is no longer collapsed to a bare min/max)."""
+    child = MockPerson(10, age=10, sex='female')           # candidate (added)
+    male_parent = [MockPerson(1, age=58, sex='male')]      # existing member
+    female_parent = [MockPerson(2, age=58, sex='female')]  # existing member
+
+    constraint = {
+        'attribute': 'age',
+        'role_1': 'Parents',
+        'role_2': 'Children',
+        'min_difference': 16,
+        'max_difference': 45,  # base / mother cap
+        'max_difference_by_categorical_attribute': {
+            'attribute': 'sex',
+            'values': {'male': 50},  # a father may be up to 50y older
+        },
+        'categorical_from': 'Parents',  # key the cap on the EXISTING parent
+    }
+
+    # Candidate is the child => role_2 => is_role_1=False. diff = 58 - 10 = 48.
+    # Father (male) cap 50 -> 48 <= 50 -> valid.
+    ok_father, _ = validator.validate_numerical_attribute_difference_constraint(
+        child, male_parent, constraint, is_role_1=False
+    )
+    assert ok_father is True
+
+    # Mother (female) falls back to base 45 -> 48 > 45 -> invalid (penalty 3).
+    ok_mother, penalty = validator.validate_numerical_attribute_difference_constraint(
+        child, female_parent, constraint, is_role_1=False
+    )
+    assert ok_mother is False
+    assert penalty == 3
+
+
+def test_categorical_from_absent_keeps_candidate_keying(validator):
+    """Without `categorical_from`, the override still keys on the *candidate* —
+    unchanged behavior. This pins the documented excess-path foot-gun: adding a
+    female Child mis-keys the father/mother cap onto the child's sex, so the
+    male parent's 50y allowance is (wrongly) ignored and the base 45 applies."""
+    child = MockPerson(10, age=10, sex='female')
+    male_parent = [MockPerson(1, age=58, sex='male')]
+    constraint = {
+        'attribute': 'age',
+        'role_1': 'Parents',
+        'role_2': 'Children',
+        'min_difference': 16,
+        'max_difference': 45,
+        'max_difference_by_categorical_attribute': {
+            'attribute': 'sex',
+            'values': {'male': 50},
+        },
+        # no categorical_from -> candidate-keyed (legacy behavior)
+    }
+    ok, _ = validator.validate_numerical_attribute_difference_constraint(
+        child, male_parent, constraint, is_role_1=False
+    )
+    assert ok is False  # diff 48 > base 45, male cap not consulted (candidate is the child)
+
+
 def test_validate_numerical_attribute_difference_empty_p2(validator):
     # Empty people2 list immediately returns True
     p1 = MockPerson(1, age=40, sex='male')
@@ -113,6 +176,54 @@ def test_validate_numerical_attribute_difference_empty_p2(validator):
         p1, [], {}
     )
     assert is_valid is True
+
+# 1b. couple_compatible_candidates (household_excess couple completion, §6)
+def test_couple_compatible_candidates_filters_sex_and_age(validator):
+    """With `same_category_probability` 0 the partner must be the *opposite*
+    sex, within the pair's `max_absolute_difference`, ordered by closeness to
+    `mean_difference`."""
+    partner = MockPerson(1, age=30, sex='male')
+    candidates = [
+        MockPerson(2, age=28, sex='female'),  # opposite sex, diff 2 -> valid, closest
+        MockPerson(3, age=33, sex='female'),  # opposite sex, diff 3 -> valid (== mean)
+        MockPerson(4, age=60, sex='female'),  # opposite sex, diff 30 > 19 -> rejected
+        MockPerson(5, age=31, sex='male'),    # same sex -> excluded by categorical roll
+    ]
+    constraint = {
+        'type': 'pair_matching',
+        'role': 'role_A',
+        'categorical_attribute': {'attribute': 'sex', 'same_category_probability': 0.0},
+        'numerical_attribute': {
+            'attribute': 'age',
+            'mean_difference': 3.0,
+            'std_difference': 5.0,
+            'max_absolute_difference': 19,
+        },
+        'creates_romantic_couple': True,
+    }
+    pool = validator.couple_compatible_candidates(partner, candidates, constraint)
+    ids = [p.id for p in pool]
+    assert ids == [3, 2]  # both valid females, best (closest to mean=3) first
+    assert 4 not in ids and 5 not in ids
+
+
+def test_couple_compatible_candidates_same_category(validator):
+    """With `same_category_probability` 1 the partner must be the *same* sex."""
+    partner = MockPerson(1, age=30, sex='male')
+    candidates = [
+        MockPerson(2, age=29, sex='male'),    # same sex, valid
+        MockPerson(3, age=31, sex='female'),  # opposite sex -> excluded
+    ]
+    constraint = {
+        'type': 'pair_matching',
+        'role': 'role_A',
+        'categorical_attribute': {'attribute': 'sex', 'same_category_probability': 1.0},
+        'numerical_attribute': {'attribute': 'age', 'max_absolute_difference': 19,
+                                'mean_difference': 3.0, 'std_difference': 5.0},
+    }
+    pool = validator.couple_compatible_candidates(partner, candidates, constraint)
+    assert [p.id for p in pool] == [2]
+
 
 # 2. validate_pair_numerical_attribute_difference
 def test_validate_pair_numerical_attribute_difference(validator):

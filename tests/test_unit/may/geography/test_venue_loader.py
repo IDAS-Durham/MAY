@@ -380,13 +380,13 @@ def test_total_venues_log_no_parenthetical_when_no_collisions(loaded_geography, 
 # ---------------------------------------------------------------------------
 
 def test_production_yaml_does_not_reference_missing_files():
-    """Each enabled venue type in yaml/venues/venues_config.yaml must point
-    to a file that actually exists on disk. This is a guardrail against
+    """Each enabled venue type in configs/2021/venues/venues_config.yaml must
+    point to a file that actually exists on disk. This is a guardrail against
     re-introducing the field.csv-style discrepancy between configured and
     loaded venue counts."""
     import yaml
 
-    config_path = "yaml/venues/venues_config.yaml"
+    config_path = "configs/2021/venues/venues_config.yaml"
     with open(config_path) as f:
         config = yaml.safe_load(f)
 

@@ -112,6 +112,7 @@ world_map/data/
 # Folder to dump stuff
 tmp/
 benchmarks/
+dev-scripts/
 *~
 # Profiling output
 *profile.stats

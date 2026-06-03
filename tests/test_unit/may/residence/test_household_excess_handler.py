@@ -45,6 +45,7 @@ def hd(geography, population_manager, venue_manager):
         venue_manager=venue_manager,
         data_dir=f"{STRESS_DATA}/households",
         config_file="test_households_config.yaml",
+        rules_file="relationship_rules.yaml",
     )
     distributor.load_household_data("households.csv")
     return distributor
@@ -516,6 +517,52 @@ class TestExcessWithRule:
         assert stats["people_added"] >= 1, (
             f"Expected at least 1 kid placed with rule, got {stats['people_added']}"
         )
+
+    def test_excess_completes_couple_via_pair_matching(self, hd):
+        """§6: adding a second Adult to a one-adult household under a rule whose
+        role carries a pair_matching constraint completes a *couple* — the added
+        adult and the existing one get bidirectional `cohabiting_couple` tags,
+        instead of an un-coupled second adult (the pre-fix behavior).
+
+        Exercises the modified selection path directly (the tiny stress world
+        only produces one single-adult household, so the round-level excess
+        distribution can't be relied on to target it)."""
+        np.random.seed(0)
+        run_family_round(hd)
+
+        def adults_in(h):
+            return [
+                m for m in h.get_all_members()
+                if hd._get_person_category_name(m) == "Adults"
+            ]
+
+        singles = [h for h in family_households(hd) if len(adults_in(h)) == 1]
+        assert singles, "fixture should produce at least one single-adult household"
+        household = singles[0]
+        existing_adult = adults_in(household)[0]
+        assert "cohabiting_couple" not in existing_adult.properties
+
+        # Candidate pool: unallocated adults (gather across geo units so the
+        # tiny per-area pools don't make the test brittle).
+        adult_idx = [c.name for c in hd.categories].index("Adults")
+        candidates = [
+            p
+            for pools in hd.person_pool_by_geo_unit.values()
+            for p in pools[adult_idx].values()
+        ]
+        assert candidates, "need at least one unallocated adult to add"
+
+        rule = hd.relationship_rules.get_rule_by_name("Adult pair")  # role_A: pair_matching
+        person = hd.excess_handler._select_person_for_excess_with_rule(
+            household, candidates, "Adults", rule
+        )
+
+        assert person is not None
+        # The pair is flagged bidirectionally as a cohabiting couple.
+        assert person.properties.get("cohabiting_couple") == [existing_adult.id]
+        assert existing_adult.properties.get("cohabiting_couple") == [person.id]
+        # And it honored the pair's age bound (max_absolute_difference: 19).
+        assert abs(person.age - existing_adult.age) <= 19
 
 
 # ──────────────────────────────────────────────────────────────────────

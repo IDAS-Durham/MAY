@@ -134,7 +134,7 @@ def test_romantic_distributor_msoa_raking_shifts_lgb_share():
     geo_high = MockGeoUnit(high_code)
 
     cfg = yaml.safe_load(
-        (REPO_ROOT / "yaml/relationships/romantic_relationships.yaml").read_text()
+        (REPO_ROOT / "configs/2021/relationships/romantic_relationships.yaml").read_text()
     )
     cfg["data_sources"]["prevalence_path"] = str(
         REPO_ROOT / cfg["data_sources"]["prevalence_path"]
@@ -196,7 +196,7 @@ def test_romantic_distributor_handles_75plus_via_extrapolation():
     geo = MockGeoUnit(code)
 
     cfg = yaml.safe_load(
-        (REPO_ROOT / "yaml/relationships/romantic_relationships.yaml").read_text()
+        (REPO_ROOT / "configs/2021/relationships/romantic_relationships.yaml").read_text()
     )
     cfg["data_sources"]["prevalence_path"] = str(
         REPO_ROOT / cfg["data_sources"]["prevalence_path"]
