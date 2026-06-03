@@ -34,6 +34,15 @@ child_properties:
 #   'fill'  - Fill first classroom to max before moving to next
 distribution_strategy: even
 
+# Balance each classroom's composition by this attribute (or list of attributes).
+# Students are created sorted by (age, sex), so plain even/fill slicing groups
+# them by sex and produces single-sex classrooms even inside a co-ed school.
+# Setting balance_by deals each value round-robin across the age group's
+# classrooms, so every classroom mirrors the cohort's gender mix. Single-sex
+# schools stay single-sex automatically (only one value present).
+# Remove this key to restore the old arrival-order slicing.
+balance_by: sex
+
 # ========================================
 # ACTIVITY MANAGEMENT
 # ========================================

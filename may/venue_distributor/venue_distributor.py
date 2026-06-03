@@ -446,9 +446,27 @@ class VenueDistributor(BaseDistributor):
             if not group_people:
                 continue
 
-            # Sort and allocate
+            # Sort and allocate.
+            #
+            # Population is created sorted by (age, sex) (see Population.generate_population),
+            # so within any age the females (lower ids) precede the males. When a group
+            # respects capacity (allow_overflow=False), processing in that order lets the
+            # earlier sex claim scarce venue spots first and systematically excludes the
+            # other — a directional gender bias in capacity-limited cohorts (e.g. sixth
+            # form, nurseries). Overflow groups place everyone regardless of order, so they
+            # keep the cheap deterministic ordering.
+            #
+            # Fix: randomise order within each priority tier. A random sort key (folded into
+            # the existing sort, so it costs nothing extra) breaks the sex ordering while
+            # preserving the age_desc priority via the primary key.
+            randomize = not allow_overflow
             if priority_config.get('priority_order') == 'age_desc':
-                group_people.sort(key=lambda p: p.age, reverse=True)
+                if randomize:
+                    group_people.sort(key=lambda p: (-p.age, np.random.random()))
+                else:
+                    group_people.sort(key=lambda p: p.age, reverse=True)
+            elif randomize:
+                np.random.shuffle(group_people)
 
             logger.info(f"Group '{group_name}': {len(group_people)} selected")
 
