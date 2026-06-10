@@ -1,0 +1,6 @@
+mkdocs
+mkdocs-material
+mkdocstrings[python]
+mkdocs-autorefs
+mkdocs-awesome-nav
+mkdocs-gen-files
