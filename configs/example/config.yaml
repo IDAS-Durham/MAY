@@ -24,7 +24,7 @@ households:
   data_file: households.csv
   config_file: configs/example/households/households_config.yaml
   rules_file: configs/example/households/relationship_rules.yaml
-  strategy_file: configs/example/households/allocation_strategy.yaml
+  # The allocation strategy lives on the timeline's residence_allocation step.
   rounds_file:
   export_file: household_allocations.csv
 
@@ -34,3 +34,4 @@ timeline:
     # Households + residence venues. This scenario has no attribute/distributor
     # steps, so the timeline is just this explicit allocation step.
     - type: residence_allocation
+      config: configs/example/households/allocation_strategy.yaml

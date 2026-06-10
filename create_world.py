@@ -176,13 +176,21 @@ def main():
 
             if step_type == "residence_allocation":
                 # Runs the full household + residence-venue allocation strategy
-                # (configs/<scenario>/households/allocation_strategy.yaml) at
-                # this point in the timeline. Placing attribute steps before it
-                # lets residence allocation read those attributes.
+                # at this point in the timeline. The step's `config:` points at
+                # the allocation-strategy YAML (any filename, must follow that
+                # format) — the single source of truth for which strategy runs.
+                # Placing attribute steps before it lets residence allocation
+                # read those attributes.
                 logger.info("")
-                logger.info("[RESIDENCE ALLOCATION] households + residence venues")
+                logger.info(f"[RESIDENCE ALLOCATION] {step_config}")
+                if not step_config:
+                    raise ValueError(
+                        "A `residence_allocation` timeline step must set "
+                        "`config:` to an allocation-strategy YAML file "
+                        "(e.g. configs/<scenario>/households/allocation_strategy.yaml)."
+                    )
                 world.household_distributor = setup_households(
-                    geo, population, venues, config
+                    geo, population, venues, config, strategy_file=step_config
                 )
 
             elif step_type == "attribute":

@@ -66,7 +66,7 @@ households:
   data_file: "households.csv"
   config_file: "configs/2021/households/households_config.yaml"
   rules_file: "configs/2021/households/relationship_rules.yaml"
-  strategy_file: "configs/2021/households/allocation_strategy.yaml"
+  # The allocation strategy lives on the timeline's residence_allocation step.
   export_file: "household_allocations.csv"
 
 # ========================================
@@ -84,6 +84,10 @@ timeline:
   enabled: true
 
   steps:
+    # 0. Households + residence venues (runs the allocation strategy first).
+    - type: residence_allocation
+      config: "configs/2021/households/allocation_strategy.yaml"
+
     # 1. Initial attributes
     - type: attribute
       config: "configs/2021/attributes/attribute_assignment.yaml"

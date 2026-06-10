@@ -249,7 +249,7 @@ class World:
         return stats
 
 
-def setup_households(geo, population, venues, config):
+def setup_households(geo, population, venues, config, strategy_file=None):
     """
     Setup and distribute households based on configuration.
 
@@ -264,6 +264,11 @@ def setup_households(geo, population, venues, config):
         population: PopulationManager object
         venues: VenueManager object
         config: Configuration dictionary
+        strategy_file: Path to the allocation-strategy YAML to execute. This is
+            the `config:` of the timeline's `residence_allocation` step — the
+            single source of truth for which strategy runs and where it runs in
+            the timeline. When ``None`` (e.g. a direct programmatic caller),
+            falls back to ``config["households"]["strategy_file"]``.
 
     Returns:
         HouseholdDistributor object with allocated households
@@ -285,8 +290,11 @@ def setup_households(geo, population, venues, config):
     household_data_file = household_config.get("data_file", "households.csv")
     household_distributor.load_household_data(household_data_file)
 
-    # Distribute households and venues based on configuration mode
-    strategy_file = household_config.get("strategy_file")
+    # Distribute households and venues based on configuration mode.
+    # The strategy file comes from the residence_allocation timeline step;
+    # fall back to the households block only for direct programmatic callers.
+    if strategy_file is None:
+        strategy_file = household_config.get("strategy_file")
 
     debug_outputs_enabled = config.get("debug_outputs", {}).get("enabled", False)
 
