@@ -27,3 +27,10 @@ households:
   strategy_file: configs/example/households/allocation_strategy.yaml
   rounds_file:
   export_file: household_allocations.csv
+
+timeline:
+  enabled: true
+  steps:
+    # Households + residence venues. This scenario has no attribute/distributor
+    # steps, so the timeline is just this explicit allocation step.
+    - type: residence_allocation

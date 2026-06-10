@@ -131,6 +131,14 @@ timeline:
   
   steps:
     # ----------------------------------------
+    # 0. Households + residence venues (care homes, boarding schools, dorms).
+    #    Runs the full allocation_strategy.yaml. Placed first so it reproduces
+    #    the previous "households before timeline" ordering; move it later only
+    #    if a residence allocation needs an attribute assigned by a prior step.
+    # ----------------------------------------
+    - type: residence_allocation
+
+    # ----------------------------------------
     # 1. Initial Attributes (Ethnicity, Comorbidities)
     # ----------------------------------------
     - type: attribute

@@ -38,11 +38,11 @@ households:
   export_file: "household_allocations.csv"
 
 timeline:
-  enabled: false
-
-# Disable the legacy attribute fallback that fires when timeline is off
-attributes:
-  enabled: false
+  enabled: true
+  steps:
+    # This scenario only builds households + residence venues; no attribute
+    # or distributor steps. Households are allocated by this explicit step.
+    - type: residence_allocation
 
 relationship_pipeline:
   enabled: false
