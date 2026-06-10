@@ -1,0 +1,103 @@
+enabled: true
+selection_strategy:
+  max_attempts: 10
+  use_best_candidate: true
+  penalty_mode: squared
+  log_violations: true
+  backtracking:
+    enabled: true
+    max_backtracks: 3
+    strategy: first_role
+    log_backtracks: true
+    avoid_duplicates: true
+track_statistics: true
+rules:
+  - name: Adult couples
+    roles:
+      Adults:
+        categories:
+          - Adults
+        count: 2
+    selection_order:
+      - Adults
+    constraints:
+      - type: pair_matching
+        role: Adults
+        require_exact_count: 2
+        categorical_attribute:
+          attribute: sex
+          same_category_probability_fallback: 0.05
+        numerical_attribute:
+          attribute: age
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19.0
+  - name: Single Parent + Kids
+    roles:
+      Children:
+        categories:
+          - Children
+        count: any
+      Parents:
+        categories:
+          - Adults
+        count: 1
+    selection_order:
+      - Children
+      - Parents
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Parents
+        role_2: Children
+        min_difference: 16.0
+        max_difference: 40.0
+        max_difference_by_categorical_attribute:
+          attribute: sex
+          values:
+            male: 45.0
+        preferred_distribution:
+          type: normal
+          mean: 21.0
+          std: 2.0
+          tolerance: 10.0
+  - name: 2 Parents + Kids
+    roles:
+      Children:
+        categories:
+          - Children
+        count: any
+      Parents:
+        categories:
+          - Adults
+        count: 2
+    selection_order:
+      - Children
+      - Parents
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Parents
+        role_2: Children
+        min_difference: 16.0
+        max_difference: 40.0
+        max_difference_by_categorical_attribute:
+          attribute: sex
+          values:
+            male: 45.0
+        preferred_distribution:
+          type: normal
+          mean: 21.0
+          std: 2.0
+          tolerance: 10.0
+      - type: pair_matching
+        role: Parents
+        require_exact_count: 2
+        categorical_attribute:
+          attribute: sex
+          same_category_probability_fallback: 0.05
+        numerical_attribute:
+          attribute: age
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19.0

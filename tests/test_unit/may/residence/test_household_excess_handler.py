@@ -519,7 +519,7 @@ class TestExcessWithRule:
         )
 
     def test_excess_completes_couple_via_pair_matching(self, hd):
-        """§6: adding a second Adult to a one-adult household under a rule whose
+        """adding a second Adult to a one-adult household under a rule whose
         role carries a pair_matching constraint completes a *couple* — the added
         adult and the existing one get bidirectional `cohabiting_couple` tags,
         instead of an un-coupled second adult (the pre-fix behavior).

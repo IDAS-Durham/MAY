@@ -1,0 +1,29 @@
+geography:
+  data_dir: data/geography
+  levels:
+    - SGU
+    - MGU
+    - LGU
+    - XLGU
+  load_all: false
+  filter:
+    level: LGU
+    codes:
+      - County Durham
+      - Newcastle upon Tyne
+population:
+  data_dir: data/population
+  demographics_male_file: demographics_male.csv
+  demographics_female_file: demographics_female.csv
+venues:
+  data_dir: data/venues
+  config_file: configs/example/venues/venues_config.yaml
+  export_file: venue_allocations.csv
+households:
+  data_dir: data/households
+  data_file: households.csv
+  config_file: configs/example/households/households_config.yaml
+  rules_file: configs/example/households/relationship_rules.yaml
+  strategy_file: configs/example/households/allocation_strategy.yaml
+  rounds_file:
+  export_file: household_allocations.csv

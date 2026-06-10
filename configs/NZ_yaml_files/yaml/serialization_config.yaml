@@ -1,0 +1,50 @@
+# Serialization Configuration for 1918 New Zealand World
+
+population:
+  properties: ["sector"]
+
+geography:
+  include_coordinates: true
+  properties: []
+
+venues:
+  global:
+    include_coordinates: true
+    include_is_residence: true
+  types:
+    household:
+      properties: []
+    workplace_agricultural:
+      properties: []
+    workplace_commercial:
+      properties: []
+    workplace_domestic:
+      properties: []
+    workplace_industrial:
+      properties: []
+    workplace_professional:
+      properties: []
+    workplace_transport:
+      properties: []
+    workplace_indefinite:
+      properties: []
+
+subsets:
+  properties: []
+
+relationships:
+  include_activity_map: true
+  include_venue_hierarchy: true
+  include_geography_hierarchy: true
+
+output:
+  compression: "gzip"
+  compression_level: 4
+  include_metadata: true
+  metadata:
+    - random_seed
+    - creation_timestamp
+    - config_files_used
+    - num_people
+    - num_venues
+    - num_geo_units

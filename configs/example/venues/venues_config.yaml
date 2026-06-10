@@ -1,0 +1,47 @@
+venue_types:
+  school:
+    enabled: true
+    filename: primary_activities/Schools_EW.csv
+    is_residence: false
+  boarding_school:
+    enabled: true
+    filename: residences/boarding_schools.csv
+    is_residence: true
+  care_home:
+    enabled: true
+    filename: residences/care_homes.csv
+    is_residence: true
+  student_dorm:
+    enabled: true
+    filename: residences/student_dorms.csv
+    is_residence: true
+  university:
+    enabled: true
+    filename: primary_activities/uk_universities.csv
+    is_residence: false
+  company:
+    enabled: true
+    filename: primary_activities/companies.csv
+    is_residence: false
+  hospital:
+    enabled: true
+    filename: medical/hospitals.csv
+    is_residence: false
+  cinema:
+    enabled: true
+    filename: leisure/cinemas.csv
+    is_residence: false
+  grocery:
+    enabled: true
+    filename: leisure/groceries.csv
+    is_residence: false
+  gym:
+    enabled: true
+    filename: leisure/gyms.csv
+    is_residence: false
+  pubs:
+    enabled: true
+    filename: leisure/pubs.csv
+    is_residence: false
+settings:
+  filter_by_geography: true

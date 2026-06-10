@@ -1,0 +1,29 @@
+enabled: true
+steps:
+  - name: New household step
+    type: household
+    patterns:
+      - '0 1'
+    refresh_pools: false
+    enable_demotion:
+  - name: New household step
+    type: household
+    rule: Adult couples
+    patterns:
+      - '0 2'
+    refresh_pools: false
+    enable_demotion:
+  - name: 1 Parent + 1 Kid
+    type: household
+    rule: Single Parent + Kids
+    patterns:
+      - '1 1'
+    refresh_pools: false
+    enable_demotion:
+  - name: 2 parents + 1 Kid
+    type: household
+    rule: 2 Parents + Kids
+    patterns:
+      - '1 2'
+    refresh_pools: false
+    enable_demotion:

@@ -37,12 +37,17 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
     if description:
         logger.info(f"  {description}")
 
-    # Check allocation mode
-    allocation_mode = allocation_config.get('allocation_mode', 'simple')
-    use_attribute_capacities = allocation_config.get('use_attribute_capacities', False)
+    # Attribute-aware allocation is gated purely on whether this step's
+    # capacity_config supplies per-slot column_mappings. The presence of the
+    # buckets IS the switch — there are no separate allocation_mode /
+    # use_attribute_capacities flags. They were redundant: the engine always
+    # fell back to simple when column_mappings were absent regardless of the
+    # flags, so the buckets were already the real source of truth.
+    capacity_config = allocation_config.get('capacity_config') or {}
+    column_mappings = capacity_config.get('attribute_capacities', {}).get('column_mappings')
 
-    # If attribute-aware mode, delegate to specialized function
-    if allocation_mode == 'attribute_aware' or use_attribute_capacities:
+    # If per-slot buckets are defined, delegate to attribute-aware allocation
+    if column_mappings:
         return _allocate_with_attributes(
             venue_type=venue_type,
             allocation_config=allocation_config,
@@ -416,9 +421,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
             f"  No capacity_config on the allocation step for {venue_type}, "
             "falling back to simple allocation"
         )
-        # Fall back to simple mode
-        allocation_config['allocation_mode'] = 'simple'
-        allocation_config['use_attribute_capacities'] = False
+        # Fall back to simple mode (no column_mappings → simple gate)
         return _allocate_to_venue_type(venue_type, allocation_config, population, venues, household_distributor)
 
     # Cache on the venue manager so post-allocation reporting/debug code
@@ -445,8 +448,6 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
     if not column_mappings:
         logger.warning(f"  No column_mappings in capacity_config, falling back to simple allocation")
-        allocation_config['allocation_mode'] = 'simple'
-        allocation_config['use_attribute_capacities'] = False
         return _allocate_to_venue_type(venue_type, allocation_config, population, venues, household_distributor)
 
     # Get attribute constraints (if any)

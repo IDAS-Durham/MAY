@@ -1,0 +1,84 @@
+# Sector Attribute Assignment for 1918 New Zealand
+# Assigns employment sector to working-age people (16+) based on
+# geo_unit + sex stratified probabilities derived from workplace CSV counts.
+
+attribute:
+  name: "sector"
+  description: "Employment sector for working-age people"
+  data_type: "categorical"
+  assignment_level: "person"
+
+# Only assign to people aged 16 and over
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    description: "Working age population"
+    numerical:
+      min: 16
+      max: null
+
+data_sources:
+  sector_by_geo_sex:
+    type: "csv_lookup"
+    description: "Sector probability distribution by home geo_unit and sex"
+
+    files:
+      - path: "world_specific_code/NZ/data/population/sector_probabilities.csv"
+
+        key_columns:
+          geo_unit:
+            attribute: "geographical_unit"
+            type: "direct"
+          sex:
+            attribute: "sex"
+            type: "direct"
+
+        value_columns:
+          Agricultural: "Agricultural"
+          Commercial: "Commercial"
+          Domestic: "Domestic"
+          Industrial: "Industrial"
+          Professional: "Professional"
+          Transport: "Transport"
+          Indefinite: "Indefinite"
+
+    fallback:
+      # Approximate 1918 NZ employment distribution
+      Agricultural: 0.30
+      Commercial: 0.15
+      Domestic: 0.15
+      Industrial: 0.15
+      Professional: 0.10
+      Transport: 0.10
+      Indefinite: 0.05
+
+assignment_rules:
+  person:
+    description: "Assign sector by sampling from geo_unit + sex stratified probabilities"
+
+    rules:
+      - description: "Probabilistic sector assignment from workplace census data"
+        priority: 1
+
+        assignment:
+          strategy: "categorical_sampler"
+          data_source: "sector_by_geo_sex"
+
+settings:
+  random_seed: null
+  normalize_probabilities: true
+  cache_lookups: true
+
+  error_handling:
+    missing_geo_unit: "use_fallback"
+    missing_lookup_data: "use_fallback"
+    person_without_work_activity: "skip_person"
+    missing_filter_activity: "skip_person"
+
+  logging:
+    level: "INFO"
+    detailed_assignment_logging: false
+    show_samples: true
+    sample_size: 10
+    show_attribute_distribution: true

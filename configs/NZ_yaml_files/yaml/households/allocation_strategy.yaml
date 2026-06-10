@@ -1,0 +1,624 @@
+# Allocation Strategy for 1918 New Zealand Households
+# One step per sN_cM column — faithfully reproduces census household counts.
+# sN_cM: N total occupants, M children (0-17), N-M adults (18+)
+# Ordered largest → smallest so complex households are filled first.
+# s11p_cM treated as 11-person minimum; promotion handles any overflow.
+
+enabled: true
+
+steps:
+
+  # =============================================
+  # s11p: 11+ person households
+  # =============================================
+  - name: "s11p_c10"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c10"
+        assumption: "10 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c9"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c9"
+        assumption: "9 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c8"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c8"
+        assumption: "8 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c7"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c7"
+        assumption: "7 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c6"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c6"
+        assumption: "6 5"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c5"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c5"
+        assumption: "5 6"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c4"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c4"
+        assumption: "4 7"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c3"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c3"
+        assumption: "3 8"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c2"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c2"
+        assumption: "2 9"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c1"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c1"
+        assumption: "1 10"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s11p_c0"
+    type: "household"
+    patterns:
+      - pattern: "s11p_c0"
+        assumption: "0 11"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s10: 10-person households
+  # =============================================
+  - name: "s10_c9"
+    type: "household"
+    patterns:
+      - pattern: "s10_c9"
+        assumption: "9 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c8"
+    type: "household"
+    patterns:
+      - pattern: "s10_c8"
+        assumption: "8 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c7"
+    type: "household"
+    patterns:
+      - pattern: "s10_c7"
+        assumption: "7 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c6"
+    type: "household"
+    patterns:
+      - pattern: "s10_c6"
+        assumption: "6 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c5"
+    type: "household"
+    patterns:
+      - pattern: "s10_c5"
+        assumption: "5 5"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c4"
+    type: "household"
+    patterns:
+      - pattern: "s10_c4"
+        assumption: "4 6"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c3"
+    type: "household"
+    patterns:
+      - pattern: "s10_c3"
+        assumption: "3 7"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c2"
+    type: "household"
+    patterns:
+      - pattern: "s10_c2"
+        assumption: "2 8"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c1"
+    type: "household"
+    patterns:
+      - pattern: "s10_c1"
+        assumption: "1 9"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s10_c0"
+    type: "household"
+    patterns:
+      - pattern: "s10_c0"
+        assumption: "0 10"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s9: 9-person households
+  # =============================================
+  - name: "s9_c8"
+    type: "household"
+    patterns:
+      - pattern: "s9_c8"
+        assumption: "8 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c7"
+    type: "household"
+    patterns:
+      - pattern: "s9_c7"
+        assumption: "7 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c6"
+    type: "household"
+    patterns:
+      - pattern: "s9_c6"
+        assumption: "6 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c5"
+    type: "household"
+    patterns:
+      - pattern: "s9_c5"
+        assumption: "5 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c4"
+    type: "household"
+    patterns:
+      - pattern: "s9_c4"
+        assumption: "4 5"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c3"
+    type: "household"
+    patterns:
+      - pattern: "s9_c3"
+        assumption: "3 6"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c2"
+    type: "household"
+    patterns:
+      - pattern: "s9_c2"
+        assumption: "2 7"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c1"
+    type: "household"
+    patterns:
+      - pattern: "s9_c1"
+        assumption: "1 8"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s9_c0"
+    type: "household"
+    patterns:
+      - pattern: "s9_c0"
+        assumption: "0 9"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s8: 8-person households
+  # =============================================
+  - name: "s8_c7"
+    type: "household"
+    patterns:
+      - pattern: "s8_c7"
+        assumption: "7 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s8_c6"
+    type: "household"
+    patterns:
+      - pattern: "s8_c6"
+        assumption: "6 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s8_c5"
+    type: "household"
+    patterns:
+      - pattern: "s8_c5"
+        assumption: "5 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s8_c4"
+    type: "household"
+    patterns:
+      - pattern: "s8_c4"
+        assumption: "4 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s8_c3"
+    type: "household"
+    patterns:
+      - pattern: "s8_c3"
+        assumption: "3 5"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s8_c2"
+    type: "household"
+    patterns:
+      - pattern: "s8_c2"
+        assumption: "2 6"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s8_c1"
+    type: "household"
+    patterns:
+      - pattern: "s8_c1"
+        assumption: "1 7"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s8_c0"
+    type: "household"
+    patterns:
+      - pattern: "s8_c0"
+        assumption: "0 8"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s7: 7-person households
+  # =============================================
+  - name: "s7_c6"
+    type: "household"
+    patterns:
+      - pattern: "s7_c6"
+        assumption: "6 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s7_c5"
+    type: "household"
+    patterns:
+      - pattern: "s7_c5"
+        assumption: "5 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s7_c4"
+    type: "household"
+    patterns:
+      - pattern: "s7_c4"
+        assumption: "4 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s7_c3"
+    type: "household"
+    patterns:
+      - pattern: "s7_c3"
+        assumption: "3 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s7_c2"
+    type: "household"
+    patterns:
+      - pattern: "s7_c2"
+        assumption: "2 5"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s7_c1"
+    type: "household"
+    patterns:
+      - pattern: "s7_c1"
+        assumption: "1 6"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s7_c0"
+    type: "household"
+    patterns:
+      - pattern: "s7_c0"
+        assumption: "0 7"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s6: 6-person households
+  # =============================================
+  - name: "s6_c5"
+    type: "household"
+    patterns:
+      - pattern: "s6_c5"
+        assumption: "5 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s6_c4"
+    type: "household"
+    patterns:
+      - pattern: "s6_c4"
+        assumption: "4 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s6_c3"
+    type: "household"
+    patterns:
+      - pattern: "s6_c3"
+        assumption: "3 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s6_c2"
+    type: "household"
+    patterns:
+      - pattern: "s6_c2"
+        assumption: "2 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s6_c1"
+    type: "household"
+    patterns:
+      - pattern: "s6_c1"
+        assumption: "1 5"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s6_c0"
+    type: "household"
+    patterns:
+      - pattern: "s6_c0"
+        assumption: "0 6"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s5: 5-person households
+  # =============================================
+  - name: "s5_c4"
+    type: "household"
+    patterns:
+      - pattern: "s5_c4"
+        assumption: "4 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s5_c3"
+    type: "household"
+    patterns:
+      - pattern: "s5_c3"
+        assumption: "3 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s5_c2"
+    type: "household"
+    patterns:
+      - pattern: "s5_c2"
+        assumption: "2 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s5_c1"
+    type: "household"
+    patterns:
+      - pattern: "s5_c1"
+        assumption: "1 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s5_c0"
+    type: "household"
+    patterns:
+      - pattern: "s5_c0"
+        assumption: "0 5"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s4: 4-person households
+  # =============================================
+  - name: "s4_c3"
+    type: "household"
+    patterns:
+      - pattern: "s4_c3"
+        assumption: "3 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s4_c2"
+    type: "household"
+    patterns:
+      - pattern: "s4_c2"
+        assumption: "2 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s4_c1"
+    type: "household"
+    patterns:
+      - pattern: "s4_c1"
+        assumption: "1 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s4_c0"
+    type: "household"
+    patterns:
+      - pattern: "s4_c0"
+        assumption: "0 4"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s3: 3-person households
+  # =============================================
+  - name: "s3_c2"
+    type: "household"
+    patterns:
+      - pattern: "s3_c2"
+        assumption: "2 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s3_c1"
+    type: "household"
+    patterns:
+      - pattern: "s3_c1"
+        assumption: "1 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s3_c0"
+    type: "household"
+    patterns:
+      - pattern: "s3_c0"
+        assumption: "0 3"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s2: 2-person households
+  # =============================================
+  - name: "s2_c1"
+    type: "household"
+    patterns:
+      - pattern: "s2_c1"
+        assumption: "1 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  - name: "s2_c0"
+    type: "household"
+    patterns:
+      - pattern: "s2_c0"
+        assumption: "0 2"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # s1: 1-person households
+  # =============================================
+  - name: "s1_c0"
+    type: "household"
+    patterns:
+      - pattern: "s1_c0"
+        assumption: "0 1"
+    enable_demotion: false
+    refresh_pools: false
+
+  # =============================================
+  # Excess handling: absorb leftover people
+  # =============================================
+  - name: "Excess Children"
+    type: "household_excess"
+    refresh_pools: false
+    target_patterns:
+      - "s11p_c1"
+      - "s11p_c2"
+      - "s11p_c3"
+      - "s10_c1"
+      - "s10_c2"
+      - "s10_c3"
+      - "s9_c1"
+      - "s9_c2"
+      - "s9_c3"
+      - "s8_c1"
+      - "s8_c2"
+      - "s7_c1"
+      - "s7_c2"
+      - "s6_c1"
+      - "s5_c1"
+      - "s4_c1"
+      - "s3_c1"
+      - "s2_c1"
+    add_category: "Children"
+    add_distribution:
+      type: "poisson"
+      mean: 1
+      min: 0
+      max: 5
+
+  - name: "Excess Adults"
+    type: "household_excess"
+    refresh_pools: false
+    target_patterns:
+      - "s11p_c0"
+      - "s10_c0"
+      - "s9_c0"
+      - "s8_c0"
+      - "s7_c0"
+      - "s6_c0"
+      - "s5_c0"
+      - "s4_c0"
+      - "s3_c0"
+      - "s2_c0"
+      - "s1_c0"
+    add_category: "Adults"
+    add_distribution:
+      type: "poisson"
+      mean: 1
+      min: 0
+      max: 5

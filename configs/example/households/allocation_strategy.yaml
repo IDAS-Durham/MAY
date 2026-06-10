@@ -1,0 +1,512 @@
+enabled: true
+steps:
+  - name: Two adults with children
+    type: household
+    rule: Parents + Kid(s)
+    patterns:
+      - '1 >=0 2 0'
+      - pattern: '>=2 >=0 2 0'
+        assumption: '2 0 2 0'
+    refresh_pools: false
+    enable_demotion:
+  - name: Single adult with children
+    type: household
+    rule: Parents + Kid(s)
+    patterns:
+      - '1 >=0 1 0'
+      - '>=2 >=0 1 0'
+    refresh_pools: false
+    enable_demotion:
+  - name: Multi-generational
+    type: household
+    rule: Multigenerational
+    patterns:
+      - pattern: '1 >=0 >=0 >=0'
+        assumption: '1 0 1 1'
+      - pattern: '>=2 >=0 >=0 >=0'
+        assumption: '2 0 1 1'
+    refresh_pools: false
+    enable_demotion:
+  - name: Two adults with YA
+    type: household
+    rule: Parents + Young Adult(s)
+    patterns:
+      - '0 >=1 2 0'
+    refresh_pools: false
+    enable_demotion:
+  - name: Single adult with YA
+    type: household
+    rule: Parents + Young Adult(s)
+    patterns:
+      - '0 >=1 1 0'
+    refresh_pools: false
+    enable_demotion:
+  - name: Elderly couple
+    type: household
+    rule: Elderly couple
+    patterns:
+      - '0 0 0 2'
+    refresh_pools: false
+    enable_demotion:
+  - name: Elderly single
+    type: household
+    patterns:
+      - '0 0 0 1'
+    refresh_pools: false
+    enable_demotion:
+  - name: Adult couple
+    type: household
+    rule: Adult couple
+    patterns:
+      - '0 0 2 0'
+    refresh_pools: false
+    enable_demotion:
+  - name: Adult single
+    type: household
+    patterns:
+      - '0 0 1 0'
+    refresh_pools: false
+    enable_demotion:
+  - name: Assuming YA pairs
+    type: household
+    patterns:
+      - pattern: '0 >=0 0 0'
+        assumption: '0 2 0 0'
+    refresh_pools: false
+    enable_demotion:
+  - name: Kids in boarding schools
+    type: venue
+    venue_type: boarding_school
+    subset_key: resident
+    strategy: random
+    max_allocations:
+    eligibility:
+      - attribute: age
+        min: 0
+        max: 24
+    capacity_config:
+      total_capacity_column: n_total
+      attribute_capacities:
+        filter_attributes:
+          - name: sex
+            type: categorical
+          - name: age
+            type: age_band
+        column_mappings:
+          n_0_15_female:
+            sex: female
+            age_band:
+              - 0
+              - 15
+          n_0_15_male:
+            sex: male
+            age_band:
+              - 0
+              - 15
+          n_16_24_female:
+            sex: female
+            age_band:
+              - 16
+              - 24
+          n_16_24_male:
+            sex: male
+            age_band:
+              - 16
+              - 24
+      attribute_constraints:
+        age:
+          min_column: StatutoryLowAge
+          max_column: StatutoryHighAge
+      fallback_strategy: flexible
+  - name: Elderly in care homes
+    type: venue
+    venue_type: care_home
+    subset_key: resident
+    strategy: oldest_first
+    max_allocations:
+    eligibility:
+      - attribute: age
+        min: 50
+    capacity_config:
+      total_capacity_column: capacity
+      attribute_capacities:
+        filter_attributes:
+          - name: sex
+            type: categorical
+          - name: age
+            type: age_band
+        column_mappings:
+          age_50_64_female:
+            sex: female
+            age_band:
+              - 50
+              - 64
+          age_50_64_male:
+            sex: male
+            age_band:
+              - 50
+              - 64
+          age_65_74_female:
+            sex: female
+            age_band:
+              - 65
+              - 74
+          age_65_74_male:
+            sex: male
+            age_band:
+              - 65
+              - 74
+          age_75_84_female:
+            sex: female
+            age_band:
+              - 75
+              - 84
+          age_75_84_male:
+            sex: male
+            age_band:
+              - 75
+              - 84
+          age_85_94_female:
+            sex: female
+            age_band:
+              - 85
+              - 94
+          age_85_94_male:
+            sex: male
+            age_band:
+              - 85
+              - 94
+          age_95_plus_female:
+            sex: female
+            age_band:
+              - 95
+              - 99
+          age_95_plus_male:
+            sex: male
+            age_band:
+              - 95
+              - 99
+      fallback_strategy: total_capacity
+  - name: Students in dorms
+    type: venue
+    venue_type: student_dorm
+    subset_key: resident
+    strategy: random
+    max_allocations:
+    eligibility:
+      - attribute: age
+        min: 16
+    capacity_config:
+      total_capacity_column: n_total
+      attribute_capacities:
+        filter_attributes:
+          - name: age
+            type: age_band
+        column_mappings:
+          n_16_24:
+            age_band:
+              - 16
+              - 24
+          n_25_34:
+            age_band:
+              - 25
+              - 34
+          n_35_49:
+            age_band:
+              - 35
+              - 49
+          n_50_64:
+            age_band:
+              - 50
+              - 64
+          n_65_99:
+            age_band:
+              - 65
+              - 99
+      fallback_strategy: flexible
+  - name: Multi Elderly
+    type: household
+    patterns:
+      - '0 0 0 >=3'
+    refresh_pools: true
+    enable_demotion:
+  - name: Add kids to families
+    type: household_excess
+    rule: Parents + Kids (EXCESS)
+    add_category: Kids
+    target_patterns:
+      - '>=2 >=0 2 0'
+      - '>=2 >=0 1 0'
+      - '>=2 >=0 >=0 >=0'
+    constraints:
+      - category: Kids
+        max: 4
+    add_distribution:
+      type: poisson
+      mean: 2.0
+      min: 0
+      max: 4
+    max_per_household:
+    refresh_pools: false
+  - name: Add young adults to YA households
+    type: household_excess
+    add_category: Young Adults
+    target_patterns:
+      - '0 >=0 0 0'
+    constraints:
+      - category: Young Adults
+        max: 6
+    add_distribution:
+      type: poisson
+      mean: 4.0
+      min: 0
+      max: 6
+    max_per_household:
+    refresh_pools: false
+  - name: Add young adults to two-adult families without kids
+    type: household_excess
+    rule: Parents + Young Adult(s) (EXCESS)
+    add_category: Young Adults
+    target_patterns:
+      - '0 >=1 2 0'
+    constraints:
+      - category: Young Adults
+        max: 4
+    add_distribution:
+      type: poisson
+      mean: 3.0
+      min: 0
+      max: 8
+    max_per_household:
+    refresh_pools: false
+  - name: Add Young Adults to Single-Adult Families without Kids
+    type: household_excess
+    rule: Parents + Young Adult(s) (EXCESS)
+    add_category: Young Adults
+    target_patterns:
+      - '0 >=1 1 0'
+    constraints:
+      - category: Young Adults
+        max: 4
+    add_distribution:
+      type: poisson
+      mean: 2.0
+      min: 0
+      max: 8
+    max_per_household:
+    refresh_pools: false
+  - name: Add Young Adults to Families with kids
+    type: household_excess
+    rule: Parents + Young Adult(s) (EXCESS)
+    add_category: Young Adults
+    target_patterns:
+      - '1 >=0 2 0'
+      - '>=2 >=0 2 0'
+      - '1 >=0 1 0'
+      - '>=2 >=0 1 0'
+    constraints:
+      - category_sum:
+          - Kids
+          - Young Adults
+        max: 8
+    add_distribution:
+      type: poisson
+      mean: 1.0
+      min: 0
+      max: 4
+    max_per_household:
+    refresh_pools: false
+  - name: Add Young Adults to multi-generational Families
+    type: household_excess
+    rule: Parents + Young Adult(s) (EXCESS)
+    add_category: Young Adults
+    target_patterns:
+      - '1 >=0 >=0 >=0'
+      - '>=2 >=0 >=0 >=0'
+    constraints:
+      - category_sum:
+          - Kids
+          - Young Adults
+        max: 6
+    add_distribution:
+      type: poisson
+      mean: 3.0
+      min: 0
+      max: 4
+    max_per_household:
+    refresh_pools: false
+  - name: Add Elderly to multi-generational Families
+    type: household_excess
+    rule: Multigenerational
+    add_category: Old Adults
+    target_patterns:
+      - '1 >=0 >=0 >=0'
+      - '>=2 >=0 >=0 >=0'
+    constraints:
+      - category: Old Adults
+        max: 2
+    add_distribution:
+      type: poisson
+      mean: 1.0
+      min: 1
+      max: 2
+    max_per_household:
+    refresh_pools: false
+  - name: Add Elderly to multi elderly households
+    type: household_excess
+    add_category: Old Adults
+    target_patterns:
+      - '0 0 0 >=3'
+    constraints:
+      - category: Old Adults
+        max: 8
+    add_distribution:
+      type: poisson
+      mean: 6.0
+      min: 0
+      max: 8
+    max_per_household:
+    refresh_pools: false
+  - name: Add Adults to multi-generational Families
+    type: household_excess
+    add_category: Adults
+    target_patterns:
+      - '1 >=0 >=0 >=0'
+      - '>=2 >=0 >=0 >=0'
+    constraints:
+      - category: Adults
+        max: 2
+    add_distribution:
+      type: poisson
+      mean: 1.0
+      min: 0
+      max: 2
+    max_per_household:
+    refresh_pools: false
+  - name: Flexible households
+    type: household
+    patterns:
+      - '0 >=0 >=0 >=0'
+    refresh_pools: false
+    enable_demotion:
+    allocate_flexible: true
+    max_household_size: 10
+  - name: Add Adults to flexible households
+    type: household_excess
+    add_category: Adults
+    target_patterns:
+      - '0 >=0 >=0 >=0'
+    constraints:
+      - category_sum:
+          - Young Adults
+          - Adults
+          - Old Adults
+        max: 10
+    max_per_household:
+    refresh_pools: false
+  - name: Add Old Adults to flexible households
+    type: household_excess
+    add_category: Old Adults
+    target_patterns:
+      - '0 >=0 >=0 >=0'
+    constraints:
+      - category_sum:
+          - Young Adults
+          - Adults
+          - Old Adults
+        max: 10
+    max_per_household:
+    refresh_pools: false
+  - name: Add YA to flexible households
+    type: household_excess
+    add_category: Young Adults
+    target_patterns:
+      - '0 >=0 >=0 >=0'
+    constraints:
+      - category_sum:
+          - Young Adults
+          - Adults
+          - Old Adults
+        max: 10
+    max_per_household:
+    refresh_pools: false
+  - name: Promote households for specific categories
+    type: household_promotion
+    promotion_rules:
+      - source_pattern: '0 0 2 0'
+        target_pattern: '>=0 >=0 2 0'
+        accept_categories:
+          - Kids
+          - Young Adults
+        max_to_add: 3
+      - source_pattern: '0 0 1 0'
+        target_pattern: '>=0 >=0 2 0'
+        accept_categories:
+          - Kids
+          - Young Adults
+          - Adults
+        max_to_add: 4
+      - source_pattern: '0 0 0 1'
+        target_pattern: '0 0 0 2'
+        accept_categories:
+          - Old Adults
+        max_to_add: 1
+    refresh_pools: false
+  - name: Overflow remaining Young Adults
+    type: household_overflow
+    add_category: Young Adults
+    target_patterns:
+      - '0 >=1 2 0'
+      - '1 >=0 2 0'
+      - '>=2 >=0 2 0'
+      - '0 >=1 1 0'
+      - '1 >=0 1 0'
+      - '>=2 >=0 1 0'
+      - '1 >=0 >=0 >=0'
+      - '>=2 >=0 >=0 >=0'
+      - '0 >=0 0 0'
+      - '0 >=0 >=0 >=0'
+    pattern_bias:
+      '0 >=0 >=0 >=0': 2.0
+      '0 >=0 0 0': 5.0
+      '0 >=1 2 0': 1.0
+      '0 >=1 1 0': 1.0
+      '1 >=0 2 0': 1.0
+      '>=2 >=0 2 0': 1.0
+      '>=2 >=0 1 0': 1.0
+      '1 >=0 1 0': 1.0
+      '1 >=0 >=0 >=0': 1.0
+      '>=2 >=0 >=0 >=0': 1.0
+    refresh_pools: false
+  - name: Overflow remaining Adults
+    type: household_overflow
+    add_category: Adults
+    target_patterns:
+      - '1 >=0 >=0 >=0'
+      - '>=2 >=0 >=0 >=0'
+      - '0 >=0 >=0 >=0'
+    pattern_bias:
+      '0 >=0 >=0 >=0': 10.0
+      '1 >=0 >=0 >=0': 1.0
+      '>=2 >=0 >=0 >=0': 1.0
+    refresh_pools: false
+  - name: Overflow remaining Old Adults
+    type: household_overflow
+    add_category: Old Adults
+    target_patterns:
+      - '1 >=0 >=0 >=0'
+      - '>=2 >=0 >=0 >=0'
+      - '0 >=0 >=0 >=0'
+    pattern_bias:
+      '0 >=0 >=0 >=0': 10.0
+      '1 >=0 >=0 >=0': 1.0
+      '>=2 >=0 >=0 >=0': 1.0
+    refresh_pools: false
+  - name: Promote and allocate all remaining
+    type: household_promotion
+    target_categories:
+      - Kids
+      - Young Adults
+      - Adults
+      - Old Adults
+    refresh_pools: false

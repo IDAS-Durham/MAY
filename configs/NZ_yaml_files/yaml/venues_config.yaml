@@ -1,0 +1,234 @@
+venue_types:
+  # =============================================
+  # HOUSEHOLD (created dynamically)
+  # =============================================
+  household:
+    enabled: false
+    is_residence: true
+    description: "Residential households (created by household distributor)"
+
+  # =============================================
+  # WORKPLACES (7 sectors)
+  # Each uses sex-stratified capacity from n_male / n_female columns
+  # =============================================
+  workplace_agricultural:
+    enabled: true
+    filename: "workplaces_Agricultural.csv"
+    is_residence: false
+    subset_categories:
+      - name: "Male"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["male"]
+      - name: "Female"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["female"]
+    capacity_config:
+      attribute_capacities:
+        filter_attributes:
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_male:
+            sex: "male"
+          n_female:
+            sex: "female"
+      fallback_strategy: "strict"
+
+  workplace_commercial:
+    enabled: true
+    filename: "workplaces_Commercial.csv"
+    is_residence: false
+    subset_categories:
+      - name: "Male"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["male"]
+      - name: "Female"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["female"]
+    capacity_config:
+      attribute_capacities:
+        filter_attributes:
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_male:
+            sex: "male"
+          n_female:
+            sex: "female"
+      fallback_strategy: "strict"
+
+  workplace_domestic:
+    enabled: true
+    filename: "workplaces_Domestic.csv"
+    is_residence: false
+    subset_categories:
+      - name: "Male"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["male"]
+      - name: "Female"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["female"]
+    capacity_config:
+      attribute_capacities:
+        filter_attributes:
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_male:
+            sex: "male"
+          n_female:
+            sex: "female"
+      fallback_strategy: "strict"
+
+  workplace_industrial:
+    enabled: true
+    filename: "workplaces_Industrial.csv"
+    is_residence: false
+    subset_categories:
+      - name: "Male"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["male"]
+      - name: "Female"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["female"]
+    capacity_config:
+      attribute_capacities:
+        filter_attributes:
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_male:
+            sex: "male"
+          n_female:
+            sex: "female"
+      fallback_strategy: "strict"
+
+  workplace_professional:
+    enabled: true
+    filename: "workplaces_Professional.csv"
+    is_residence: false
+    subset_categories:
+      - name: "Male"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["male"]
+      - name: "Female"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["female"]
+    capacity_config:
+      attribute_capacities:
+        filter_attributes:
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_male:
+            sex: "male"
+          n_female:
+            sex: "female"
+      fallback_strategy: "strict"
+
+  workplace_transport:
+    enabled: true
+    filename: "workplaces_Transport.csv"
+    is_residence: false
+    subset_categories:
+      - name: "Male"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["male"]
+      - name: "Female"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["female"]
+    capacity_config:
+      attribute_capacities:
+        filter_attributes:
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_male:
+            sex: "male"
+          n_female:
+            sex: "female"
+      fallback_strategy: "strict"
+
+  workplace_indefinite:
+    enabled: true
+    filename: "workplaces_Indefinite.csv"
+    is_residence: false
+    subset_categories:
+      - name: "Male"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["male"]
+      - name: "Female"
+        attribute: "sex"
+        type: "categorical"
+        categorical:
+          allowed_values: ["female"]
+    capacity_config:
+      attribute_capacities:
+        filter_attributes:
+          - name: "sex"
+            type: "categorical"
+        column_mappings:
+          n_male:
+            sex: "male"
+          n_female:
+            sex: "female"
+      fallback_strategy: "strict"
+  
+  school:
+    enabled: true
+    filename: primary_activities/nz_schools.csv
+    description: "Educational institutions for primary and secondary education"
+    is_residence: false  # Not a place where people live
+
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "SchoolCapacity"
+
+  university:
+    enabled: true
+    filename: primary_activities/nz_universities.csv
+    description: "Higher education institutions"
+    is_residence: false  # Not a place where people live
+
+    # Capacity configuration
+    capacity_config:
+      total_capacity_column: "n_students"
+
+  # =============================================
+  # HOSPITAL
+  # =============================================   
+
+  hospital:
+    enabled: true
+    filename: medical/nz_hospitals.csv
+    description: "Healthcare facilities providing medical treatment"
+    is_residence: false  # Not a place where people live
+
+settings:
+  filter_by_geography: true

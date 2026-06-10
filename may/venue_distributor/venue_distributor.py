@@ -143,16 +143,18 @@ class VenueDistributor(BaseDistributor):
             if cache_key in self.probability_cache:
                 continue
 
-            # Load CSV file
+            # Load CSV file: try the path as-given (CWD-relative) first, then
+            # fall back to resolving against the project root.
             full_path = Path(file_path)
-            if not full_path.is_absolute() and self.config_path:
-                # Make relative to project root
-                # config_path is yaml/distributors/xxx.yaml
-                # We need to go up to yaml/, then up to project root
-                project_root = self.config_path.parent.parent.parent
-                full_path = project_root / file_path
-            elif not self.config_path:
-                logger.warning(f"Cannot resolve relative path '{file_path}' for probability file without a config_file path. Assuming absolute path.")
+            if not full_path.is_absolute() and not full_path.exists():
+                if self.config_path:
+                    # config_path is configs/<year>/distributors/xxx.yaml
+                    project_root = self.config_path.parent.parent.parent
+                    candidate = project_root / file_path
+                    if candidate.exists():
+                        full_path = candidate
+                else:
+                    logger.warning(f"Cannot resolve relative path '{file_path}' for probability file without a config_file path. Assuming absolute path.")
 
 
             try:

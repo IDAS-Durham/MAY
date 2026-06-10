@@ -1,0 +1,23 @@
+venue_types:
+  school:
+    enabled: true
+    filename: primary_activities/nz_schools.csv
+    is_residence: false
+  university:
+    enabled: true
+    filename: primary_activities/nz_universities.csv
+    is_residence: false
+  hospital:
+    enabled: true
+    filename: medical/nz_hospitals.csv
+    is_residence: false
+  prison:
+    enabled: true
+    filename: residences/prisions.csv
+    is_residence: true
+  military_camp:
+    enabled: true
+    filename: residences/military_camps.csv
+    is_residence: true
+settings:
+  filter_by_geography: true

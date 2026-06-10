@@ -9,6 +9,14 @@ per-membership metadata, what to do on a miss).
 
 Commute is one instance of this distributor; future use-cases (school buses,
 freight routes, ferries) plug in by writing a new YAML config — no code change.
+
+Besides the config-mapped leg columns, every leg membership carries five
+structural fields: ``leg_idx`` (the journey sequence — leg timings are
+line-relative and cannot recover it), ``origin_unit_id`` / ``dest_unit_id``
+(the journey endpoints the router itself derived, as geo unit ids) and
+``board_unit_id`` / ``alight_unit_id`` (this leg's stops). They are routing
+facts, not domain choices — what "origin" means is still whatever
+origin_source/destination_source the config defined.
 """
 
 import logging
@@ -63,14 +71,15 @@ class RouteDistributor(BaseDistributor):
 
         # Resolve table paths relative to project root if the config came from
         # a file under configs/.
-        self.routes_table_path = c.get("routes_table", "data/transport/routes.csv")
-        self.legs_table_path = c.get("legs_table", "data/transport/route_legs.csv")
+        self.routes_table_path = c.get("routes_table", "data/activities/commute/routes.csv")
+        self.legs_table_path = c.get("legs_table", "data/activities/commute/route_legs.csv")
         self.routes_table_path = self._resolve_path(self.routes_table_path)
         self.legs_table_path = self._resolve_path(self.legs_table_path)
 
         # Lazy state, populated in allocate()
         self._legs_index = None      # (origin, dest, mode_class) -> [leg dicts]
         self._line_to_venue = {}     # line_id -> Venue (lazy cache)
+        self._unit_id_cache = {}     # geo-unit name -> unit id (or -1)
         self._stats = Counter()
 
         logger.info(
@@ -186,6 +195,21 @@ class RouteDistributor(BaseDistributor):
             return unit.name
         return getattr(unit, "name", None)
 
+    def _unit_id_for(self, world, name) -> int:
+        """Geo unit id for a unit-name key, or -1 when the name doesn't resolve
+        in this world (e.g. a leg boards in an MGU outside the loaded
+        geography). Cached — route tables reuse a small set of unit names.
+        Unit ids serialise verbatim (geography/ids = unit.id), so the stored
+        value joins directly against the exported world."""
+        if name is None or (isinstance(name, float) and pd.isna(name)):
+            return -1
+        cached = self._unit_id_cache.get(name)
+        if cached is None:
+            unit = world.geography.get_unit(name)
+            cached = int(unit.id) if unit is not None else -1
+            self._unit_id_cache[name] = cached
+        return cached
+
     def _get_person_class(self, person) -> Optional[str]:
         src = self.class_source
         if src.startswith("properties."):
@@ -283,6 +307,15 @@ class RouteDistributor(BaseDistributor):
                 self._apply_miss(person)
                 continue
 
+            # The journey's endpoints as geo unit ids. The keys were derived to
+            # route this person; persisting them (rather than discarding them
+            # here) is what lets consumers reconstruct origin→destination
+            # without re-deriving the source attributes — which stay config-
+            # defined, so these fields carry whatever semantics the world's
+            # distributor configs chose (home→work today, work→cinema tomorrow).
+            origin_unit_id = self._unit_id_for(world, origin)
+            dest_unit_id = self._unit_id_for(world, dest)
+
             # Place the rider on every leg of the journey.
             leg_count_this_person = 0
             for leg in legs:
@@ -301,13 +334,22 @@ class RouteDistributor(BaseDistributor):
                 subset = venue.subsets[self.leg_subset_key]
                 # Per-leg numeric metadata (D11). Keyed by person.id; if a
                 # person has two legs on the same line (rare), the second
-                # overwrites — warn and count it.
-                if self.leg_metadata:
-                    if person.id in subset.member_metadata:
-                        self._stats["metadata_overwrites"] += 1
-                    subset.member_metadata[person.id] = {
-                        field: leg[col] for field, col in self.leg_metadata.items()
-                    }
+                # overwrites — warn and count it. Alongside the config-mapped
+                # columns, every leg row carries the structural routing fields:
+                # journey origin/dest plus this leg's board/alight unit ids
+                # (-1 when a unit lies outside the loaded geography).
+                if person.id in subset.member_metadata:
+                    self._stats["metadata_overwrites"] += 1
+                row = {field: leg[col] for field, col in self.leg_metadata.items()}
+                # The route table's journey sequence. Persisted because leg
+                # timings cannot recover it: t_board/t_alight are line-relative
+                # offsets, so sorting by them misorders interchange journeys.
+                row["leg_idx"] = int(leg["leg_idx"])
+                row["origin_unit_id"] = origin_unit_id
+                row["dest_unit_id"] = dest_unit_id
+                row["board_unit_id"] = self._unit_id_for(world, leg["board_mgu"])
+                row["alight_unit_id"] = self._unit_id_for(world, leg["alight_mgu"])
+                subset.member_metadata[person.id] = row
                 leg_count_this_person += 1
                 n_legs_written += 1
 

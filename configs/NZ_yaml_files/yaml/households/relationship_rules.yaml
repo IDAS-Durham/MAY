@@ -1,0 +1,104 @@
+# Relationship Rules for 1918 New Zealand Households
+# Two categories: Children (0-17) and Adults (18+)
+# Pattern format: "C A" (children, adults)
+
+enabled: true
+
+selection_strategy:
+  max_attempts: 10
+  use_best_candidate: true
+  penalty_mode: "squared"
+  log_violations: true
+  log_best_candidates: true
+  backtracking:
+    enabled: true
+    max_backtracks: 3
+    strategy: "first_role"
+    log_backtracks: true
+    avoid_duplicates: true
+
+track_statistics: true
+
+rules:
+  # =============================================
+  # NZ FAMILY (households with children)
+  # =============================================
+  # Target: 1+ children, 2 adults
+  # Enforces:
+  # - 14-50 yr age gap between parent and child
+  # - Opposite-sex couple for the two parents
+  # =============================================
+  - name: "NZ Family"
+    roles:
+      child:
+        categories: ["Children"]
+        count: 1
+      parents:
+        categories: ["Adults"]
+        count: 2
+
+    selection_order:
+      - child
+      - parents
+
+    constraints:
+      - type: "numerical_attribute_difference"
+        attribute: "age"
+        role_1: "parents"
+        role_2: "child"
+        min_difference: 14
+        max_difference: 50
+        preferred_distribution:
+          type: "normal"
+          mean: 28
+          std: 6
+          tolerance: 10
+
+      - type: "pair_matching"
+        role: "parents"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 2.0
+          std_difference: 4.0
+          max_absolute_difference: 15
+        creates_romantic_couple: true
+
+  # =============================================
+  # NZ COUPLE (no children)
+  # =============================================
+  - name: "NZ Couple"
+    roles:
+      partners:
+        categories: ["Adults"]
+        count: 2
+
+    selection_order:
+      - partners
+
+    constraints:
+      - type: "pair_matching"
+        role: "partners"
+        categorical_attribute:
+          attribute: "sex"
+          same_category_probability: 0.05
+        numerical_attribute:
+          attribute: "age"
+          mean_difference: 2.0
+          std_difference: 4.0
+          max_absolute_difference: 15
+        creates_romantic_couple: true
+
+  # =============================================
+  # SINGLE ADULT
+  # =============================================
+  - name: "Single Adult"
+    roles:
+      solo:
+        categories: ["Adults"]
+        count: 1
+
+    selection_order:
+      - solo

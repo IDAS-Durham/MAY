@@ -107,7 +107,7 @@ def test_validate_numerical_attribute_difference_categorical_override(validator)
     assert is_valid_f is False
 
 def test_categorical_from_keys_override_on_existing_member(validator):
-    """§10: on the household_excess path the candidate is the person being
+    """on the household_excess path the candidate is the person being
     *added* (here a Child), but `max_difference_by_categorical_attribute` is
     conceptually about the *parent's* sex. `categorical_from` pins the override
     onto the existing role so the father/mother age cap is honored correctly,
@@ -177,7 +177,7 @@ def test_validate_numerical_attribute_difference_empty_p2(validator):
     )
     assert is_valid is True
 
-# 1b. couple_compatible_candidates (household_excess couple completion, §6)
+# 1b. couple_compatible_candidates (household_excess couple completion)
 def test_couple_compatible_candidates_filters_sex_and_age(validator):
     """With `same_category_probability` 0 the partner must be the *opposite*
     sex, within the pair's `max_absolute_difference`, ordered by closeness to

@@ -1,0 +1,62 @@
+# Household Configuration for 1918 New Zealand
+# Two categories: Children (0-17) and Adults (18+)
+# Composition pattern format: "C A" (children count, adult count)
+
+categories:
+  - name: "Children"
+    symbol: "C"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 0
+      max: 17
+
+  - name: "Adults"
+    symbol: "A"
+    attribute: "age"
+    type: "numerical"
+    numerical:
+      min: 18
+      max: null
+
+demotion:
+  enabled: true
+  max_attempts: 10
+  min_household_size: 1
+  priority:
+    Children: 1
+    Adults: 2
+  validation_rules:
+    - name: "Children require adult supervision"
+      description: "If there are children in the household, there must be at least one adult"
+      condition:
+        category: "Children"
+        operator: ">="
+        value: 1
+      requirement:
+        category: "Adults"
+        operator: ">="
+        value: 1
+
+promotion:
+  enabled: true
+  max_attempts: 8
+  priority:
+    Adults: 1
+    Children: 2
+  validation_rules:
+    - name: "Children require adult supervision"
+      description: "If there are children in the household, there must be at least one adult"
+      condition:
+        category: "Children"
+        operator: ">="
+        value: 1
+      requirement:
+        category: "Adults"
+        operator: ">="
+        value: 1
+
+allocation:
+  strategy: "random"
+  allow_partial: false
+  seed: null

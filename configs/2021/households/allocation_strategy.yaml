@@ -191,10 +191,6 @@ steps:
 
     venue_type: "boarding_school"
 
-    # Enable attribute-aware allocation
-    allocation_mode: "attribute_aware"
-    use_attribute_capacities: true
-
     subset_key: "resident"
 
     # General eligibility (pre-filter before attribute matching)
@@ -243,10 +239,6 @@ steps:
     description: "Allocate elderly to care homes with age/sex matching"
 
     venue_type: "care_home"
-
-    # Enable attribute-aware allocation
-    allocation_mode: "attribute_aware"
-    use_attribute_capacities: true
 
     subset_key: "resident"
 
@@ -310,10 +302,6 @@ steps:
     description: "Allocate young adults to student dorms with age-band matching"
 
     venue_type: "student_dorms"
-
-    # Enable attribute-aware allocation
-    allocation_mode: "attribute_aware"
-    use_attribute_capacities: true
 
     # Subset to add residents to
     subset_key: "resident"

@@ -1,0 +1,37 @@
+distributor_name: "workplace_indefinite_distributor"
+venue_type: "workplace_indefinite"
+activity_map_key: "work"
+subset_key: "worker"
+
+settings:
+  verbose: true
+  log_summary: true
+
+eligibility:
+  global_filters:
+    - attribute: "age"
+      type: "numerical"
+      min: 16
+    - attribute: "properties.sector"
+      type: "categorical"
+      values: ["Indefinite"]
+
+venue_selection:
+  person_location_source: "geographical_unit.coordinates"
+  venue_geo_level: "SGU"
+  batch_geo_level: "SGU"
+  consider_by: "geo_unit"
+
+allocation:
+  strategy: "closest_balanced"
+  track_capacity: true
+  when_full: "exclude"
+
+fallback:
+  strategy: "relax_distance"
+  max_iterations: 3
+  distance_multiplier: 2.0
+
+exports:
+  venue_summary: "output/NZ/workplace_indefinite_venue_summary.csv"
+  unallocated_report: "output/NZ/workplace_indefinite_unallocated.csv"

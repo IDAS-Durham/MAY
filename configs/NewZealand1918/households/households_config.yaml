@@ -1,0 +1,48 @@
+categories:
+  - name: Children
+    symbol: C
+    attribute: age
+    type: numerical
+    numerical:
+      min: 0
+      max: 17
+  - name: Adults
+    symbol: A
+    attribute: age
+    type: numerical
+    numerical:
+      min: 18
+      max:
+demotion:
+  enabled: true
+  max_attempts: 10
+  min_household_size: 1
+  priority:
+    Children: 1
+    Adults: 2
+  validation_rules:
+    - name: Kids need supervision
+      condition:
+        category: Children
+        operator: '>='
+        value: 1
+      requirement:
+        category: Adults
+        operator: '>='
+        value: 1
+promotion:
+  enabled: true
+  max_attempts: 4
+  priority:
+    Children: 1
+    Adults: 2
+  validation_rules:
+    - name: Kids need supervision
+      condition:
+        category: Children
+        operator: '>='
+        value: 1
+      requirement:
+        category: Adults
+        operator: '>='
+        value: 1
