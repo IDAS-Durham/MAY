@@ -40,6 +40,9 @@ env/
 # Claude Code
 .claude/
 CLAUDE.md
+CONTEXT.md
+docs/adr/
+docs/handoff/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -107,8 +110,6 @@ world_map/medieval_map.html
 docs/site/
 docs/docs/may/
 
-world_map/data/
-
 # Folder to dump stuff
 tmp/
 benchmarks/
@@ -116,3 +117,8 @@ benchmarks/
 # Profiling output
 *profile.stats
 *profile.stats.worktrees/
+
+# Graphify
+graphify-out/
+
+#
