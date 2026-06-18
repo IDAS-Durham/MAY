@@ -220,9 +220,11 @@ class Venue:
         if venue_type_key not in person.activity_map[activity_name]:
             person.activity_map[activity_name][venue_type_key] = []
 
-        # Add subset to person's activity_map (check by venue ID to avoid duplicates)
+        # Add subset to person's activity_map (check by subset identity, not
+        # venue ID, so multiple distinct subsets at the same venue can both
+        # be recorded - e.g. one per feast at a venue hosting several fairs)
         subset_already_added = any(
-            s.venue.id == self.id
+            s is subset
             for s in person.activity_map[activity_name][venue_type_key]
         )
         if not subset_already_added:

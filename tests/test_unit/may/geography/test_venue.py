@@ -2,6 +2,7 @@ import logging
 
 from may.geography import VenueManager, Venue, Geography
 from may.geography import GeographicalUnit
+from may.population import Person
 
 import pytest
 
@@ -517,5 +518,39 @@ def test_get_capacity_config_with_stored_config(geo):
 
     retrieved = manager.get_capacity_config('care_home')
     assert retrieved == test_config
+
+
+# ============================================================================
+# add_to_subset Tests
+# ============================================================================
+
+def test_add_to_subset_records_multiple_distinct_subsets_at_same_venue(geo):
+    """A person added to two distinct subsets of the same venue, under the
+    same activity_name/activity_type, should end up with both subsets in
+    their activity_map list (not just the first, deduped-by-venue-id)."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Fair Ground', venue_type='Fair', geographical_unit=geo_unit, properties={})
+    person = Person(age=30, sex='male', geographical_unit=geo_unit)
+
+    venue.add_to_subset(person, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+    venue.add_to_subset(person, subset_key='feast_2', activity_name='Fair', activity_type='Fair')
+
+    recorded_subsets = person.activity_map['Fair']['Fair']
+    assert len(recorded_subsets) == 2
+    assert {subset.subset_name for subset in recorded_subsets} == {'feast_1', 'feast_2'}
+
+
+def test_add_to_subset_does_not_duplicate_the_same_subset(geo):
+    """Re-adding the same person to the same subset twice should not create
+    a duplicate entry in their activity_map list."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Fair Ground', venue_type='Fair', geographical_unit=geo_unit, properties={})
+    person = Person(age=30, sex='male', geographical_unit=geo_unit)
+
+    venue.add_to_subset(person, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+    venue.add_to_subset(person, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+
+    recorded_subsets = person.activity_map['Fair']['Fair']
+    assert len(recorded_subsets) == 1
 
 

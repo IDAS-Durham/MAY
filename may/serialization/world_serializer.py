@@ -1026,6 +1026,12 @@ class WorldSerializer:
         the sentinel for "field absent for this row" (rare; should not occur
         unless different memberships in the same export carry disjoint
         metadata schemas).
+
+        Rows are keyed by (person_id, venue_id) only, with no subset_index -
+        ambiguous if a person ever has member_metadata on two different
+        subsets at the same venue. Not reachable today since no subset type
+        populates member_metadata for more than one subset per venue per
+        person; revisit if that changes.
         """
         # First pass: collect rows and the union of field names.
         person_ids = []
