@@ -1016,26 +1016,23 @@ class WorldSerializer:
         """Write Subset.member_metadata as a generic side-table.
 
         Produces /activity_mappings/membership_metadata with one row per
-        (person, venue) membership that carries metadata:
-            person_id    : int32
-            venue_id     : int32 (global venue id, matches activity_data col 2)
-            <field_name> : float32 — one column per metadata field name found
+        (person, venue, subset) membership that carries metadata:
+            person_id     : int32
+            venue_id      : int32 (global venue id, matches activity_data col 2)
+            subset_index  : int32 (disambiguates multiple subsets at one venue,
+                            e.g. multi-feast accommodation sharing a guest house)
+            <field_name>  : float32 — one column per metadata field name found
 
         Field names are discovered by scanning all subsets' member_metadata
         dicts. Datasets are float32 to accept both ints and floats; -1.0 is
         the sentinel for "field absent for this row" (rare; should not occur
         unless different memberships in the same export carry disjoint
         metadata schemas).
-
-        Rows are keyed by (person_id, venue_id) only, with no subset_index -
-        ambiguous if a person ever has member_metadata on two different
-        subsets at the same venue. Not reachable today since no subset type
-        populates member_metadata for more than one subset per venue per
-        person; revisit if that changes.
         """
         # First pass: collect rows and the union of field names.
         person_ids = []
         venue_ids = []
+        subset_indices = []
         per_field = defaultdict(list)
         field_names = []  # preserve discovery order
         field_set = set()
@@ -1053,6 +1050,7 @@ class WorldSerializer:
                 for pid, fields in meta.items():
                     person_ids.append(pid)
                     venue_ids.append(global_id)
+                    subset_indices.append(subset.subset_index)
                     # Register any newly seen field name.
                     for fname in fields.keys():
                         if fname not in field_set:
@@ -1084,6 +1082,9 @@ class WorldSerializer:
         )
         self._create_dataset(
             meta_group, 'venue_ids', np.array(venue_ids, dtype=np.int32),
+        )
+        self._create_dataset(
+            meta_group, 'subset_indices', np.array(subset_indices, dtype=np.int32),
         )
         # Field-name registry (string array, ordered) so consumers can iterate.
         self._create_dataset(

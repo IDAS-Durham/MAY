@@ -223,3 +223,40 @@ class TestWorldHDF5PayloadIntegrity:
             assert "Region" in geo_levels_binary
             assert "MGU" in geo_levels_binary
             assert "SGU" in geo_levels_binary
+
+    def test_membership_metadata_disambiguates_same_venue_different_subset(
+        self, minimal_world, test_export_path
+    ):
+        """A person can hold member_metadata on two distinct Subsets at the
+        same venue (e.g. two feasts sharing one guest house). The exported
+        membership_metadata rows must carry subset_index so the two rows
+        are distinguishable rather than colliding on (person_id, venue_id)."""
+        venue = minimal_world.venues.get_all_venues_list()[0]
+        person = minimal_world.population.get_all_people()[0]
+
+        venue.add_to_subset(person, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+        venue.add_to_subset(person, subset_key='feast_2', activity_name='Fair', activity_type='Fair')
+
+        subset_1 = venue.subsets['feast_1']
+        subset_2 = venue.subsets['feast_2']
+        subset_1.member_metadata[person.id] = {'feast_id': 1.0}
+        subset_2.member_metadata[person.id] = {'feast_id': 2.0}
+
+        minimal_world.export_to_hdf5(test_export_path)
+
+        with h5py.File(test_export_path, 'r') as f:
+            meta = f['activity_mappings']['membership_metadata']
+            assert 'subset_indices' in meta
+
+            person_ids = meta['person_ids'][:]
+            venue_ids = meta['venue_ids'][:]
+            subset_indices = meta['subset_indices'][:]
+            feast_ids = meta['feast_id'][:]
+
+            rows = list(zip(person_ids, venue_ids, subset_indices, feast_ids))
+            matching_rows = [row for row in rows if row[0] == person.id]
+
+            assert len(matching_rows) == 2
+            assert len({row[1] for row in matching_rows}) == 1  # same venue
+            assert {row[2] for row in matching_rows} == {subset_1.subset_index, subset_2.subset_index}
+            assert {row[3] for row in matching_rows} == {1.0, 2.0}
