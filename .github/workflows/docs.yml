@@ -20,7 +20,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          # Match the project's runtime: the codebase uses 3.12+ syntax
+          # (PEP 701 nested f-strings), so griffe must parse on >=3.12.
+          python-version: "3.13"
 
       # Install the project's runtime deps so mkdocstrings/griffe can import
       # may.* modules during collection (allow_inspection is on).
