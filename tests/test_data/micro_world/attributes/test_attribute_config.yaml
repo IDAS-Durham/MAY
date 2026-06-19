@@ -3,9 +3,9 @@
 attribute:
   name: "test_attribute"
 description: "Test attribute assignment config"
-assignment_level: "person_by_household"
+assignment_level: "person_by_residence"
 
-household_venue_types: ["household"]
+residence_venue_types: ["household"]
 
 required_attributes:
   age:
@@ -21,14 +21,6 @@ filters:
       max: 100
 
 settings:
-  assignment_order:
-    base:
-      - "Adults"
-      - "Young Adults"
-      - "Old Adults"
-      - "Kids"
-    sort_by_age: true
-    age_sort_direction: "descending"
   logging:
     detailed_assignment_logging: true
 

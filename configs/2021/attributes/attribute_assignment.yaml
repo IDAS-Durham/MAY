@@ -53,7 +53,7 @@ attribute:
 
   # Venue types to apply household structure-based assignment to
   # Other residence types (not in this list) use venue_assignment_rules instead
-  household_venue_types: ["household"]
+  residence_venue_types: ["household"]
 
 
 # ============================================================================
@@ -69,32 +69,26 @@ attribute:
 
 roles:
   primary_adult:
-    type: primary
     description: "First adult assigned in any household"
     subsets: ["Adults"]
 
   secondary_adult:
-    type: secondary
     description: "Second adult (partner in couples/families)"
     subsets: ["Adults"]
 
   extra_adult:
-    type: extra
     description: "Additional adults beyond primary pair"
     subsets: ["Adults"]
 
   primary_elder:
-    type: primary
     description: "First elderly person"
     subsets: ["Old Adults"]
 
   secondary_elder:
-    type: secondary
     description: "Second elderly person"
     subsets: ["Old Adults"]
 
   extra_elder:
-    type: extra
     description: "Additional elderly beyond primary pair"
     subsets: ["Old Adults"]
 
@@ -268,7 +262,6 @@ assignment_rules:
         assignment:
           strategy: "probabilistic"
           data_source: "geo_distribution"
-          context: "household.geo_unit"
 
       # Secondary adult: Partner, use partnership probabilities
       - role: "secondary_adult"
@@ -278,11 +271,9 @@ assignment_rules:
           strategy: "partnership"
           data_source: "pair_probabilities"
           partner_role: "primary_adult"
-          context: ["household.geo_unit", "primary_adult.ethnicity"]
           fallback:
             strategy: "probabilistic"
             data_source: "geo_distribution"
-            context: "household.geo_unit"
 
       # Extra adults: Independent assignment
       - role: "extra_adult"
@@ -290,7 +281,6 @@ assignment_rules:
         assignment:
           strategy: "probabilistic"
           data_source: "geo_distribution"
-          context: "household.geo_unit"
 
       # Children: Inherit from adults using combination rules
       - role: "children"
@@ -312,7 +302,6 @@ assignment_rules:
           fallback:
             strategy: "probabilistic"
             data_source: "geo_distribution"
-            context: "household.geo_unit"
 
       # Elderly: Reverse inheritance from primary_adult (parents of adults)
       - role: "primary_elder"
@@ -334,7 +323,6 @@ assignment_rules:
           fallback:
             strategy: "probabilistic"
             data_source: "geo_distribution"
-            context: "household.geo_unit"
 
       - role: "secondary_elder"
         priority: 6
@@ -360,7 +348,6 @@ assignment_rules:
         assignment:
           strategy: "probabilistic"
           data_source: "geo_distribution"
-          context: "household.geo_unit"
 
   # --------------------------------------------------------------------------
   # COUPLE HOUSEHOLDS (no inheritance)
@@ -376,7 +363,6 @@ assignment_rules:
         assignment:
           strategy: "probabilistic"
           data_source: "geo_distribution"
-          context: "household.geo_unit"
 
       # Secondary adult: Use partnership probabilities
       - role: "secondary_adult"
@@ -386,11 +372,9 @@ assignment_rules:
           strategy: "partnership"
           data_source: "pair_probabilities"
           partner_role: "primary_adult"
-          context: ["household.geo_unit", "primary_adult.ethnicity"]
           fallback:
             strategy: "probabilistic"
             data_source: "geo_distribution"
-            context: "household.geo_unit"
 
       # Primary elder: Use geo distribution
       - role: "primary_elder"
@@ -398,7 +382,6 @@ assignment_rules:
         assignment:
           strategy: "probabilistic"
           data_source: "geo_distribution"
-          context: "household.geo_unit"
 
       # Secondary elder: Use partnership probabilities
       - role: "secondary_elder"
@@ -408,11 +391,9 @@ assignment_rules:
           strategy: "partnership"
           data_source: "pair_probabilities"
           partner_role: "primary_elder"
-          context: ["household.geo_unit", "primary_elder.ethnicity"]
           fallback:
             strategy: "probabilistic"
             data_source: "geo_distribution"
-            context: "household.geo_unit"
 
   # --------------------------------------------------------------------------
   # INDEPENDENTS (no inheritance, no partnership)
@@ -428,7 +409,6 @@ assignment_rules:
         assignment:
           strategy: "probabilistic"
           data_source: "geo_distribution"
-          context: "household.geo_unit"
 
       # Children in independent households (rare but possible)
       - role: "children"
@@ -436,7 +416,6 @@ assignment_rules:
         assignment:
           strategy: "probabilistic"
           data_source: "geo_distribution"
-          context: "household.geo_unit"
 
 # ============================================================================
 # Venue Assignment Rules (Non-Household)
@@ -448,36 +427,3 @@ venue_assignment_rules:
     assignment:
       strategy: "probabilistic"
       data_source: "geo_distribution"
-      context: "venue.geo_unit"
-
-# ============================================================================
-# Settings
-# ============================================================================
-
-settings:
-  random_seed: null
-  normalize_probabilities: true
-  cache_lookups: true
-
-  # Assignment order: Adults first, then children, then elderly
-  assignment_order:
-    method: "category_priority"
-    category_priorities:
-      "Adults": 0
-      "Young Adults": 1
-      "Kids": 2
-      "Old Adults": 3
-
-  # Error handling
-  error_handling:
-    missing_geo_unit: "use_fallback"
-    missing_lookup_data: "use_fallback"
-    missing_household_structure: "default_to_independents"
-
-  # Logging
-  logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: true
-    sample_size: 10
-
