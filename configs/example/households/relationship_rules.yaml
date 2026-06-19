@@ -1,0 +1,257 @@
+enabled: true
+selection_strategy:
+  max_attempts: 10
+  use_best_candidate: true
+  penalty_mode: squared
+  log_violations: false
+  backtracking:
+    enabled: true
+    max_backtracks: 3
+    strategy: first_role
+    log_backtracks: false
+    avoid_duplicates: true
+track_statistics: false
+same_category_sources:
+  - attribute: sex
+    csv_path: data/population/sexual_orientation/orientation_by_msoa_normalized.csv
+    geo_code_column: geo_unit
+    geo_level: MGU
+    formula:
+      - column: homosexual
+        weight: 1.0
+      - column: bisexual
+        weight: 0.5
+rules:
+  - name: Parents + Kid(s)
+    roles:
+      Parents:
+        categories:
+          - Adults
+        count: 2
+      Children:
+        categories:
+          - Kids
+        count: any
+    selection_order:
+      - Children
+      - Parents
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Parents
+        role_2: Children
+        min_difference: 16.0
+        max_difference: 45.0
+        max_difference_by_categorical_attribute:
+          attribute: sex
+          values:
+            male: 50.0
+        preferred_distribution:
+          type: normal
+          mean: 32.0
+          std: 6.0
+          tolerance: 9.0
+      - type: pair_matching
+        role: Parents
+        require_exact_count: 2
+        categorical_attribute:
+          attribute: sex
+          same_category_probability_fallback: 0.05
+        numerical_attribute:
+          attribute: age
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19.0
+        creates_romantic_couple: true
+  - name: Multigenerational
+    roles:
+      Parents:
+        categories:
+          - Adults
+        count: 2
+      Children:
+        categories:
+          - Kids
+        count: any
+      Grandparents:
+        categories:
+          - Old Adults
+        count: any
+    selection_order:
+      - Children
+      - Parents
+      - Grandparents
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Parents
+        role_2: Children
+        min_difference: 16.0
+        max_difference: 45.0
+        max_difference_by_categorical_attribute:
+          attribute: sex
+          values:
+            male: 50.0
+        preferred_distribution:
+          type: normal
+          mean: 32.0
+          std: 6.0
+          tolerance: 9.0
+      - type: pair_matching
+        role: Parents
+        require_exact_count: 2
+        categorical_attribute:
+          attribute: sex
+          same_category_probability_fallback: 0.05
+        numerical_attribute:
+          attribute: age
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19.0
+        creates_romantic_couple: true
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Grandparents
+        role_2: Parents
+        min_difference: 16.0
+        max_difference: 45.0
+        max_difference_by_categorical_attribute:
+          attribute: sex
+          values:
+            male: 50.0
+        preferred_distribution:
+          type: normal
+          mean: 30.0
+          std: 7.0
+          tolerance: 10.0
+  - name: Parents + Young Adult(s)
+    roles:
+      Parents:
+        categories:
+          - Adults
+        count: 2
+      Teens:
+        categories:
+          - Young Adults
+        count: any
+    selection_order:
+      - Teens
+      - Parents
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Parents
+        role_2: Teens
+        min_difference: 16.0
+        max_difference: 45.0
+        max_difference_by_categorical_attribute:
+          attribute: sex
+          values:
+            male: 50.0
+        preferred_distribution:
+          type: normal
+          mean: 32.0
+          std: 6.0
+          tolerance: 9.0
+      - type: pair_matching
+        role: Parents
+        require_exact_count: 2
+        categorical_attribute:
+          attribute: sex
+          same_category_probability_fallback: 0.05
+        numerical_attribute:
+          attribute: age
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19.0
+        creates_romantic_couple: true
+  - name: Elderly couple
+    roles:
+      Old Adult:
+        categories:
+          - Old Adults
+        count: 2
+    selection_order:
+      - Old Adult
+    constraints:
+      - type: pair_matching
+        role: Old Adult
+        categorical_attribute:
+          attribute: sex
+          same_category_probability_fallback: 0.05
+        numerical_attribute:
+          attribute: age
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19.0
+  - name: Adult couple
+    roles:
+      Adult:
+        categories:
+          - Adults
+        count: any
+    selection_order:
+      - Adult
+    constraints:
+      - type: pair_matching
+        role: Adult
+        require_exact_count: 2
+        categorical_attribute:
+          attribute: sex
+          same_category_probability_fallback: 0.05
+        numerical_attribute:
+          attribute: age
+          mean_difference: 3.0
+          std_difference: 5.0
+          max_absolute_difference: 19.0
+        creates_romantic_couple: true
+  - name: Parents + Kids (EXCESS)
+    roles:
+      Parents:
+        categories:
+          - Adults
+        count: any
+      Children:
+        categories:
+          - Kids
+        count: any
+    selection_order:
+      - Children
+      - Parents
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Parents
+        role_2: Children
+        min_difference: 16.0
+        max_difference: 50.0
+        preferred_distribution:
+          type: normal
+          mean: 32.0
+          std: 6.0
+          tolerance: 9.0
+  - name: Parents + Young Adult(s) (EXCESS)
+    roles:
+      Parents:
+        categories:
+          - Adults
+        count: any
+      Teens:
+        categories:
+          - Young Adults
+        count: any
+    selection_order:
+      - Teens
+      - Parents
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        role_1: Parents
+        role_2: Teens
+        min_difference: 16.0
+        max_difference: 50.0
+        preferred_distribution:
+          type: normal
+          mean: 32.0
+          std: 6.0
+          tolerance: 9.0

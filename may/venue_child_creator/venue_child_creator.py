@@ -40,6 +40,7 @@ class VenueChildCreator:
         min_capacity=1,
         child_properties=None,
         distribution_strategy='even',
+        balance_by=None,
         attribute_mapping=None,
         activity_map_key=None,
         subset_key=None,
@@ -58,6 +59,13 @@ class VenueChildCreator:
             min_capacity: Minimum people to create a child venue (default: 1)
             child_properties: Dict of properties to add to each child venue
             distribution_strategy: How to distribute people ('even' or 'fill')
+            balance_by: Optional attribute (or list of attributes) to balance evenly across
+                       the child venues, e.g. "sex". Without it, members are sliced from the
+                       group in arrival order — and because population is created sorted by
+                       (age, sex), that order is sex-clustered, so contiguous slicing produces
+                       single-sex classrooms even within a co-ed school. When set, each child
+                       venue receives a proportional mix of every value of this attribute,
+                       mirroring the cohort. Single-sex cohorts stay single-sex automatically.
             attribute_mapping: Optional dict mapping attribute values to group keys.
                              Supports 'default' key for unmapped values.
                              Example: {18: "18", 19: "19", "default": "23+"}
@@ -80,6 +88,7 @@ class VenueChildCreator:
         self.min_capacity = min_capacity
         self.child_properties = child_properties or {}
         self.distribution_strategy = distribution_strategy
+        self.balance_by = balance_by
         self.attribute_mapping = attribute_mapping or {}
         self.activity_map_key = activity_map_key
         self.subset_key = subset_key
@@ -132,6 +141,7 @@ class VenueChildCreator:
             min_capacity=config.get('min_capacity', 1),
             child_properties=config.get('child_properties', {}),
             distribution_strategy=config.get('distribution_strategy', 'even'),
+            balance_by=config.get('balance_by'),
             attribute_mapping=config.get('attribute_mapping', {}),
             activity_map_key=config.get('activity_map_key'),
             subset_key=config.get('subset_key'),
@@ -142,6 +152,8 @@ class VenueChildCreator:
 
         # Log configuration summary
         logger.info(f"  Parent type: {instance.parent_venue_type} → Child type: {instance.child_venue_type}")
+        if instance.balance_by:
+            logger.info(f"  Balancing children by: {instance.balance_by}")
         if instance.member_filters:
             logger.info(f"  Member filters: {len(instance.member_filters)} filter(s) configured")
             for f in instance.member_filters:
@@ -330,6 +342,33 @@ class VenueChildCreator:
 
         return dict(groups)
 
+    def _stratify_members(self, members, balance_by):
+        """
+        Partition members into strata by one or more attributes.
+
+        Used by balanced distribution to spread each attribute value evenly
+        across child venues. Members whose attribute is missing fall into an
+        'unknown' stratum so they are still placed.
+
+        Args:
+            members: List of Person objects
+            balance_by: Attribute name (str) or list of attribute names
+
+        Returns:
+            Dict of {value(s): [Person, ...]}, preserving member order within each stratum
+        """
+        attrs = balance_by if isinstance(balance_by, (list, tuple)) else [balance_by]
+
+        strata = defaultdict(list)
+        for person in members:
+            values = tuple(get_person_attribute(person, a) for a in attrs)
+            key = values if len(values) > 1 else values[0]
+            if any(v is None for v in values):
+                key = 'unknown'
+            strata[key].append(person)
+
+        return dict(strata)
+
     def _create_children_for_group(self, parent_venue, group_key, group_members, world):
         """
         Create child venues for a specific group and distribute members.
@@ -391,6 +430,21 @@ class VenueChildCreator:
             members: List of Person objects
             child_venues: List of child Venue objects
         """
+        # When balancing by an attribute (e.g. sex), deal each value's members
+        # round-robin across the child venues so every venue gets a proportional
+        # mix that mirrors the cohort, rather than contiguous slices of an
+        # arrival-ordered (and therefore sex-clustered) list. A single shared
+        # pointer carried across the strata keeps per-venue totals even too.
+        if self.balance_by and len(child_venues) > 1:
+            strata = self._stratify_members(members, self.balance_by)
+            ptr = 0
+            n = len(child_venues)
+            for stratum_members in strata.values():
+                for person in stratum_members:
+                    self._add_person_to_child(person, child_venues[ptr % n])
+                    ptr += 1
+            return
+
         if self.distribution_strategy == 'even':
             # Distribute evenly across all children
             members_per_child = len(members) // len(child_venues)

@@ -86,15 +86,13 @@ data_sources:
           - "888888888"  # Offshore Installation
           - "999999999"  # Outside UK
 
-    fallback: "local_work"
-
-  # Fallback: Work locally in same area
-  local_work:
-    type: "constant"
-    description: "Fallback: work in same LGU as residence"
-    values:
-      workplace_location: "person.geographical_unit.lgu"  # Get person's LGU
-      work_mode: "Normal"
+# NOTE: there is deliberately NO fallback here. The old config declared a
+# "local_work" fallback chain (a constant-type data source with expression
+# values, plus `fallback: "local_work"` on the source and a rule-level
+# constant fallback pointing at it) — none of which the engine ever
+# implemented: constant sources are skipped at load, and the rule fallback
+# silently assigned None. A person whose origin LGU is missing from the
+# matrix now fails the build loudly instead.
 
 # ============================================================================
 # Assignment Rules (Person-Level)
@@ -117,34 +115,11 @@ assignment_rules:
             workplace_location: "destination"
             work_mode: "work_mode"
 
-          # Context: person's residence SGU
-          context:
-            origin: "person.geographical_unit"
-
-          fallback:
-            strategy: "constant"
-            data_source: "local_work"
-
 # ============================================================================
 # Settings
 # ============================================================================
 settings:
-  random_seed: null
-  normalize_probabilities: true
-  cache_lookups: true
-
-  error_handling:
-    missing_geo_unit: "use_fallback"
-    missing_lookup_data: "use_fallback"
-    person_without_work_sector: "skip_person"
-    person_without_work_activity: "skip_person"
-    missing_filter_activity: "skip_person"
-
   logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: true
-    sample_size: 10
     show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
 
 

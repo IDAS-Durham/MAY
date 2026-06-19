@@ -129,17 +129,30 @@ rules:
         assert v.get_rule_by_name('Nonexistent') is None
 
     def test_disabled_validator_returns_none_from_lookups(self, tmp_path):
-        """When `enabled: false`, neither pattern nor name lookup may surface
-        a rule — even if the rules block parses cleanly."""
+        """When `enabled: false`, a name lookup may not surface a rule —
+        even if the rules block parses cleanly."""
         path = _write_yaml(tmp_path, """
 enabled: false
 rules:
-  - {name: "R", patterns: ["1 0 0 0"], roles: {a: {categories: [Kids], count: 1}}, selection_order: [a], constraints: []}
+  - {name: "R", roles: {a: {categories: [Kids], count: 1}}, selection_order: [a], constraints: []}
 """)
         v = RelationshipRulesValidator(categories=[], config_file=path)
         assert v.enabled is False
         assert v.get_rule_by_name('R') is None
-        assert v.get_rule_for_pattern('1 0 0 0') is None
+
+    def test_legacy_patterns_field_is_ignored(self, tmp_path):
+        """Older configs may still carry a per-rule `patterns:` list. It is
+        vestigial — rules resolve by name only — so the loader must ignore it
+        and never expose it on the RelationshipRule."""
+        path = _write_yaml(tmp_path, """
+enabled: true
+rules:
+  - {name: "R", patterns: ["1 0 0 0", ">=2 >=0 2 0"], roles: {a: {categories: [Kids], count: 1}}, selection_order: [a], constraints: []}
+""")
+        v = RelationshipRulesValidator(categories=[], config_file=path)
+        rule = v.get_rule_by_name('R')
+        assert rule is not None
+        assert not hasattr(rule, 'patterns')
 
 
 # ===========================================================================

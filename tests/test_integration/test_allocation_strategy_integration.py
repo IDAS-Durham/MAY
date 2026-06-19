@@ -46,7 +46,8 @@ def hd(geography, population_manager, venue_manager):
         population=population_manager,
         venue_manager=venue_manager,
         data_dir=f"{STRESS_DATA}/households",
-        config_file="test_households_config.yaml"
+        config_file="test_households_config.yaml",
+        rules_file="relationship_rules.yaml"
     )
     distributor.load_household_data("households.csv")
     return distributor

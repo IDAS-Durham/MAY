@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from functools import lru_cache
 from may.residence.composition_pattern import CompositionPattern
+from may.attribute_assignment.strategies import validate_assignment_config
 from may.utils import path_resolver as pr
 
 logger = logging.getLogger("may.attribute_assignment.config")
@@ -333,7 +334,7 @@ class AttributeAssignmentConfig:
         # Parse sections
         self.attribute_name = self._parse_attribute()
         self.assignment_level = self._parse_assignment_level()
-        self.household_venue_types = self._parse_household_venue_types()
+        self.residence_venue_types = self._parse_residence_venue_types()
         self.filters = self._parse_filters()
         self.required_attributes = self._parse_required_attributes()
         self.region_mapping = self.raw_config.get('region_mapping', {})
@@ -367,12 +368,15 @@ class AttributeAssignmentConfig:
         return self.raw_config.get('attribute', {}).get('name', 'unknown')
 
     def _parse_assignment_level(self) -> str:
-        """Parse assignment level (person_by_household or person)."""
-        return self.raw_config.get('attribute', {}).get('assignment_level', 'person_by_household')
+        """Parse assignment level: 'person' or 'person_by_residence'."""
+        return self.raw_config.get('attribute', {}).get('assignment_level', 'person_by_residence')
 
-    def _parse_household_venue_types(self) -> List[str]:
-        """Parse household venue types (which residence types to apply household structure-based rules to)."""
-        return self.raw_config.get('attribute', {}).get('household_venue_types', ['household'])
+    def _parse_residence_venue_types(self) -> List[str]:
+        """Residence venue types assigned by household structure (default ['household']).
+
+        Other residence types fall through to venue_assignment_rules.
+        """
+        return self.raw_config.get('attribute', {}).get('residence_venue_types', ['household'])
 
     def _parse_filters(self) -> Dict[str, Any]:
         """Parse filters (e.g., activity-based filtering)."""
@@ -420,7 +424,10 @@ class AttributeAssignmentConfig:
             if not isinstance(role_data, dict):
                 continue
 
-            # Use explicit 'type' if provided, otherwise infer from name for backward compatibility
+            # Use explicit 'type' if provided, otherwise infer from name prefix.
+            # The config builder writes the type AS the name prefix
+            # (primary_/secondary_/extra_) and omits the explicit key, but
+            # hand-authored configs may still use arbitrary names + explicit type.
             role_type = role_data.get('type')
             if not role_type:
                 if role_name.startswith('primary_'):
@@ -495,9 +502,15 @@ class AttributeAssignmentConfig:
                 continue
 
             rules = []
-            for rule_data in struct_rules_data.get('rules', []):
+            for i, rule_data in enumerate(struct_rules_data.get('rules', [])):
                 assignment_data = rule_data.get('assignment', {})
-                
+                # Fail loudly on keys no strategy reads (dead config / typos).
+                validate_assignment_config(
+                    assignment_data,
+                    where=f"{self.config_path.name}: assignment_rules."
+                          f"{structure_name}.rules[{i}]",
+                )
+
                 # Extract dependencies from inheritance strategies
                 dependencies = []
                 inherit_from = assignment_data.get('inherit_from', {})
@@ -530,7 +543,13 @@ class AttributeAssignmentConfig:
 
     def _parse_venue_assignment_rules(self) -> List[Dict[str, Any]]:
         """Parse venue assignment rules."""
-        return self.raw_config.get('venue_assignment_rules', [])
+        rules = self.raw_config.get('venue_assignment_rules', [])
+        for i, rule in enumerate(rules):
+            validate_assignment_config(
+                (rule or {}).get('assignment', {}),
+                where=f"{self.config_path.name}: venue_assignment_rules[{i}]",
+            )
+        return rules
 
     def _parse_settings(self) -> Dict[str, Any]:
         """Parse settings."""

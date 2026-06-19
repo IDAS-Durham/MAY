@@ -138,15 +138,15 @@ class MinimalConfig:
     """Config object matching what AttributeAssigner needs."""
     def __init__(self, attribute_name="ethnicity", filters=None,
                  required_attributes=None, settings=None,
-                 assignment_level="person_by_household",
-                 household_venue_types=None,
+                 assignment_level="person_by_residence",
+                 residence_venue_types=None,
                  venue_assignment_rules=None):
         self.attribute_name = attribute_name
         self.filters = filters or {}
         self.required_attributes = required_attributes or {}
         self.settings = settings or {}
         self.assignment_level = assignment_level
-        self.household_venue_types = household_venue_types or ["household"]
+        self.residence_venue_types = residence_venue_types or ["household"]
         self.venue_assignment_rules = venue_assignment_rules or []
         self.roles = {}
         self.assignment_rules = {}
@@ -185,19 +185,7 @@ def _build_family_config(geo_source, pair_source=None):
     - Structure: Family (>=1 kids, any adults)
     - Structure: Independents (catch-all)
     """
-    config = MinimalConfig(
-        attribute_name="ethnicity",
-        settings={
-            "assignment_order": {
-                "category_priorities": {
-                    "Adults": 1,
-                    "Old Adults": 2,
-                    "Kids": 3,
-                    "Young Adults": 4,
-                }
-            }
-        },
-    )
+    config = MinimalConfig(attribute_name="ethnicity", settings={})
 
     # Roles
     config.roles = {
@@ -552,11 +540,7 @@ class TestAssignHousehold:
         """
         config = MinimalConfig(
             attribute_name="comorbidities",
-            settings={
-                "assignment_order": {
-                    "category_priorities": {"Adults": 1}
-                }
-            },
+            settings={},
         )
         config.roles = {
             "primary_adult": Role(
@@ -631,10 +615,10 @@ class TestAssignAll:
         assert stats['total_people'] == 0
 
     def test_routes_to_residence_assignment(self):
-        """assignment_level='person_by_household' routes to _assign_all_residences."""
+        """assignment_level='person_by_residence' routes to _assign_all_residences."""
         config = MinimalConfig(
             attribute_name="test_attr",
-            assignment_level="person_by_household",
+            assignment_level="person_by_residence",
         )
         dm = SimpleDataManager()
         assigner = AttributeAssigner(config, dm)

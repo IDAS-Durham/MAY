@@ -144,14 +144,20 @@ class VenueDistributor(BaseDistributor):
             if cache_key in self.probability_cache:
                 continue
 
-            # Load CSV file
-            full_path = Path(pr.resolve(file_path))
-            if not full_path.is_absolute() and self.config_path:
-                # Make relative to project root
-                project_root = self.config_path.parent.parent.parent
-                full_path = project_root / pr.resolve(file_path)
-            elif not self.config_path:
-                logger.warning(f"Cannot resolve relative path '{file_path}' for probability file without a config_file path. Assuming absolute path.")
+            # Load CSV file: resolve portable path tokens (${data_root} etc.),
+            # then try the path as-given (CWD-relative) first, falling back to
+            # resolving against the project root.
+            resolved = pr.resolve(file_path)
+            full_path = Path(resolved)
+            if not full_path.is_absolute() and not full_path.exists():
+                if self.config_path:
+                    # config_path is configs/<year>/distributors/xxx.yaml
+                    project_root = self.config_path.parent.parent.parent
+                    candidate = project_root / resolved
+                    if candidate.exists():
+                        full_path = candidate
+                else:
+                    logger.warning(f"Cannot resolve relative path '{file_path}' for probability file without a config_file path. Assuming absolute path.")
 
 
             try:
@@ -445,9 +451,27 @@ class VenueDistributor(BaseDistributor):
             if not group_people:
                 continue
 
-            # Sort and allocate
+            # Sort and allocate.
+            #
+            # Population is created sorted by (age, sex) (see Population.generate_population),
+            # so within any age the females (lower ids) precede the males. When a group
+            # respects capacity (allow_overflow=False), processing in that order lets the
+            # earlier sex claim scarce venue spots first and systematically excludes the
+            # other — a directional gender bias in capacity-limited cohorts (e.g. sixth
+            # form, nurseries). Overflow groups place everyone regardless of order, so they
+            # keep the cheap deterministic ordering.
+            #
+            # Fix: randomise order within each priority tier. A random sort key (folded into
+            # the existing sort, so it costs nothing extra) breaks the sex ordering while
+            # preserving the age_desc priority via the primary key.
+            randomize = not allow_overflow
             if priority_config.get('priority_order') == 'age_desc':
-                group_people.sort(key=lambda p: p.age, reverse=True)
+                if randomize:
+                    group_people.sort(key=lambda p: (-p.age, np.random.random()))
+                else:
+                    group_people.sort(key=lambda p: p.age, reverse=True)
+            elif randomize:
+                np.random.shuffle(group_people)
 
             logger.info(f"Group '{group_name}': {len(group_people)} selected")
 

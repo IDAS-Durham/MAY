@@ -34,15 +34,16 @@ households:
   # Uses 2021's K/YA/A/OA schema — our sampler emits patterns in that format.
   config_file: "configs/1918/households/households_config.yaml"
   rules_file: "configs/1918/households/relationship_rules.yaml"
-  strategy_file: "configs/1918/households/allocation_strategy.yaml"
+  # The allocation strategy lives on the timeline's residence_allocation step.
   export_file: "household_allocations.csv"
 
 timeline:
-  enabled: false
-
-# Disable the legacy attribute fallback that fires when timeline is off
-attributes:
-  enabled: false
+  enabled: true
+  steps:
+    # This scenario only builds households + residence venues; no attribute
+    # or distributor steps. Households are allocated by this explicit step.
+    - type: residence_allocation
+      config: "configs/1918/households/allocation_strategy.yaml"
 
 relationship_pipeline:
   enabled: false

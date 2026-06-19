@@ -143,10 +143,10 @@ def main():
         # Generate population
         population.generate_population()
 
-    # Setup and distribute households
+    # Households are allocated by the explicit `residence_allocation` timeline
+    # step (see the timeline loop below), not implicitly before the timeline.
+    # The World starts with no distributor; the step attaches it when it runs.
     household_distributor = None
-    if config.get("households", {}).get("enabled", True):
-        household_distributor = setup_households(geo, population, venues, config)
 
     # Create World object
     logger.info("")
@@ -166,12 +166,44 @@ def main():
         logger.info("=" * 60)
         logger.info("SIMULATION TIMELINE")
         logger.info("=" * 60)
-        
+
+        # Households/residence venues are allocated by an explicit
+        # `residence_allocation` step. Warn loudly if households are enabled
+        # but no such step exists — otherwise they'd silently never allocate.
+        step_types = [s.get("type") for s in timeline_config.get("steps", [])]
+        if (
+            config.get("households", {}).get("enabled", True)
+            and "residence_allocation" not in step_types
+        ):
+            logger.warning(
+                "households.enabled is true but the timeline has no "
+                "'residence_allocation' step — households will NOT be allocated."
+            )
+
         for step in timeline_config.get("steps", []):
             step_type = step.get("type")
             step_config = pr.resolve(step.get("config"))
 
-            if step_type == "attribute":
+            if step_type == "residence_allocation":
+                # Runs the full household + residence-venue allocation strategy
+                # at this point in the timeline. The step's `config:` points at
+                # the allocation-strategy YAML (any filename, must follow that
+                # format) — the single source of truth for which strategy runs.
+                # Placing attribute steps before it lets residence allocation
+                # read those attributes.
+                logger.info("")
+                logger.info(f"[RESIDENCE ALLOCATION] {step_config}")
+                if not step_config:
+                    raise ValueError(
+                        "A `residence_allocation` timeline step must set "
+                        "`config:` to an allocation-strategy YAML file "
+                        "(e.g. configs/<scenario>/households/allocation_strategy.yaml)."
+                    )
+                world.household_distributor = setup_households(
+                    geo, population, venues, config, strategy_file=step_config
+                )
+
+            elif step_type == "attribute":
                 logger.info("")
                 logger.info(f"[ATTRIBUTE] {step_config}")
                 world.assign_attributes(step_config)
@@ -220,78 +252,17 @@ def main():
             )
 
     else:
-        # FALLBACK: LEGACY BEHAVIOR
-        logger.info("No timeline configured, using legacy pipeline attributes -> venues")
-
-        # Assign attributes
-        attribute_config = config.get("attributes", {})
-        if attribute_config.get("enabled", True):
-            # Support both single config and list of configs
-            configs = attribute_config.get("configs")
-            if configs is None:
-                # Legacy: single config
-                configs = [attribute_config.get("config", "configs/2021/attribute_assignment.yaml")]
-
-            # Assign each attribute in sequence
-            for config_path in configs:
-                logger.info(f"Assigning attributes from: {config_path}")
-                world.assign_attributes(config_path)
-
-        # Venue Pipeline
-        pipeline_config = config.get("venue_pipeline", {})
-
-        if pipeline_config.get("enabled", False):
-            logger.info("")
-            logger.info("=" * 60)
-            logger.info("VENUE PIPELINE")
-            logger.info("=" * 60)
-
-            pipeline_steps = pipeline_config.get("steps", [])
-
-            if not pipeline_steps:
-                logger.info("No pipeline steps configured")
-            else:
-                # Execute each step in sequence
-                for step in pipeline_steps:
-                    step_type = step.get("type")
-                    step_config = pr.resolve(step.get("config"))
-
-                    if step_type == "distributor":
-                        logger.info("")
-                        logger.info(f"[DISTRIBUTOR] {step_config}")
-                        try:
-                            distributor = VenueDistributor.from_yaml(step_config)
-                            distributor.allocate(world)
-
-                            # Export allocations to CSV
-                            venue_type = distributor.venue_type
-                            output_file = f"{venue_type}_allocations.csv"
-                            #distributor.export_allocations(world, output_file)
-                            #logger.info(f"Saved allocations to: {output_file}")
-
-                        except Exception as e:
-                            logger.error(f"Failed to run distributor {step_config}: {e}")
-                            logger.exception(e)
-
-                    elif step_type == "child_creator":
-                        logger.info("")
-                        logger.info(f"[CHILD CREATOR] {step_config}")
-                        try:
-                            creator = VenueChildCreator.from_yaml(step_config)
-                            creator.create_children(world)
-
-                            # Export allocations to CSV
-                            child_type = creator.child_venue_type
-                            output_file = f"{child_type}_allocations.csv"
-                            #creator.export_allocations(world, output_file)
-                            #logger.info(f"Saved allocations to: {output_file}")
-
-                        except Exception as e:
-                            logger.error(f"Failed to run child creator {step_config}: {e}")
-                            logger.exception(e)
-
-                    else:
-                        logger.warning(f"Unknown pipeline step type: {step_type}")
+        # The legacy no-timeline path (implicit pre-timeline households +
+        # the `attributes` / `venue_pipeline` fallback blocks) has been
+        # removed. Every scenario now drives all events through the timeline,
+        # including an explicit `residence_allocation` step for households.
+        raise ValueError(
+            "No enabled timeline with steps found. The legacy "
+            "attributes/venue_pipeline path has been removed — every config "
+            "must define `timeline.enabled: true` with `timeline.steps`, "
+            "including an explicit `residence_allocation` step when "
+            "households are enabled."
+        )
 
     # ========================================
     # RELATIONSHIP PIPELINE - Build agent networks

@@ -175,12 +175,13 @@ class TestConstantStrategy:
         )
         assert results == [42, 42, 42, 42, 42]
 
-    def test_missing_value_triggers_fallback_and_records_reason(self):
+    def test_missing_value_without_fallback_raises(self):
+        """No value and no fallback → loud failure (reason still recorded)."""
         config = {"strategy": "constant"}  # no 'value' key
         strategy = ConstantStrategy(config, SimpleDataManager())
         context = {"attribute_name": "attr"}
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), context)
-        assert result is None
+        with pytest.raises(RuntimeError, match="no `fallback:` configured"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), context)
         assert context["fallback_reason"] == "NO_CONSTANT_VALUE"
 
     def test_value_zero_is_valid_not_treated_as_missing(self):
@@ -723,12 +724,14 @@ class TestReverseInheritanceStrategy:
         },
     ]
 
-    def _make_strategy(self, logic):
+    def _make_strategy(self, logic, fallback=None):
         config = {
             "strategy": "reverse_inheritance",
             "inherit_from": {"role": "primary_adult"},
             "logic": logic,
         }
+        if fallback:
+            config["fallback"] = fallback
         geo_source = SimpleGeoSource(fallback={"W": 0.5, "A": 0.3, "B": 0.2})
         dm = SimpleDataManager(sources={"geo_distribution": geo_source})
         return ReverseInheritanceStrategy(config, dm)
@@ -764,28 +767,36 @@ class TestReverseInheritanceStrategy:
     # --- Fallback cases ---
 
     def test_fallback_when_child_role_not_in_context(self):
-        strategy = self._make_strategy(self.REVERSE_LOGIC_PRIMARY)
+        strategy = self._make_strategy(
+            self.REVERSE_LOGIC_PRIMARY,
+            fallback={"strategy": "constant", "value": "FB"},
+        )
         context = {"attribute_name": "ethnicity"}  # no primary_adult_person
 
         geo = MinimalGeoUnit("E00001234")
-        strategy.assign(
+        result = strategy.assign(
             MinimalPerson(geographical_unit=geo),
             MinimalVenue(geographical_unit=geo),
             context,
         )
+        assert result == "FB"
         assert context["fallback_reason"] == "CHILD_NOT_FOUND"
 
     def test_fallback_when_child_has_no_attribute(self):
-        strategy = self._make_strategy(self.REVERSE_LOGIC_PRIMARY)
+        strategy = self._make_strategy(
+            self.REVERSE_LOGIC_PRIMARY,
+            fallback={"strategy": "constant", "value": "FB"},
+        )
         adult = MinimalPerson(properties={})  # no ethnicity
         context = {"attribute_name": "ethnicity", "primary_adult_person": adult}
 
         geo = MinimalGeoUnit("E00001234")
-        strategy.assign(
+        result = strategy.assign(
             MinimalPerson(geographical_unit=geo),
             MinimalVenue(geographical_unit=geo),
             context,
         )
+        assert result == "FB"
         assert context["fallback_reason"] == "CHILD_VALUE_MISSING"
 
     def test_no_inherit_role_configured(self):
@@ -793,17 +804,19 @@ class TestReverseInheritanceStrategy:
             "strategy": "reverse_inheritance",
             "inherit_from": {},  # no 'role' key
             "logic": self.REVERSE_LOGIC_PRIMARY,
+            "fallback": {"strategy": "constant", "value": "FB"},
         }
         dm = SimpleDataManager(sources={"geo_distribution": SimpleGeoSource(fallback={"W": 1.0})})
         strategy = ReverseInheritanceStrategy(config, dm)
         context = {"attribute_name": "ethnicity"}
 
         geo = MinimalGeoUnit("E00001234")
-        strategy.assign(
+        result = strategy.assign(
             MinimalPerson(geographical_unit=geo),
             MinimalVenue(geographical_unit=geo),
             context,
         )
+        assert result == "FB"
         assert context["fallback_reason"] == "NO_CHILD_ROLE"
 
     # ---- BUG DETECTION ----
@@ -967,12 +980,24 @@ class TestStrategyFactory:
             )
 
     def test_raises_on_unknown_strategy_type(self):
-        with pytest.raises(ValueError, match="Unknown strategy type"):
+        with pytest.raises(ValueError, match="unknown strategy"):
             StrategyFactory.create_strategy({"strategy": "nonexistent"}, SimpleDataManager())
 
     def test_raises_when_strategy_key_missing(self):
-        with pytest.raises(ValueError, match="must include 'strategy' field"):
+        with pytest.raises(ValueError, match="no 'strategy' field"):
             StrategyFactory.create_strategy({}, SimpleDataManager())
+
+    def test_raises_on_unread_keys(self):
+        """Keys no strategy reads (e.g. the old `context`) fail loudly."""
+        with pytest.raises(ValueError, match="does not read key.*context"):
+            StrategyFactory.create_strategy(
+                {
+                    "strategy": "probabilistic",
+                    "data_source": "geo_distribution",
+                    "context": "household.geo_unit",
+                },
+                SimpleDataManager(),
+            )
 
 
 # =============================================================================
@@ -1012,26 +1037,28 @@ class TestFallbackMechanism:
         )
         assert result == "Z"
 
-    def test_default_fallback_uses_geo_distribution(self):
-        """No fallback in config → defaults to probabilistic with geo_distribution."""
-        geo_source = SimpleGeoSource(fallback={"DEFAULT": 1.0})
+    def test_no_fallback_configured_raises(self):
+        """No fallback in config → loud failure, NOT a silent geo default.
+
+        The old behavior silently invented a `geo_distribution` probabilistic
+        fallback, which masked data and config problems."""
         config = {
             "strategy": "partnership",
             "data_source": "pair_probabilities",
             "partner_role": "primary_adult",
             # no 'fallback' key
         }
-        dm = SimpleDataManager(sources={"geo_distribution": geo_source})
+        dm = SimpleDataManager(sources={"geo_distribution": SimpleGeoSource(fallback={"DEFAULT": 1.0})})
         strategy = PartnershipStrategy(config, dm)
 
         geo = MinimalGeoUnit("E00001234")
         context = {"attribute_name": "ethnicity"}
-        result = strategy.assign(
-            MinimalPerson(geographical_unit=geo),
-            MinimalVenue(geographical_unit=geo),
-            context,
-        )
-        assert result == "DEFAULT"
+        with pytest.raises(RuntimeError, match="no `fallback:` configured"):
+            strategy.assign(
+                MinimalPerson(geographical_unit=geo),
+                MinimalVenue(geographical_unit=geo),
+                context,
+            )
 
     def test_fallback_records_reason_in_context(self):
         config = {

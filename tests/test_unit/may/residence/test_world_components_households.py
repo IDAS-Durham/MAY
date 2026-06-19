@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 from may.geography import Geography
 from may.population.population import PopulationManager
@@ -5,6 +6,18 @@ from may.geography.venue_manager import VenueManager
 from may.residence.household_distributor import HouseholdDistributor
 from may.residence.composition_pattern import CompositionPattern
 from may.residence.allocation_strategy import execute_allocation_strategy
+
+
+@pytest.fixture(autouse=True)
+def _seed_rng():
+    """Couple formation and overflow allocation draw from the global np.random
+    stream (the pair_matching sex roll, age matching, and pool shuffles). Seed
+    before every test so outcomes are deterministic and independent of which
+    tests ran earlier — without this the suite passes or fails by execution
+    order. Mirrors the np.random.seed(42) convention already used throughout
+    test_allocation_strategy_integration.py.
+    """
+    np.random.seed(42)
 
 
 @pytest.fixture
@@ -32,7 +45,8 @@ def hd(geography, population_manager, venue_manager):
         population=population_manager,
         venue_manager=venue_manager,
         data_dir="tests/test_data/micro_world/households",
-        config_file="test_households_config.yaml"
+        config_file="test_households_config.yaml",
+        rules_file="relationship_rules.yaml"
     )
     distributor.load_household_data("households.csv")
     return distributor

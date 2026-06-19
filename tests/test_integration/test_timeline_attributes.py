@@ -102,7 +102,7 @@ def test_person_assignment_filters(fully_formed_world, test_dir):
         adult = adults[0]
         assert assigner._passes_filters(adult)
 
-def test_person_by_household_dependencies(fully_formed_world, test_dir):
+def test_person_by_residence_dependencies(fully_formed_world, test_dir):
     """
     Test Topological Graph Sorting: Roles with inherited dependencies correctly resolve backwards when sorted.
     """

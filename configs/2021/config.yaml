@@ -85,23 +85,11 @@ households:
   # are disabled — there is no implicit lookup.
   rules_file: "${config_root}/households/relationship_rules.yaml"
 
-  # =============================================
-  # ALLOCATION MODE (choose one)
-  # =============================================
-
-  # Option 1: Unified strategy (RECOMMENDED - controls everything in one place)
-  #   - Defines both household AND venue allocations in order
-  #   - File: data/households/allocation_strategy.yaml
-  strategy_file: "${config_root}/households/allocation_strategy.yaml"
-
-  # Option 2: Multi-round households only (household rounds, no venue integration)
-  #   - Only household allocation rounds
-  #   - File: data/households/allocation_rounds.yaml
-  #   - Set strategy_file to null to use this
-  # rounds_file: "allocation_rounds.yaml"
-
-  # Option 3: Single-pass allocation (original simple mode)
-  #   - Set both strategy_file and rounds_file to null
+  # NOTE: which allocation strategy runs, and WHERE in the simulation it runs,
+  # is owned by the timeline's `residence_allocation` step (its `config:` points
+  # at the allocation_strategy.yaml). It is not configured here — that keeps a
+  # single source of truth for allocation ordering. This block only holds the
+  # household data/rules wiring.
 
   # Export file for household allocations (automatically created after distribution)
   export_file: "household_allocations.csv"
@@ -137,6 +125,15 @@ timeline:
   enabled: true
   
   steps:
+    # ----------------------------------------
+    # 0. Households + residence venues (care homes, boarding schools, dorms).
+    #    Runs the full allocation_strategy.yaml. Placed first so it reproduces
+    #    the previous "households before timeline" ordering; move it later only
+    #    if a residence allocation needs an attribute assigned by a prior step.
+    # ----------------------------------------
+    - type: residence_allocation
+      config: "configs/2021/households/allocation_strategy.yaml"
+
     # ----------------------------------------
     # 1. Initial Attributes (Ethnicity, Comorbidities)
     # ----------------------------------------

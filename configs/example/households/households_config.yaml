@@ -1,0 +1,66 @@
+categories:
+  - name: Kids
+    symbol: K
+    attribute: age
+    type: numerical
+    numerical:
+      min: 0
+      max: 17
+  - name: Young Adults
+    symbol: Y
+    attribute: age
+    type: numerical
+    numerical:
+      min: 18
+      max: 24
+  - name: Adults
+    symbol: A
+    attribute: age
+    type: numerical
+    numerical:
+      min: 25
+      max: 64
+  - name: Old Adults
+    symbol: O
+    attribute: age
+    type: numerical
+    numerical:
+      min: 65
+      max:
+demotion:
+  enabled: true
+  max_attempts: 10
+  min_household_size: 1
+  priority:
+    Kids: 1
+    Young Adults: 2
+    Old Adults: 3
+    Adults: 4
+  validation_rules:
+    - name: Kids need supervision
+      condition:
+        category: Kids
+        operator: '>='
+        value: 1
+      requirement:
+        category: Adults
+        operator: '>='
+        value: 1
+promotion:
+  enabled: true
+  max_attempts: 4
+  priority:
+    Young Adults: 1
+    Adults: 2
+    Old Adults: 3
+    Kids: 4
+  validation_rules:
+    - name: Kids need supervision
+      condition:
+        category: Kids
+        operator: '>='
+        value: 1
+      requirement:
+        category: Adults
+        operator: '>='
+        value: 1

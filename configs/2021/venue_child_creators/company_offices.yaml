@@ -30,6 +30,8 @@ child_properties:
 # Distribution strategy
 distribution_strategy: even
 
+balance_by: sex
+
 # ========================================
 # ACTIVITY MANAGEMENT
 # ========================================

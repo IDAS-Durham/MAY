@@ -31,7 +31,9 @@ class VenueManager:
         # Store full venue type configurations from YAML
         self.venue_configs = {}         # {venue_type: full_config_dict}
 
-        # Store capacity configurations by venue type
+        # Capacity configurations per venue type — lazily populated by
+        # allocation steps (residence venue_allocator) at runtime. The
+        # venues_config.yaml itself no longer carries capacity rules.
         self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
     def _generate_id(self, venue_type: str) -> int:
@@ -501,11 +503,6 @@ class VenueManager:
 
             # Get filename (default: {venue_type}s.csv)
             filename = type_config.get('filename', f"{venue_type}s.csv")
-
-            # Store capacity_config if present
-            if 'capacity_config' in type_config:
-                self.capacity_configs[venue_type] = type_config['capacity_config']
-                logger.info(f"  Loaded capacity_config for {venue_type}")
 
             enabled_types.append((venue_type, filename))
 
