@@ -21,6 +21,7 @@ Required YAML keys per network entry:
 import logging
 import yaml
 from functools import wraps
+from may.utils import path_resolver as pr
 from typing import Callable, Any
 
 from may.social_networks.builder_functions.filters_and_constraints.filters import pool_type_builders
@@ -91,7 +92,7 @@ class SocialNetworkBuilder:
 
     @classmethod
     def from_yaml(cls, world, yaml_path: str) -> "SocialNetworkBuilder":
-        with open(yaml_path) as f:
+        with open(pr.resolve(yaml_path)) as f:
             config = yaml.safe_load(f)
         return cls(world, config)
 

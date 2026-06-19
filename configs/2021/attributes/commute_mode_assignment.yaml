@@ -69,7 +69,7 @@ data_sources:
     description: "TS061 method-of-travel-to-work counts by residence OA (SGU)"
 
     files:
-      - path: "data/activities/commute/mode_transport_by_oa.csv"
+      - path: "${data_root}/activities/commute/mode_transport_by_oa.csv"
 
         # Key = residence OA code. The dict key MUST equal the CSV header so the
         # MultiKeyLookupSource can read row["2021 output area"]. Resolved from the

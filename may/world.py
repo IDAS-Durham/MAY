@@ -9,6 +9,7 @@ import logging
 from typing import Optional, Set
 from may.residence.household_distributor import HouseholdDistributor
 from may.residence.allocation_strategy import execute_allocation_strategy
+from may.utils import path_resolver as pr
 from random import sample
 
 logger = logging.getLogger("world")
@@ -239,7 +240,7 @@ class World:
         logger.info("EXPORTING WORLD TO HDF5")
         logger.info("=" * 60)
 
-        serializer = WorldSerializer(config_file=config_file)
+        serializer = WorldSerializer(config_file=pr.resolve(config_file))
         stats = serializer.export(self, output_file)
 
         logger.info("")
@@ -281,9 +282,9 @@ def setup_households(geo, population, venues, config, strategy_file=None):
         geography=geo,
         population=population,
         venue_manager=venues,
-        data_dir=household_config.get("data_dir", "data/households"),
-        config_file=household_config.get("config_file", "households_config.yaml"),
-        rules_file=household_config.get("rules_file"),
+        data_dir=pr.resolve(household_config.get("data_dir", "data/households")),
+        config_file=pr.resolve(household_config.get("config_file", "households_config.yaml")),
+        rules_file=pr.resolve(household_config.get("rules_file")) if household_config.get("rules_file") else None,
     )
 
     # Load household data
@@ -293,8 +294,8 @@ def setup_households(geo, population, venues, config, strategy_file=None):
     # Distribute households and venues based on configuration mode.
     # The strategy file comes from the residence_allocation timeline step;
     # fall back to the households block only for direct programmatic callers.
-    if strategy_file is None:
-        strategy_file = household_config.get("strategy_file")
+    if strategy_file is None and household_config.get("strategy_file"):
+        strategy_file = pr.resolve(household_config.get("strategy_file"))
 
     debug_outputs_enabled = config.get("debug_outputs", {}).get("enabled", False)
 

@@ -15,6 +15,7 @@ Functions:
 
 import yaml
 from pathlib import Path
+from may.utils import path_resolver as pr
 
 from .venue_distributor import VenueDistributor
 from .multi_venue_distributor import MultiVenueDistributor
@@ -48,7 +49,7 @@ def distributor_from_yaml(yaml_path: str):
         >>> distributor.allocate(world)
     """
     # Read YAML to check distributor_type
-    yaml_path = Path(yaml_path)
+    yaml_path = Path(pr.resolve(str(yaml_path)))
     with open(yaml_path, 'r') as f:
         config = yaml.safe_load(f)
 

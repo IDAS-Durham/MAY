@@ -47,7 +47,7 @@ data_sources:
     description: "SGU employment totals within each LGU for spatial distribution"
 
     files:
-      - path: "data/activities/work/EW_workers_by_industry_by_OA.csv"
+      - path: "${data_root}/activities/work/EW_workers_by_industry_by_OA.csv"
 
         # Key column: Match person's workplace LGU (from properties)
         key_column: "LGU"

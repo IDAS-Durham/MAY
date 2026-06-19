@@ -16,6 +16,7 @@ import math
 from collections import defaultdict
 
 from may.utils.attribute_access import get_person_attribute
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("venue_child_creator")
 
@@ -126,6 +127,7 @@ class VenueChildCreator:
         Returns:
             VenueChildCreator instance
         """
+        yaml_file = pr.resolve(str(yaml_file))
         logger.info(f"Loading VenueChildCreator config from {yaml_file}")
 
         with open(yaml_file, 'r') as f:

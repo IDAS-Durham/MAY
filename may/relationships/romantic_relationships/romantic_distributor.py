@@ -45,6 +45,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import yaml
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("romantic_relationships")
 
@@ -123,7 +124,7 @@ class RomanticDistributor:
     @staticmethod
     def _load_config(config) -> dict:
         if isinstance(config, str):
-            with open(config, 'r') as f:
+            with open(pr.resolve(config), 'r') as f:
                 return yaml.safe_load(f)
         return config
 
@@ -132,8 +133,8 @@ class RomanticDistributor:
     # ------------------------------------------------------------------
 
     def _load_data_sources(self, ds: Dict):
-        prev_path = ds.get('prevalence_path')
-        msoa_path = ds.get('msoa_marginal_path')
+        prev_path = pr.resolve(ds.get('prevalence_path', '')) or None
+        msoa_path = pr.resolve(ds.get('msoa_marginal_path', '')) or None
         if not prev_path or not os.path.exists(prev_path):
             logger.warning(f"prevalence_path missing or not found: {prev_path}; falling back to YAML probabilities")
             return

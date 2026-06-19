@@ -18,6 +18,7 @@ import os
 import logging
 import yaml
 import operator
+from may.utils import path_resolver as pr
 import numpy as np
 from operator import attrgetter
 from collections import defaultdict
@@ -108,7 +109,7 @@ class RelationshipRulesValidator:
 
     def _load_config(self, config_file: str):
         """Load configuration from YAML file."""
-        with open(config_file, 'r') as f:
+        with open(pr.resolve(config_file), 'r') as f:
             config = yaml.safe_load(f)
 
         # An empty YAML body parses to None. Treat it the same as a missing
@@ -163,7 +164,7 @@ class RelationshipRulesValidator:
         matches will then use the per-area value instead of its scalar fallback.
         """
         attribute = source.get('attribute')
-        path = source.get('csv_path')
+        path = pr.resolve(source.get('csv_path', '')) or None
         if not attribute:
             logger.warning("same_category_source missing required 'attribute'; skipped")
             return

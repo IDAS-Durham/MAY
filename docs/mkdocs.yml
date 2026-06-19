@@ -4,6 +4,9 @@ hooks:
   - hooks.py
 
 plugins:
+  - gen-files:
+      scripts:
+        - gen_pages.py
   - mkdocstrings:
       handlers:
         python:

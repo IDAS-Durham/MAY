@@ -47,7 +47,7 @@ venue_type_config:
   gym:
     count: 1  # Override default count for gym
     participation_filter:
-      data_file: "data/population/leisure_participation/gym_attendance.csv"
+      data_file: "${data_root}/population/leisure_participation/gym_attendance.csv"
       # Attributes to match against CSV rows
       row_filters:
         - person_attribute: "age"
@@ -164,7 +164,7 @@ validation:
 #   venue_type_config:
 #     venue_x:
 #       participation_filter:
-#         data_file: "data/participation_by_ethnicity.csv"
+#         data_file: "${data_root}/participation_by_ethnicity.csv"
 #         row_filters:
 #           - person_attribute: "ethnicity"
 #             csv_column: "ethnicity_group"
@@ -180,7 +180,7 @@ validation:
 #   venue_type_config:
 #     venue_y:
 #       participation_filter:
-#         data_file: "data/age_participation.csv"
+#         data_file: "${data_root}/age_participation.csv"
 #         row_filters:
 #           - person_attribute: "age"
 #             csv_column: "age_group"

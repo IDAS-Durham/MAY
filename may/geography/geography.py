@@ -141,7 +141,12 @@ class Geography:
 
             coord_df = pd.read_csv(coord_file)
             self._validate_coord_columns(coord_df, coord_file, level)
-            name_col = coord_df.columns[0]
+            for _candidate in ('geo_unit', level.lower(), level):
+                if _candidate in coord_df.columns:
+                    name_col = _candidate
+                    break
+            else:
+                name_col = coord_df.columns[0]
 
             wanted = names_per_level[level]
             if wanted:

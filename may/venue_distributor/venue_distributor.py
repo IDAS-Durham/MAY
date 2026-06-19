@@ -16,6 +16,7 @@ from .fallbacks import FallbackManager
 from .matcher import VenueMatcher
 from .allocation_engine import AllocationEngine
 from .reporting import ReportingManager
+from may.utils import path_resolver as pr
 
 import logging
 import numpy as np
@@ -143,14 +144,16 @@ class VenueDistributor(BaseDistributor):
             if cache_key in self.probability_cache:
                 continue
 
-            # Load CSV file: try the path as-given (CWD-relative) first, then
-            # fall back to resolving against the project root.
-            full_path = Path(file_path)
+            # Load CSV file: resolve portable path tokens (${data_root} etc.),
+            # then try the path as-given (CWD-relative) first, falling back to
+            # resolving against the project root.
+            resolved = pr.resolve(file_path)
+            full_path = Path(resolved)
             if not full_path.is_absolute() and not full_path.exists():
                 if self.config_path:
                     # config_path is configs/<year>/distributors/xxx.yaml
                     project_root = self.config_path.parent.parent.parent
-                    candidate = project_root / file_path
+                    candidate = project_root / resolved
                     if candidate.exists():
                         full_path = candidate
                 else:

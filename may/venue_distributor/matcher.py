@@ -323,7 +323,7 @@ class VenueMatcher:
             return np.random.choice(valid, p=weights / weights.sum())
         elif strategy == 'closest_balanced':
             valid = [v for v in venues if v.coordinates]
-            if not valid: return venues[0]
+            if not valid: return np.random.choice(venues)
             
             if len(valid) < 50:
                 dists = np.array([self.distributor._haversine_distance(person_location, v.coordinates) for v in valid])

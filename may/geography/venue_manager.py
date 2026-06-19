@@ -4,6 +4,7 @@ import os
 import yaml
 from collections import defaultdict
 from .venue import Venue
+from may.utils import path_resolver as pr
 
 logger = logging.getLogger("venuemanager")
 
@@ -455,14 +456,14 @@ class VenueManager:
             config_file: Path to YAML config file (can be absolute or relative to data_dir)
         """
         # Try to find config file
-        config_path = config_file
+        config_path = pr.resolve(config_file)
         if not os.path.isabs(config_path):
             # Try relative to current working directory first
             if os.path.exists(config_path):
                 config_path = config_path
             else:
                 # Try relative to data_dir
-                config_path = os.path.join(self.data_dir, config_file)
+                config_path = os.path.join(self.data_dir, config_path)
 
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Venue config file not found: {config_path}")

@@ -24,6 +24,7 @@ from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
 from may.residence.relationship_rules import RelationshipRulesValidator
+from may.utils import path_resolver as pr
 from may.residence.models import Category
 from may.residence.composition_pattern import CompositionPattern
 from may.residence.household_excess_handler import HouseholdExcessHandler
@@ -67,6 +68,7 @@ class HouseholdDistributor:
 
         # Load configuration
         # Try relative to current working directory first, then relative to data_dir
+        config_file = pr.resolve(config_file)
         if os.path.isabs(config_file) or os.path.exists(config_file):
             config_path = config_file
         else:
@@ -96,6 +98,7 @@ class HouseholdDistributor:
         # world config's `households.rules_file`. If unset, the validator is
         # constructed with an empty path and disables itself (no implicit lookup).
         if rules_file:
+            rules_file = pr.resolve(rules_file)
             if os.path.isabs(rules_file) or os.path.exists(rules_file):
                 rules_config_path = rules_file
             else:

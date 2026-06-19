@@ -205,7 +205,7 @@ data_sources:
     description: "Geographical unit ethnicity distributions"
 
     files:
-      - path: "data/population/ethnicity/ethnicity_5groups_by_OA.csv"
+      - path: "${data_root}/population/ethnicity/ethnicity_5groups_by_OA.csv"
         key_column: "geo_unit"
         value_columns:
           W: "W"
@@ -228,7 +228,7 @@ data_sources:
     description: "Conditional partner ethnicity probabilities"
 
     files:
-      - path: "data/population/ethnicity/precomputed_area_partnerships.csv"
+      - path: "${data_root}/population/ethnicity/precomputed_area_partnerships.csv"
         key_columns: ["geo_unit", "first_ethnicity"]
         value_columns:
           W: "prob_W"

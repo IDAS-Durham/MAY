@@ -1,9 +1,21 @@
-import networkx as nx
 from typing import Callable, Any
 from functools import wraps
 import logging
 
 logger = logging.getLogger("create_clustered_graph")
+
+
+def _require_networkx():
+    """Lazily import networkx, raising a clear error if it's not installed."""
+    try:
+        import networkx as nx
+    except ImportError as e:
+        raise ImportError(
+            "networkx is required for clustered-graph social network builders "
+            "(watts_strogatz, barabasi_albert, etc). Install with: pip install networkx"
+        ) from e
+    return nx
+
 
 type GraphCreator = Callable[[Any],Any]
 
@@ -45,12 +57,14 @@ def create_clustered_graph_watts_strogatz(n_nodes: int , k: int = 4, clustering_
     Returns:
         NetworkX Graph
     """
+    nx = _require_networkx()
+
     # Ensure k is even as required for this graph
     if k % 2 != 0:
         k -= 1
     if k < 2:
         k = 2
-    
+
     # Watts-Strogatz rewiring probability is inverse of clustering level
     p = 1.0 - clustering_level
     return nx.watts_strogatz_graph(round(n_nodes), round(k), p, **kwargs)
@@ -78,12 +92,14 @@ def create_clustered_graph_connected_watts_strogatz(n_nodes: int, k: int =4, clu
         >>> nx.is_connected(G)
         True
     """
+    nx = _require_networkx()
+
     # Ensure k is even as required for this graph
     if k % 2 != 0:
         k -= 1
     if k < 2:
         k = 2
-    
+
     p = 1.0 - clustering_level
     return nx.connected_watts_strogatz_graph(n_nodes, k, p, tries=100)
 
@@ -94,6 +110,7 @@ def create_clustered_barabasi_albert_graph(n_nodes: int, num_first_connections: 
     A graph of n nodes is grown by attaching new nodes each with num_first_connections
     edges that are preferentially attached to existing nodes with high degree.
     """
+    nx = _require_networkx()
     return nx.barabasi_albert_graph(n_nodes, num_first_connections, **kwargs)
 
 
@@ -105,6 +122,7 @@ def create_clustered_graph_random_regular_graph(n_nodes: int, d:int = 4, **kwarg
     The resulting graph has no self-loops or parallel edges.
     
     """
+    nx = _require_networkx()
     if d > n_nodes-1:
         logger.error("Cannot have more neighbours than the number of nodes. Rounding down so that the degree of each node is equal to n-1")
         d = n_nodes - 1
@@ -114,8 +132,9 @@ def create_clustered_graph_random_regular_graph(n_nodes: int, d:int = 4, **kwarg
 def create_clustered_graph_gnm_random_graph(n_nodes, avg_edges_per_node=4,**kwargs):
     """Returns a G_n,m random graph.
     
-    Returns a graph where a graph with n nodes and m edges is chosen uniformly from the set of all possible graphs. 
+    Returns a graph where a graph with n nodes and m edges is chosen uniformly from the set of all possible graphs.
     """
+    nx = _require_networkx()
     if avg_edges_per_node > n_nodes - 1:
         logger.error("Should not have an average number of edges greater than the number of nodes. Rounding down to n-1 edges per node.")
         tot_edges = int((n_nodes - 1)*n_nodes / 2)
@@ -125,6 +144,7 @@ def create_clustered_graph_gnm_random_graph(n_nodes, avg_edges_per_node=4,**kwar
 
 @register_graph_creator("gnp_random_graph")
 def create_clustered_graph_gnp_random_graph(n_nodes, avg_edges_per_node=4,**kwargs):
+    nx = _require_networkx()
     probability_of_each_edge = float(avg_edge_per_node) / (n_nodes-1)
     return nx.gnp_random_graph(n_nodes, probability_of_each_edge, **kwargs)
 
@@ -157,6 +177,8 @@ def create_clustered_graph(*args, algorithm: str='watts_strogatz', **kwargs):
 ###########################################################################
     
 if __name__ == "__main__":
+    nx = _require_networkx()
+
     # Example usage
     G = create_clustered_graph(n_nodes=100, k=6, clustering_level=0.8)
 

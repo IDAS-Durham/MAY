@@ -10,9 +10,8 @@ from typing import Optional
 
 import numpy as np
 import numba as nb
-import networkx as nx
 
-from .clustered_graph import create_clustered_graph
+from .clustered_graph import create_clustered_graph, _require_networkx
 from ..filters_and_constraints.filters import (
     ConnectionFilter,
     build_local_attribute_arrays,
@@ -174,6 +173,8 @@ class GraphRelationshipBuilder:
             >>> relationships = builder.build_all()
             >>> print(f"Person 0 connected to {len(relationships[0])} others")
         """
+        nx = _require_networkx()
+
         logger.debug(f"Building graph-based relationships for {self.n_people:,} people")
         logger.debug(f"  mean_connections_per_person={self.mean_connections_per_person}, clustering_level={self.clustering_level}")
 
