@@ -121,26 +121,3 @@ assignment_rules:
         assignment:
           strategy: "categorical_sampler"  # Sample ONE category from probabilities
           data_source: "workplace_industry_by_sex"
-
-# ============================================================================
-# Settings
-# ============================================================================
-settings:
-  random_seed: null
-  normalize_probabilities: true
-  cache_lookups: true
-
-  error_handling:
-    missing_geo_unit: "use_fallback"
-    missing_lookup_data: "use_fallback"
-    person_without_work_activity: "skip_person"
-    missing_filter_activity: "skip_person"
-
-  logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: true
-    sample_size: 10
-    show_attribute_distribution: true 
-
-

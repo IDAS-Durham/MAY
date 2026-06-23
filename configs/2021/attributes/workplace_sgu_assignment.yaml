@@ -84,19 +84,7 @@ assignment_rules:
 # Settings
 # ============================================================================
 settings:
-  random_seed: null
-  normalize_probabilities: true
-  cache_lookups: true
-
-  error_handling:
-    missing_workplace_location: "skip_person"
-    missing_lookup_data: "skip_person"
-
   logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: true
-    sample_size: 10
     show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
 
 # ============================================================================

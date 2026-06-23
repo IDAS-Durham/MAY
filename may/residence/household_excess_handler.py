@@ -514,14 +514,58 @@ class HouseholdExcessHandler:
                 current_role = role_name
                 break
 
+        candidate_list = (
+            list(candidates.values()) if isinstance(candidates, dict) else list(candidates)
+        )
+
         if not current_role:
             # Category not in any role - just return first candidate
             logger.debug(f"Category '{add_category}' not found in rule roles, using first candidate")
-            return candidates[0] if candidates else None
+            return candidate_list[0] if candidate_list else None
+
+        rr = self.distributor.relationship_rules
+
+        # Couple completion: if this role carries a `pair_matching` constraint and
+        # the household already holds exactly one partner, the person we add
+        # *completes* the couple. The base excess path ignores pair_matching
+        # entirely (it only honors numerical_attribute_difference), so a "second
+        # adult" would be added as an un-coupled individual. Here we honor the
+        # pair: pick a partner compatible with the existing member (sex + age
+        # gap), still subject to the role's numerical constraints, and flag the
+        # cohabiting couple. Falls back to the plain selection when no
+        # couple-compatible-and-role-valid candidate exists.
+        role_count = (rule.roles.get(current_role) or {}).get('count')
+        pair_constraint = self.distributor._find_pair_constraint_for_role(
+            rule, current_role, role_count
+        )
+        existing_partners = existing_people_by_role.get(current_role, [])
+        required_count = (pair_constraint or {}).get('require_exact_count') or 2
+        if pair_constraint is not None and required_count == 2 and len(existing_partners) == 1:
+            partner = existing_partners[0]
+            geo_unit_code = getattr(
+                getattr(household, 'geographical_unit', None), 'name', None
+            )
+            pool = rr.couple_compatible_candidates(
+                partner, candidate_list, pair_constraint, geo_unit_code=geo_unit_code
+            )
+            if pool:
+                person = rr.select_person_with_constraint(
+                    candidates=pool,
+                    existing_people_by_role=existing_people_by_role,
+                    constraints=rule.constraints,
+                    current_role=current_role,
+                    show_detailed_logs=False,
+                )
+                if person is not None:
+                    if pair_constraint.get('creates_romantic_couple', False):
+                        person.properties['cohabiting_couple'] = [partner.id]
+                        partner.properties['cohabiting_couple'] = [person.id]
+                    return person
+            # else: fall through to the plain (un-coupled) selection below.
 
         # Use relationship rules to select a valid person
-        person = self.distributor.relationship_rules.select_person_with_constraint(
-            candidates=list(candidates.values()) if isinstance(candidates, dict) else candidates,
+        person = rr.select_person_with_constraint(
+            candidates=candidate_list,
             existing_people_by_role=existing_people_by_role,
             constraints=rule.constraints,
             current_role=current_role,

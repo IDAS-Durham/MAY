@@ -1298,11 +1298,26 @@ class HouseholdDistributor:
         # Get all household venues from VenueManager
         all_households = self.venue_manager.get_venues_by_type("household")
 
+        target_set = set(target_patterns)
+        matched_patterns = set()
         filtered = []
         for household in all_households:
             pattern = household.properties.get(pattern_property, '')
-            if pattern in target_patterns:
+            if pattern in target_set:
+                matched_patterns.add(pattern)
                 filtered.append(household)
+
+        # Matching is exact-string, not a `>=` evaluation: a requested pattern
+        # that doesn't literally equal any household's stored pattern matches
+        # nothing and is silently dropped from the allocation. Warn so these
+        # dead entries don't go unnoticed.
+        unmatched = target_set - matched_patterns
+        if unmatched:
+            logger.warning(
+                f"{len(unmatched)} target pattern(s) matched no households on "
+                f"'{pattern_property}' and will be ignored: {sorted(unmatched)}"
+            )
+
         return filtered
 
     def _setup_allocation_logging(self, geo_unit_code: str) -> int:

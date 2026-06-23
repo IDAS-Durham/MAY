@@ -357,12 +357,14 @@ class TestCommutingLikelihoodStrategy:
     def _make_od_source(self, data):
         return ODMatrixSource(lookup_data=data)
 
-    def _make_strategy(self, outputs, data_source_name="commuting_flows"):
+    def _make_strategy(self, outputs, data_source_name="commuting_flows", fallback=None):
         config = {
             "strategy": "commuting_likelihood",
             "data_source": data_source_name,
             "outputs": outputs,
         }
+        if fallback:
+            config["fallback"] = fallback
         return config
 
     # --- Single output ---
@@ -442,7 +444,10 @@ class TestCommutingLikelihoodStrategy:
             "commuting_flows": source,
             "geo_distribution": geo_source,
         })
-        config = self._make_strategy(outputs={"loc": "destination"})
+        config = self._make_strategy(
+            outputs={"loc": "destination"},
+            fallback={"strategy": "constant", "value": "FB"},
+        )
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=None)
@@ -450,18 +455,23 @@ class TestCommutingLikelihoodStrategy:
         context = {"attribute_name": "loc"}
         result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
         # Should hit fallback because _resolve_origin_code returns None
+        assert result == "FB"
         assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
 
     def test_missing_data_source_triggers_fallback(self):
         """Data source not registered → fallback."""
         dm = SimpleDataManager(sources={"geo_distribution": SimpleGeoSource(fallback={"W": 1.0})})
-        config = self._make_strategy(outputs={"loc": "destination"})
+        config = self._make_strategy(
+            outputs={"loc": "destination"},
+            fallback={"strategy": "constant", "value": "FB"},
+        )
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("ORIGIN_A"))
         geo = MinimalGeoUnit("E00001234")
         context = {"attribute_name": "loc"}
         result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
+        assert result == "FB"
         assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
 
     def test_empty_destinations_triggers_fallback(self):
@@ -472,13 +482,17 @@ class TestCommutingLikelihoodStrategy:
             "commuting_flows": source,
             "geo_distribution": geo_source,
         })
-        config = self._make_strategy(outputs={"loc": "destination"})
+        config = self._make_strategy(
+            outputs={"loc": "destination"},
+            fallback={"strategy": "constant", "value": "FB"},
+        )
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("ORIGIN_A"))
         geo = MinimalGeoUnit("E00001234")
         context = {"attribute_name": "loc"}
         result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
+        assert result == "FB"
         assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
 
     def test_unknown_origin_triggers_fallback(self):
@@ -489,13 +503,17 @@ class TestCommutingLikelihoodStrategy:
             "commuting_flows": source,
             "geo_distribution": geo_source,
         })
-        config = self._make_strategy(outputs={"loc": "destination"})
+        config = self._make_strategy(
+            outputs={"loc": "destination"},
+            fallback={"strategy": "constant", "value": "FB"},
+        )
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("UNKNOWN"))
         geo = MinimalGeoUnit("E00001234")
         context = {"attribute_name": "loc"}
         result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
+        assert result == "FB"
         assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
 
     # --- Batch mode ---
@@ -1020,12 +1038,14 @@ class TestConstantStrategyBatchConsistency:
 
     def test_batch_with_no_value_triggers_fallback_like_assign(self):
         """
-        Both assign() and assign_batch() should trigger fallback when value is None.
+        Both assign() and assign_batch() should trigger the configured
+        fallback when value is None.
         """
-        config = {"strategy": "constant"}  # no 'value' key → self.value = None
-        geo_source = SimpleGeoSource(fallback={"W": 1.0})
-        dm = SimpleDataManager(sources={"geo_distribution": geo_source})
-        strategy = ConstantStrategy(config, dm)
+        config = {
+            "strategy": "constant",  # no 'value' key → self.value = None
+            "fallback": {"strategy": "constant", "value": "W"},
+        }
+        strategy = ConstantStrategy(config, SimpleDataManager())
 
         geo = MinimalGeoUnit("E00001234")
 

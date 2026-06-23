@@ -613,6 +613,81 @@ class TestDistributeEven:
 
 
 # =============================================================================
+# Tests: _distribute_members_to_children (balance_by)
+# =============================================================================
+
+class TestDistributeBalanced:
+
+    def _sex_counts(self, venue):
+        members = venue.get_all_members()
+        return (
+            sum(1 for p in members if p.sex == "female"),
+            sum(1 for p in members if p.sex == "male"),
+        )
+
+    def test_balanced_even_split_mirrors_cohort(self):
+        # 30 female + 30 male, sex-clustered (as population creation produces).
+        # Plain slicing would yield single-sex rooms; balance_by must mix them.
+        creator = VenueChildCreator("s", "c", balance_by="sex")
+        people = make_people(30, sex="female") + make_people(30, sex="male")
+        venues = [MinimalVenue(venue_type="classroom") for _ in range(3)]
+
+        creator._distribute_members_to_children(people, venues)
+
+        for v in venues:
+            f, m = self._sex_counts(v)
+            assert f == 10 and m == 10
+
+    def test_balanced_uneven_ratio_is_proportional(self):
+        # 50 female + 10 male across 2 rooms -> each room ~25F/5M, totals even.
+        creator = VenueChildCreator("s", "c", balance_by="sex")
+        people = make_people(50, sex="female") + make_people(10, sex="male")
+        venues = [MinimalVenue(venue_type="classroom") for _ in range(2)]
+
+        creator._distribute_members_to_children(people, venues)
+
+        sizes = [len(v.get_all_members()) for v in venues]
+        assert sizes == [30, 30]
+        for v in venues:
+            f, m = self._sex_counts(v)
+            assert f == 25 and m == 5
+
+    def test_balanced_single_sex_stays_single_sex(self):
+        creator = VenueChildCreator("s", "c", balance_by="sex")
+        people = make_people(60, sex="female")
+        venues = [MinimalVenue(venue_type="classroom") for _ in range(2)]
+
+        creator._distribute_members_to_children(people, venues)
+
+        for v in venues:
+            f, m = self._sex_counts(v)
+            assert f == 30 and m == 0
+
+    def test_balanced_single_venue_places_everyone(self):
+        # With one child venue there is nothing to balance; all members land there.
+        creator = VenueChildCreator("s", "c", balance_by="sex")
+        people = make_people(15, sex="female") + make_people(15, sex="male")
+        venues = [MinimalVenue(venue_type="classroom")]
+
+        creator._distribute_members_to_children(people, venues)
+
+        assert len(venues[0].get_all_members()) == 30
+
+    def test_balance_by_unset_keeps_arrival_order_slicing(self):
+        # Regression guard: default behavior is unchanged (contiguous slicing).
+        creator = VenueChildCreator("s", "c", distribution_strategy="even")
+        people = make_people(30, sex="female") + make_people(30, sex="male")
+        venues = [MinimalVenue(venue_type="classroom") for _ in range(2)]
+
+        creator._distribute_members_to_children(people, venues)
+
+        f0, m0 = self._sex_counts(venues[0])
+        f1, m1 = self._sex_counts(venues[1])
+        assert (f0, m0) == (30, 0)
+        assert (f1, m1) == (0, 30)
+
+
+# =============================================================================
 # Tests: _distribute_members_to_children (fill strategy)
 # =============================================================================
 

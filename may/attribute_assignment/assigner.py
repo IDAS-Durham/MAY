@@ -164,11 +164,11 @@ class AttributeAssigner:
         # Branch based on assignment level
         if self.config.assignment_level == "person":
             self._assign_all_people(venue_manager)
-        elif self.config.assignment_level in ["person_by_household", "person_by_residence"]:
+        elif self.config.assignment_level == "person_by_residence":
             self._assign_all_residences(venue_manager)
         else:
             raise ValueError(f"Unknown assignment_level: '{self.config.assignment_level}'. "
-                           f"Expected 'person', 'person_by_household', or 'person_by_residence'.")
+                           f"Expected 'person' or 'person_by_residence'.")
 
         # Report statistics
         self._report_statistics()
@@ -184,12 +184,13 @@ class AttributeAssigner:
         # Count total people across ALL venues for accurate statistics
         total_people_in_simulation = sum(venue.size() for venue in all_venues)
 
-        # Get household venue types from config (defaults to ["household"])
-        household_venue_types = self.config.household_venue_types or ["household"]
+        # Get the residence venue types assigned by household structure
+        # (defaults to ["household"]); other residences use venue_assignment_rules.
+        residence_venue_types = self.config.residence_venue_types or ["household"]
 
-        # Separate households from other residence venues based on config
-        households = [v for v in all_venues if v.type in household_venue_types]
-        other_residences = [v for v in all_venues if v.type not in household_venue_types]
+        # Separate structure-assigned residences from the rest based on config
+        households = [v for v in all_venues if v.type in residence_venue_types]
+        other_residences = [v for v in all_venues if v.type not in residence_venue_types]
         people_in_other_residences = sum(venue.size() for venue in other_residences)
 
         logger.info(f"  Households: {len(households)}")
@@ -732,21 +733,24 @@ class AttributeAssigner:
         self.stats['people_in_households'] += len(members)
         self.stats['total_people'] += len(members)
 
-    def _get_dependency_aware_order(self, members, structure: str, 
+    def _get_dependency_aware_order(self, members, structure: str,
                                     person_categories: Dict[int, str] = None) -> List:
         """
-        Get person assignment order that satisfies both category priorities AND role dependencies.
-        
-        Uses a topological sort to handle dependencies like inheritance.
+        Get person assignment order that satisfies role dependencies.
+
+        Uses a topological sort so inheritors are processed after the roles they
+        inherit from. Members are ordered by id as the stable base/tie-breaker —
+        which role a person takes (primary vs secondary, child, elder) depends on
+        their subset and this order, not on any configurable category priority.
         """
         # 1. Determine roles for everyone first (predictive)
         # We need to know who is who to build the dependency graph
         temp_assigned_roles = []
         person_to_role = {}
-        
-        # We must use the base sort order to predict roles (since role depends on order)
-        base_sorted = self._sort_members_by_assignment_order(members, structure, person_categories)
-        
+
+        # Stable base order (by id) used to predict roles, since role depends on order.
+        base_sorted = sorted(members, key=lambda p: p.id)
+
         for person in base_sorted:
             category = person_categories.get(person.id, "unknown") if person_categories else "unknown"
             role = self.config.get_person_role(
@@ -779,23 +783,18 @@ class AttributeAssigner:
                                 adj[dep_pid].append(pid)
                                 in_degree[pid] += 1
 
-        # 3. Topological Sort (Kahn's Algorithm)
-        # Tie-breaker: Use the base sorting order (category priorities)
+        # 3. Topological Sort (Kahn's Algorithm), tie-broken by base (id) order.
         queue = []
         # Initial nodes with no dependencies
         for p in base_sorted:
             if in_degree[p.id] == 0:
                 queue.append(p)
-        
-        # Sort initial queue by base priority (it already is, but just in case)
-        # queue.sort(key=lambda p: [p.id for p in base_sorted].index(p.id))
 
         result = []
         processed_count = 0
-        
+
         while queue:
-            # Sort queue by base priority to maintain consistency
-            # This ensures that among equal dependency levels, we follow YAML order
+            # Among equal dependency levels, keep the stable base (id) order.
             queue.sort(key=lambda p: [x.id for x in base_sorted].index(p.id))
             
             curr = queue.pop(0)
@@ -818,44 +817,6 @@ class AttributeAssigner:
                     result.append(p)
                     
         return result
-
-    def _sort_members_by_assignment_order(self, members, structure: str, person_categories: Dict[int, str] = None):
-        """
-        Sort household members by configured assignment order (base priority).
-        Used as a tie-breaker for topological sort.
-        """
-        def get_sort_key(person):
-            """Get sort key for person based on configured assignment order."""
-            # Use pre-calculated category if available
-            if person_categories:
-                category = person_categories.get(person.id, "unknown")
-            else:
-                # Fallback to recalculating
-                # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
-                if "residence" not in person.activity_map or "household" not in person.activity_map["residence"] or not person.activity_map["residence"]["household"]:
-                     category = "unknown"
-                else:
-                     category = person.activity_map["residence"]["household"][0].subset_name
-
-            if category == "unknown":
-                 return (999, person.id)
-
-            # Get assignment order configuration
-            assignment_order = self.config.settings.get('assignment_order', {})
-
-            # Check for structure-specific overrides first
-            structure_overrides = assignment_order.get('structure_overrides', {})
-            if structure in structure_overrides:
-                priorities = structure_overrides[structure]
-            else:
-                # Use default category priorities
-                priorities = assignment_order.get('category_priorities', {})
-
-            # Get priority for this category (default 999 if not specified)
-            priority = priorities.get(category, 999)
-            return (priority, person.id)  # Use person ID as tiebreaker
-
-        return sorted(members, key=get_sort_key)
 
     def _get_person_category(self, person) -> str:
         """

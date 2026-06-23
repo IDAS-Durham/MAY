@@ -425,6 +425,183 @@ Common distributors:
 | `specific_workplace_classrooms_distributor.yaml` | P-sector workers → schools as workplace. |
 | `care_home_visits_distributor.yaml` | Links households of care home residents to visit that care home as a leisure activity. |
 
+#### 5.4.1 The `route` distributor — transit lines & commuting
+
+The `route` distributor (`distributor_type: "route"`) is how MAY puts people onto
+**shared transport lines** (train / tube / bus) and, more generally, onto any
+origin→destination journey made of one or more **legs**. Commuting is the built-in
+use-case, but the distributor is generic: school buses, ferries, or freight routes
+plug in the same way — only the YAML and the input CSV change.
+
+**Key idea — it is a lookup, not a router.** The distributor does **no** pathfinding
+at world-build time. For each eligible person it forms a key `(origin, destination,
+mode)` and looks that key up in a **precomputed routing table** you supply. If the
+key is found, the person is placed as a rider on **every leg already listed** for
+that journey; if not, a fallback property is applied (a "miss"). This is what lets
+it scale to tens of millions of agents — all the route-finding happens once,
+offline, before the run.
+
+##### What you must provide
+
+| File | Required? | Role |
+|---|---|---|
+| `route_legs.csv` | **Yes** — the distributor reads this | The itinerary table: one row per leg, keyed by `(origin, destination, mode)`. |
+| `routes.csv` | Optional | A human-readable per-journey summary. **Not read by the distributor** — keep it for your own QA if you like. |
+| A line→stops mapping | Only if you want geometry | Ordered stops per line. **Not used by the distributor**, but needed downstream (e.g. to draw the lines on a map). See note at the end. |
+
+Put the CSVs anywhere under `data/` and point the YAML at them (paths are resolved
+relative to the project root). The conventional location is `data/activities/commute/`.
+
+##### `route_legs.csv` format (the file the distributor consumes)
+
+One row per leg. **Required columns** (the distributor errors if any are missing):
+
+| Column | Meaning |
+|---|---|
+| `origin_mgu` | Journey origin, an **MGU** name/code. Must match `GeographicalUnit.name`. |
+| `dest_mgu` | Journey destination, an **MGU** name/code. |
+| `mode_class` | The transport class (`train`, `tube`, `bus`, …). Matched against the person's mode (see `class_source`/`class_map`). |
+| `leg_idx` | 0-based leg order within the journey. Rows are sorted by this. |
+| `line_id` | Stable identifier of the line ridden on this leg. **Becomes the venue name** (`/metadata/names/venues`), so one venue is materialised per distinct `line_id`. |
+| `board_mgu` | Where the rider boards this leg (an MGU). |
+| `alight_mgu` | Where the rider alights this leg. |
+
+Plus any **per-leg metadata columns** you reference in the YAML's `leg_metadata`
+(the commute configs use `t_board_min`, `t_alight_min` — minutes from start of day):
+
+```csv
+origin_mgu,dest_mgu,mode_class,leg_idx,line_id,board_mgu,alight_mgu,t_board_min,t_alight_min
+E02000001,E02000016,train,0,three_bridges_west_hampstead_thameslink_0911,E02000001,E02000192,63,65
+E02000001,E02000016,train,1,reading_abbey_wood_el_0739,E02000192,E02000878,58,60
+```
+
+A journey with two rows like the above (`leg_idx` 0 and 1) is a **two-leg trip with
+one interchange**. The keying is **only** `(origin_mgu, dest_mgu, mode_class)` — so
+every person travelling that O→D by that mode rides the **identical** leg sequence
+(no per-person variation). Origin/destination are at **MGU** granularity, even though
+people live and work at finer (SGU) units — the distributor rolls each up to its MGU
+ancestor before the lookup (see `origin_source`/`destination_source` below).
+
+##### How to build `route_legs.csv` (the algorithm)
+
+You produce this table however you like; the distributor only cares about the
+columns above. The reference approach used to generate the shipped commute tables is
+a standard **shortest-path over a transit graph**, and you can reproduce it with any
+graph library (e.g. `scipy.sparse.csgraph` or `networkx`):
+
+1. **Define lines.** For each line, list its stops in order, map each stop to an MGU,
+   and record a cumulative time offset per stop (from a timetable, or estimated from
+   inter-stop distance).
+2. **Build a graph.** Create *stop-nodes* `(line, stop)` and one *hub-node* per MGU.
+   Add **ride edges** between consecutive stops on a line (weight = travel time) and
+   **transfer edges** between a stop-node and its MGU hub (weight = a transfer
+   penalty). The hub-per-MGU keeps transfers cheap to model (O(lines), not O(lines²)).
+3. **Shortest path per (origin, mode).** For each origin MGU, run a multi-source
+   Dijkstra from *all* that MGU's stop-nodes at once (so the **first boarding is
+   free** and only **transfers pay the penalty**). Every destination MGU is reached
+   at its hub; walk the predecessor tree back and **split the node path into legs at
+   hub crossings** — a leg is a maximal run of stops on one line.
+4. **Cap and emit.** Drop journeys over a max time or max leg count (the shipped
+   tables use ≤120 min, ≤4 legs), then write one `route_legs.csv` row per leg.
+
+Run this **once per mode class** (keep `train`/`tube`/`bus` graphs separate) and
+concatenate the results into a single `route_legs.csv` with the right `mode_class`.
+
+##### The distributor YAML
+
+One file per mode class (so each instance filters to one `class_filter`). Annotated
+example (`configs/2021/distributors/route_commute_train.yaml`):
+
+```yaml
+distributor_type: "route"
+distributor_name: "route_commute_train"
+
+activity_map_key: "commute"      # activity bucket set on the person
+leg_venue_type:   "train_line"   # venue type created per line_id (must be a known venue type)
+leg_subset_key:   "rider"        # subset each rider is added to on every leg venue
+
+routes_table: "data/activities/commute/routes.csv"      # optional summary (unused at runtime)
+legs_table:   "data/activities/commute/route_legs.csv"  # REQUIRED — the table read above
+
+# How to form the routing-table key from each person:
+origin_source:        # -> origin_mgu
+  type: "ancestor"
+  from: "geographical_unit"          # the person's residence unit (an SGU)...
+  level: "MGU"                        # ...rolled up to its MGU ancestor
+destination_source:   # -> dest_mgu
+  type: "ancestor"
+  from: "properties.workplace_sgu"   # the workplace unit set by workplace assignment...
+  level: "MGU"                        # ...rolled up to MGU
+
+# How to form mode_class, and which class this instance handles:
+class_source: "properties.commute_mode"  # person property holding the mode
+class_filter: "train"                     # only act on people with commute_mode == "train"
+class_map: { train: "train" }             # person value -> mode_class in the CSV (identity here)
+
+require_properties: ["commute_mode"]      # skip people missing these properties
+
+# Per-leg CSV columns to store on Subset.member_metadata, keyed by field name:
+leg_metadata:
+  t_board_min:  "t_board_min"
+  t_alight_min: "t_alight_min"
+
+on_miss:                 # applied when (origin,dest,mode) isn't in the table
+  set:
+    commute_mode: "car_solo"
+```
+
+Field reference:
+
+| Key | What it does |
+|---|---|
+| `distributor_type` | Must be `"route"`. |
+| `leg_venue_type` | Venue type materialised once per `line_id`. Must be a venue type the world knows (e.g. `train_line`, `tube_line`, `bus_line`). The line venue is attached to a rider's residence MGU purely for stable HDF5 partitioning — its `geo_unit` is **not** the line's location. |
+| `leg_subset_key` | Subset every rider is added to on each leg venue (e.g. `rider`). |
+| `origin_source` / `destination_source` | Recipe to derive the O/D key. `type: ancestor` reads a unit (`from: geographical_unit` or `from: properties.<name>`) and rolls it up to `level`. `type: property` uses a raw property string. |
+| `class_source` | Person attribute/property giving the transport class. |
+| `class_filter` | Run this instance only for people whose class equals this. Run one distributor per class. |
+| `class_map` | Maps the person's class value to the `mode_class` string in the CSV (identity if omitted). |
+| `require_properties` | People missing any of these are skipped entirely (not even counted as misses). |
+| `leg_metadata` | `{ field_name: csv_column }` — per-leg numbers copied onto `Subset.member_metadata[person.id]`. |
+| `on_miss.set` | Property overrides applied when the key isn't found (the fallback, e.g. send unrouted commuters to `car_solo`). |
+
+##### Prerequisites & ordering
+
+The `route` distributor only works if, by the time it runs, each eligible person
+already has the properties its key needs. For commuting that means the timeline must
+run, **in order**:
+
+1. **Workplace assignment** — sets `workplace_sgu` (the destination unit).
+2. **Commute-mode assignment** (`attributes/commute_mode_assignment.yaml`) — sets
+   `commute_mode` (the class).
+3. **The `route` distributors** — one `type: distributor` step per mode class.
+
+In `config.yaml` the commute block looks like:
+
+```yaml
+    - type: attribute
+      config: "configs/2021/attributes/commute_mode_assignment.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_train.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_tube.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_bus.yaml"
+```
+
+##### Serialization & downstream geometry
+
+Each line venue is serialized with its `line_id` as the venue **name**, and the
+per-leg `t_board_min`/`t_alight_min` land on the membership metadata side-table in
+`world_state.h5`. To know *who rides each line*, read the line venue's `rider`
+subset; to reconstruct a person's full journey, order their legs by `t_board_min`.
+
+The distributor stores **board/alight MGUs**, not the stops in between. If you need
+the drawable shape of a line (a polyline through its stations), keep your line→stops
+mapping (`line_id, position, node_mgu, name, …`) alongside the world and join on
+`line_id` at render time — slicing each line's stop sequence between a rider's
+`board_mgu` and `alight_mgu` gives exactly the segment they travel.
+
 ### 5.5 `configs/2021/venue_child_creators/*.yaml`
 
 Break a parent venue into children. Examples: `school_classrooms.yaml` (school → classrooms by age), `university_uni_years.yaml` (university → year groups), `company_offices.yaml` (company → offices by sizeband).

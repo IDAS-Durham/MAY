@@ -1026,16 +1026,44 @@ class WorldSerializer:
         the sentinel for "field absent for this row" (rare; should not occur
         unless different memberships in the same export carry disjoint
         metadata schemas).
-        """
-        # First pass: collect rows and the union of field names.
-        person_ids = []
-        venue_ids = []
-        per_field = defaultdict(list)
-        field_names = []  # preserve discovery order
-        field_set = set()
 
+        Two passes over the venues, filling preallocated numpy arrays — no
+        Python per-row lists, so memory stays flat at 60M-scale ridership
+        (the arrays are 4 bytes per row per column). Any value above 2**24
+        is logged loudly: float32 cannot represent larger integers exactly,
+        so e.g. venue ids in big worlds would silently corrupt.
+        """
         venue_to_global_id = self._venue_to_global_id
 
+        # Pass 1: count rows and discover the union of field names (in
+        # discovery order, so output column order is deterministic).
+        n_rows = 0
+        field_names = []
+        field_set = set()
+        for venue in world.venues.get_all_venues_list():
+            if id(venue) not in venue_to_global_id:
+                continue
+            for subset in venue.subsets.values():
+                meta = getattr(subset, 'member_metadata', None)
+                if not meta:
+                    continue
+                n_rows += len(meta)
+                for fields in meta.values():
+                    for fname in fields.keys():
+                        if fname not in field_set:
+                            field_set.add(fname)
+                            field_names.append(fname)
+
+        if n_rows == 0:
+            logger.info("  No membership_metadata to serialise (no subsets populated)")
+            return
+
+        # Pass 2: fill. Same venue/subset/dict iteration order as pass 1
+        # (nothing mutates between passes), so row k lands in slot k.
+        person_arr = np.empty(n_rows, dtype=np.int32)
+        venue_arr = np.empty(n_rows, dtype=np.int32)
+        per_field = {f: np.full(n_rows, -1.0, dtype=np.float32) for f in field_names}
+        k = 0
         for venue in world.venues.get_all_venues_list():
             global_id = venue_to_global_id.get(id(venue))
             if global_id is None:
@@ -1045,50 +1073,33 @@ class WorldSerializer:
                 if not meta:
                     continue
                 for pid, fields in meta.items():
-                    person_ids.append(pid)
-                    venue_ids.append(global_id)
-                    # Register any newly seen field name.
-                    for fname in fields.keys():
-                        if fname not in field_set:
-                            field_set.add(fname)
-                            field_names.append(fname)
-                    # Append this row's value for every known field so far.
-                    # Use index of last appended row to back-fill on next pass.
-                    for fname in field_names:
-                        per_field[fname].append(float(fields[fname]) if fname in fields else -1.0)
-                    # Back-fill any new fields onto previous rows
-                    # (handled below in a single pass for efficiency).
+                    person_arr[k] = pid
+                    venue_arr[k] = global_id
+                    for fname, val in fields.items():
+                        per_field[fname][k] = float(val)
+                    k += 1
 
-        if not person_ids:
-            logger.info("  No membership_metadata to serialise (no subsets populated)")
-            return
-
-        n_rows = len(person_ids)
-        # Back-fill: any field list shorter than n_rows means it was discovered
-        # after some rows had already been appended — pad the head with the
-        # absent-sentinel.
-        for fname in field_names:
-            short = n_rows - len(per_field[fname])
-            if short > 0:
-                per_field[fname] = [-1.0] * short + per_field[fname]
+        # float32 keeps integers exact only up to 2**24; beyond that ids
+        # round silently. Geo unit ids are safely small; this trips if a
+        # config ever routes venue-scale ids through the side-table.
+        for fname, arr in per_field.items():
+            if np.abs(arr).max() > 2 ** 24:
+                logger.warning(
+                    f"  membership_metadata field '{fname}' holds values above "
+                    f"2^24 — float32 storage rounds such integers; ids stored "
+                    f"in this field may be corrupt"
+                )
 
         meta_group = rel_group.create_group('membership_metadata')
-        self._create_dataset(
-            meta_group, 'person_ids', np.array(person_ids, dtype=np.int32),
-        )
-        self._create_dataset(
-            meta_group, 'venue_ids', np.array(venue_ids, dtype=np.int32),
-        )
+        self._create_dataset(meta_group, 'person_ids', person_arr)
+        self._create_dataset(meta_group, 'venue_ids', venue_arr)
         # Field-name registry (string array, ordered) so consumers can iterate.
         self._create_dataset(
             meta_group, 'field_names',
             np.array(field_names, dtype=h5py.string_dtype()),
         )
         for fname in field_names:
-            self._create_dataset(
-                meta_group, fname,
-                np.array(per_field[fname], dtype=np.float32),
-            )
+            self._create_dataset(meta_group, fname, per_field[fname])
         logger.info(
             f"  Wrote membership_metadata side-table: {n_rows:,} rows × "
             f"{len(field_names)} fields {field_names}"

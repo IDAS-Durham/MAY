@@ -334,37 +334,21 @@ Applied to persons residing in venue types not listed in `attribute.household_ve
 
 ## `settings`
 
+The engine reads exactly two keys, both optional logging switches:
+
 ```yaml
 settings:
-  random_seed: null
-  normalize_probabilities: true
-  cache_lookups: true
-
-  assignment_order:
-    method: "category_priority"
-    category_priorities:
-      "Adults": 0
-      "Young Adults": 1
-      "Kids": 2
-      "Old Adults": 3
-
-  error_handling:
-    missing_geo_unit: "use_fallback"
-    missing_lookup_data: "use_fallback"
-    missing_household_structure: "default_to_independents"
-    missing_required_attribute: "skip_person"
-    invalid_age: "skip_person"
-
   logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: true
-    sample_size: 10
-    show_attribute_distribution: false
+    detailed_assignment_logging: false   # default false — very verbose per-person log
+    show_attribute_distribution: true    # default true — summary table at end of run
 ```
 
-`normalize_probabilities: true` normalises distributions to sum to 1 before sampling. Set `false` for `probabilistic_conditions` where each condition is independent.
+`detailed_assignment_logging: true` logs every per-person assignment (debug only).
+`show_attribute_distribution: false` suppresses the end-of-run value-distribution table.
 
-`assignment_order.category_priority` controls which household subset is processed first within a structure. Lower numbers run first.
-
-`error_handling` values: `"use_fallback"`, `"skip_person"`, or `"default_to_independents"`.
+Nothing else under `settings:` is read. Earlier configs carried `random_seed`,
+`normalize_probabilities`, `cache_lookups`, `error_handling`, and an
+`assignment_order` map — none of which the engine ever consulted (probabilities
+are always normalised; member processing order is determined by role
+dependencies, with person id as the stable tie-breaker). Those keys have been
+removed; omit them.
