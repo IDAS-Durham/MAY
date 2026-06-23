@@ -8,7 +8,7 @@ assignment_level: "person_by_residence"
 residence_venue_types: ["household"]
 
 required_attributes:
-  age:
+  - name: age
     required: true
 
 # Add a simple filter to exclude infants for testing

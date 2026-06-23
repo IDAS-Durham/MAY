@@ -864,3 +864,38 @@ class _MinimalConfig:
     get_person_role = AttributeAssignmentConfig.get_person_role
     get_household_structure = AttributeAssignmentConfig.get_household_structure
     get_assignment_rule = AttributeAssignmentConfig.get_assignment_rule
+
+
+# =============================================================================
+# _parse_required_attributes — canonical list form (adr/0006)
+# =============================================================================
+
+class _RawOnly:
+    """Carries just raw_config so the unbound parser can run in isolation."""
+    def __init__(self, raw_config):
+        self.raw_config = raw_config
+
+    _parse_required_attributes = AttributeAssignmentConfig._parse_required_attributes
+
+
+class TestParseRequiredAttributes:
+    def test_list_form_keyed_by_name(self):
+        obj = _RawOnly({"required_attributes": [
+            {"name": "ethnicity", "required": True, "mapping": {"O": "CO"}},
+        ]})
+        result = obj._parse_required_attributes()
+        assert result == {"ethnicity": {"required": True, "mapping": {"O": "CO"}}}
+
+    def test_missing_section_is_empty(self):
+        assert _RawOnly({})._parse_required_attributes() == {}
+
+    def test_mapping_form_rejected(self):
+        """The retired `name: {...}` mapping form fails loudly (adr/0006)."""
+        obj = _RawOnly({"required_attributes": {"ethnicity": {"required": True}}})
+        with pytest.raises(ValueError, match="must be a list"):
+            obj._parse_required_attributes()
+
+    def test_entry_without_name_raises(self):
+        obj = _RawOnly({"required_attributes": [{"required": True}]})
+        with pytest.raises(ValueError, match="missing 'name'"):
+            obj._parse_required_attributes()

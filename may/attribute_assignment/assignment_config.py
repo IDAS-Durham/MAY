@@ -383,31 +383,33 @@ class AttributeAssignmentConfig:
     def _parse_required_attributes(self) -> Dict[str, Any]:
         """Parse required attributes (dependencies).
 
-        Supports two formats:
-        1. Dict format: {attr_name: {description: "...", required: true, ...}}
-        2. List format: [{name: "attr_name", description: "...", required: true, ...}]
+        Canonical form is a list of entries, each carrying a 'name' (adr/0006):
 
-        Returns a dict format for backward compatibility.
+            required_attributes:
+              - name: ethnicity
+                required: true
+
+        Returned as a dict keyed by name for internal lookup. The retired mapping
+        form (`name: {...}`) raises a clear error rather than being accepted.
         """
-        raw_attrs = self.raw_config.get('required_attributes', {})
+        raw_attrs = self.raw_config.get('required_attributes', [])
+        if not raw_attrs:
+            return {}
 
-        # If it's already a dict, return it
-        if isinstance(raw_attrs, dict):
-            return raw_attrs
+        if not isinstance(raw_attrs, list):
+            raise ValueError(
+                f"required_attributes must be a list of entries each with a "
+                f"'name' (adr/0006), got {type(raw_attrs).__name__}. Convert the "
+                f"mapping form `name:\\n  ...` to `- name: name\\n  ...`."
+            )
 
-        # If it's a list, convert to dict using 'name' field as key
-        if isinstance(raw_attrs, list):
-            result = {}
-            for attr in raw_attrs:
-                if 'name' not in attr:
-                    raise ValueError(f"Required attribute entry missing 'name' field: {attr}")
-                name = attr['name']
-                # Copy all fields except 'name' into the config
-                config = {k: v for k, v in attr.items() if k != 'name'}
-                result[name] = config
-            return result
-
-        return {}
+        result = {}
+        for attr in raw_attrs:
+            if 'name' not in attr:
+                raise ValueError(f"Required attribute entry missing 'name' field: {attr}")
+            name = attr['name']
+            result[name] = {k: v for k, v in attr.items() if k != 'name'}
+        return result
 
     def _parse_categories(self) -> List[Dict[str, Any]]:
         """Parse categories (e.g., age bands)."""
