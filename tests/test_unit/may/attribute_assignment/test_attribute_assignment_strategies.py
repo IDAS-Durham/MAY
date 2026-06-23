@@ -512,8 +512,8 @@ class TestInheritanceStrategy:
     """
 
     ETHNICITY_LOGIC = [
-        {"when": "count(unique_values) == 1", "then": "values[0]"},
-        {"when": "count(unique_values) > 1", "then": "M"},
+        {"when": {"unique_count": 1}, "then": "values[0]"},
+        {"when": {"unique_count_at_least": 2}, "then": "M"},
     ]
 
     def _make_strategy(self, logic=None, marginal_source=None):
@@ -626,16 +626,15 @@ class TestInheritanceStrategy:
         with pytest.raises(RuntimeError, match="no logic block matched"):
             strategy.assign(MinimalPerson(), MinimalVenue(), context)
 
-    def test_malformed_logic_condition_does_not_crash(self):
-        """A bad 'when' expression should be caught, not raise to caller."""
+    def test_unknown_predicate_raises(self):
+        """An unrecognized 'when' predicate fails loudly, not silently (adr/0009)."""
         logic = [
-            {"when": "this is not valid python!!!", "then": "X"},
-            {"when": "count(unique_values) == 1", "then": "values[0]"},
+            {"when": {"bogus_operator": 1}, "then": "X"},
         ]
         strategy = self._make_strategy(logic=logic)
         context = self._make_context("W", "W")
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), context)
-        assert result == "W"
+        with pytest.raises(ValueError, match="unknown inheritance 'when' predicate"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), context)
 
     # ---- BUG DETECTION ----
 
@@ -645,7 +644,7 @@ class TestInheritanceStrategy:
         Regression test for: `if value:` → `if value is not None:`.
         """
         logic = [
-            {"when": "count(unique_values) == 1", "then": "values[0]"},
+            {"when": {"unique_count": 1}, "then": "values[0]"},
         ]
         strategy = self._make_strategy(logic=logic)
         primary = MinimalPerson(properties={"score": 0})
@@ -680,22 +679,22 @@ class TestReverseInheritanceStrategy:
 
     REVERSE_LOGIC_PRIMARY = [
         {
-            "when": "primary_adult.ethnicity in ['W', 'A', 'B', 'O']",
-            "then": "primary_adult.ethnicity",
+            "when": {"role": "primary_adult", "attr": "ethnicity", "in": ["W", "A", "B", "O"]},
+            "then": {"copy": {"role": "primary_adult", "attr": "ethnicity"}},
         },
         {
-            "when": "primary_adult.ethnicity == 'M'",
+            "when": {"role": "primary_adult", "attr": "ethnicity", "equals": "M"},
             "then": {"strategy": "probabilistic", "data_source": "geo_distribution"},
         },
     ]
 
     REVERSE_LOGIC_SECONDARY = [
         {
-            "when": "primary_adult.ethnicity in ['W', 'A', 'B', 'O']",
-            "then": "primary_adult.ethnicity",
+            "when": {"role": "primary_adult", "attr": "ethnicity", "in": ["W", "A", "B", "O"]},
+            "then": {"copy": {"role": "primary_adult", "attr": "ethnicity"}},
         },
         {
-            "when": "primary_adult.ethnicity == 'M'",
+            "when": {"role": "primary_adult", "attr": "ethnicity", "equals": "M"},
             "then": {
                 "strategy": "probabilistic",
                 "data_source": "geo_distribution",
@@ -804,7 +803,8 @@ class TestReverseInheritanceStrategy:
         Regression test for: `if not child_value:` → `if child_value is None:`.
         """
         logic = [
-            {"when": "primary_adult.score == 0", "then": "primary_adult.score"},
+            {"when": {"role": "primary_adult", "attr": "score", "equals": 0},
+             "then": {"copy": {"role": "primary_adult", "attr": "score"}}},
         ]
         config = {
             "strategy": "reverse_inheritance",
@@ -860,14 +860,12 @@ class TestReverseInheritanceStrategy:
         assert "W" not in results, "secondary_elder must exclude primary_elder's ethnicity"
         assert results <= {"A", "B"}, f"Expected only A and B, got {results}"
 
-    def test_exclude_with_all_values_excluded_falls_back_with_warning(self, caplog):
+    def test_exclude_with_all_values_excluded_raises(self):
         """
-        Edge case: if the geo distribution only has one ethnicity and we
-        exclude it, all values are removed. Should fall back to the full
-        distribution and log a warning.
+        Edge case: if the geo distribution only has one ethnicity and we exclude
+        it, no value remains. That is a data/config contradiction — fail loudly
+        rather than silently sampling the excluded value (adr/0010).
         """
-        import logging
-
         # Distribution has only "W"
         single_source = SimpleGeoSource(fallback={"W": 1.0})
         config = {
@@ -875,7 +873,7 @@ class TestReverseInheritanceStrategy:
             "inherit_from": {"role": "primary_adult"},
             "logic": [
                 {
-                    "when": "primary_adult.ethnicity == 'M'",
+                    "when": {"role": "primary_adult", "attr": "ethnicity", "equals": "M"},
                     "then": {
                         "strategy": "probabilistic",
                         "data_source": "geo_distribution",
@@ -896,18 +894,12 @@ class TestReverseInheritanceStrategy:
         }
 
         geo = MinimalGeoUnit("E00001234")
-        with caplog.at_level(logging.WARNING):
-            result = strategy.assign(
+        with pytest.raises(RuntimeError, match="all values excluded"):
+            strategy.assign(
                 MinimalPerson(geographical_unit=geo),
                 MinimalVenue(geographical_unit=geo),
                 context,
             )
-
-        # Should still return something (falls back to full distribution)
-        assert result is not None
-        assert result == "W"  # only value available after fallback
-        # Must have logged a warning about all values being excluded
-        assert any("All values excluded" in msg for msg in caplog.messages)
 
     def test_exclude_with_no_primary_elder_in_context(self):
         """

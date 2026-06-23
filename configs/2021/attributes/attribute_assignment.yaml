@@ -283,11 +283,11 @@ assignment_rules:
             roles: ["primary_adult", "secondary_adult"]
           logic:
             # Both parents same ethnicity → child gets same ethnicity
-            - when: "count(unique_values) == 1"
+            - when: {unique_count: 1}
               then: "values[0]"
               note: "W+W=W, A+A=A, B+B=B, O+O=O, M+M=M"
             # Parents have different ethnicities → child is Mixed
-            - when: "count(unique_values) > 1"
+            - when: {unique_count_at_least: 2}
               then: "M"
               note: "W+A=M, W+B=M, A+O=M, M+W=M, etc."
           marginal_source: "geo_distribution"
@@ -302,10 +302,10 @@ assignment_rules:
             role: "primary_adult"
           logic:
             # For non-mixed ethnicities, both parents must be same
-            - when: "primary_adult.ethnicity in ['W', 'A', 'B', 'O']"
-              then: "primary_adult.ethnicity"
+            - when: {role: primary_adult, attr: ethnicity, in: ["W", "A", "B", "O"]}
+              then: {copy: {role: primary_adult, attr: ethnicity}}
             # For mixed ethnicity, parents must be different - pick first parent
-            - when: "primary_adult.ethnicity == 'M'"
+            - when: {role: primary_adult, attr: ethnicity, equals: "M"}
               then:
                 strategy: "probabilistic"
                 data_source: "geo_distribution"
@@ -320,10 +320,10 @@ assignment_rules:
             role: "primary_adult"
           logic:
             # For non-mixed ethnicities, must match primary_elder
-            - when: "primary_adult.ethnicity in ['W', 'A', 'B', 'O']"
-              then: "primary_adult.ethnicity"
+            - when: {role: primary_adult, attr: ethnicity, in: ["W", "A", "B", "O"]}
+              then: {copy: {role: primary_adult, attr: ethnicity}}
             # For mixed ethnicity, must be different from primary_elder
-            - when: "primary_adult.ethnicity == 'M'"
+            - when: {role: primary_adult, attr: ethnicity, equals: "M"}
               then:
                 strategy: "probabilistic"
                 data_source: "geo_distribution"

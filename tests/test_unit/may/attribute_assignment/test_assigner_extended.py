@@ -223,8 +223,8 @@ def _build_family_config(geo_source, pair_source=None):
         "strategy": "inheritance",
         "inherit_from": {"roles": ["primary_adult", "secondary_adult"]},
         "logic": [
-            {"when": "count(unique_values) == 1", "then": "values[0]"},
-            {"when": "count(unique_values) > 1", "then": "M"},
+            {"when": {"unique_count": 1}, "then": "values[0]"},
+            {"when": {"unique_count_at_least": 2}, "then": "M"},
         ],
     }
 

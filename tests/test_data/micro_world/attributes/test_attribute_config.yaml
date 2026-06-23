@@ -94,7 +94,7 @@ assignment_rules:
           inherit_from:
             roles: ["Parent"]
           logic:
-            - when: "True"
+            - when: {unique_count: 1}
               then: "values[0]"
 
 # Non-Household communals

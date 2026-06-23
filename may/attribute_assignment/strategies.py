@@ -1,7 +1,6 @@
 import logging
 import numpy as np
 from typing import Dict, List, Any, Optional
-from functools import lru_cache
 
 logger = logging.getLogger("may.attribute_assignment.strategies")
 
@@ -23,9 +22,87 @@ STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
     'categorical_sampler': {'strategy', 'data_source'},
     'constant': {'strategy', 'value'},
 }
-# Logic entries and nested then-blocks (reverse_inheritance reads these inline).
+# Logic entries and nested then-blocks (inheritance strategies read these inline).
 _LOGIC_ENTRY_KEYS = {'when', 'then', 'note'}
-_THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value'}
+_THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value', 'copy'}
+
+# Strategies whose `logic:` blocks use the declarative when/then schema (adr/0009).
+_LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
+
+
+def _classify_when(when: Any) -> str:
+    """
+    Validate a declarative `when` predicate and return its kind (adr/0009).
+
+    Recognized forms (no eval — structured predicates only):
+      - {unique_count: N}          distinct collected values == N
+      - {unique_count_at_least: N} distinct collected values >= N
+      - {role: R, attr: A, equals: V}   role R's attribute A == V
+      - {role: R, attr: A, in: [V, ...]} role R's attribute A in the list
+
+    Raises:
+        ValueError: naming the offending predicate, so a malformed or unknown
+        `when` fails loudly instead of silently evaluating false.
+    """
+    if not isinstance(when, dict):
+        raise ValueError(
+            f"inheritance 'when' must be a mapping describing one predicate, got "
+            f"{when!r}. Use e.g. {{unique_count: 1}} or "
+            f"{{role: primary_adult, attr: ethnicity, equals: M}}."
+        )
+    keys = set(when)
+    if keys == {'unique_count'}:
+        return 'unique_count'
+    if keys == {'unique_count_at_least'}:
+        return 'unique_count_at_least'
+    if {'role', 'attr'} <= keys and keys <= {'role', 'attr', 'equals', 'in'}:
+        if ('equals' in keys) ^ ('in' in keys):
+            return 'role_attr'
+        raise ValueError(
+            f"inheritance role predicate needs exactly one of 'equals'/'in': {when!r}"
+        )
+    raise ValueError(
+        f"unknown inheritance 'when' predicate {when!r}. Known forms: "
+        f"{{unique_count: N}}, {{unique_count_at_least: N}}, "
+        f"{{role, attr, equals: V}}, {{role, attr, in: [...]}}."
+    )
+
+
+def _classify_then(then: Any) -> str:
+    """
+    Validate a declarative `then` action and return its kind (adr/0009).
+
+    Recognized forms:
+      - the literal token "values[0]"  → first collected value
+      - any other scalar               → that literal value
+      - {value: V}                     → literal V (explicit)
+      - {copy: {role: R, attr: A}}     → role R's attribute A value
+      - {strategy: ..., ...}           → nested strategy block
+
+    Raises:
+        ValueError: on an unrecognized `then` block.
+    """
+    if isinstance(then, dict):
+        keys = set(then)
+        if keys == {'value'}:
+            return 'value'
+        if keys == {'copy'}:
+            spec = then['copy']
+            if not isinstance(spec, dict) or set(spec) != {'role', 'attr'}:
+                raise ValueError(
+                    f"inheritance 'then.copy' must be {{role, attr}}, got {then['copy']!r}"
+                )
+            return 'copy'
+        if 'strategy' in keys:
+            return 'strategy'
+        raise ValueError(
+            f"unknown inheritance 'then' block {then!r}. Known forms: a literal, "
+            f"\"values[0]\", {{value: V}}, {{copy: {{role, attr}}}}, or a nested "
+            f"strategy block."
+        )
+    if then == 'values[0]':
+        return 'values[0]'
+    return 'literal'
 
 
 def validate_assignment_config(config: Dict[str, Any], where: str = "assignment") -> None:
@@ -59,6 +136,7 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
             f"Remove them (dead config) or fix the typo."
         )
 
+    is_logic_strategy = strategy_type in _LOGIC_STRATEGIES
     for i, entry in enumerate(config.get('logic') or []):
         entry = entry or {}
         unknown = set(entry) - _LOGIC_ENTRY_KEYS
@@ -75,21 +153,12 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
                     f"{where}.logic[{i}].then: unknown key(s) {sorted(unknown)} — "
                     f"allowed: {sorted(_THEN_BLOCK_KEYS)}"
                 )
-
-
-@lru_cache(maxsize=2048)
-def _compile_expression(expr: str, mode: str = 'eval'):
-    """
-    Cached compilation of Python expressions.
-
-    Args:
-        expr: The expression string to compile
-        mode: 'eval' for expressions, 'exec' for statements
-
-    Returns:
-        Compiled code object
-    """
-    return compile(expr, '<string>', mode)
+        if is_logic_strategy:
+            try:
+                _classify_when(entry.get('when'))
+                _classify_then(then)
+            except ValueError as exc:
+                raise ValueError(f"{where}.logic[{i}]: {exc}") from exc
 
 
 class AssignmentStrategy:
@@ -306,230 +375,89 @@ class PartnershipStrategy(AssignmentStrategy):
 
 
 
-class InheritanceStrategy(AssignmentStrategy):
+class LogicBlockStrategy(AssignmentStrategy):
     """
-    Forward inheritance: Parent → Child.
+    Base for the inheritance strategies that drive assignment from declarative
+    `when`/`then` logic blocks (adr/0009).
 
-    Children inherit attribute values from parents based on combination rules.
-    Logic is completely configurable via YAML logic blocks.
-
-    Example for ethnicity:
-    - Same + Same = Same (W+W=W, A+A=A, etc.)
-    - Different = Mixed (W+A=M, W+B=M, etc.)
-    - Mixed + Any = Mixed (M+X=M)
-
-    Simplified from V1 - no complex conditions, just straightforward logic.
+    A `when` is a structured predicate (see `_classify_when`) evaluated against
+    the collected source values and role context — never an eval'd string. A
+    `then` is a literal, the `values[0]` token, a `{value: ...}` / `{copy: ...}`
+    block, or a nested strategy block (see `_classify_then`). The first block
+    whose `when` matches wins; if none match, assignment fails loudly (adr/0010).
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
-        """Initialize inheritance strategy - completely generic."""
         super().__init__(config, data_manager)
-        # Store the full config - we'll evaluate logic blocks
         self.inherit_config = config.get('inherit_from', {})
         self.logic_blocks = config.get('logic', [])
 
-    def assign(self, person, household, context: Dict[str, Any]) -> Any:
-        """
-        Assign value based on inheritance from parent roles (completely generic).
+    def _resolve_role_attr(self, role: str, attr: str, context: Dict[str, Any]) -> Any:
+        """Resolve a `role.attribute` reference to its assigned value, or raise."""
+        person = self._get_person_by_role(context, role)
+        if person is None:
+            raise ValueError(f"logic predicate references role '{role}' absent from context")
+        value = self._get_attribute_value(person, attr)
+        if value is None:
+            raise ValueError(f"logic predicate: role '{role}' has no '{attr}' assigned")
+        return value
 
-        Evaluates logic blocks defined in YAML configuration.
+    def _evaluate_when(self, when: Any, source_values: List[Any],
+                       context: Dict[str, Any]) -> bool:
+        """Evaluate a declarative `when` predicate; unknown shapes raise (adr/0009)."""
+        kind = _classify_when(when)
+        if kind == 'unique_count':
+            return len(set(source_values)) == when['unique_count']
+        if kind == 'unique_count_at_least':
+            return len(set(source_values)) >= when['unique_count_at_least']
+        # role_attr
+        value = self._resolve_role_attr(when['role'], when['attr'], context)
+        if 'equals' in when:
+            return value == when['equals']
+        return value in when['in']
 
-        Args:
-            person: Person object
-            household: Household object
-            context: Assignment context
+    def _resolve_then(self, then: Any, source_values: List[Any], person, household,
+                      context: Dict[str, Any], attribute_name: str) -> Any:
+        """Produce the value for a matched `then` action (adr/0009)."""
+        kind = _classify_then(then)
+        if kind == 'value':
+            return then['value']
+        if kind == 'copy':
+            spec = then['copy']
+            return self._resolve_role_attr(spec['role'], spec['attr'], context)
+        if kind == 'strategy':
+            return self._run_nested_strategy(then, person, household, context, attribute_name)
+        if kind == 'values[0]':
+            if not source_values:
+                return self._fail(person, "'then: values[0]' but no source values collected")
+            return source_values[0]
+        # literal
+        return then
 
-        Returns:
-            Inherited attribute value
-        """
-        attribute_name = context.get('attribute_name')
+    def _run_nested_strategy(self, then: Dict[str, Any], person, household,
+                             context: Dict[str, Any], attribute_name: str) -> Any:
+        """Run a nested strategy block, honouring any `exclude` constraint."""
+        strategy_type = then.get('strategy')
+        if strategy_type != 'probabilistic':
+            return self._fail(person, f"unsupported nested strategy '{strategy_type}' in logic block")
+        excluded_values = self._resolve_exclude_values(
+            then.get('exclude', []), context, attribute_name
+        )
+        if excluded_values:
+            return self._sample_with_exclusion(person, household, context, then, excluded_values)
+        return ProbabilisticStrategy(then, self.data_manager).assign(person, household, context)
 
-        # Get roles to inherit from
-        parent_roles = self.inherit_config.get('roles', [])
-
-        # Collect parent values
-        parent_values = []
-        for role_name in parent_roles:
-            parent = self._get_person_by_role(context, role_name)
-            if parent:
-                value = self._get_attribute_value(parent, attribute_name)
-                if value is not None:
-                    parent_values.append(value)
-
-        if not parent_values:
-            logger.warning(f"No parent values found for inheritance")
-            return self._marginal_assign(person, household, context)
-
-        # Evaluate logic blocks
-        unique_values = list(set(parent_values))
-
-        # Create evaluation context for logic blocks
-        eval_context = {
-            'values': parent_values,
-            'unique_values': unique_values,
-            'count': lambda x: len(x)
-        }
-
-        # Evaluate each logic block
+    def _run_logic(self, source_values: List[Any], person, household,
+                   context: Dict[str, Any], attribute_name: str) -> Any:
+        """First block whose `when` matches wins; no match fails loudly (adr/0010)."""
         for logic_block in self.logic_blocks:
-            when_condition = logic_block.get('when')
-            then_action = logic_block.get('then')
-
-            try:
-                # Evaluate the condition
-                if self._evaluate_condition(when_condition, eval_context):
-                    # Execute the 'then' action
-                    if isinstance(then_action, str):
-                        # Simple value like "M" or "values[0]"
-                        result = self._resolve_value(then_action, eval_context)
-                        logger.debug(f"Inheritance: {result} for {person.id}")
-                        return result
-                    elif isinstance(then_action, dict):
-                        # Nested strategy - not implemented yet, fall back
-                        logger.warning(f"Nested strategy in inheritance not yet supported")
-                        return self._fail(person, "unsupported nested strategy in logic block")
-            except Exception as e:
-                logger.warning(f"Error evaluating inheritance logic: {e}")
-                continue
-
-        # No logic matched - fallback
-        return self._fail(person, "no logic block matched")
-
-    def _evaluate_condition(self, condition: str, context: dict) -> bool:
-        """Evaluate a when condition with fast-paths for common patterns."""
-        # FAST PATH: These account for >90% of ethnicity inheritance calls
-        if condition == "count(unique_values) == 1":
-            return len(context['unique_values']) == 1
-        if condition == "count(unique_values) > 1":
-            return len(context['unique_values']) > 1
-            
-        try:
-            # Fallback to cached eval for complex conditions
-            code = _compile_expression(condition, 'eval')
-            return eval(code, {"__builtins__": {}}, context)
-        except:
-            return False
-
-    def _resolve_value(self, value_expr: str, context: dict) -> Any:
-        """Resolve a value expression with fast-paths for common patterns."""
-        # FAST PATH: Common resolutions like 'M' or 'values[0]'
-        if value_expr == "values[0]":
-            return context['values'][0] if context['values'] else None
-        if len(value_expr) <= 2: # Likely a literal code like "M", "W", etc.
-            # If it's in context, it's a variable, but for letters it's usually literal
-            if value_expr not in context:
-                return value_expr
-            
-        try:
-            # Fallback to cached eval
-            code = _compile_expression(value_expr, 'eval')
-            return eval(code, {"__builtins__": {}}, context)
-        except:
-            # If it fails, return as literal string
-            return value_expr
-
-
-
-class ReverseInheritanceStrategy(AssignmentStrategy):
-    """
-    Reverse inheritance: Child → Parent.
-
-    When children are assigned first, infer parent attribute values.
-    Logic is completely configurable via YAML logic blocks.
-
-    Example for ethnicity:
-    - Child is W/A/B/O → Both parents must be same (both W, both A, etc.)
-    - Child is M → Parents must differ (sample two different values from geo distribution)
-
-    Enables "kids first" assignment in certain household patterns.
-    """
-
-    def __init__(self, config: Dict[str, Any], data_manager):
-        """Initialize reverse inheritance strategy - completely generic."""
-        super().__init__(config, data_manager)
-        # Store the full config - we'll evaluate logic blocks
-        self.inherit_config = config.get('inherit_from', {})
-        self.logic_blocks = config.get('logic', [])
-
-    def assign(self, person, household, context: Dict[str, Any]) -> Any:
-        """
-        Assign value based on reverse inheritance (generic - evaluates logic blocks).
-
-        Args:
-            person: Person object (parent being assigned)
-            household: Household object
-            context: Assignment context
-
-        Returns:
-            Inferred parent value
-        """
-        attribute_name = context.get('attribute_name')
-
-        # Get child role to inherit from
-        child_role = self.inherit_config.get('role')
-        if not child_role:
-            logger.warning("No child role specified for reverse inheritance")
-            return self._fail(person, "no child role configured for reverse inheritance")
-
-        # Get child's attribute value
-        child = self._get_person_by_role(context, child_role)
-        if not child:
-            logger.warning(f"Child role '{child_role}' not found")
-            return self._marginal_assign(person, household, context)
-
-        child_value = self._get_attribute_value(child, attribute_name)
-        if child_value is None:
-            logger.warning(f"No value found for child role '{child_role}'")
-            return self._marginal_assign(person, household, context)
-
-        # Create evaluation context for logic blocks
-        # Make child value accessible as "primary_adult.ethnicity" format
-        eval_context = {child_role: type('obj', (object,), {attribute_name: child_value})()}
-
-        # Evaluate each logic block
-        for logic_block in self.logic_blocks:
-            when_condition = logic_block.get('when')
-            then_action = logic_block.get('then')
-
-            try:
-                # Evaluate the condition
-                if self._evaluate_condition_with_context(when_condition, eval_context, child_role, attribute_name, child_value):
-                    # Execute the 'then' action
-                    if isinstance(then_action, str):
-                        # Simple value - might be literal or reference to child value
-                        if then_action == f"{child_role}.{attribute_name}":
-                            result = child_value
-                        else:
-                            result = then_action
-                        logger.debug(f"Reverse inheritance: {result} for {person.id}")
-                        return result
-                    elif isinstance(then_action, dict):
-                        # Nested strategy - create and execute it
-                        strategy_type = then_action.get('strategy')
-                        if strategy_type == 'probabilistic':
-                            # Check for exclude constraints (e.g., secondary_elder
-                            # must differ from primary_elder when child is Mixed)
-                            exclude_refs = then_action.get('exclude', [])
-                            excluded_values = self._resolve_exclude_values(
-                                exclude_refs, context, attribute_name
-                            )
-
-                            if excluded_values:
-                                return self._sample_with_exclusion(
-                                    person, household, context,
-                                    then_action, excluded_values
-                                )
-                            else:
-                                fallback_strategy = ProbabilisticStrategy(then_action, self.data_manager)
-                                return fallback_strategy.assign(person, household, context)
-                        else:
-                            logger.warning(f"Unknown nested strategy: {strategy_type}")
-                            return self._fail(person, "unsupported nested strategy in logic block")
-            except Exception as e:
-                logger.warning(f"Error evaluating reverse inheritance logic: {e}")
-                continue
-
-        # No logic matched - fallback
+            if self._evaluate_when(logic_block.get('when'), source_values, context):
+                result = self._resolve_then(
+                    logic_block.get('then'), source_values,
+                    person, household, context, attribute_name,
+                )
+                logger.debug(f"{self.strategy_type}: {result} for {person.id}")
+                return result
         return self._fail(person, "no logic block matched")
 
     def _resolve_exclude_values(self, exclude_refs: List[str],
@@ -538,6 +466,10 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         """
         Resolve exclude references like ["primary_elder.ethnicity"] into
         concrete values by looking up the referenced role persons in context.
+
+        A referenced role that is not yet in context (e.g. the first elder when
+        assigning the second) contributes nothing to exclude — there is no value
+        to differ from yet. That is primary logic, not a fallback.
 
         Args:
             exclude_refs: List of "role.attribute" reference strings
@@ -576,9 +508,9 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         """
         Sample from a probabilistic distribution while excluding specific values.
 
-        Gets the full distribution, removes excluded values, re-normalizes,
-        and samples. Falls back to sampling without exclusion if all values
-        would be excluded.
+        Gets the full distribution, removes excluded values, re-normalizes, and
+        samples. If every value is excluded, that is a data/config contradiction —
+        fail loudly rather than silently sampling the excluded value (adr/0010).
 
         Args:
             person: Person being assigned
@@ -613,13 +545,11 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         filtered_probs = {k: v for k, v in probs.items() if k not in excluded_values}
 
         if not filtered_probs:
-            # All values excluded — fall back to full distribution with warning
-            logger.warning(
-                f"All values excluded for person {person.id} "
-                f"(excluded={excluded_values}, available={set(probs.keys())}). "
-                f"Falling back to full distribution without exclusion."
+            return self._fail(
+                person,
+                f"all values excluded (excluded={excluded_values}, "
+                f"available={set(probs.keys())})",
             )
-            filtered_probs = probs
 
         # Re-normalize
         total = sum(filtered_probs.values())
@@ -632,32 +562,68 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
 
         sampled = np.random.choice(values, p=probabilities)
         logger.debug(
-            f"Reverse inheritance (with exclusion): {sampled} for {person.id} "
+            f"Inheritance (with exclusion): {sampled} for {person.id} "
             f"(excluded={excluded_values})"
         )
         return sampled
 
-    def _evaluate_condition_with_context(self, condition: str, eval_context: dict,
-                                         child_role: str, attribute_name: str, child_value: Any) -> bool:
-        """Evaluate a when condition with attribute access and fast-paths."""
-        # FAST PATH: Pattern like "primary_adult.ethnicity == 'W'"
-        prefix = f"{child_role}.{attribute_name}"
-        if condition.startswith(prefix):
-            op_part = condition[len(prefix):].strip()
-            if op_part.startswith("=="):
-                # Extract value (handles both 'VAL' and "VAL")
-                val_part = op_part[2:].strip().strip("'").strip('"')
-                return str(child_value) == val_part
 
-        try:
-            # Build a safe evaluation context
-            safe_context = {
-                "__builtins__": {},
-                child_role: eval_context[child_role]
-            }
-            return eval(condition, safe_context, {})
-        except:
-            return False
+class InheritanceStrategy(LogicBlockStrategy):
+    """
+    Forward inheritance: Parent → Child.
+
+    Children inherit attribute values from parents based on declarative logic
+    blocks. Example for ethnicity: same parents → that value (`values[0]`),
+    differing parents → `M` (Mixed).
+    """
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """Assign a value by inheriting from the configured parent roles."""
+        attribute_name = context.get('attribute_name')
+        parent_roles = self.inherit_config.get('roles', [])
+
+        parent_values = []
+        for role_name in parent_roles:
+            parent = self._get_person_by_role(context, role_name)
+            if parent:
+                value = self._get_attribute_value(parent, attribute_name)
+                if value is not None:
+                    parent_values.append(value)
+
+        if not parent_values:
+            return self._marginal_assign(person, household, context)
+
+        return self._run_logic(parent_values, person, household, context, attribute_name)
+
+
+class ReverseInheritanceStrategy(LogicBlockStrategy):
+    """
+    Reverse inheritance: Child → Parent.
+
+    When children are assigned first, infer a parent's attribute value from the
+    child's, via declarative logic blocks. Example for ethnicity: child W/A/B/O →
+    parent copies it; child M → parents differ (nested probabilistic draw, with an
+    optional `exclude` to force a second parent to differ from the first).
+    """
+
+    def assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """Assign a value by inferring it from the configured child role."""
+        attribute_name = context.get('attribute_name')
+
+        child_role = self.inherit_config.get('role')
+        if not child_role:
+            return self._fail(person, "no child role configured for reverse inheritance")
+
+        child = self._get_person_by_role(context, child_role)
+        if not child:
+            return self._marginal_assign(person, household, context)
+
+        child_value = self._get_attribute_value(child, attribute_name)
+        if child_value is None:
+            return self._marginal_assign(person, household, context)
+
+        return self._run_logic([child_value], person, household, context, attribute_name)
+
 
 class ProbabilisticConditionsStrategy(AssignmentStrategy):
     """
