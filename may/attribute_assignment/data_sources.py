@@ -864,15 +864,13 @@ class GUSamplerSource(DataSource):
                 try:
                     df = pd.read_csv(file_path)
 
-                    parent_column = file_config.get('key_column')
-                    if not parent_column:
-                        raise ValueError(
-                            f"GU sampler source '{self.name}' needs 'key_column' "
-                            "(the parent-GU column in the data)."
-                        )
+                    # Parent-GU lookup key: canonical one-entry key_columns mapping (adr/0006).
+                    parent_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
                     weight_column = file_config.get('weight_column', 'Total')
 
-                    # Handle geographical_unit_column, format: {name: ..., level: ...}
+                    # The sampled child-GU output column (distinct from the lookup
+                    # key above), format: {name: ..., level: ...}. `level` is the
+                    # user-facing label, used only for logging.
                     geo_unit_config = file_config.get('geographical_unit_column')
                     if geo_unit_config:
                         geo_unit_column = geo_unit_config.get('name')

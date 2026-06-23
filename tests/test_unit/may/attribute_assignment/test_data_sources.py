@@ -765,7 +765,7 @@ class TestDataSourceManagerRouting:
         config = self._make_config({
             "ethnicity_distribution": ("csv_lookup", {
                 "format": "geo_distribution",
-                "files": [{"path": "/fake/path.csv", "key_column": "geo_unit", "value_columns": {"W": "white"}}],
+                "files": [{"path": "/fake/path.csv", "key_columns": {"geo_unit": None}, "value_columns": {"W": "white"}}],
             })
         })
         manager = DataSourceManager(config)
@@ -775,7 +775,7 @@ class TestDataSourceManagerRouting:
         config = self._make_config({
             "ethnicity_diversity": ("csv_lookup", {
                 "format": "diversity",
-                "files": [{"path": "/fake/path.csv", "key_column": "geo_unit", "value_columns": {"single": "single"}}],
+                "files": [{"path": "/fake/path.csv", "key_columns": {"geo_unit": None}, "value_columns": {"single": "single"}}],
             })
         })
         manager = DataSourceManager(config)
@@ -785,7 +785,7 @@ class TestDataSourceManagerRouting:
         config = self._make_config({
             "ethnicity_pairs": ("csv_lookup", {
                 "format": "pair",
-                "files": [{"path": "/fake/path.csv", "key_columns": ["geo_unit", "first_eth"], "value_columns": {"W": "white"}}],
+                "files": [{"path": "/fake/path.csv", "key_columns": {"geo_unit": None, "first_eth": None}, "value_columns": {"W": "white"}}],
             })
         })
         manager = DataSourceManager(config)
@@ -824,7 +824,7 @@ class TestDataSourceManagerRouting:
                 "format": "gu_sampler",
                 "files": [{
                     "path": "/fake/path.csv",
-                    "key_column": "LGU",
+                    "key_columns": {"LGU": None},
                     "geographical_unit_column": {"name": "SGU", "level": "SGU"},
                     "weight_column": "Total",
                 }],

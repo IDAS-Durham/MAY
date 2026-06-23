@@ -50,8 +50,10 @@ data_sources:
     files:
       - path: "${data_root}/activities/work/EW_workers_by_industry_by_OA.csv"
 
-        # Key column: Match person's workplace LGU (from properties)
-        key_column: "LGU"
+        # Lookup key: match person's workplace LGU (from properties).
+        # Canonical one-entry key_columns mapping; null = key passed directly.
+        key_columns:
+          LGU: ~
 
         # Geographical unit column: specifies which GU level to sample
         # The loader will aggregate all GUs at this level for each parent
