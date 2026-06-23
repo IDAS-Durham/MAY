@@ -6,6 +6,7 @@ from collections import defaultdict
 from .assignment_config import AttributeAssignmentConfig
 from .data_sources import DataSourceManager
 from .strategies import StrategyFactory
+from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("may.attribute_assignment.assigner")
 
@@ -96,8 +97,6 @@ class AttributeAssigner:
                     'min': num.get('min'),
                     'max': num.get('max'),
                     'values': cat_values,
-                    'is_age': attr == 'age',
-                    'is_sex': attr == 'sex'
                 })
 
         self._activity_filters = config.filters.get('activities', {}) if self._has_filters else {}
@@ -320,16 +319,7 @@ class AttributeAssigner:
 
         # 1. Attribute filters
         for f in self._optimized_filters:
-            # Use direct attribute access for age/sex (significant speedup)
-            if f['is_age']:
-                person_value = person.age
-            elif f['is_sex']:
-                person_value = person.sex
-            else:
-                # Check properties first
-                person_value = person.properties.get(f['attr'])
-                if person_value is None:
-                    person_value = getattr(person, f['attr'], None)
+            person_value = get_person_attribute(person, f['attr'])
 
             if person_value is None:
                 continue

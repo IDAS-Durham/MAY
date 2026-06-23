@@ -12,6 +12,7 @@ import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 from may.utils import path_resolver as pr
+from may.utils.attribute_access import get_person_attribute, get_nested_value
 
 logger = logging.getLogger("may.attribute_assignment.data_sources")
 
@@ -609,10 +610,7 @@ class MultiKeyLookupSource(DataSource):
         col_type = col_config.get('type', 'direct')
 
         if col_type == 'direct':
-            # Direct attribute lookup
-            value = person.properties.get(attr_name)
-            if value is None:
-                value = getattr(person, attr_name, None)
+            value = get_person_attribute(person, attr_name)
 
             # Check if this is a required attribute with mapping
             if attr_name in self.assignment_config.required_attributes:
@@ -623,20 +621,16 @@ class MultiKeyLookupSource(DataSource):
 
         elif col_type == 'category_lookup':
             # Get attribute value, find matching category
-            value = getattr(person, attr_name, None)
-            if value is None:
-                value = person.properties.get(attr_name)
-
+            value = get_person_attribute(person, attr_name)
             category = self.assignment_config.get_category_for_value(value, attr_name)
             return category.get('csv_value') if category else None
 
         elif col_type == 'ancestor_lookup':
             # Traverse hierarchy
-            geo_unit = getattr(person, attr_name, None)
-            if geo_unit is None:
-                # Try household's geo unit
-                if household:
-                    geo_unit = getattr(household, attr_name, None)
+            geo_unit = get_person_attribute(person, attr_name)
+            if geo_unit is None and household:
+                # Fall back to the household's geo unit
+                geo_unit = get_nested_value(household, attr_name)
 
             if geo_unit is None:
                 return None
