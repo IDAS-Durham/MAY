@@ -34,79 +34,17 @@ venue_types:
     description: "Educational institutions for primary and secondary education"
     is_residence: false  # Not a place where people live
 
-    # Capacity configuration
-    capacity_config:
-      total_capacity_column: "SchoolCapacity"
-
   university:
     enabled: true
     filename: primary_activities/uk_universities.csv
     description: "Higher education institutions"
     is_residence: false  # Not a place where people live
 
-    # Capacity configuration
-    capacity_config:
-      total_capacity_column: "n_students"
-
   care_home:
     enabled: true
     filename: residences/care_homes.csv
     description: "Residential care facilities for elderly or disabled persons"
     is_residence: true  # People live here
-
-    # Capacity configuration for attribute-aware allocation
-    capacity_config:
-      # Total capacity column
-      total_capacity_column: "capacity"
-
-      # Attribute-based capacity breakdown
-      attribute_capacities:
-        # Define which attributes we filter by
-        filter_attributes:
-          - name: "age"
-            type: "age_band"
-          - name: "sex"
-            type: "categorical"
-
-        # Map CSV columns to attribute combinations
-        # Format: {column_name: {age_band: [min, max], sex: "male/female"}}
-        column_mappings:
-          age_50_64_male:
-            age_band: [50, 64]
-            sex: "male"
-          age_50_64_female:
-            age_band: [50, 64]
-            sex: "female"
-          age_65_74_male:
-            age_band: [65, 74]
-            sex: "male"
-          age_65_74_female:
-            age_band: [65, 74]
-            sex: "female"
-          age_75_84_male:
-            age_band: [75, 84]
-            sex: "male"
-          age_75_84_female:
-            age_band: [75, 84]
-            sex: "female"
-          age_85_94_male:
-            age_band: [85, 94]
-            sex: "male"
-          age_85_94_female:
-            age_band: [85, 94]
-            sex: "female"
-          age_95_plus_male:
-            age_band: [95, 120]
-            sex: "male"
-          age_95_plus_female:
-            age_band: [95, 120]
-            sex: "female"
-
-      # Fallback behavior when specific slots are full
-      fallback_strategy: "total_capacity"  # or "strict", "total_capacity"
-      # - "flexible": Allow overflow into other age/sex slots
-      # - "strict": Only allocate to exact matches
-      # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
 
   prison:
     enabled: false
@@ -120,98 +58,17 @@ venue_types:
     description: "Commercial workplaces and businesses"
     is_residence: false  # Not a place where people live
 
-    # Capacity configuration
-    capacity_config:
-      total_capacity_column: "employee_count"
-
   boarding_school:
     enabled: true
     filename: residences/boarding_schools.csv
     description: "Communal residence for school kids"
     is_residence: true  # People live here
 
-    # Capacity configuration for attribute-aware allocation
-    capacity_config:
-      # Total capacity column
-      total_capacity_column: "n_total"
-
-      # Attribute-based capacity breakdown
-      attribute_capacities:
-        # Define which attributes we filter by
-        filter_attributes:
-          - name: "age"
-            type: "age_band"
-          - name: "sex"
-            type: "categorical"
-
-        # Map CSV columns to attribute combinations
-        # Format: {column_name: {age_band: [min, max], sex: "male/female"}}
-        column_mappings:
-          n_0_15_male:
-            age_band: [0, 15]
-            sex: "male"
-          n_0_15_female:
-            age_band: [0, 15]
-            sex: "female"
-          n_16_24_male:
-            age_band: [16, 24]
-            sex: "male"
-          n_16_24_female:
-            age_band: [16, 24]
-            sex: "female"
-
-      # Venue-specific attribute constraints (hard limits from CSV columns)
-      # These enforce that only people with attribute values within the venue's
-      # specified range can be allocated to that venue
-      attribute_constraints:
-        age:
-          min_column: "StatutoryLowAge"
-          max_column: "StatutoryHighAge"
-          # Both min and max are inclusive ranges
-
-      # Fallback behavior when specific slots are full
-      fallback_strategy: "flexible"  # or "strict", "total_capacity"
-      # - "flexible": Allow overflow into other age/sex slots
-      # - "strict": Only allocate to exact matches
-      # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
-
   student_dorms:
     enabled: true
     filename: residences/student_dorms.csv
     description: "Communal residence for university students"
     is_residence: true  # People live here
-
-    # Capacity configuration for attribute-aware allocation
-    capacity_config:
-      # Total capacity column
-      total_capacity_column: "n_total"
-
-      # Attribute-based capacity breakdown
-      attribute_capacities:
-        # Define which attributes we filter by
-        filter_attributes:
-          - name: "age"
-            type: "age_band"
-
-        # Map CSV columns to attribute combinations
-        # Format: {column_name: {age_band: [min, max], sex: "male/female"}}
-        column_mappings:
-          n_16_24:
-            age_band: [18, 24]
-          n_25_34:
-            age_band: [25, 34]
-          n_35_49:
-            age_band: [35, 49]
-          n_50_64:
-            age_band: [50, 64]
-          n_65_99:
-            age_band: [65, 99]
-
-      # Fallback behavior when specific slots are full
-      fallback_strategy: "flexible"  # or "strict", "total_capacity"
-      # - "flexible": Allow overflow into other age/sex slots
-      # - "strict": Only allocate to exact matches
-      # - "total_capacity": Use total capacity as hard limit, ignore breakdowns
   
   cinema:
     enabled: true

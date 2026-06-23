@@ -87,29 +87,29 @@ data_sources:
         # Only tube/train/bus get a distributor + venue in task 8; the rest are
         # terminal modes with no commute venue.
         value_columns:
-          tube:          "Underground, metro, light rail, tram"
-          train:         "Train"
-          bus:           "Bus, minibus or coach"
-          taxi:          "Taxi"
-          motorcycle:    "Motorcycle, scooter or moped"
-          car_solo:      "Driving a car or van"
+          tube: "Underground, metro, light rail, tram"
+          train: "Train"
+          bus: "Bus, minibus or coach"
+          taxi: "Taxi"
+          motorcycle: "Motorcycle, scooter or moped"
+          car_solo: "Driving a car or van"
           car_passenger: "Passenger in a car or van"
-          bike:          "Bicycle"
-          walk:          "On foot"
-          other:         "Other method of travel to work"
+          bike: "Bicycle"
+          walk: "On foot"
+          other: "Other method of travel to work"
 
     # National TS061 shares (WFH-excluded), used when an OA is missing.
     fallback:
-      tube:          0.04
-      train:         0.05
-      bus:           0.07
-      taxi:          0.01
-      motorcycle:    0.01
-      car_solo:      0.58
+      tube: 0.04
+      train: 0.05
+      bus: 0.07
+      taxi: 0.01
+      motorcycle: 0.01
+      car_solo: 0.58
       car_passenger: 0.05
-      bike:          0.03
-      walk:          0.15
-      other:         0.01
+      bike: 0.03
+      walk: 0.15
+      other: 0.01
 
 # ============================================================================
 # Assignment Rules (Person-Level)
@@ -123,23 +123,3 @@ assignment_rules:
         assignment:
           strategy: "categorical_sampler"
           data_source: "travel_to_work_mode"
-
-# ============================================================================
-# Settings
-# ============================================================================
-settings:
-  random_seed: null
-  normalize_probabilities: true
-  cache_lookups: true
-
-  error_handling:
-    missing_geo_unit: "use_fallback"
-    missing_lookup_data: "use_fallback"
-    missing_filter_activity: "skip_person"
-
-  logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: true
-    sample_size: 10
-    show_attribute_distribution: true

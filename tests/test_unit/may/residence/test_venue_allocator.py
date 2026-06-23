@@ -317,7 +317,6 @@ class TestSimpleAllocation:
 
     def _shelter_config(self, strategy="random", max_allocations=None):
         cfg = {
-            "allocation_mode": "simple",
             "capacity_property": "capacity",
             "eligibility": [],
             "strategy": strategy,
@@ -464,9 +463,24 @@ class TestAttributeAwareAllocation:
 
     def _care_home_config(self):
         return {
-            "allocation_mode": "attribute_aware",
             "eligibility": [{"attribute": "age", "min": 50}],
             "strategy": "oldest_first",
+            "capacity_config": {
+                "attribute_capacities": {
+                    "column_mappings": {
+                        "age_50_64_male":   {"age_band": [50, 64], "sex": "male"},
+                        "age_50_64_female": {"age_band": [50, 64], "sex": "female"},
+                        "age_65_74_male":   {"age_band": [65, 74], "sex": "male"},
+                        "age_65_74_female": {"age_band": [65, 74], "sex": "female"},
+                        "age_75_84_male":   {"age_band": [75, 84], "sex": "male"},
+                        "age_75_84_female": {"age_band": [75, 84], "sex": "female"},
+                        "age_85_94_male":   {"age_band": [85, 94], "sex": "male"},
+                        "age_85_94_female": {"age_band": [85, 94], "sex": "female"},
+                        "age_95_plus_male":   {"age_band": [95, 120], "sex": "male"},
+                        "age_95_plus_female": {"age_band": [95, 120], "sex": "female"},
+                    }
+                }
+            },
         }
 
     def test_only_eligible_ages_placed_in_care_homes(self, hd):
@@ -506,8 +520,7 @@ class TestAttributeAwareAllocation:
         """The number of residents in any slot must not exceed that slot's CSV capacity."""
         cfg = self._care_home_config()
         _allocate_with_attributes("care_home", cfg, hd.population, hd.venue_manager, hd)
-        capacity_config = hd.venue_manager.get_capacity_config("care_home")
-        column_mappings = capacity_config["attribute_capacities"]["column_mappings"]
+        column_mappings = cfg["capacity_config"]["attribute_capacities"]["column_mappings"]
         care_homes = hd.venue_manager.get_venues_by_type("care_home")
         for ch in care_homes:
             for col in column_mappings:
@@ -565,33 +578,85 @@ class TestAttributeAwareAllocation:
         """If VenueManager has no capacity_config for the type, falls back to simple allocation."""
         # shelter has no capacity_config defined → should fall back
         cfg = {
-            "allocation_mode": "attribute_aware",
             "capacity_property": "capacity",
             "eligibility": [],
             "strategy": "random",
         }
         # Must not raise, and must allocate some people (shelters have capacity)
         stats = _allocate_with_attributes("shelter", cfg, hd.population, hd.venue_manager, hd)
-        # After fallback, mode is reset to simple and allocation proceeds
+        # No column_mappings → falls back to simple allocation and proceeds
         assert stats["allocated"] >= 0
         assert "total_capacity" in stats
 
     def test_no_venues_found_returns_zero_stats(self, hd):
         """When the venue type has no venues loaded, stats must show zeros."""
         cfg = {
-            "allocation_mode": "attribute_aware",
             "eligibility": [],
             "strategy": "random",
-        }
-        # Manually inject a capacity_config but no venues
-        hd.venue_manager.capacity_configs["ghost_venue"] = {
-            "attribute_capacities": {
-                "column_mappings": {"slot_a": {"age_band": [0, 99]}}
-            }
+            # Capacity config is now owned by the allocation step itself,
+            # not by venue_manager.
+            "capacity_config": {
+                "attribute_capacities": {
+                    "column_mappings": {"slot_a": {"age_band": [0, 99]}}
+                }
+            },
         }
         stats = _allocate_with_attributes("ghost_venue", cfg, hd.population, hd.venue_manager, hd)
         assert stats["venues"] == 0
         assert stats["allocated"] == 0
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Mode gate — _allocate_to_venue_type routes by presence of column_mappings
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestAllocationModeGate:
+    """The single switch: a step is attribute-aware iff its capacity_config
+    supplies attribute_capacities.column_mappings. The legacy allocation_mode /
+    use_attribute_capacities flags are gone and never consulted."""
+
+    def test_column_mappings_present_routes_to_attribute_aware(self, hd):
+        """capacity_config with column_mappings → attribute-aware path
+        (stats carry allocation_by_attribute), with no mode flag present."""
+        cfg = {
+            "eligibility": [{"attribute": "age", "min": 50}],
+            "strategy": "oldest_first",
+            "capacity_config": {
+                "attribute_capacities": {
+                    "column_mappings": {
+                        "age_65_74_male":   {"age_band": [65, 74], "sex": "male"},
+                        "age_65_74_female": {"age_band": [65, 74], "sex": "female"},
+                    }
+                }
+            },
+        }
+        stats = _allocate_to_venue_type("care_home", cfg, hd.population, hd.venue_manager, hd)
+        assert "allocation_by_attribute" in stats
+
+    def test_no_column_mappings_routes_to_simple(self, hd):
+        """No column_mappings → simple path (no allocation_by_attribute),
+        with no mode flag present."""
+        cfg = {
+            "capacity_property": "capacity",
+            "eligibility": [],
+            "strategy": "random",
+        }
+        stats = _allocate_to_venue_type("shelter", cfg, hd.population, hd.venue_manager, hd)
+        assert "allocation_by_attribute" not in stats
+        assert "total_capacity" in stats
+
+    def test_empty_capacity_config_routes_to_simple(self, hd):
+        """An empty capacity_config (e.g. the 1918 venue steps that declared no
+        buckets) → simple path, matching the runtime fallback it already hit."""
+        cfg = {
+            "capacity_property": "capacity",
+            "eligibility": [],
+            "strategy": "random",
+            "capacity_config": {},
+        }
+        stats = _allocate_to_venue_type("shelter", cfg, hd.population, hd.venue_manager, hd)
+        assert "allocation_by_attribute" not in stats
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -604,9 +669,24 @@ class TestBoardingSchoolAttributeConstraints:
 
     def _boarding_config(self):
         return {
-            "allocation_mode": "attribute_aware",
             "eligibility": [{"attribute": "age", "max": 24}],
             "strategy": "youngest_first",
+            "capacity_config": {
+                "attribute_capacities": {
+                    "column_mappings": {
+                        "n_0_15_female":  {"age_band": [0, 15],  "sex": "female"},
+                        "n_0_15_male":    {"age_band": [0, 15],  "sex": "male"},
+                        "n_16_24_female": {"age_band": [16, 24], "sex": "female"},
+                        "n_16_24_male":   {"age_band": [16, 24], "sex": "male"},
+                    }
+                },
+                "attribute_constraints": {
+                    "age": {
+                        "min_column": "StatutoryLowAge",
+                        "max_column": "StatutoryHighAge",
+                    }
+                },
+            },
         }
 
     def test_child_below_statutory_minimum_not_placed(self, hd):
@@ -660,8 +740,7 @@ class TestBoardingSchoolAttributeConstraints:
         _allocate_with_attributes(
             "boarding_school", cfg, hd.population, hd.venue_manager, hd
         )
-        capacity_config = hd.venue_manager.get_capacity_config("boarding_school")
-        column_mappings = capacity_config["attribute_capacities"]["column_mappings"]
+        column_mappings = cfg["capacity_config"]["attribute_capacities"]["column_mappings"]
         schools = hd.venue_manager.get_venues_by_type("boarding_school")
         for school in schools:
             for col in column_mappings:
@@ -683,7 +762,6 @@ class TestVenueMembershipSideEffects:
     def test_residents_in_venue_properties_after_simple_allocation(self, hd):
         """After simple allocation, each shelter's 'residents' property must be set."""
         cfg = {
-            "allocation_mode": "simple",
             "capacity_property": "capacity",
             "eligibility": [],
             "strategy": "random",
@@ -699,7 +777,6 @@ class TestVenueMembershipSideEffects:
     def test_residents_in_venue_properties_after_attribute_allocation(self, hd):
         """After attribute allocation, care home 'residents' property must be populated."""
         cfg = {
-            "allocation_mode": "attribute_aware",
             "eligibility": [{"attribute": "age", "min": 50}],
             "strategy": "oldest_first",
         }
@@ -713,13 +790,11 @@ class TestVenueMembershipSideEffects:
     def test_no_double_allocation_across_venue_types(self, hd):
         """Running shelter then care_home allocation: same person must not appear in both."""
         shelter_cfg = {
-            "allocation_mode": "simple",
             "capacity_property": "capacity",
             "eligibility": [],
             "strategy": "oldest_first",  # oldest go to shelters first
         }
         care_cfg = {
-            "allocation_mode": "attribute_aware",
             "eligibility": [{"attribute": "age", "min": 50}],
             "strategy": "oldest_first",
         }

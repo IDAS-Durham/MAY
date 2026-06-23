@@ -167,7 +167,6 @@ def test_can_skip_role_with_no_candidates(distributor):
 def mock_rule():
     return RelationshipRule(
         name="Test Rule",
-        patterns=["1 0 2 0"],
         roles={
             "parent": {"categories": ["Adults"], "count": 2},
             "child": {"categories": ["Kids"], "count": 1}
@@ -316,7 +315,7 @@ def test_select_roles_defer_couple_flagging(distributor):
     pattern = CompositionPattern.from_string("0 0 2 0")
     
     rule = RelationshipRule(
-        name="Couples", patterns=["0 0 2 0"],
+        name="Couples",
         roles={"couple": {"categories": ["Adults"], "count": 2}},
         selection_order=["couple"],
         constraints=[

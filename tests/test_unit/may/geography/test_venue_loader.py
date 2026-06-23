@@ -271,12 +271,17 @@ def test_extend_merges_id_counters_no_collision(loaded_geography):
 
 
 # ---------------------------------------------------------------------------
-# capacity_config propagation
+# subset metadata propagation
 # ---------------------------------------------------------------------------
 
-def test_capacity_config_propagates_subset_metadata(loaded_geography, tmp_path):
+def test_venue_type_metadata_propagates_to_venues(loaded_geography, tmp_path):
     """Properties declared on the venue type config (is_residence,
-    subset_categories, subset_key) must end up on every venue's properties."""
+    subset_categories, subset_key) must end up on every venue's properties.
+
+    Note: capacity rules used to live here under `capacity_config` but were
+    moved to the allocation step that owns them. venues_config now describes
+    only the venue itself.
+    """
     venues_dir = tmp_path / "venues"
     venues_dir.mkdir()
     (venues_dir / "dorms.csv").write_text(
@@ -290,8 +295,6 @@ def test_capacity_config_propagates_subset_metadata(loaded_geography, tmp_path):
         "    is_residence: true\n"
         "    subset_key: age\n"
         "    subset_categories: [young, old]\n"
-        "    capacity_config:\n"
-        "      total_capacity_column: n_total\n"
         "settings:\n"
         "  filter_by_geography: true\n"
     )
@@ -305,12 +308,10 @@ def test_capacity_config_propagates_subset_metadata(loaded_geography, tmp_path):
     assert venue.properties.get('is_residence') is True
     assert venue.properties.get('subset_key') == 'age'
     assert venue.properties.get('subset_categories') == ['young', 'old']
-    # capacity_config retrievable by type.
-    cfg = vm.get_capacity_config('student_dorms')
-    assert cfg is not None
-    assert cfg['total_capacity_column'] == 'n_total'
     # is_residence_type derives from venue_configs.
     assert vm.is_residence_type('student_dorms') is True
+    # capacity rules no longer come from venues_config.
+    assert vm.get_capacity_config('student_dorms') is None
 
 
 # ---------------------------------------------------------------------------
@@ -379,13 +380,13 @@ def test_total_venues_log_no_parenthetical_when_no_collisions(loaded_geography, 
 # ---------------------------------------------------------------------------
 
 def test_production_yaml_does_not_reference_missing_files():
-    """Each enabled venue type in yaml/venues/venues_config.yaml must point
-    to a file that actually exists on disk. This is a guardrail against
+    """Each enabled venue type in configs/2021/venues/venues_config.yaml must
+    point to a file that actually exists on disk. This is a guardrail against
     re-introducing the field.csv-style discrepancy between configured and
     loaded venue counts."""
     import yaml
 
-    config_path = "yaml/venues/venues_config.yaml"
+    config_path = "configs/2021/venues/venues_config.yaml"
     with open(config_path) as f:
         config = yaml.safe_load(f)
 

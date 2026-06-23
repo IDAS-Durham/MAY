@@ -80,20 +80,3 @@ assignment_rules:
         assignment:
           strategy: "constant"
           value: "Normal"
-
-# ============================================================================
-# Settings
-# ============================================================================
-settings:
-  random_seed: null
-  cache_lookups: false
-
-  error_handling:
-    missing_filter_activity: "skip_person"
-
-  logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: true
-    sample_size: 10
-    show_attribute_distribution: true

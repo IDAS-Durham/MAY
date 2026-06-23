@@ -6,6 +6,94 @@ from functools import lru_cache
 logger = logging.getLogger("may.attribute_assignment.strategies")
 
 
+# ---------------------------------------------------------------------------
+# Config validation — assignment blocks fail loudly on keys the engine
+# doesn't read. (The `context:` key survived a year as dead config because
+# nothing rejected it; this is the guard against the next one.)
+# ---------------------------------------------------------------------------
+STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
+    'probabilistic': {'strategy', 'data_source', 'fallback'},
+    'partnership': {'strategy', 'data_source', 'partner_role', 'fallback'},
+    'inheritance': {'strategy', 'inherit_from', 'logic', 'fallback'},
+    'reverse_inheritance': {'strategy', 'inherit_from', 'logic', 'fallback'},
+    'probabilistic_conditions': {'strategy', 'data_source', 'conditions',
+                                 'selection_method', 'fallback'},
+    'commuting_likelihood': {'strategy', 'data_source', 'outputs', 'fallback'},
+    'geographical_unit_sampler': {'strategy', 'data_source', 'fallback'},
+    'categorical_sampler': {'strategy', 'data_source', 'fallback'},
+    'constant': {'strategy', 'value', 'fallback'},
+}
+# Logic entries and nested then-blocks (reverse_inheritance reads these inline).
+_LOGIC_ENTRY_KEYS = {'when', 'then', 'note'}
+_THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value'}
+
+
+def validate_assignment_config(config: Dict[str, Any], where: str = "assignment") -> None:
+    """
+    Reject assignment config keys no strategy reads.
+
+    Raises:
+        ValueError: naming the unknown keys, the strategy, and the allowed
+        set — so a stale key (e.g. `context`) breaks the build at load time
+        instead of silently doing nothing.
+    """
+    if not isinstance(config, dict):
+        raise ValueError(f"{where}: assignment must be a mapping, got {type(config).__name__}")
+
+    strategy_type = config.get('strategy')
+    if not strategy_type:
+        raise ValueError(f"{where}: assignment has no 'strategy' field")
+
+    allowed = STRATEGY_ALLOWED_KEYS.get(strategy_type)
+    if allowed is None:
+        raise ValueError(
+            f"{where}: unknown strategy '{strategy_type}' "
+            f"(known: {sorted(STRATEGY_ALLOWED_KEYS)})"
+        )
+
+    unknown = set(config) - allowed
+    if unknown:
+        raise ValueError(
+            f"{where}: strategy '{strategy_type}' does not read key(s) "
+            f"{sorted(unknown)} — allowed keys are {sorted(allowed)}. "
+            f"Remove them (dead config) or fix the typo."
+        )
+
+    fallback = config.get('fallback')
+    if fallback is not None:
+        if not isinstance(fallback, dict):
+            raise ValueError(f"{where}.fallback: must be a mapping with a 'strategy'")
+        fb_strategy = fallback.get('strategy')
+        if fb_strategy not in ('probabilistic', 'constant'):
+            raise ValueError(
+                f"{where}.fallback: only 'probabilistic' and 'constant' fallback "
+                f"strategies are supported, got '{fb_strategy}'"
+            )
+        if fb_strategy == 'constant' and 'value' not in fallback:
+            raise ValueError(
+                f"{where}.fallback: a constant fallback must define 'value' "
+                "(other keys, e.g. 'data_source', are not read for constants)"
+            )
+        validate_assignment_config(fallback, where=f"{where}.fallback")
+
+    for i, entry in enumerate(config.get('logic') or []):
+        entry = entry or {}
+        unknown = set(entry) - _LOGIC_ENTRY_KEYS
+        if unknown:
+            raise ValueError(
+                f"{where}.logic[{i}]: unknown key(s) {sorted(unknown)} — "
+                f"allowed: {sorted(_LOGIC_ENTRY_KEYS)}"
+            )
+        then = entry.get('then')
+        if isinstance(then, dict):
+            unknown = set(then) - _THEN_BLOCK_KEYS
+            if unknown:
+                raise ValueError(
+                    f"{where}.logic[{i}].then: unknown key(s) {sorted(unknown)} — "
+                    f"allowed: {sorted(_THEN_BLOCK_KEYS)}"
+                )
+
+
 @lru_cache(maxsize=2048)
 def _compile_expression(expr: str, mode: str = 'eval'):
     """
@@ -62,26 +150,38 @@ class AssignmentStrategy:
 
     def _fallback(self, person, household, context: Dict[str, Any], reason: str) -> Any:
         """
-        Execute fallback strategy (either configured in YAML or default geo).
+        Execute the fallback strategy configured in the YAML.
+
+        Fails loudly when none is configured: a silent default (the old
+        behavior invented a `geo_distribution` lookup) masks data and config
+        problems. If a miss is expected and acceptable, the config must say
+        so with an explicit `fallback:`.
         """
         self._record_fallback(context, reason)
-        
-        # Check if a custom fallback is configured in the YAML
+
         fallback_config = self.config.get('fallback')
-        if fallback_config:
-            strategy_type = fallback_config.get('strategy')
-            if strategy_type == 'probabilistic':
-                strat = ProbabilisticStrategy(fallback_config, self.data_manager)
-                return strat.assign(person, household, context)
-            elif strategy_type == 'constant':
-                return fallback_config.get('value')
-        
-        # Default: Probabilistic geo distribution
-        strat = ProbabilisticStrategy(
-            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
-            self.data_manager
+        if not fallback_config:
+            raise RuntimeError(
+                f"Strategy '{self.strategy_type}' failed for person {person.id} "
+                f"({reason}) and the rule has no `fallback:` configured. "
+                "Add an explicit fallback to the rule or fix the data/config."
+            )
+
+        strategy_type = fallback_config.get('strategy')
+        if strategy_type == 'probabilistic':
+            strat = ProbabilisticStrategy(fallback_config, self.data_manager)
+            return strat.assign(person, household, context)
+        if strategy_type == 'constant':
+            if 'value' not in fallback_config:
+                raise ValueError(
+                    f"Constant fallback for strategy '{self.strategy_type}' has no "
+                    "'value' — other keys (e.g. 'data_source') are not read."
+                )
+            return fallback_config['value']
+        raise ValueError(
+            f"Unsupported fallback strategy '{strategy_type}' for "
+            f"'{self.strategy_type}' — only 'probabilistic' and 'constant' exist."
         )
-        return strat.assign(person, household, context)
 
     def _get_person_by_role(self, context: Dict[str, Any], role_name: str):
         """
@@ -1246,12 +1346,7 @@ class StrategyFactory:
         Raises:
             ValueError: If strategy type is unknown
         """
-        strategy_type = config.get('strategy')
-        if not strategy_type:
-            raise ValueError("Strategy configuration must include 'strategy' field")
+        validate_assignment_config(config)
 
-        strategy_class = cls._strategy_map.get(strategy_type)
-        if not strategy_class:
-            raise ValueError(f"Unknown strategy type: {strategy_type}")
-
+        strategy_class = cls._strategy_map.get(config['strategy'])
         return strategy_class(config, data_manager)

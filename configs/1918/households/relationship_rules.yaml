@@ -57,10 +57,6 @@ track_statistics: true
 rules:
   # Rule 1: Families with 2 adults and kids
   - name: "Two-adult family with kids"
-    patterns:
-      - ">=2 >=0 2 0"
-      - "1 >=0 2 0"
-
     roles:
       role_A:
         categories: ["Kids"]
@@ -106,10 +102,6 @@ rules:
 
   # Rule 2: Single-adult families with kids
   - name: "Single-adult family with kids"
-    patterns:
-      - ">=2 >=0 1 0"
-      - "1 >=0 1 0"
-
     roles:
       role_A:
         categories: ["Kids"]
@@ -143,9 +135,6 @@ rules:
 
   # Rule 3: Two-adult families with young adults
   - name: "Two-adult family with young adults"
-    patterns:
-      - "0 >=1 2 0"
-
     roles:
       role_A:
         categories: ["Young Adults"]
@@ -191,9 +180,6 @@ rules:
 
   # Rule 4: Single-adult families with young adults
   - name: "Single-adult family with young adults"
-    patterns:
-      - "0 >=1 1 0"
-
     roles:
       role_A:
         categories: ["Young Adults"]
@@ -227,9 +213,6 @@ rules:
 
   # Rule 5: Adult pairs (no kids)
   - name: "Adult pair"
-    patterns:
-      - "0 0 2 0"
-
     roles:
       role_A:
         categories: ["Adults"]
@@ -253,9 +236,6 @@ rules:
 
   # Rule 6: Elderly pairs
   - name: "Elderly pair"
-    patterns:
-      - "0 0 0 2"
-
     roles:
       role_A:
         categories: ["Old Adults"]
@@ -279,12 +259,6 @@ rules:
 
   # Rule 7: Adding young adults to existing families (for household_excess steps)
   - name: "Add young adults to existing family"
-    patterns:
-      - "0 >=1 2 0"
-      - "0 >=1 1 0"
-      - ">=2 >=0 2 0"
-      - "1 >=0 2 0"
-
     roles:
       role_A:
         categories: ["Young Adults"]
@@ -312,10 +286,6 @@ rules:
 
   # Rule 8: Multi-generational families
   - name: "Multi-generational household"
-    patterns:
-      - ">=2 >=0 >=0 >=0"
-      - "1 >=0 >=0 >=0"
-
     roles:
       role_A:
         categories: ["Kids"]

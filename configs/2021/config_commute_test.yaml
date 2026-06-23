@@ -1,0 +1,174 @@
+# Commute test world — varied geography for debugging the RouteDistributor.
+#
+# Spans three transport regions to exercise every commute mode + multi-leg
+# interchanges + route-miss fallbacks in a single world:
+#
+#   * Greater Manchester (Manchester, Salford)     -> Metrolink (mode_class=tube)
+#   * Inner London (Camden, Westminster, Islington, Lambeth)
+#                                                  -> Tube interchanges, multi-leg
+#                                                     journeys, Overground, Elizabeth
+#   * Tyne & Wear + Durham
+#     (Newcastle upon Tyne, Gateshead, County Durham, Darlington)
+#                                                  -> Tyne & Wear Metro (tube),
+#                                                     ECML rail (Durham<->Newcastle),
+#                                                     mixed urban/rural for fallbacks
+#
+# ~9.5K SGUs / ~2.5M people. Output filename is distinct from existing worlds
+# (world_state.h5, london_xlgu.h5, world_msm_hubs.h5) so this run will not
+# overwrite them.
+
+geography:
+  data_dir: "data/geography"
+  levels: ["SGU", "MGU", "LGU", "XLGU"]
+  load_all: false
+
+  filter:
+    level: LGU
+    codes:
+      # Greater Manchester (Metrolink)
+      - "Manchester"
+      - "Salford"
+      # Inner London (TfL tube + rail)
+      - "Camden"
+      - "Westminster"
+      - "Islington"
+      - "Lambeth"
+      # Tyne & Wear + Durham (Metro + ECML)
+      - "Newcastle upon Tyne"
+      - "Gateshead"
+      - "County Durham"
+      - "Darlington"
+
+# ========================================
+# POPULATION
+# ========================================
+
+population:
+  data_dir: "data/population"
+  demographics_male_file: "demographics_male.csv"
+  demographics_female_file: "demographics_female.csv"
+
+# ========================================
+# VENUES
+# ========================================
+
+venues:
+  data_dir: "data/venues"
+  config_file: "configs/2021/venues/venues_config.yaml"
+  export_file: "venue_allocations.csv"
+
+# ========================================
+# HOUSEHOLDS
+# ========================================
+
+households:
+  data_dir: "data/households"
+  data_file: "households.csv"
+  config_file: "configs/2021/households/households_config.yaml"
+  rules_file: "configs/2021/households/relationship_rules.yaml"
+  # The allocation strategy lives on the timeline's residence_allocation step.
+  export_file: "household_allocations.csv"
+
+# ========================================
+# DEBUG OUTPUTS — keep ON for commute verification
+# ========================================
+
+debug_outputs:
+  enabled: true
+
+# ========================================
+# TIMELINE — identical to configs/2021/config.yaml
+# ========================================
+
+timeline:
+  enabled: true
+
+  steps:
+    # 0. Households + residence venues (runs the allocation strategy first).
+    - type: residence_allocation
+      config: "configs/2021/households/allocation_strategy.yaml"
+
+    # 1. Initial attributes
+    - type: attribute
+      config: "configs/2021/attributes/attribute_assignment.yaml"
+    - type: attribute
+      config: "configs/2021/attributes/comorbidity_assignment.yaml"
+
+    # 2. Education
+    - type: distributor
+      config: "configs/2021/distributors/school_distributor.yaml"
+    - type: child_creator
+      config: "configs/2021/venue_child_creators/school_classrooms.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/university_distributor.yaml"
+    - type: child_creator
+      config: "configs/2021/venue_child_creators/university_uni_years.yaml"
+
+    # 3. Employment attributes
+    - type: attribute
+      config: "configs/2021/attributes/workplace_assignment.yaml"
+    - type: attribute
+      config: "configs/2021/attributes/workplace_sgu_assignment.yaml"
+    - type: attribute
+      config: "configs/2021/attributes/work_sector_assignment.yaml"
+
+    # 4. Specific workplaces
+    - type: distributor
+      config: "configs/2021/distributors/specific_workplace_hospitals_distributor.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/specific_workplace_care_homes_distributor.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/specific_workplace_classrooms_distributor.yaml"
+
+    # 5. General employment
+    - type: distributor
+      config: "configs/2021/distributors/company_distributor.yaml"
+    - type: child_creator
+      config: "configs/2021/venue_child_creators/company_offices.yaml"
+
+    # 6. Work mode correction
+    - type: attribute
+      config: "configs/2021/attributes/work_mode_correction.yaml"
+
+    # 7. Commute assignment
+    - type: attribute
+      config: "configs/2021/attributes/commute_mode_assignment.yaml"
+
+    # Route legs (commute mode -> transport_line venues + per-leg timing).
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_train.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_tube.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/route_commute_bus.yaml"
+
+    # 8. Other services
+    - type: distributor
+      config: "configs/2021/distributors/hospital_distributor.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/multi_venue_distributor.yaml"
+    - type: distributor
+      config: "configs/2021/distributors/care_home_visits_distributor.yaml"
+
+# ========================================
+# RELATIONSHIPS
+# ========================================
+
+relationship_pipeline:
+  enabled: true
+  relationships:
+    - config: "configs/2021/relationships/social_networks.yaml"
+
+romantic_relationships:
+  enabled: true
+  config: "configs/2021/relationships/romantic_relationships.yaml"
+
+# ========================================
+# SERIALIZATION — distinct filename so existing worlds are not overwritten
+# ========================================
+
+serialization:
+  enabled: true
+  config_file: "configs/2021/serialization_config.yaml"
+  output_dir: "output/2021"
+  filename: "commute_test_world.h5"

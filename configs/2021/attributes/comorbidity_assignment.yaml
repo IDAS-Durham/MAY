@@ -109,7 +109,7 @@ categories:
     type: "numerical"
     numerical:
       min: 75
-      max: null
+      max:
 
 # ============================================================================
 # Data Sources
@@ -207,20 +207,5 @@ assignment_rules:
 # Settings
 # ============================================================================
 settings:
-  random_seed: null
-  normalize_probabilities: false
-  cache_lookups: true
-
-  error_handling:
-    missing_required_attribute: "skip_person"
-    missing_geo_unit: "use_fallback"
-    missing_lookup_data: "use_fallback"
-    invalid_age: "skip_person"
-    invalid_sex: "skip_person"
-
   logging:
-    level: "INFO"
-    detailed_assignment_logging: false
-    show_samples: false
-    sample_size: 10
     show_attribute_distribution: false  # Hide detailed comorbidity distribution output

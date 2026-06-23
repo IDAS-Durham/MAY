@@ -125,15 +125,15 @@ class MinimalConfig:
     """Config with just enough to create an AttributeAssigner."""
     def __init__(self, attribute_name="ethnicity", filters=None,
                  required_attributes=None, settings=None,
-                 assignment_level="person_by_household",
-                 household_venue_types=None,
+                 assignment_level="person_by_residence",
+                 residence_venue_types=None,
                  venue_assignment_rules=None):
         self.attribute_name = attribute_name
         self.filters = filters or {}
         self.required_attributes = required_attributes or {}
         self.settings = settings or {}
         self.assignment_level = assignment_level
-        self.household_venue_types = household_venue_types or ["household"]
+        self.residence_venue_types = residence_venue_types or ["household"]
         self.venue_assignment_rules = venue_assignment_rules or []
         self.roles = {}
         self.assignment_rules = {}
@@ -418,9 +418,7 @@ class TestGetDependencyAwareOrder:
         config.roles = roles
         config.assignment_rules = structure_rules
         config._valid_roles_cache = {}
-        config.settings = {'assignment_order': {'category_priorities': {
-            'Adults': 1, 'Old Adults': 2, 'Kids': 3, 'Young Adults': 4
-        }}}
+        config.settings = {}
 
         # Bind the real methods
         from may.attribute_assignment.assignment_config import AttributeAssignmentConfig
@@ -485,7 +483,7 @@ class TestGetDependencyAwareOrder:
         assert adult2_idx < child_idx, "Secondary adult must be assigned before child"
 
     def test_no_dependencies_preserves_base_order(self):
-        """Without dependencies, base category priority ordering is used."""
+        """Without dependencies, the stable base order (by person id) is used."""
         roles = {
             "primary_adult": Role(
                 name="primary_adult", description="", subsets=["Adults"], role_type="primary"
@@ -511,7 +509,7 @@ class TestGetDependencyAwareOrder:
         result = assigner._get_dependency_aware_order(
             [child, adult], "Family", person_categories
         )
-        # Adults priority=1, Kids priority=3 → adult first
+        # adult was created before child → lower id → comes first in base order
         assert result[0].id == adult.id
 
     def test_cycle_detection_falls_back_gracefully(self):
@@ -694,15 +692,16 @@ class TestAssignOtherResidences:
 
     def test_strategy_returning_none_counts_as_unassigned(self):
         """If strategy returns None, person counted as unassigned."""
-        # Use a data manager with NO geo_distribution source so the
-        # ConstantStrategy fallback also returns None.
+        # Probabilistic lookup against an unregistered source returns None
+        # (the silent-miss path the assigner must count, not crash on).
         config = MinimalConfig(
             attribute_name="ethnicity",
             venue_assignment_rules=[
-                {'venue_types': ['care_home'], 'assignment': {'strategy': 'constant'}}  # no value → None
+                {'venue_types': ['care_home'],
+                 'assignment': {'strategy': 'probabilistic', 'data_source': 'missing_source'}}
             ],
         )
-        dm = SimpleDataManager(sources={})  # no geo_distribution → fallback also fails
+        dm = SimpleDataManager(sources={})  # lookup misses → strategy returns None
         assigner = AttributeAssigner(config, dm)
 
         geo = MinimalGeoUnit("E00001234")
@@ -715,11 +714,15 @@ class TestAssignOtherResidences:
 
     def test_strategy_returning_none_with_fallback_still_assigns(self):
         """
-        ConstantStrategy with no value falls back to ProbabilisticStrategy
-        using geo_distribution. If that source exists, assignment succeeds.
+        ConstantStrategy with no value falls back to its EXPLICIT
+        probabilistic fallback. If that source exists, assignment succeeds.
+        (Fallbacks must be declared — there is no implicit default anymore.)
         """
         assigner = self._make_assigner(venue_assignment_rules=[
-            {'venue_types': ['care_home'], 'assignment': {'strategy': 'constant'}}  # no value
+            {'venue_types': ['care_home'],
+             'assignment': {'strategy': 'constant',  # no value
+                            'fallback': {'strategy': 'probabilistic',
+                                         'data_source': 'geo_distribution'}}}
         ])
         geo = MinimalGeoUnit("E00001234")
         person = MinimalPerson(geographical_unit=geo)

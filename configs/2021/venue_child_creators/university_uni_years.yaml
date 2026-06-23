@@ -45,6 +45,8 @@ child_properties:
 #   'fill'  - Fill first uni_year venue to max before moving to next
 distribution_strategy: even
 
+balance_by: sex
+
 # ========================================
 # ACTIVITY MANAGEMENT
 # ========================================
