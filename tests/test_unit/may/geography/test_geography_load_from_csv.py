@@ -276,11 +276,7 @@ def test_setup_geography_passes_levels_and_filter_through(four_level_geo_dir):
         }
     }
 
-    class _Args:
-        load_all = False
-        lgu = lgu_file = mgu = mgu_file = sgu = sgu_file = None
-
-    geo, filters = setup_geography(args=_Args(), config=config)
+    geo, filters = setup_geography(config=config)
     assert geo.levels == LEVELS_4
     assert filters == {"level": "LGU", "codes": ["L_keep1", "L_keep2"]}
 
