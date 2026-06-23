@@ -966,6 +966,27 @@ class TestStrategyFactory:
                 SimpleDataManager(),
             )
 
+    def test_probabilistic_conditions_requires_selection_method(self):
+        """No implicit default — selection_method must be declared (adr/0013)."""
+        with pytest.raises(ValueError, match="requires 'selection_method'"):
+            StrategyFactory.create_strategy(
+                {"strategy": "probabilistic_conditions", "data_source": "x", "conditions": []},
+                SimpleDataManager(),
+            )
+
+    def test_probabilistic_conditions_rejects_unknown_selection_method(self):
+        """An unknown selection_method fails at load, not deep in assign."""
+        with pytest.raises(ValueError, match="unknown selection_method"):
+            StrategyFactory.create_strategy(
+                {
+                    "strategy": "probabilistic_conditions",
+                    "data_source": "x",
+                    "conditions": [],
+                    "selection_method": "bogus",
+                },
+                SimpleDataManager(),
+            )
+
 
 # =============================================================================
 # Base class _fail / _marginal_assign mechanism Tests (adr/0010)

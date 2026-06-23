@@ -33,6 +33,11 @@ _LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
 # P(exactly 1) vs floating-point noise) in the gated comorbidity sampler.
 _PROB_TOL = 1e-9
 
+# How `probabilistic_conditions` turns per-person probabilities into a set of
+# conditions. A config must pick one explicitly — there is no default, so the
+# modelling choice is always visible (see ProbabilisticConditionsStrategy).
+_CONDITION_SELECTION_METHODS = {'independent_bernoulli', 'gated_conditions'}
+
 
 class _CompiledBlock:
     """
@@ -158,6 +163,20 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
             f"{sorted(unknown)} — allowed keys are {sorted(allowed)}. "
             f"Remove them (dead config) or fix the typo."
         )
+
+    if strategy_type == 'probabilistic_conditions':
+        method = config.get('selection_method')
+        if method is None:
+            raise ValueError(
+                f"{where}: strategy 'probabilistic_conditions' requires "
+                f"'selection_method' — declare one of "
+                f"{sorted(_CONDITION_SELECTION_METHODS)} (no implicit default)."
+            )
+        if method not in _CONDITION_SELECTION_METHODS:
+            raise ValueError(
+                f"{where}: unknown selection_method '{method}' "
+                f"(known: {sorted(_CONDITION_SELECTION_METHODS)})."
+            )
 
     is_logic_strategy = strategy_type in _LOGIC_STRATEGIES
     for i, entry in enumerate(config.get('logic') or []):
@@ -686,7 +705,10 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         super().__init__(config, data_manager)
         self.strategy_type = "probabilistic_conditions"
         self.conditions = config.get('conditions', [])
-        self.selection_method = config.get('selection_method', 'independent_bernoulli')
+        # No default: a config must declare its selection_method (validated at
+        # load by validate_assignment_config). The dispatch in assign() still
+        # fails loudly if an unknown value reaches it via direct construction.
+        self.selection_method = config.get('selection_method')
 
     def assign(self, person, household, context: Dict[str, Any]) -> List[str]:
         """

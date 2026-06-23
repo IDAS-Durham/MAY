@@ -1014,8 +1014,14 @@ class TestStrategyFactoryComplete:
             ("categorical_sampler", CategoricalSamplerStrategy),
             ("constant", ConstantStrategy),
         ]
+        # Minimal extra keys for strategies that require more than just 'strategy'
+        # to pass load-time validation.
+        required_extra = {
+            "probabilistic_conditions": {"selection_method": "independent_bernoulli"},
+        }
         for strategy_type, expected_class in all_types:
-            instance = StrategyFactory.create_strategy({"strategy": strategy_type}, dm)
+            config = {"strategy": strategy_type, **required_extra.get(strategy_type, {})}
+            instance = StrategyFactory.create_strategy(config, dm)
             assert isinstance(instance, expected_class), (
                 f"Expected {expected_class.__name__} for '{strategy_type}', "
                 f"got {type(instance).__name__}"
