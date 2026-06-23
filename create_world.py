@@ -17,10 +17,6 @@ from may.utils.debug_output import export_residence_venues, export_commute_mode_
 from may.utils import path_resolver as pr
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
-if os.environ.get('PYTHONHASHSEED') is None:
-    os.environ['PYTHONHASHSEED'] = '0'
-    os.execv(sys.executable, [sys.executable] + sys.argv)
-
 logger = logging.getLogger("create_world")
 logging.basicConfig(
     level=logging.INFO,
@@ -343,6 +339,13 @@ def main():
 
 
 if __name__ == "__main__":
+    # Force a deterministic hash seed for reproducible runs. This re-execs the
+    # interpreter, so it must stay in the CLI entry path — doing it at import
+    # time replaces the process whenever the module is imported (e.g. by tests).
+    if os.environ.get('PYTHONHASHSEED') is None:
+        os.environ['PYTHONHASHSEED'] = '0'
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
     profiler = cProfile.Profile()
     profiler.enable()
 
