@@ -108,12 +108,14 @@ class ODMatrixSource:
 
 
 class GUSamplerSource:
-    """Source that returns {gu_code: probability} dicts."""
+    """Source that returns {gu_code: probability} dicts; raises on a miss (adr/0010)."""
     def __init__(self, lookup_data=None):
         self._lookup_data = lookup_data or {}
 
     def lookup(self, parent_gu):
-        return self._lookup_data.get(parent_gu, {})
+        if parent_gu not in self._lookup_data:
+            raise KeyError(f"no child-GU distribution for parent '{parent_gu}'")
+        return self._lookup_data[parent_gu]
 
 
 class SimpleDataManager:
@@ -584,12 +586,12 @@ class TestCommutingLikelihoodStrategy:
 
 class TestGUSamplerStrategy:
     """
-    Intended behaviour (strategies.py lines 918-1062):
+    Intended behaviour:
     - Gets workplace_location from person.properties
-    - Looks up GU distribution for that parent GU from data source
-    - If no data for workplace GU, falls back to person's home LGU
+    - Looks up GU distribution for that parent GU from data source (raises on a miss)
     - Samples one GU weighted by distribution
-    - Batch mode groups by (workplace_parent_gu, home_parent_gu)
+    - Batch mode groups by workplace_parent_gu
+    No fallbacks (adr/0010): missing workplace_location or missing data is a hard error.
     """
 
     def _make_strategy(self, data_source_name="gu_sampler"):
@@ -627,54 +629,27 @@ class TestGUSamplerStrategy:
             result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
             assert result == "SGU_ONLY"
 
-    # --- Fallback to home parent GU ---
+    # --- Missing data / prerequisites → raise (adr/0010) ---
 
-    def test_falls_back_to_home_lgu_when_workplace_missing(self):
-        """If workplace GU has no data, tries person's home LGU."""
-        lgu = MinimalGeoUnit("Birmingham", level="LGU")
-        sgu = MinimalGeoUnit("SGU_123", level="SGU", parent=lgu)
-
-        source = GUSamplerSource(lookup_data={
-            "Birmingham": {"SGU_HOME": 1.0}
-            # "UnknownWorkplace" not in data
-        })
-        dm = SimpleDataManager(sources={"gu_sampler": source})
-        strategy = GUSamplerStrategy(self._make_strategy(), dm)
-
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "UnknownWorkplace"}
-        )
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result == "SGU_HOME"
-
-    def test_no_data_anywhere_returns_none(self):
-        """Neither workplace nor home GU has data → None."""
-        lgu = MinimalGeoUnit("Nowhere", level="LGU")
-        sgu = MinimalGeoUnit("SGU_X", level="SGU", parent=lgu)
-
+    def test_missing_workplace_data_raises(self):
+        """Workplace GU not in the source → raise (no home fallback)."""
         source = GUSamplerSource(lookup_data={})  # empty
         dm = SimpleDataManager(sources={"gu_sampler": source})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "Unknown"}
-        )
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
+        person = MinimalPerson(properties={"workplace_location": "Unknown"})
+        with pytest.raises(KeyError, match="no child-GU distribution"):
+            strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
 
-    # --- Missing prerequisites ---
-
-    def test_no_workplace_location_returns_none(self):
-        """Person without workplace_location property → None."""
+    def test_no_workplace_location_raises(self):
+        """Person without workplace_location → raise (adr/0010)."""
         source = GUSamplerSource(lookup_data={"X": {"SGU_1": 1.0}})
         dm = SimpleDataManager(sources={"gu_sampler": source})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
         person = MinimalPerson(properties={})  # no workplace_location
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="no workplace_location"):
+            strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
 
     def test_no_data_source_raises(self):
         dm = SimpleDataManager(sources={})
@@ -683,22 +658,6 @@ class TestGUSamplerStrategy:
         person = MinimalPerson(properties={"workplace_location": "Manchester"})
         with pytest.raises(KeyError, match="not registered"):
             strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-
-    def test_no_lgu_ancestor_falls_through(self):
-        """Person's geo unit has no LGU ancestor → can't fall back."""
-        # SGU with no parent
-        sgu = MinimalGeoUnit("SGU_ORPHAN", level="SGU", parent=None)
-
-        source = GUSamplerSource(lookup_data={})  # no data for "UnknownWorkplace"
-        dm = SimpleDataManager(sources={"gu_sampler": source})
-        strategy = GUSamplerStrategy(self._make_strategy(), dm)
-
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "UnknownWorkplace"}
-        )
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
 
     # --- Batch mode ---
 
@@ -723,8 +682,8 @@ class TestGUSamplerStrategy:
         assert results[1] == "SGU_2"
         assert results[2] == "SGU_1"
 
-    def test_batch_person_without_workplace_gets_none(self):
-        """Person without workplace_location in batch → stays None."""
+    def test_batch_person_without_workplace_raises(self):
+        """Person without workplace_location in batch → raise (adr/0010)."""
         source = GUSamplerSource(lookup_data={"Manchester": {"SGU_1": 1.0}})
         dm = SimpleDataManager(sources={"gu_sampler": source})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
@@ -732,40 +691,12 @@ class TestGUSamplerStrategy:
         p1 = MinimalPerson(properties={"workplace_location": "Manchester"})
         p2 = MinimalPerson(properties={})  # no workplace
 
-        results = strategy.assign_batch(
-            [p1, p2],
-            [MinimalVenue()] * 2,
-            [{"attribute_name": "sgu"}] * 2,
-        )
-        assert results[0] == "SGU_1"
-        assert results[1] is None
-
-    # ---- BUG DETECTION ----
-
-    def test_batch_fallback_to_home_gu(self):
-        """
-        Batch mode also has the workplace→home fallback logic.
-        Verify it works identically to sequential mode.
-        """
-        lgu = MinimalGeoUnit("Birmingham", level="LGU")
-        sgu = MinimalGeoUnit("SGU_123", level="SGU", parent=lgu)
-
-        source = GUSamplerSource(lookup_data={
-            "Birmingham": {"SGU_HOME": 1.0}
-        })
-        dm = SimpleDataManager(sources={"gu_sampler": source})
-        strategy = GUSamplerStrategy(self._make_strategy(), dm)
-
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "UnknownWorkplace"}
-        )
-        results = strategy.assign_batch(
-            [person],
-            [MinimalVenue()],
-            [{"attribute_name": "sgu"}],
-        )
-        assert results[0] == "SGU_HOME"
+        with pytest.raises(RuntimeError, match="no workplace_location"):
+            strategy.assign_batch(
+                [p1, p2],
+                [MinimalVenue()] * 2,
+                [{"attribute_name": "sgu"}] * 2,
+            )
 
     def test_no_data_source_batch_raises(self):
         dm = SimpleDataManager(sources={})

@@ -970,8 +970,7 @@ class GUSamplerStrategy(AssignmentStrategy):
         """
         Batch assignment to minimize repeated data lookups.
 
-        Groups people by (workplace_parent_gu, home_parent_gu) and processes each group together.
-        Falls back from workplace to home GU if workplace has no data.
+        Groups people by workplace_parent_gu and processes each group together.
 
         Args:
             people_list: List of Person objects
@@ -991,42 +990,21 @@ class GUSamplerStrategy(AssignmentStrategy):
                 "No fallbacks (adr/0010)."
             )
 
-        # Group people by (workplace_parent_gu, home_parent_gu)
-        # This allows efficient batch sampling with fallback logic
+        # Group people by workplace parent GU
         gu_groups = defaultdict(list)
 
         for i, person in enumerate(people_list):
-            # Get workplace parent GU
             workplace_parent_gu = person.properties.get('workplace_location')
-
-            # Get home parent GU for fallback
-            home_parent_gu = None
-            if person.geographical_unit:
-                home_parent_gu_obj = person.geographical_unit.get_ancestor_by_level('LGU')
-                if home_parent_gu_obj:
-                    home_parent_gu = home_parent_gu_obj.name
-
-            if workplace_parent_gu:
-                gu_groups[(workplace_parent_gu, home_parent_gu)].append(i)
+            if not workplace_parent_gu:
+                self._fail(person, "no workplace_location assigned")
+            gu_groups[workplace_parent_gu].append(i)
 
         # Results array
         results = [None] * len(people_list)
 
         # Process each group
-        for (workplace_parent_gu, home_parent_gu), indices in gu_groups.items():
-            # Try workplace parent GU first
-            gu_probs = source.lookup(workplace_parent_gu)
-
-            # Fallback: if no data for workplace parent GU, try home parent GU
-            if not gu_probs and home_parent_gu:
-                logger.debug(f"No GU distribution for workplace parent GU '{workplace_parent_gu}', "
-                           f"falling back to home parent GU '{home_parent_gu}'")
-                gu_probs = source.lookup(home_parent_gu)
-
-            if not gu_probs:
-                logger.warning(f"No GU distribution found for parent GU '{workplace_parent_gu}' "
-                             f"or home parent GU '{home_parent_gu}'")
-                continue
+        for workplace_parent_gu, indices in gu_groups.items():
+            gu_probs = source.lookup(workplace_parent_gu)  # raises on miss (adr/0010)
 
             # BATCH SAMPLE: Sample GUs for all people in this group at once
             gu_codes = list(gu_probs.keys())
@@ -1043,8 +1021,7 @@ class GUSamplerStrategy(AssignmentStrategy):
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """
-        Sample a geographical unit within person's parent GU.
-        Falls back to home parent GU if workplace parent GU has no data.
+        Sample a geographical unit within person's workplace parent GU.
 
         Args:
             person: Person object
@@ -1057,8 +1034,7 @@ class GUSamplerStrategy(AssignmentStrategy):
         # Get workplace_location from person properties
         workplace_parent_gu = person.properties.get('workplace_location')
         if not workplace_parent_gu:
-            logger.warning(f"No workplace_location found for person {person.id}")
-            return None
+            self._fail(person, "no workplace_location assigned")
 
         # Look up GU distribution for this parent GU
         source = self.data_manager.get_source(self.data_source_name)
@@ -1068,30 +1044,7 @@ class GUSamplerStrategy(AssignmentStrategy):
                 "No fallbacks (adr/0010)."
             )
 
-        gu_probs = source.lookup(workplace_parent_gu)
-
-        # Fallback: if no data for workplace parent GU, try home parent GU
-        if not gu_probs:
-            # Get person's home parent GU from their geographical_unit
-            home_parent_gu = None
-            if person.geographical_unit:
-                home_parent_gu_obj = person.geographical_unit.get_ancestor_by_level('LGU')
-                if home_parent_gu_obj:
-                    home_parent_gu = home_parent_gu_obj.name
-                else:
-                    logger.debug(f"Person {person.id} GU '{person.geographical_unit.name}' has no LGU ancestor")
-            else:
-                logger.debug(f"Person {person.id} has no geographical_unit set")
-
-            if home_parent_gu:
-                logger.debug(f"No GU distribution for workplace parent GU '{workplace_parent_gu}', "
-                           f"falling back to home parent GU '{home_parent_gu}'")
-                gu_probs = source.lookup(home_parent_gu)
-
-            if not gu_probs:
-                logger.warning(f"No GU distribution found for parent GU '{workplace_parent_gu}' "
-                             f"or home parent GU '{home_parent_gu}'")
-                return None
+        gu_probs = source.lookup(workplace_parent_gu)  # raises on miss (adr/0010)
 
         # Sample GU weighted by distribution
         gu_codes = list(gu_probs.keys())

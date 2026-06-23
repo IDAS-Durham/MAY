@@ -694,11 +694,12 @@ class OriginDestinationMatrixSource(DataSource):
                     exclude_destinations = file_config.get('exclude_destinations', [])
 
                     # Origin column is the first key in key_columns
-                    # e.g., if key_columns has 'LGU_origin_code', use that
-                    if key_columns_config:
-                        origin_column = list(key_columns_config.keys())[0]
-                    else:
-                        origin_column = 'LGU_origin_code'
+                    if not key_columns_config:
+                        raise ValueError(
+                            f"O-D source '{self.name}' has no 'key_columns'; cannot "
+                            "determine the origin column."
+                        )
+                    origin_column = list(key_columns_config.keys())[0]
 
                     # Filter to only relevant geographical units
                     # Only filter if geo_units values actually match origin column values
@@ -833,15 +834,19 @@ class GUSamplerSource(DataSource):
                 try:
                     df = pd.read_csv(file_path)
 
-                    lgu_column = file_config.get('key_column', 'LGU')
+                    parent_column = file_config.get('key_column')
+                    if not parent_column:
+                        raise ValueError(
+                            f"GU sampler source '{self.name}' needs 'key_column' "
+                            "(the parent-GU column in the data)."
+                        )
                     weight_column = file_config.get('weight_column', 'Total')
 
-                    # Handle geographical_unit_column
+                    # Handle geographical_unit_column, format: {name: ..., level: ...}
                     geo_unit_config = file_config.get('geographical_unit_column')
                     if geo_unit_config:
-                        # format: {name: "SGU", level: "SGU"}
                         geo_unit_column = geo_unit_config.get('name')
-                        geo_unit_level = geo_unit_config.get('level', 'SGU')
+                        geo_unit_level = geo_unit_config.get('level')
 
                     # Filter to only relevant geographical units
                     if geo_units and geo_unit_column and geo_unit_column in df.columns:
@@ -860,7 +865,7 @@ class GUSamplerSource(DataSource):
                                 df = df[~df[col].isin(exclude_values)]
 
                     # Group by parent GU and build child GU distribution
-                    for parent_name, group in df.groupby(lgu_column):
+                    for parent_name, group in df.groupby(parent_column):
                         geo_dist = {}
                         for _, row in group.iterrows():
                             geo_code = row[geo_unit_column]
