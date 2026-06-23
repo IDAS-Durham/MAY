@@ -166,9 +166,12 @@ assignment_rules:
         assignment:
           strategy: "probabilistic_conditions"
           data_source: "comorbidity_probabilities"
-          selection_method: "independent_bernoulli"
+          # Gated hierarchical sampler: honors the joint count structure
+          # (no_condition / has_comorbidity / multiple_morbidities) rather than
+          # treating each condition as an independent Bernoulli trial (adr/0013).
+          selection_method: "gated_conditions"
 
-          # Conditions to consider (sampled independently)
+          # Conditions drawn (weighted by their per-condition marginals)
           conditions:
             - name: "cvd"
               label: "Cardiovascular Disease"

@@ -29,6 +29,10 @@ _THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value', 'copy'}
 # Strategies whose `logic:` blocks use the declarative when/then schema (adr/0009).
 _LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
 
+# Tolerance for probability arithmetic (e.g. detecting a genuinely negative
+# P(exactly 1) vs floating-point noise) in the gated comorbidity sampler.
+_PROB_TOL = 1e-9
+
 
 class _CompiledBlock:
     """
@@ -665,10 +669,16 @@ class ReverseInheritanceStrategy(LogicBlockStrategy):
 
 class ProbabilisticConditionsStrategy(AssignmentStrategy):
     """
-    Assigns multiple conditions independently based on probabilities.
+    Assigns a set of conditions (e.g. comorbidities) to a person.
 
-    Each condition is checked with a Bernoulli trial (independent sampling).
-    Person can end up with 0, 1, or multiple conditions.
+    Two `selection_method`s:
+
+    - `independent_bernoulli`: each condition is an independent Bernoulli trial
+      on its marginal probability. Ignores any joint count structure in the data.
+    - `gated_conditions`: gated hierarchical sampler (adr/0013) that honors the
+      joint count structure — `no_condition` = P(0), `has_comorbidity` = P(>=1),
+      `multiple_morbidities` = P(>=2) — then draws which conditions from the
+      per-condition marginals. See `_sample_gated_conditions`.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -706,6 +716,8 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         # Sample conditions based on selection method
         if self.selection_method == 'independent_bernoulli':
             return self._sample_independent_bernoulli(probabilities)
+        if self.selection_method == 'gated_conditions':
+            return self._sample_gated_conditions(person, probabilities)
         self._fail(person, f"unknown selection_method '{self.selection_method}'")
 
     def _sample_independent_bernoulli(self, probabilities: Dict[str, float]) -> List[str]:
@@ -735,6 +747,99 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
                 selected_conditions.append(condition_name)
 
         return selected_conditions
+
+    def _sample_gated_conditions(self, person, probabilities: Dict[str, float]) -> List[str]:
+        """
+        Gated hierarchical comorbidity sampler (adr/0013).
+
+        Honors the joint count structure carried by the data exactly:
+          P(0)  = no_condition
+          P(>=1) = has_comorbidity      (so P(1) = has_comorbidity - multiple)
+          P(>=2) = multiple_morbidities
+
+        1. Draw a count tier {0, 1, >=2} from those joint probabilities.
+        2. Draw that many *distinct* conditions weighted by the per-condition
+           marginals, without replacement.
+        3. For the >=2 tier, draw the actual count from the Poisson-binomial
+           distribution implied by the per-condition marginals, conditioned on
+           >=2. The data fixes P(>=2) but not the upper tail, so this is the
+           explicit modelling assumption for the tail shape.
+
+        Missing or contradictory data fails loudly — no fallbacks (adr/0010).
+        """
+        p_none = self._require_prob(probabilities, 'no_condition', person)
+        p_any = self._require_prob(probabilities, 'has_comorbidity', person)
+        p_multi = self._require_prob(probabilities, 'multiple_morbidities', person)
+
+        p_one = p_any - p_multi
+        if p_one < -_PROB_TOL:
+            self._fail(
+                person,
+                f"has_comorbidity ({p_any}) < multiple_morbidities ({p_multi}); "
+                "P(exactly 1 condition) would be negative",
+            )
+
+        tier = np.clip(np.array([p_none, p_one, p_multi], dtype=float), 0.0, None)
+        total = tier.sum()
+        if total <= 0:
+            self._fail(person, "comorbidity count-tier probabilities sum to zero")
+        tier /= total
+
+        drawn_tier = np.random.choice(3, p=tier)
+        if drawn_tier == 0:
+            return []
+
+        names = [c['name'] for c in self.conditions if c.get('name')]
+        margins = np.clip(
+            np.array([self._require_prob(probabilities, n, person) for n in names], dtype=float),
+            0.0, None,
+        )
+
+        count = 1 if drawn_tier == 1 else self._sample_multi_count(person, margins)
+        return self._pick_distinct_conditions(person, names, margins, count)
+
+    def _require_prob(self, probabilities: Dict[str, float], key: str, person) -> float:
+        """Read a probability the gated sampler depends on, or fail loudly (adr/0010)."""
+        if key not in probabilities:
+            self._fail(person, f"gated_conditions requires '{key}' from the data source")
+        return float(probabilities[key])
+
+    def _sample_multi_count(self, person, margins: np.ndarray) -> int:
+        """
+        Draw a condition count >=2 from the Poisson-binomial of the per-condition
+        marginals, conditioned on >=2 (adr/0013, step 3).
+        """
+        # Poisson-binomial PMF over the marginals: convolve each [1-p, p].
+        pmf = np.array([1.0])
+        for p in margins:
+            pmf = np.convolve(pmf, [1.0 - p, p])
+
+        tail = pmf[2:]
+        total = tail.sum()
+        if total <= 0:
+            self._fail(
+                person,
+                "data implies >=2 comorbidities but the per-condition marginals "
+                "cannot produce two or more",
+            )
+        counts = np.arange(2, len(pmf))
+        return int(np.random.choice(counts, p=tail / total))
+
+    def _pick_distinct_conditions(self, person, names: List[str],
+                                  margins: np.ndarray, count: int) -> List[str]:
+        """Pick `count` distinct conditions weighted by their marginals, no replacement."""
+        positive = margins > 0
+        valid = [name for name, ok in zip(names, positive) if ok]
+        if count > len(valid):
+            self._fail(
+                person,
+                f"cannot draw {count} distinct conditions from {len(valid)} "
+                "with positive probability",
+            )
+        weights = margins[positive]
+        weights = weights / weights.sum()
+        chosen = np.random.choice(valid, size=count, replace=False, p=weights)
+        return [str(c) for c in chosen]
 
 
 class CommutingLikelihoodStrategy(AssignmentStrategy):

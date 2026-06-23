@@ -343,6 +343,127 @@ class TestProbabilisticConditionsStrategy:
 
 
 # =============================================================================
+# Gated hierarchical comorbidity sampler (adr/0013)
+# =============================================================================
+
+class TestGatedConditionsSampler:
+    """
+    selection_method: gated_conditions
+
+    Honors the joint count structure (no_condition / has_comorbidity /
+    multiple_morbidities) as the count tier, then draws which conditions from the
+    per-condition marginals. Contradictory or missing data fails loud (adr/0010).
+    """
+
+    CONDITIONS = [{"name": "cvd"}, {"name": "crd"}, {"name": "ckd"}, {"name": "cld"}]
+
+    def _make(self, return_value, conditions=None):
+        config = {
+            "strategy": "probabilistic_conditions",
+            "data_source": "comorbidity_probs",
+            "selection_method": "gated_conditions",
+            "conditions": self.CONDITIONS if conditions is None else conditions,
+        }
+        dm = SimpleDataManager(sources={"comorbidity_probs": MultiKeySource(return_value)})
+        return ProbabilisticConditionsStrategy(config, dm)
+
+    def _assign(self, strategy):
+        return strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
+
+    def test_p_none_one_always_empty(self):
+        """no_condition = 1 → person always has zero conditions."""
+        strategy = self._make({
+            "no_condition": 1.0, "has_comorbidity": 0.0, "multiple_morbidities": 0.0,
+            "cvd": 0.5, "crd": 0.5, "ckd": 0.5, "cld": 0.5,
+        })
+        np.random.seed(0)
+        for _ in range(50):
+            assert self._assign(strategy) == []
+
+    def test_exactly_one_tier_returns_single_condition(self):
+        """has_comorbidity = 1, multiple = 0 → exactly one condition every time."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 0.0,
+            "cvd": 0.5, "crd": 0.5, "ckd": 0.0, "cld": 0.0,
+        })
+        np.random.seed(0)
+        for _ in range(50):
+            result = self._assign(strategy)
+            assert len(result) == 1
+            assert result[0] in {"cvd", "crd"}  # only positive-margin conditions
+
+    def test_multi_tier_returns_distinct_conditions(self):
+        """multiple = 1 → at least two distinct conditions, never a duplicate."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 1.0,
+            "cvd": 0.4, "crd": 0.4, "ckd": 0.4, "cld": 0.4,
+        })
+        np.random.seed(1)
+        for _ in range(50):
+            result = self._assign(strategy)
+            assert len(result) >= 2
+            assert len(set(result)) == len(result)  # distinct
+            assert set(result) <= {"cvd", "crd", "ckd", "cld"}
+
+    def test_zero_margin_condition_never_selected(self):
+        """A condition with marginal 0 is never drawn even when conditions fire."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 0.0,
+            "cvd": 1.0, "crd": 0.0, "ckd": 0.0, "cld": 0.0,
+        })
+        np.random.seed(0)
+        for _ in range(30):
+            assert self._assign(strategy) == ["cvd"]
+
+    def test_count_tier_distribution_is_honored(self):
+        """Over many draws, the fraction with zero conditions ≈ no_condition."""
+        strategy = self._make({
+            "no_condition": 0.7, "has_comorbidity": 0.3, "multiple_morbidities": 0.1,
+            "cvd": 0.15, "crd": 0.1, "ckd": 0.05, "cld": 0.05,
+        })
+        np.random.seed(42)
+        n = 5000
+        empties = sum(1 for _ in range(n) if self._assign(strategy) == [])
+        assert abs(empties / n - 0.7) < 0.03
+
+    def test_missing_joint_column_raises(self):
+        """gated_conditions needs the joint columns — missing one fails loud."""
+        strategy = self._make({"has_comorbidity": 0.3, "multiple_morbidities": 0.1, "cvd": 0.2})
+        with pytest.raises(RuntimeError, match="requires 'no_condition'"):
+            self._assign(strategy)
+
+    def test_has_comorbidity_less_than_multiple_raises(self):
+        """P(>=1) < P(>=2) is contradictory → fail loud (adr/0010)."""
+        strategy = self._make({
+            "no_condition": 0.5, "has_comorbidity": 0.1, "multiple_morbidities": 0.4,
+            "cvd": 0.2, "crd": 0.2, "ckd": 0.2, "cld": 0.2,
+        })
+        with pytest.raises(RuntimeError, match="has_comorbidity.*multiple_morbidities"):
+            self._assign(strategy)
+
+    def test_multi_tier_with_too_few_positive_conditions_raises(self):
+        """Data says >=2 but only one condition has positive marginal → fail loud."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 1.0,
+            "cvd": 1.0, "crd": 0.0, "ckd": 0.0, "cld": 0.0,
+        })
+        with pytest.raises(RuntimeError, match="cannot produce two or more|cannot draw"):
+            self._assign(strategy)
+
+    def test_independent_bernoulli_still_available(self):
+        """The old method is retained alongside the new one."""
+        config = {
+            "strategy": "probabilistic_conditions",
+            "data_source": "comorbidity_probs",
+            "selection_method": "independent_bernoulli",
+            "conditions": [{"name": "cvd"}],
+        }
+        dm = SimpleDataManager(sources={"comorbidity_probs": MultiKeySource({"cvd": 1.0})})
+        strategy = ProbabilisticConditionsStrategy(config, dm)
+        assert self._assign(strategy) == ["cvd"]
+
+
+# =============================================================================
 # CommutingLikelihoodStrategy Tests
 # =============================================================================
 
