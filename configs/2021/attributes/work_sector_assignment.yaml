@@ -86,27 +86,6 @@ data_sources:
           Q: "Human Health and Social Work Activities"
           Other: "Other"
 
-    fallback:
-      # National fallback (approximate UK 2021 employment distribution)
-      A: 0.01
-      B: 0.002
-      C: 0.08
-      D: 0.005
-      E: 0.007
-      F: 0.07
-      G: 0.15
-      H: 0.05
-      I: 0.07
-      J: 0.045
-      K: 0.035
-      L: 0.02
-      M: 0.09
-      N: 0.08
-      O: 0.045
-      P: 0.09
-      Q: 0.13
-      Other: 0.04
-
 # ============================================================================
 # Assignment Rules (Person-Level)
 # ============================================================================

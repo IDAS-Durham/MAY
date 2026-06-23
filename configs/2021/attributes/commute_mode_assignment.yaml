@@ -98,19 +98,6 @@ data_sources:
           walk: "On foot"
           other: "Other method of travel to work"
 
-    # National TS061 shares (WFH-excluded), used when an OA is missing.
-    fallback:
-      tube: 0.04
-      train: 0.05
-      bus: 0.07
-      taxi: 0.01
-      motorcycle: 0.01
-      car_solo: 0.58
-      car_passenger: 0.05
-      bike: 0.03
-      walk: 0.15
-      other: 0.01
-
 # ============================================================================
 # Assignment Rules (Person-Level)
 # ============================================================================

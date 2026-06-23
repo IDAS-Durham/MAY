@@ -4,7 +4,6 @@ Data source loaders for attribute assignment system.
 This module handles loading demographic data from CSV files with:
 - Regional routing (England/Wales, Scotland, Northern Ireland)
 - Caching for performance
-- Fallback probabilities when data not found
 - Normalization of probability distributions
 """
 
@@ -91,13 +90,10 @@ class DataSource:
         elif total > 0:
             return {k: v / total for k, v in probs.items()}
         else:
-            # All zeros — return uniform distribution
-            n = len(probs)
-            logger.warning(
+            raise ValueError(
                 f"All-zero probability distribution in source '{self.name}' "
-                f"({n} keys) — falling back to uniform"
+                f"({len(probs)} keys). No fallbacks (adr/0010) — fix the data."
             )
-            return {k: 1.0 / n for k in probs.keys()}
 
 
 class GeoDistributionSource(DataSource):
@@ -122,7 +118,6 @@ class GeoDistributionSource(DataSource):
 
         # Parse file configurations
         self._file_configs = config.get('files', [])
-        self._fallback = config.get('fallback', {})
 
     def load_data(self, geo_units: Optional[set] = None):
         """
@@ -220,15 +215,19 @@ class GeoDistributionSource(DataSource):
             Dictionary of probabilities
         """
         if not self._data_loaded:
-            logger.warning(f"Data not loaded for source '{self.name}', using fallback")
-            return self._normalize_probabilities(self._fallback)
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010) — "
+                "fix the source/data so it loads."
+            )
 
         # Look up geographical unit
         if geo_unit in self._lookup:
             return self._lookup[geo_unit]
 
-        # Not found - use fallback
-        return self._normalize_probabilities(self._fallback)
+        raise KeyError(
+            f"Source '{self.name}' has no row for geo unit '{geo_unit}'. No fallbacks "
+            "(adr/0010) — the data must cover every keyed unit, or it's a real gap."
+        )
 
 
 class DiversitySource(DataSource):
@@ -246,7 +245,6 @@ class DiversitySource(DataSource):
         super().__init__(name, config)
         self._lookup: Dict[str, Dict[str, float]] = {}
         self._file_configs = config.get('files', [])
-        self._fallback = config.get('fallback', {})
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load diversity data from CSV file."""
@@ -291,12 +289,12 @@ class DiversitySource(DataSource):
 
             # Normalize to probabilities
             total = sum(counts.values())
-            if total > 0:
-                probs = {k: v / total for k, v in counts.items()}
-            else:
-                # Uniform if no data
-                n = len(counts)
-                probs = {k: 1.0 / n for k in counts.keys()}
+            if total <= 0:
+                raise ValueError(
+                    f"Source '{self.name}': zero-total diversity counts for geo unit "
+                    f"'{geo_unit}'. No fallbacks (adr/0010) — fix the data."
+                )
+            probs = {k: v / total for k, v in counts.items()}
 
             lookup[geo_unit] = self._normalize_probabilities(probs)
 
@@ -305,14 +303,17 @@ class DiversitySource(DataSource):
     def lookup(self, geo_unit: str) -> Dict[str, float]:
         """Look up diversity probabilities for a geographical unit."""
         if not self._data_loaded:
-            return self._normalize_probabilities(self._fallback)
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+            )
 
-        # Look up geographical unit
         if geo_unit in self._lookup:
             return self._lookup[geo_unit]
 
-        # Not found - use fallback
-        return self._normalize_probabilities(self._fallback)
+        raise KeyError(
+            f"Source '{self.name}' has no diversity row for geo unit '{geo_unit}'. "
+            "No fallbacks (adr/0010)."
+        )
 
 
 class PairProbabilitySource(DataSource):
@@ -329,7 +330,6 @@ class PairProbabilitySource(DataSource):
         # Nested lookup: geo_unit -> first_ethnicity -> partner_ethnicity -> probability
         self._lookups: Dict[str, Dict[str, Dict[str, float]]] = {}
         self._file_configs = config.get('files', [])
-        self._fallback_type = config.get('fallback', 'uniform')
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load pair probability data."""
@@ -402,7 +402,9 @@ class PairProbabilitySource(DataSource):
             Probability distribution for second person's attribute value
         """
         if not self._data_loaded:
-            return self._get_fallback()
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+            )
 
         # Look up geographical unit
         if geo_unit in self._lookups:
@@ -410,18 +412,11 @@ class PairProbabilitySource(DataSource):
             if first_value in self._lookups[geo_unit]:
                 return self._lookups[geo_unit][first_value]
 
-        return self._get_fallback()
-
-    def _get_fallback(self) -> Dict[str, float]:
-        """Get fallback pair probabilities."""
-        if self._fallback_type == 'uniform':
-            # Equal probability for all values
-            values = ['W', 'A', 'B', 'M', 'O']
-            prob = 1.0 / len(values)
-            return {val: prob for val in values}
-        else:
-            # Default uniform
-            return {'W': 0.2, 'A': 0.2, 'B': 0.2, 'M': 0.2, 'O': 0.2}
+        raise KeyError(
+            f"Source '{self.name}' has no pair row for (geo='{geo_unit}', "
+            f"first='{first_value}'). No fallbacks (adr/0010) — the pair data must cover "
+            "every (unit, first-value) combination the model produces."
+        )
 
 
 class MultiKeyLookupSource(DataSource):
@@ -444,7 +439,6 @@ class MultiKeyLookupSource(DataSource):
         super().__init__(name, config)
         self.assignment_config = assignment_config
         self._file_configs = config.get('files', [])
-        self._fallback = config.get('fallback', {})
         self._lookup_dict = {}  # Dict mapping tuple keys to value dicts
         self._key_columns = []
         self._value_columns = {}
@@ -515,19 +509,21 @@ class MultiKeyLookupSource(DataSource):
         debug = context and context.get('debug', False)
 
         if not self._lookup_dict:
-            if debug:
-                logger.debug(f"    [LOOKUP] No lookup dict available, using fallback")
-            return self._fallback
+            raise RuntimeError(
+                f"Source '{self.name}' has no data loaded. No fallbacks (adr/0010)."
+            )
 
         # Build key tuple directly (faster than building intermediate dict)
         key_values = []
         for csv_col_name, col_config in self._key_columns_config.items():
             value = self._resolve_key_value_cached(col_config, person, household, context)
             if value is None:
-                # Can't build complete key, use fallback
-                if debug:
-                    logger.debug(f"    [LOOKUP] Failed to resolve '{csv_col_name}', using fallback")
-                return self._fallback
+                raise KeyError(
+                    f"Source '{self.name}': could not resolve key column "
+                    f"'{csv_col_name}' for person {person.id}. No fallbacks (adr/0010) — "
+                    "the person is missing an attribute the key needs, or the key config "
+                    "is wrong."
+                )
             key_values.append(value)
 
         # Direct dictionary lookup with tuple key
@@ -544,12 +540,11 @@ class MultiKeyLookupSource(DataSource):
         result = self._lookup_dict.get(lookup_key)
 
         if result is None:
-            # No match found, use fallback
-            if debug:
-                logger.debug(f"    [LOOKUP] Key not found in data, using fallback")
-            # Cache the fallback too
-            self._lookup_cache[lookup_key] = self._fallback
-            return self._fallback
+            raise KeyError(
+                f"Source '{self.name}' has no row for key {lookup_key}. No fallbacks "
+                "(adr/0010) — the data must cover every demographic combination the "
+                "model produces, or this is a real gap."
+            )
 
         if debug:
             logger.debug(f"    [LOOKUP] ✓ Found data: {list(result.keys())[:3]}...")

@@ -155,18 +155,6 @@ data_sources:
           immunosuppression: "has_had_immunosuppression_diagnosis_count_midpoint_rounded"
           neuro: "has_had_neuro_diagnosis_count_midpoint_rounded"
 
-    fallback:
-      no_condition: 0.95
-      has_comorbidity: 0.05
-      multiple_morbidities: 0.01
-      cvd: 0.01
-      crd: 0.01
-      ckd: 0.005
-      cld: 0.005
-      severe_obesity: 0.01
-      cancer: 0.005
-      immunosuppression: 0.002
-      neuro: 0.005
 
 # ============================================================================
 # Assignment Rules (Person-Level)

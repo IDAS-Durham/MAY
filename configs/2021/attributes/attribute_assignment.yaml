@@ -215,13 +215,6 @@ data_sources:
           O: "CO"
         total_column: "total"
 
-    fallback:
-      W: 0.81
-      A: 0.09
-      B: 0.04
-      M: 0.03
-      O: 0.03
-
 
   pair_probabilities:
     type: "csv_lookup"
@@ -236,8 +229,6 @@ data_sources:
           B: "prob_B"
           M: "prob_M"
           O: "prob_O"
-
-    fallback: "uniform"
 
 # ============================================================================
 # Assignment Rules by Household Structure

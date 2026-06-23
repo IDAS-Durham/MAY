@@ -123,15 +123,11 @@ class TestNormalizeProbabilities:
         assert abs(result["B"] - 0.5) < 1e-10
         assert abs(sum(result.values()) - 1.0) < 1e-10
 
-    def test_all_zeros_returns_uniform_and_warns(self, caplog):
-        import logging
+    def test_all_zeros_raises(self):
+        """All-zero distribution can't be sampled — no fallbacks (adr/0010)."""
         probs = {"W": 0.0, "A": 0.0, "B": 0.0}
-        with caplog.at_level(logging.WARNING):
-            result = self._normalize(probs)
-        expected = 1.0 / 3.0
-        for v in result.values():
-            assert abs(v - expected) < 1e-10
-        assert any("All-zero" in msg for msg in caplog.messages)
+        with pytest.raises(ValueError, match="All-zero"):
+            self._normalize(probs)
 
     def test_single_entry(self):
         probs = {"W": 5.0}
@@ -177,28 +173,25 @@ class TestNormalizeProbabilities:
         assert result == {}
         assert any("Empty probability" in msg for msg in caplog.messages)
 
-    def test_negative_sum_to_zero_becomes_uniform(self):
+    def test_negative_sum_to_zero_raises(self):
         """
-        If negatives are clamped to 0 and the remaining values also sum to 0,
-        the result is uniform over all keys.
-        e.g. {A: -1, B: 0} → clamp → {A: 0, B: 0} → uniform {A: 0.5, B: 0.5}
+        Negatives clamp to 0; if nothing positive remains the distribution is
+        unsampleable, so raise rather than invent a uniform one (adr/0010).
+        e.g. {A: -1, B: 0} → clamp → {A: 0, B: 0} → raise.
         """
         probs = {"A": -1.0, "B": 0.0}
-        result = self._normalize(probs)
-        assert abs(result["A"] - 0.5) < 1e-10
-        assert abs(result["B"] - 0.5) < 1e-10
+        with pytest.raises(ValueError, match="All-zero"):
+            self._normalize(probs)
 
-    def test_all_negative_values_become_uniform(self, caplog):
-        """All values negative → all clamped to 0 → uniform."""
+    def test_all_negative_values_raise(self, caplog):
+        """All values negative → all clamped to 0 → all-zero → raise (adr/0010)."""
         import logging
         probs = {"A": -2.0, "B": -3.0}
         with caplog.at_level(logging.WARNING):
-            result = self._normalize(probs)
-        assert abs(result["A"] - 0.5) < 1e-10
-        assert abs(result["B"] - 0.5) < 1e-10
-        # Should warn about both negatives and all-zero
+            with pytest.raises(ValueError, match="All-zero"):
+                self._normalize(probs)
+        # Negatives are still warned about before the raise.
         assert any("Negative probability" in msg for msg in caplog.messages)
-        assert any("All-zero" in msg for msg in caplog.messages)
 
     def test_mixed_negative_positive_summing_to_zero(self):
         """
@@ -235,37 +228,19 @@ class TestGeoDistributionSource:
         result = source.lookup("E00001")
         assert result == {"W": 0.8, "A": 0.2}
 
-    def test_lookup_missing_geo_unit_returns_fallback(self):
+    def test_lookup_missing_geo_unit_raises(self):
+        """No fallbacks (adr/0010): a missing geo unit is a hard error."""
         source = self._make_source_with_data(
             {"E00001": {"W": 0.8, "A": 0.2}},
-            fallback={"W": 0.5, "A": 0.5},
         )
-        result = source.lookup("MISSING")
-        assert abs(sum(result.values()) - 1.0) < 1e-10
+        with pytest.raises(KeyError, match="no row for geo unit"):
+            source.lookup("MISSING")
 
-    def test_lookup_before_data_loaded_returns_fallback(self):
-        source = GeoDistributionSource("test_geo", {
-            "files": [],
-            "fallback": {"W": 0.6, "A": 0.4},
-        })
+    def test_lookup_before_data_loaded_raises(self):
+        source = GeoDistributionSource("test_geo", {"files": []})
         # _data_loaded is False by default
-        result = source.lookup("E00001")
-        assert abs(sum(result.values()) - 1.0) < 1e-10
-
-    def test_fallback_is_normalized(self):
-        """Even if fallback values don't sum to 1, they get normalized."""
-        source = self._make_source_with_data(
-            {},
-            fallback={"W": 3.0, "A": 7.0},
-        )
-        result = source.lookup("MISSING")
-        assert abs(result["W"] - 0.3) < 1e-10
-        assert abs(result["A"] - 0.7) < 1e-10
-
-    def test_empty_fallback_returns_empty(self):
-        source = self._make_source_with_data({}, fallback={})
-        result = source.lookup("MISSING")
-        assert result == {}
+        with pytest.raises(RuntimeError, match="Data not loaded"):
+            source.lookup("E00001")
 
     def test_parse_dataframe_with_total_column(self):
         """When total_column is provided, values are divided by total first."""
@@ -333,43 +308,25 @@ class TestPairProbabilitySource:
         result = source.lookup("E00001", "W")
         assert result["W"] == 0.9
 
-    def test_lookup_missing_first_value_returns_fallback(self):
+    def test_lookup_missing_first_value_raises(self):
+        """No fallbacks (adr/0010): a missing (geo, first-value) pair is an error."""
         source = self._make_source_with_data({
             "E00001": {"W": {"W": 0.9, "A": 0.1}}
         })
-        result = source.lookup("E00001", "B")  # "B" not in data
-        # Should return uniform fallback
-        assert len(result) == 5
-        assert abs(sum(result.values()) - 1.0) < 1e-10
+        with pytest.raises(KeyError, match="no pair row"):
+            source.lookup("E00001", "B")  # "B" not in data
 
-    def test_lookup_missing_geo_unit_returns_fallback(self):
+    def test_lookup_missing_geo_unit_raises(self):
         source = self._make_source_with_data({
             "E00001": {"W": {"W": 0.9, "A": 0.1}}
         })
-        result = source.lookup("MISSING", "W")
-        assert len(result) == 5  # uniform fallback
+        with pytest.raises(KeyError, match="no pair row"):
+            source.lookup("MISSING", "W")
 
-    def test_lookup_before_data_loaded_returns_fallback(self):
-        source = PairProbabilitySource("test_pair", {
-            "files": [],
-            "fallback": "uniform",
-        })
-        result = source.lookup("E00001", "W")
-        assert len(result) == 5
-        assert all(abs(v - 0.2) < 1e-10 for v in result.values())
-
-    def test_uniform_fallback_has_equal_probabilities(self):
-        source = self._make_source_with_data({}, fallback_type='uniform')
-        result = source._get_fallback()
-        expected = 1.0 / 5.0
-        for v in result.values():
-            assert abs(v - expected) < 1e-10
-
-    def test_non_uniform_fallback_type(self):
-        """Unknown fallback type defaults to uniform."""
-        source = self._make_source_with_data({}, fallback_type='something_else')
-        result = source._get_fallback()
-        assert all(abs(v - 0.2) < 1e-10 for v in result.values())
+    def test_lookup_before_data_loaded_raises(self):
+        source = PairProbabilitySource("test_pair", {"files": []})
+        with pytest.raises(RuntimeError, match="Data not loaded"):
+            source.lookup("E00001", "W")
 
 
 # =============================================================================
@@ -589,43 +546,41 @@ class TestMultiKeyLookupSource:
         assert "cvd" in result
         assert "crd" in result
 
-    def test_direct_lookup_miss_returns_fallback(self):
+    def test_direct_lookup_miss_raises(self):
+        """No fallbacks (adr/0010): a key not present in the data is an error."""
         source = self._make_source(
             lookup_dict={("M", 30): {"cvd": 0.05}},
             key_columns_config={
                 "sex": {"attribute": "sex", "type": "direct"},
                 "age": {"attribute": "age", "type": "direct"},
             },
-            fallback={"cvd": 0.01},
         )
         person = MinimalPerson(age=99, sex="F")  # not in lookup
-        result = source.lookup(person)
-        assert result == {"cvd": 0.01}
+        with pytest.raises(KeyError, match="no row for key"):
+            source.lookup(person)
 
-    def test_empty_lookup_dict_returns_fallback(self):
+    def test_empty_lookup_dict_raises(self):
         source = self._make_source(
             lookup_dict={},
             key_columns_config={
                 "sex": {"attribute": "sex", "type": "direct"},
             },
-            fallback={"cvd": 0.0},
         )
-        result = source.lookup(MinimalPerson())
-        assert result == {"cvd": 0.0}
+        with pytest.raises(RuntimeError, match="no data loaded"):
+            source.lookup(MinimalPerson())
 
-    def test_missing_key_attribute_returns_fallback(self):
-        """If person doesn't have the required attribute, fallback."""
+    def test_missing_key_attribute_raises(self):
+        """If the person lacks an attribute the key needs, raise (adr/0010)."""
         source = self._make_source(
             lookup_dict={("M", "W"): {"cvd": 0.05}},
             key_columns_config={
                 "sex": {"attribute": "sex", "type": "direct"},
                 "ethnicity": {"attribute": "ethnicity", "type": "direct"},
             },
-            fallback={"cvd": 0.01},
         )
         person = MinimalPerson(sex="M", properties={})  # no ethnicity
-        result = source.lookup(person)
-        assert result == {"cvd": 0.01}
+        with pytest.raises(KeyError, match="could not resolve key column"):
+            source.lookup(person)
 
     def test_direct_lookup_uses_properties_first(self):
         """Properties dict is checked before direct attributes."""
@@ -686,7 +641,8 @@ class TestMultiKeyLookupSource:
         result = source.lookup(person)
         assert "industry_a" in result
 
-    def test_ancestor_lookup_missing_geo_unit_returns_fallback(self):
+    def test_ancestor_lookup_missing_geo_unit_raises(self):
+        """No geo unit to resolve the key → raise (adr/0010)."""
         source = self._make_source(
             lookup_dict={("Manchester",): {"industry_a": 1.0}},
             key_columns_config={
@@ -697,11 +653,10 @@ class TestMultiKeyLookupSource:
                     "property": "name",
                 },
             },
-            fallback={"industry_a": 0.5},
         )
         person = MinimalPerson(geographical_unit=None)
-        result = source.lookup(person)
-        assert result == {"industry_a": 0.5}
+        with pytest.raises(KeyError, match="could not resolve key column"):
+            source.lookup(person)
 
     def test_ancestor_lookup_falls_back_to_household_geo(self):
         """If person has no geo_unit, try household's."""
@@ -901,18 +856,13 @@ class TestDiversitySource:
         result = source.lookup("E00001")
         assert abs(sum(result.values()) - 1.0) < 1e-10
 
-    def test_lookup_missing_returns_fallback(self):
-        source = self._make_source_with_data(
-            {},
-            fallback={"single": 0.5, "two": 0.5},
-        )
-        result = source.lookup("MISSING")
-        assert abs(sum(result.values()) - 1.0) < 1e-10
+    def test_lookup_missing_raises(self):
+        """No fallbacks (adr/0010): a missing geo unit is a hard error."""
+        source = self._make_source_with_data({})
+        with pytest.raises(KeyError, match="no diversity row"):
+            source.lookup("MISSING")
 
-    def test_lookup_before_data_loaded(self):
-        source = DiversitySource("test", {
-            "files": [],
-            "fallback": {"single": 1.0},
-        })
-        result = source.lookup("E00001")
-        assert abs(result["single"] - 1.0) < 1e-10
+    def test_lookup_before_data_loaded_raises(self):
+        source = DiversitySource("test", {"files": []})
+        with pytest.raises(RuntimeError, match="Data not loaded"):
+            source.lookup("E00001")
