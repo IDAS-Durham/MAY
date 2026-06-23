@@ -247,20 +247,38 @@ class TestGeoDistributionSource:
         source._data_loaded = True
         return source
 
-    def test_lookup_existing_geo_unit(self):
+    def test_lookup_resolves_person_geo_unit(self):
         source = self._make_source_with_data(
             {"E00001": {"W": 0.8, "A": 0.2}}
         )
-        result = source.lookup("E00001")
+        person = MinimalPerson(geographical_unit=MinimalGeoUnit("E00001"))
+        result = source.lookup(person, None, None)
         assert result == {"W": 0.8, "A": 0.2}
+
+    def test_lookup_prefers_household_geo_over_person(self):
+        """Residence venue geo wins over the person's own (adr/0007 resolution)."""
+        source = self._make_source_with_data(
+            {"E00001": {"W": 1.0}, "E00002": {"A": 1.0}}
+        )
+        person = MinimalPerson(geographical_unit=MinimalGeoUnit("E00002"))
+        household = MinimalHousehold(geographical_unit=MinimalGeoUnit("E00001"))
+        assert source.lookup(person, household, None) == {"W": 1.0}
+
+    def test_lookup_no_geo_unit_raises(self):
+        """No residence geo anywhere → hard error, no silent miss (adr/0010)."""
+        source = self._make_source_with_data({"E00001": {"W": 1.0}})
+        person = MinimalPerson(geographical_unit=None)
+        with pytest.raises(KeyError, match="no residence geographical_unit"):
+            source.lookup(person, None, None)
 
     def test_lookup_missing_geo_unit_raises(self):
         """No fallbacks (adr/0010): a missing geo unit is a hard error."""
         source = self._make_source_with_data(
             {"E00001": {"W": 0.8, "A": 0.2}},
         )
+        person = MinimalPerson(geographical_unit=MinimalGeoUnit("MISSING"))
         with pytest.raises(KeyError, match="no row for geo unit"):
-            source.lookup("MISSING")
+            source.lookup(person, None, None)
 
     def test_lookup_before_data_loaded_raises(self):
         source = GeoDistributionSource("test_geo", {"files": []})
@@ -482,17 +500,21 @@ class TestOriginDestinationMatrixSource:
 class TestGUSamplerSource:
     """Tests geographical unit sampler loading and lookup."""
 
-    def _make_source_with_data(self, lookup_data):
+    def _make_source_with_data(self, lookup_data, parent_attribute="workplace_location"):
         source = GUSamplerSource("test_gu_sampler", {"files": []})
         source._lookup = lookup_data
+        source._parent_attribute = parent_attribute
         source._data_loaded = True
         return source
 
-    def test_lookup_existing_parent(self):
+    def _person_in(self, parent_gu, parent_attribute="workplace_location"):
+        return MinimalPerson(properties={parent_attribute: parent_gu})
+
+    def test_lookup_resolves_parent_from_person_attribute(self):
         source = self._make_source_with_data({
             "ParentGU_A": {"SGU_1": 0.6, "SGU_2": 0.4}
         })
-        result = source.lookup("ParentGU_A")
+        result = source.lookup(self._person_in("ParentGU_A"), None, None)
         assert result == {"SGU_1": 0.6, "SGU_2": 0.4}
 
     def test_lookup_missing_parent_raises(self):
@@ -500,12 +522,18 @@ class TestGUSamplerSource:
             "ParentGU_A": {"SGU_1": 1.0}
         })
         with pytest.raises(KeyError, match="no child-GU distribution"):
-            source.lookup("MISSING")
+            source.lookup(self._person_in("MISSING"), None, None)
+
+    def test_lookup_no_parent_attribute_value_raises(self):
+        """Person missing the configured parent attribute → hard error (adr/0010)."""
+        source = self._make_source_with_data({"ParentGU_A": {"SGU_1": 1.0}})
+        with pytest.raises(KeyError, match="workplace_location"):
+            source.lookup(MinimalPerson(properties={}), None, None)
 
     def test_lookup_before_data_loaded_raises(self):
         source = GUSamplerSource("test_gu_sampler", {"files": []})
         with pytest.raises(RuntimeError, match="Data not loaded"):
-            source.lookup("ParentGU_A")
+            source.lookup(self._person_in("ParentGU_A"), None, None)
 
     def test_weight_normalization(self):
         """Weights should be normalized to probabilities summing to 1.0."""
@@ -526,7 +554,7 @@ class TestGUSamplerSource:
             "ParentGU_A": {"SGU_1": 0.5, "SGU_2": 0.5}
             # SGU_3 with weight 0 would not appear
         })
-        result = source.lookup("ParentGU_A")
+        result = source.lookup(self._person_in("ParentGU_A"), None, None)
         assert "SGU_3" not in result
         assert len(result) == 2
 
@@ -874,7 +902,8 @@ class TestDataSourceManagerRouting:
         source._lookup = {"E00001": {"W": 1.0}}
         source._data_loaded = True
 
-        result = manager.lookup("test_geo", "E00001")
+        person = MinimalPerson(geographical_unit=MinimalGeoUnit("E00001"))
+        result = manager.lookup("test_geo", person, None, None)
         assert result == {"W": 1.0}
 
     def test_lookup_missing_source_raises(self):

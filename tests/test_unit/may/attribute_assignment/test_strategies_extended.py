@@ -108,11 +108,21 @@ class ODMatrixSource:
 
 
 class GUSamplerSource:
-    """Source that returns {gu_code: probability} dicts; raises on a miss (adr/0010)."""
-    def __init__(self, lookup_data=None):
+    """
+    Like the real GUSamplerSource: resolves the parent GU from a configured
+    person attribute (adr/0007), then returns {gu_code: probability}; raises on a
+    miss (adr/0010).
+    """
+    def __init__(self, lookup_data=None, parent_attribute="workplace_location"):
         self._lookup_data = lookup_data or {}
+        self._parent_attribute = parent_attribute
 
-    def lookup(self, parent_gu):
+    def lookup(self, person, household=None, context=None):
+        parent_gu = person.properties.get(self._parent_attribute)
+        if not parent_gu:
+            raise KeyError(
+                f"person has no '{self._parent_attribute}' to sample within"
+            )
         if parent_gu not in self._lookup_data:
             raise KeyError(f"no child-GU distribution for parent '{parent_gu}'")
         return self._lookup_data[parent_gu]
@@ -769,7 +779,7 @@ class TestGUSamplerStrategy:
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
         person = MinimalPerson(properties={})  # no workplace_location
-        with pytest.raises(RuntimeError, match="no workplace_location"):
+        with pytest.raises(KeyError, match="workplace_location"):
             strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
 
     def test_no_data_source_raises(self):
@@ -812,7 +822,7 @@ class TestGUSamplerStrategy:
         p1 = MinimalPerson(properties={"workplace_location": "Manchester"})
         p2 = MinimalPerson(properties={})  # no workplace
 
-        with pytest.raises(RuntimeError, match="no workplace_location"):
+        with pytest.raises(KeyError, match="workplace_location"):
             strategy.assign_batch(
                 [p1, p2],
                 [MinimalVenue()] * 2,

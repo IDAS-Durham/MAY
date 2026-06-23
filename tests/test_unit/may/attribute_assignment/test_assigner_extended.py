@@ -111,13 +111,24 @@ class SimpleGeoSource:
         self._fallback = fallback or {}
 
     def lookup(self, *args, **kwargs):
-        if len(args) == 1:
+        # Pair form: (geo_unit_str, first_value).
+        if args and isinstance(args[0], str):
+            if len(args) == 2:
+                geo, val = args
+                return self._lookup_data.get(geo, {}).get(val, self._fallback)
             return self._lookup_data.get(args[0], self._fallback)
-        elif len(args) == 2:
-            geo, val = args
-            nested = self._lookup_data.get(geo, {})
-            return nested.get(val, self._fallback)
-        return self._fallback
+        # Draw form: (person, household, context) — resolve residence geo like
+        # the real GeoDistribution source (adr/0007).
+        person = args[0] if args else None
+        household = args[1] if len(args) > 1 else None
+        geo_unit = None
+        if household is not None and getattr(household, 'geographical_unit', None):
+            geo_unit = household.geographical_unit.name
+        if not geo_unit and getattr(person, 'geographical_unit', None):
+            geo_unit = person.geographical_unit.name
+        if not geo_unit:
+            raise KeyError("no residence geographical_unit for person")
+        return self._lookup_data.get(geo_unit, self._fallback)
 
 
 class SimpleDataManager:

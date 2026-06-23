@@ -243,15 +243,12 @@ class GeoDistributionSource(DataSource):
 
         return lookup
 
-    def lookup(self, geo_unit: str) -> Dict[str, float]:
+    def lookup(self, person, household=None, context=None) -> Dict[str, float]:
         """
-        Look up probability distribution for a geographical unit.
+        Look up the distribution for a person's residence geographical unit.
 
-        Args:
-            geo_unit: Geographical unit code (e.g., "E00000001")
-
-        Returns:
-            Dictionary of probabilities
+        Resolves the key itself (adr/0007): the residence venue's geo unit first,
+        then the person's own. The strategy no longer resolves geo units.
         """
         if not self._data_loaded:
             raise RuntimeError(
@@ -259,7 +256,17 @@ class GeoDistributionSource(DataSource):
                 "fix the source/data so it loads."
             )
 
-        # Look up geographical unit
+        geo_unit = None
+        if household is not None and getattr(household, 'geographical_unit', None):
+            geo_unit = household.geographical_unit.name
+        if not geo_unit and getattr(person, 'geographical_unit', None):
+            geo_unit = person.geographical_unit.name
+        if not geo_unit:
+            raise KeyError(
+                f"Source '{self.name}': no residence geographical_unit for person "
+                f"{person.id} (no venue geo and no person-level geo). No fallbacks (adr/0010)."
+            )
+
         if geo_unit in self._lookup:
             return self._lookup[geo_unit]
 
@@ -852,6 +859,10 @@ class GUSamplerSource(DataSource):
         # Lookup: parent_gu_name -> {child_gu_code: weight}
         self._lookup: Dict[str, Dict[str, float]] = {}
         self._file_configs = config.get('files', [])
+        # Person attribute that supplies the parent GU to sample within — read
+        # from config (key_columns value), NOT hardcoded, so the sampler is
+        # generic over any parent attribute / hierarchy level (adr/0007).
+        self._parent_attribute: Optional[str] = None
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load GU distribution by parent GU."""
@@ -865,7 +876,18 @@ class GUSamplerSource(DataSource):
                     df = pd.read_csv(file_path)
 
                     # Parent-GU lookup key: canonical one-entry key_columns mapping (adr/0006).
+                    # Its value names the person attribute that supplies the parent GU
+                    # (adr/0007) — generic, not a hardcoded 'workplace_location'.
                     parent_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
+                    key_resolution = file_config['key_columns'][parent_column]
+                    if not isinstance(key_resolution, dict) or not key_resolution.get('attribute'):
+                        raise ValueError(
+                            f"GU sampler source '{self.name}': key column '{parent_column}' "
+                            "must map to a resolution with an 'attribute' naming the person "
+                            "attribute that holds the parent GU, e.g. "
+                            f"{{{parent_column}: {{attribute: workplace_location}}}}."
+                        )
+                    self._parent_attribute = key_resolution['attribute']
                     weight_column = file_config.get('weight_column', 'Total')
 
                     # The sampled child-GU output column (distinct from the lookup
@@ -914,19 +936,22 @@ class GUSamplerSource(DataSource):
 
         self._data_loaded = True
 
-    def lookup(self, parent_gu_name: str) -> Dict[str, float]:
+    def lookup(self, person, household=None, context=None) -> Dict[str, float]:
         """
-        Look up GU probability distribution for a parent GU.
+        Look up the child-GU distribution for the person's parent GU.
 
-        Args:
-            parent_gu_name: Parent GU name (e.g., "Nuneaton and Bedworth")
-
-        Returns:
-            Dictionary mapping child GU codes to probabilities
+        Resolves the key itself (adr/0007): the parent GU is the person's already
+        assigned `workplace_location`. The strategy no longer resolves it.
         """
         if not self._data_loaded:
             raise RuntimeError(
                 f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+            )
+        parent_gu_name = get_person_attribute(person, self._parent_attribute)
+        if not parent_gu_name:
+            raise KeyError(
+                f"Source '{self.name}': person {person.id} has no '{self._parent_attribute}' "
+                "to sample a child GU within. No fallbacks (adr/0010)."
             )
         if parent_gu_name not in self._lookup:
             raise KeyError(

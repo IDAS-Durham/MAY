@@ -320,44 +320,63 @@ class AssignmentStrategy:
         return get_person_attribute(person, attribute_name)
 
 
-class ProbabilisticStrategy(AssignmentStrategy):
+class DrawStrategy(AssignmentStrategy):
     """
-    Probabilistic assignment based on geographical distribution.
+    Weighted single draw from a {value: weight} distribution (adr/0007).
 
-    Samples from attribute distribution for the household's geographical unit.
-    This is the simplest strategy - no dependencies on other people.
+    One strategy for every weighted-draw use. The split: the **data source** owns
+    key-resolution and weight computation — it receives (person, household,
+    context) and returns the distribution; this **strategy** owns the sampling
+    mechanics (sanitize + draw, via `_weighted_draw`). The former
+    `probabilistic`, `categorical_sampler` and `geographical_unit_sampler`
+    strategies — which differed only in how their source resolved the lookup key
+    — are aliases of this one class.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
-        """Initialize and cache configuration values."""
         super().__init__(config, data_manager)
-        self.data_source_name = config.get('data_source', 'geo_distribution')
+        self.data_source_name = config.get('data_source')
+
+    def _source(self):
+        source = self.data_manager.get_source(self.data_source_name)
+        if not source:
+            raise KeyError(
+                f"Data source '{self.data_source_name}' is not registered. "
+                "No fallbacks (adr/0010)."
+            )
+        return source
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
-        """
-        Sample attribute value from geographical distribution.
-
-        Args:
-            person: Person object
-            household: Household object
-            context: Assignment context
-
-        Returns:
-            Sampled attribute value
-        """
-        # Resolve the residence geo unit: venue first, then the person's own.
-        geo_unit = None
-        if household and household.geographical_unit:
-            geo_unit = household.geographical_unit.name
-        if not geo_unit and person.geographical_unit:
-            geo_unit = person.geographical_unit.name
-        if not geo_unit:
-            self._fail(person, "no geographical_unit (no residence venue and no person-level geo unit)")
-
-        probs = self.data_manager.lookup(self.data_source_name, geo_unit)
+        """Draw one value from the source's distribution for this person."""
+        probs = self._source().lookup(person, household, context)
         sampled = self._weighted_draw(probs, person)
-        logger.debug(f"Probabilistic: {sampled} for {person.id} in {geo_unit}")
+        logger.debug(f"{self.strategy_type}: {sampled} for {person.id}")
         return sampled
+
+    def assign_batch(self, people_list: List, households_list: List,
+                     contexts_list: List[Dict[str, Any]]) -> List[Any]:
+        """
+        Batch draw. Group people by the distribution their source returns, then
+        sample each group in one np.random.choice. Grouping is by the resolved
+        distribution, so it needs no knowledge of how the source keys its lookup.
+        """
+        from collections import defaultdict
+
+        source = self._source()
+        groups = defaultdict(list)
+        for i, (person, household, context) in enumerate(
+            zip(people_list, households_list, contexts_list)
+        ):
+            probs = source.lookup(person, household, context)
+            groups[tuple(sorted(probs.items()))].append((i, person, probs))
+
+        results = [None] * len(people_list)
+        for members in groups.values():
+            _, person0, probs = members[0]
+            sampled = self._weighted_draw(probs, person0, size=len(members))
+            for (idx, _person, _probs), value in zip(members, sampled):
+                results[idx] = value
+        return results
 
 
 class PartnershipStrategy(AssignmentStrategy):
@@ -591,27 +610,15 @@ class LogicBlockStrategy(AssignmentStrategy):
             Sampled attribute value
         """
         data_source_name = strategy_config.get('data_source', 'geo_distribution')
+        source = self.data_manager.get_source(data_source_name)
+        if not source:
+            raise KeyError(
+                f"Data source '{data_source_name}' is not registered. No fallbacks (adr/0010)."
+            )
 
-        # Get the geo unit for lookup
-        geo_unit = None
-        if household and household.geographical_unit:
-            geo_unit = household.geographical_unit.name
-        elif person.geographical_unit:
-            geo_unit = person.geographical_unit.name
-
-        if not geo_unit:
-            logger.warning(f"No geo unit for exclusion sampling, person {person.id}")
-            return self._fail(person, "no geographical_unit available")
-
-        # Look up full distribution
-        probs = self.data_manager.lookup(data_source_name, geo_unit)
-        if not probs:
-            logger.warning(f"No distribution for {data_source_name}({geo_unit})")
-            return self._fail(person, "data source returned no distribution")
-
-        # Remove excluded values
+        # The source resolves its own key (adr/0007) and returns the full distribution.
+        probs = source.lookup(person, household, context)
         filtered_probs = {k: v for k, v in probs.items() if k not in excluded_values}
-
         if not filtered_probs:
             return self._fail(
                 person,
@@ -619,16 +626,7 @@ class LogicBlockStrategy(AssignmentStrategy):
                 f"available={set(probs.keys())})",
             )
 
-        # Re-normalize
-        total = sum(filtered_probs.values())
-        if total <= 0:
-            logger.warning(f"Zero total probability after exclusion for person {person.id}")
-            return self._fail(person, "zero total probability after exclusion")
-
-        values = list(filtered_probs.keys())
-        probabilities = [v / total for v in filtered_probs.values()]
-
-        sampled = np.random.choice(values, p=probabilities)
+        sampled = self._weighted_draw(filtered_probs, person)
         logger.debug(
             f"Inheritance (with exclusion): {sampled} for {person.id} "
             f"(excluded={excluded_values})"
@@ -1091,187 +1089,6 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         return result
 
 
-class GUSamplerStrategy(AssignmentStrategy):
-    """
-    Samples a geographical unit within a parent GU based on weighted distribution.
-    Generic strategy that works with any geographical hierarchy level.
-
-    Supports batch assignment to reduce repeated lookups.
-    """
-
-    def __init__(self, config: Dict[str, Any], data_manager):
-        """Initialize geographical unit sampler strategy."""
-        super().__init__(config, data_manager)
-        self.data_source_name = config.get('data_source')
-
-    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
-        """
-        Batch assignment to minimize repeated data lookups.
-
-        Groups people by workplace_parent_gu and processes each group together.
-
-        Args:
-            people_list: List of Person objects
-            households_list: List of Household objects (parallel to people_list)
-            contexts_list: List of context dicts (parallel to people_list)
-
-        Returns:
-            List of sampled geographical unit codes (parallel to people_list)
-        """
-        from collections import defaultdict
-
-        # Get data source
-        source = self.data_manager.get_source(self.data_source_name)
-        if not source:
-            raise KeyError(
-                f"Data source '{self.data_source_name}' is not registered. "
-                "No fallbacks (adr/0010)."
-            )
-
-        # Group people by workplace parent GU
-        gu_groups = defaultdict(list)
-
-        for i, person in enumerate(people_list):
-            workplace_parent_gu = person.properties.get('workplace_location')
-            if not workplace_parent_gu:
-                self._fail(person, "no workplace_location assigned")
-            gu_groups[workplace_parent_gu].append(i)
-
-        # Results array
-        results = [None] * len(people_list)
-
-        # Process each group
-        for workplace_parent_gu, indices in gu_groups.items():
-            gu_probs = source.lookup(workplace_parent_gu)  # raises on miss (adr/0010)
-            sampled_gus = self._weighted_draw(gu_probs, people_list[indices[0]], size=len(indices))
-            for idx, sampled_gu in zip(indices, sampled_gus):
-                results[idx] = sampled_gu
-
-        return results
-
-    def assign(self, person, household, context: Dict[str, Any]) -> Any:
-        """
-        Sample a geographical unit within person's workplace parent GU.
-
-        Args:
-            person: Person object
-            household: Household object (optional)
-            context: Assignment context
-
-        Returns:
-            Sampled geographical unit code
-        """
-        # Get workplace_location from person properties
-        workplace_parent_gu = person.properties.get('workplace_location')
-        if not workplace_parent_gu:
-            self._fail(person, "no workplace_location assigned")
-
-        # Look up GU distribution for this parent GU
-        source = self.data_manager.get_source(self.data_source_name)
-        if not source:
-            raise KeyError(
-                f"Data source '{self.data_source_name}' is not registered. "
-                "No fallbacks (adr/0010)."
-            )
-
-        gu_probs = source.lookup(workplace_parent_gu)  # raises on miss (adr/0010)
-        sampled_gu = self._weighted_draw(gu_probs, person)
-        logger.debug(f"GU Sampler: {sampled_gu} for person {person.id} in parent GU {workplace_parent_gu}")
-        return sampled_gu
-
-
-class CategoricalSamplerStrategy(AssignmentStrategy):
-    """
-    Samples ONE category from a probability distribution.
-
-    Works with MultiKeyLookupSource that returns {category: probability} dicts.
-    Unlike ProbabilisticConditionsStrategy which samples multiple yes/no conditions,
-    this samples exactly one mutually-exclusive category (e.g., one industry sector).
-
-    Supports batch assignment to reduce repeated lookups.
-    """
-
-    def __init__(self, config: Dict[str, Any], data_manager):
-        """Initialize categorical sampler strategy."""
-        super().__init__(config, data_manager)
-        self.data_source_name = config.get('data_source')
-
-    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
-        """
-        Batch assignment to minimize repeated data lookups.
-
-        Groups people by their lookup keys and processes each group together.
-
-        Args:
-            people_list: List of Person objects
-            households_list: List of Household objects (parallel to people_list)
-            contexts_list: List of context dicts (parallel to people_list)
-
-        Returns:
-            List of sampled category values (parallel to people_list)
-        """
-        from collections import defaultdict
-
-        # Get data source
-        source = self.data_manager.get_source(self.data_source_name)
-        if not source:
-            raise KeyError(
-                f"Data source '{self.data_source_name}' is not registered. "
-                "No fallbacks (adr/0010)."
-            )
-
-        # Group people by their lookup keys
-        # lookup_key_groups: {lookup_key: [indices]}
-        lookup_key_groups = defaultdict(list)
-
-        for i, (person, household, context) in enumerate(zip(people_list, households_list, contexts_list)):
-            # Look up probability distribution
-            probs = source.lookup(person, household, context)
-            if probs:
-                # Create a hashable key from the probabilities
-                lookup_key = tuple(sorted(probs.items()))
-                lookup_key_groups[lookup_key].append((i, probs))
-
-        # Results array
-        results = [None] * len(people_list)
-
-        # Process each group
-        for lookup_key, group_data in lookup_key_groups.items():
-            indices = [idx for idx, _ in group_data]
-            probs = group_data[0][1]  # All have same probs for this key
-            sampled_values = self._weighted_draw(probs, people_list[indices[0]], size=len(indices))
-            for idx, value in zip(indices, sampled_values):
-                results[idx] = value
-
-        return results
-
-    def assign(self, person, household, context: Dict[str, Any]) -> Any:
-        """
-        Sample one category from probability distribution.
-
-        Args:
-            person: Person object
-            household: Household object (optional)
-            context: Assignment context
-
-        Returns:
-            Sampled category value
-        """
-        # Get data source
-        source = self.data_manager.get_source(self.data_source_name)
-        if not source:
-            raise KeyError(
-                f"Data source '{self.data_source_name}' is not registered. "
-                "No fallbacks (adr/0010)."
-            )
-
-        # Look up probability distribution
-        probs = source.lookup(person, household, context)
-        sampled = self._weighted_draw(probs, person)
-        logger.debug(f"Categorical: {sampled} for person {person.id}")
-        return sampled
-
-
 class ConstantStrategy(AssignmentStrategy):
     """
     Assigns a fixed, constant value.
@@ -1299,6 +1116,14 @@ class ConstantStrategy(AssignmentStrategy):
             return self._fail(person, "constant strategy has no 'value'")
 
         return self.value
+
+
+# The weighted-draw family collapsed to one implementation (adr/0007). The old
+# strategy names stay as aliases so configs and internal callers (marginal and
+# nested-strategy creation) keep working; all resolve to DrawStrategy.
+ProbabilisticStrategy = DrawStrategy
+CategoricalSamplerStrategy = DrawStrategy
+GUSamplerStrategy = DrawStrategy
 
 
 class StrategyFactory:

@@ -66,13 +66,25 @@ class SimpleGeoSource:
         self._fallback = fallback or {}
 
     def lookup(self, *args, **kwargs):
-        if len(args) == 1:
+        # Pair form: (geo_unit_str, first_value) — used by partnership tests.
+        if args and isinstance(args[0], str):
+            if len(args) == 2:
+                geo, val = args
+                return self._lookup_data.get(geo, {}).get(val, self._fallback)
             return self._lookup_data.get(args[0], self._fallback)
-        elif len(args) == 2:
-            geo, val = args
-            nested = self._lookup_data.get(geo, {})
-            return nested.get(val, self._fallback)
-        return self._fallback
+        # Draw form: (person, household, context). Like the real GeoDistribution
+        # source, resolve the residence geo unit (venue first, then person) and
+        # raise loudly if there is none (adr/0007, adr/0010).
+        person = args[0] if args else None
+        household = args[1] if len(args) > 1 else None
+        geo_unit = None
+        if household is not None and getattr(household, 'geographical_unit', None):
+            geo_unit = household.geographical_unit.name
+        if not geo_unit and getattr(person, 'geographical_unit', None):
+            geo_unit = person.geographical_unit.name
+        if not geo_unit:
+            raise KeyError("no residence geographical_unit for person")
+        return self._lookup_data.get(geo_unit, self._fallback)
 
 
 class SimpleDataManager:
@@ -245,16 +257,17 @@ class TestProbabilisticStrategy:
         config = {"strategy": "probabilistic", "data_source": "geo_distribution"}
         strategy = ProbabilisticStrategy(config, dm)
 
-        with pytest.raises(RuntimeError, match="geographical_unit"):
+        with pytest.raises(KeyError, match="geographical_unit"):
             strategy.assign(person_no_geo, household_no_geo, {"attribute_name": "ethnicity"})
 
     def test_raises_when_household_is_none_and_no_person_geo(self, person_no_geo, ethnicity_geo_source):
-        """Household None and no person geo → fail loud (adr/0010)."""
+        """Household None and no person geo → fail loud (adr/0010). The source
+        now owns geo resolution and raises when there is none (adr/0007)."""
         dm = SimpleDataManager(sources={"geo_distribution": ethnicity_geo_source})
         config = {"strategy": "probabilistic", "data_source": "geo_distribution"}
         strategy = ProbabilisticStrategy(config, dm)
 
-        with pytest.raises(RuntimeError, match="geographical_unit"):
+        with pytest.raises(KeyError, match="geographical_unit"):
             strategy.assign(person_no_geo, None, {"attribute_name": "ethnicity"})
 
     def test_raises_when_data_source_returns_empty(self, person_with_geo, household_with_geo):
@@ -271,7 +284,7 @@ class TestProbabilisticStrategy:
         config = {"strategy": "probabilistic", "data_source": "geo_distribution"}
         strategy = ProbabilisticStrategy(config, dm)
 
-        with pytest.raises(RuntimeError, match="no distribution"):
+        with pytest.raises(KeyError, match="not registered"):
             strategy.assign(person_with_geo, household_with_geo, {"attribute_name": "ethnicity"})
 
     def test_deterministic_distribution_always_returns_single_value(
