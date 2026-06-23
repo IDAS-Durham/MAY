@@ -12,11 +12,13 @@
 # - Requires ethnicity to be assigned first
 # ============================================================================
 
-attribute:
-  name: "comorbidities"
-  description: "Assigns health comorbidities based on person demographics"
-  data_type: "list"
+step:
   assignment_level: "person"
+
+attributes:
+  - name: "comorbidities"
+    description: "Assigns health comorbidities based on person demographics"
+    data_type: "list"
 
 # ============================================================================
 # Required Attributes (Dependencies)

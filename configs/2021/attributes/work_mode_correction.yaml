@@ -25,11 +25,13 @@
 #
 # ============================================================================
 
-attribute:
-  name: "work_mode"
-  description: "Force Normal for workers in on-site venues (hospital/care_home/classroom)"
-  data_type: "categorical"
+step:
   assignment_level: "person"
+
+attributes:
+  - name: "work_mode"
+    description: "Force Normal for workers in on-site venues (hospital/care_home/classroom)"
+    data_type: "categorical"
 
 # ============================================================================
 # Filters

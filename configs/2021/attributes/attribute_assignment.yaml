@@ -45,15 +45,17 @@
 # The root attribute configuration MUST be defined as a nested dictionary 
 # under the 'attribute:' key. Top-level 'attribute_name' will be ignored.
 # ============================================================================
-attribute:
-  name: "ethnicity"
-  description: "Assigns ethnicity based on residence structure and roles"
-  data_type: "categorical"
+step:
   assignment_level: "person_by_residence"
 
   # Venue types to apply household structure-based assignment to
   # Other residence types (not in this list) use venue_assignment_rules instead
   residence_venue_types: ["household"]
+
+attributes:
+  - name: "ethnicity"
+    description: "Assigns ethnicity based on residence structure and roles"
+    data_type: "categorical"
 
 
 # ============================================================================

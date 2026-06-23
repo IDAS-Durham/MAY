@@ -10,11 +10,13 @@
 # Dependencies: work_mode (from workplace_assignment), residence geographical_unit
 # ============================================================================
 
-attribute:
-  name: "commute_mode"
-  description: "Method of travel to work (TS061), residence-side"
-  data_type: "categorical"
+step:
   assignment_level: "person"
+
+attributes:
+  - name: "commute_mode"
+    description: "Method of travel to work (TS061), residence-side"
+    data_type: "categorical"
 
 # ============================================================================
 # Filters

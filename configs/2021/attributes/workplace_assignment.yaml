@@ -11,20 +11,15 @@
 # Dependencies: None (this runs FIRST for workers, before sector assignment)
 # ============================================================================
 
-attribute:
-  name: "workplace_location"
-  description: "Assigns geographical location (LGU) where person works and work mode"
-  data_type: "categorical"
+step:
   assignment_level: "person"
 
-# ============================================================================
-# Additional Attributes Assigned
-# ============================================================================
-# This configuration assigns TWO attributes:
-# 1. workplace_location (LGU code where person works)
-# 2. work_mode (From_Home, Hybrid, or Normal commute)
-
-additional_attributes:
+# This step produces TWO attributes from one joint (origin-destination) draw;
+# the rule's `outputs:` map wires the strategy's fields to these names.
+attributes:
+  - name: "workplace_location"
+    description: "Geographical location (LGU) where the person works"
+    data_type: "categorical"
   - name: "work_mode"
     description: "Work mode: From_Home, Hybrid, or Normal commute"
     data_type: "categorical"

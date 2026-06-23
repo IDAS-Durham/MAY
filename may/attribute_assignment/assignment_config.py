@@ -331,7 +331,10 @@ class AttributeAssignmentConfig:
             self.raw_config = yaml.safe_load(f)
 
         # Parse sections
-        self.attribute_name = self._parse_attribute()
+        self.attributes = self._parse_attributes()
+        # Primary produced attribute (single-output configs have exactly one).
+        self.attribute_name = self.attributes[0]['name']
+        self.produced_attributes = [a['name'] for a in self.attributes]
         self.assignment_level = self._parse_assignment_level()
         self.residence_venue_types = self._parse_residence_venue_types()
         self.filters = self._parse_filters()
@@ -361,20 +364,43 @@ class AttributeAssignmentConfig:
         logger.info(f"  Household structures: {len(self.household_structures)}")
         logger.info(f"  Assignment rules: {len(self.assignment_rules)}")
 
-    def _parse_attribute(self) -> str:
-        """Parse attribute name."""
-        return self.raw_config.get('attribute', {}).get('name', 'unknown')
+    def _parse_attributes(self) -> List[Dict[str, Any]]:
+        """Parse the produced-attribute declarations (adr/0012).
+
+        Produced attributes are always a top-level `attributes:` list; each entry
+        carries a 'name'. A single-output config declares a one-entry list. Step
+        config (assignment_level, residence_venue_types) lives under `step:`.
+        The retired singular `attribute:` block raises a clear error.
+        """
+        if 'attribute' in self.raw_config:
+            raise ValueError(
+                "top-level 'attribute:' block is retired (adr/0012) — declare the "
+                "produced attribute(s) as an 'attributes:' list and step config "
+                "under 'step:'."
+            )
+        raw = self.raw_config.get('attributes')
+        if not raw or not isinstance(raw, list):
+            raise ValueError(
+                "config needs an 'attributes:' list declaring the produced "
+                "attribute(s) (adr/0012), e.g. `attributes:\\n  - name: ethnicity`."
+            )
+        for entry in raw:
+            if not isinstance(entry, dict) or 'name' not in entry:
+                raise ValueError(
+                    f"each 'attributes' entry needs a 'name', got {entry!r}"
+                )
+        return raw
 
     def _parse_assignment_level(self) -> str:
         """Parse assignment level: 'person' or 'person_by_residence'."""
-        return self.raw_config.get('attribute', {}).get('assignment_level', 'person_by_residence')
+        return self.raw_config.get('step', {}).get('assignment_level', 'person_by_residence')
 
     def _parse_residence_venue_types(self) -> List[str]:
         """Residence venue types assigned by household structure (default ['household']).
 
         Other residence types fall through to venue_assignment_rules.
         """
-        return self.raw_config.get('attribute', {}).get('residence_venue_types', ['household'])
+        return self.raw_config.get('step', {}).get('residence_venue_types', ['household'])
 
     def _parse_filters(self) -> Dict[str, Any]:
         """Parse filters (e.g., activity-based filtering)."""

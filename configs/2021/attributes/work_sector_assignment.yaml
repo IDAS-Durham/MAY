@@ -12,11 +12,13 @@
 # Dependencies: workplace_location (LGU), workplace_sgu (SGU)
 # ============================================================================
 
-attribute:
-  name: "work_sector"
-  description: "Assigns industry sector based on workplace LGU and sex"
-  data_type: "categorical"
+step:
   assignment_level: "person"
+
+attributes:
+  - name: "work_sector"
+    description: "Assigns industry sector based on workplace LGU and sex"
+    data_type: "categorical"
 
 # ============================================================================
 # Filters - Only assign to working-age people (18-65)

@@ -876,6 +876,30 @@ class _RawOnly:
         self.raw_config = raw_config
 
     _parse_required_attributes = AttributeAssignmentConfig._parse_required_attributes
+    _parse_attributes = AttributeAssignmentConfig._parse_attributes
+
+
+class TestParseAttributes:
+    def test_single_output_list(self):
+        obj = _RawOnly({"attributes": [{"name": "ethnicity", "data_type": "categorical"}]})
+        assert obj._parse_attributes() == [{"name": "ethnicity", "data_type": "categorical"}]
+
+    def test_multi_output_list_preserves_order(self):
+        obj = _RawOnly({"attributes": [{"name": "workplace_location"}, {"name": "work_mode"}]})
+        assert [a["name"] for a in obj._parse_attributes()] == ["workplace_location", "work_mode"]
+
+    def test_retired_attribute_block_raises(self):
+        obj = _RawOnly({"attribute": {"name": "ethnicity"}})
+        with pytest.raises(ValueError, match="'attribute:' block is retired"):
+            obj._parse_attributes()
+
+    def test_missing_attributes_raises(self):
+        with pytest.raises(ValueError, match="needs an 'attributes:' list"):
+            _RawOnly({})._parse_attributes()
+
+    def test_entry_without_name_raises(self):
+        with pytest.raises(ValueError, match="needs a 'name'"):
+            _RawOnly({"attributes": [{"data_type": "categorical"}]})._parse_attributes()
 
 
 class TestParseRequiredAttributes:

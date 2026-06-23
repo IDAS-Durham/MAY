@@ -11,11 +11,13 @@
 # Dependencies: workplace_location (LGU name must be assigned first)
 # ============================================================================
 
-attribute:
-  name: "workplace_sgu"
-  description: "Assigns specific SGU within workplace LGU"
-  data_type: "categorical"
+step:
   assignment_level: "person"
+
+attributes:
+  - name: "workplace_sgu"
+    description: "Assigns specific SGU within workplace LGU"
+    data_type: "categorical"
 
 # ============================================================================
 # Filters - Only assign to working-age people (18-65)
