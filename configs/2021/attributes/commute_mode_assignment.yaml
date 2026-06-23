@@ -66,6 +66,7 @@ required_attributes:
 data_sources:
   travel_to_work_mode:
     type: "csv_lookup"
+    format: "multi_key"
     description: "TS061 method-of-travel-to-work counts by residence OA (SGU)"
 
     files:

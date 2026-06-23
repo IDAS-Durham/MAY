@@ -926,54 +926,44 @@ class DataSourceManager:
         self.sources: Dict[str, DataSource] = {}
         self._initialize_sources()
 
+    # csv_lookup `format` → source class. Chosen explicitly in config; no name
+    # sniffing or shape inference (adr/0005).
+    _CSV_FORMATS = {
+        'geo_distribution': GeoDistributionSource,
+        'diversity': DiversitySource,
+        'pair': PairProbabilitySource,
+        'multi_key': MultiKeyLookupSource,
+        'origin_destination_matrix': OriginDestinationMatrixSource,
+        'gu_sampler': GUSamplerSource,
+    }
+
     def _initialize_sources(self):
-        """Initialize data sources from config."""
+        """Initialize data sources from config (explicit type/format dispatch)."""
         for source_name, source_config in self.config.data_sources.items():
             source_type = source_config.type
 
-            if source_type == 'csv_lookup':
-                # Check if this is a multi-key lookup (has key_columns in file config)
-                file_config = source_config.config.get('files', [{}])[0]
-                key_columns = file_config.get('key_columns')
-
-                # Check for O-D matrix format
-                output_format = file_config.get('output_format')
-                if output_format == 'origin_destination_matrix':
-                    self.sources[source_name] = OriginDestinationMatrixSource(
-                        source_name, source_config.config
-                    )
-                elif isinstance(key_columns, dict) and any(
-                    isinstance(v, dict) for v in key_columns.values()
-                ):
-                    # Multi-key lookup (values are dicts with 'attribute', 'type', etc.)
-                    self.sources[source_name] = MultiKeyLookupSource(
-                        source_name, source_config.config, self.config
-                    )
-                elif 'diversity' in source_name.lower():
-                    self.sources[source_name] = DiversitySource(
-                        source_name, source_config.config
-                    )
-                elif 'pair' in source_name.lower():
-                    self.sources[source_name] = PairProbabilitySource(
-                        source_name, source_config.config
-                    )
-                elif ('sgu' in source_name.lower() and 'sampler' in source_name.lower()) or \
-                     (file_config.get('geographical_unit_column') and file_config.get('weight_column')) or \
-                     (file_config.get('sgu_column') and file_config.get('weight_column')):
-                    # Geographical unit sampler: has geographical_unit_column (or sgu_column) and weight_column for distribution
-                    self.sources[source_name] = GUSamplerSource(
-                        source_name, source_config.config
-                    )
-                else:
-                    # Default to geo distribution
-                    self.sources[source_name] = GeoDistributionSource(
-                        source_name, source_config.config
-                    )
-            elif source_type == 'constant':
-                # Constant source (for fallbacks) - skip for now
+            if source_type == 'constant':
                 logger.debug(f"Skipping constant source: {source_name}")
+                continue
+            if source_type != 'csv_lookup':
+                raise ValueError(
+                    f"Data source '{source_name}': unknown type '{source_type}' "
+                    "(expected 'csv_lookup')."
+                )
+
+            fmt = source_config.config.get('format')
+            cls = self._CSV_FORMATS.get(fmt)
+            if cls is None:
+                raise ValueError(
+                    f"Data source '{source_name}' needs an explicit 'format' "
+                    f"(one of {sorted(self._CSV_FORMATS)}), got {fmt!r}."
+                )
+
+            # MultiKeyLookupSource needs the assignment config for key/category resolution.
+            if cls is MultiKeyLookupSource:
+                self.sources[source_name] = cls(source_name, source_config.config, self.config)
             else:
-                logger.warning(f"Unknown data source type: {source_type}")
+                self.sources[source_name] = cls(source_name, source_config.config)
 
     def load_all(self, geo_units: Optional[set] = None):
         """

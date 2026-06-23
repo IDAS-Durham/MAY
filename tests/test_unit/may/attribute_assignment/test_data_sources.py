@@ -731,49 +731,50 @@ class TestDataSourceManagerRouting:
             config.data_sources[name] = MinimalDataSourceConfig(source_type, source_config)
         return config
 
-    def test_routes_to_geo_distribution_by_default(self):
+    def test_format_geo_distribution(self):
         config = self._make_config({
             "ethnicity_distribution": ("csv_lookup", {
+                "format": "geo_distribution",
                 "files": [{"path": "/fake/path.csv", "key_column": "geo_unit", "value_columns": {"W": "white"}}],
             })
         })
         manager = DataSourceManager(config)
         assert isinstance(manager.sources["ethnicity_distribution"], GeoDistributionSource)
 
-    def test_routes_to_diversity_source(self):
+    def test_format_diversity(self):
         config = self._make_config({
             "ethnicity_diversity": ("csv_lookup", {
+                "format": "diversity",
                 "files": [{"path": "/fake/path.csv", "key_column": "geo_unit", "value_columns": {"single": "single"}}],
             })
         })
         manager = DataSourceManager(config)
         assert isinstance(manager.sources["ethnicity_diversity"], DiversitySource)
 
-    def test_routes_to_pair_probability_source(self):
+    def test_format_pair(self):
         config = self._make_config({
-            "ethnicity_pair_probabilities": ("csv_lookup", {
+            "ethnicity_pairs": ("csv_lookup", {
+                "format": "pair",
                 "files": [{"path": "/fake/path.csv", "key_columns": ["geo_unit", "first_eth"], "value_columns": {"W": "white"}}],
             })
         })
         manager = DataSourceManager(config)
-        assert isinstance(manager.sources["ethnicity_pair_probabilities"], PairProbabilitySource)
+        assert isinstance(manager.sources["ethnicity_pairs"], PairProbabilitySource)
 
-    def test_routes_to_od_matrix(self):
+    def test_format_od_matrix(self):
         config = self._make_config({
             "commuting_flows": ("csv_lookup", {
-                "files": [{
-                    "path": "/fake/path.csv",
-                    "output_format": "origin_destination_matrix",
-                    "key_columns": {"origin": "origin_col"},
-                }],
+                "format": "origin_destination_matrix",
+                "files": [{"path": "/fake/path.csv", "key_columns": {"origin": "origin_col"}}],
             })
         })
         manager = DataSourceManager(config)
         assert isinstance(manager.sources["commuting_flows"], OriginDestinationMatrixSource)
 
-    def test_routes_to_multi_key_lookup(self):
+    def test_format_multi_key(self):
         config = self._make_config({
             "disease_probs": ("csv_lookup", {
+                "format": "multi_key",
                 "files": [{
                     "path": "/fake/path.csv",
                     "key_columns": {
@@ -787,20 +788,13 @@ class TestDataSourceManagerRouting:
         manager = DataSourceManager(config)
         assert isinstance(manager.sources["disease_probs"], MultiKeyLookupSource)
 
-    def test_routes_to_gu_sampler_by_name(self):
-        config = self._make_config({
-            "sgu_workplace_sampler": ("csv_lookup", {
-                "files": [{"path": "/fake/path.csv", "key_column": "LGU", "weight_column": "Total"}],
-            })
-        })
-        manager = DataSourceManager(config)
-        assert isinstance(manager.sources["sgu_workplace_sampler"], GUSamplerSource)
-
-    def test_routes_to_gu_sampler_by_geo_unit_column(self):
+    def test_format_gu_sampler(self):
         config = self._make_config({
             "workplace_distribution": ("csv_lookup", {
+                "format": "gu_sampler",
                 "files": [{
                     "path": "/fake/path.csv",
+                    "key_column": "LGU",
                     "geographical_unit_column": {"name": "SGU", "level": "SGU"},
                     "weight_column": "Total",
                 }],
@@ -809,6 +803,15 @@ class TestDataSourceManagerRouting:
         manager = DataSourceManager(config)
         assert isinstance(manager.sources["workplace_distribution"], GUSamplerSource)
 
+    def test_missing_format_raises(self):
+        config = self._make_config({
+            "no_format": ("csv_lookup", {
+                "files": [{"path": "/fake/path.csv", "value_columns": {"W": "white"}}],
+            })
+        })
+        with pytest.raises(ValueError, match="needs an explicit 'format'"):
+            DataSourceManager(config)
+
     def test_constant_source_skipped(self):
         config = self._make_config({
             "fallback_constant": ("constant", {}),
@@ -816,12 +819,12 @@ class TestDataSourceManagerRouting:
         manager = DataSourceManager(config)
         assert "fallback_constant" not in manager.sources
 
-    def test_unknown_source_type_logged(self):
+    def test_unknown_source_type_raises(self):
         config = self._make_config({
             "mystery": ("weird_type", {}),
         })
-        manager = DataSourceManager(config)
-        assert "mystery" not in manager.sources
+        with pytest.raises(ValueError, match="unknown type"):
+            DataSourceManager(config)
 
     def test_get_source_returns_none_for_missing(self):
         config = self._make_config({})
@@ -831,6 +834,7 @@ class TestDataSourceManagerRouting:
     def test_lookup_delegates_to_source(self):
         config = self._make_config({
             "test_geo": ("csv_lookup", {
+                "format": "geo_distribution",
                 "files": [{"path": "/fake/path.csv", "value_columns": {"W": "white"}}],
             })
         })

@@ -50,6 +50,7 @@ data_sources:
   # Workplace LGU + Sex stratified industry distribution
   workplace_industry_by_sex:
     type: "csv_lookup"
+    format: "multi_key"
     description: "Industry distribution by workplace LGU and sex for demographic accuracy"
 
     files:

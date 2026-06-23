@@ -53,13 +53,11 @@ filters:
 data_sources:
   commuting_flows:
     type: "csv_lookup"
+    format: "origin_destination_matrix"
     description: "Commuting likelihood from residence to workplace (LGU to LGU)"
 
     files:
       - path: "${data_root}/activities/work/EW-work-destination-likelihood.csv"
-
-        # Special output format: origin-destination matrix
-        output_format: "origin_destination_matrix"
 
         # Geographic unit levels for matching (configurable!)
         origin_level: "LGU"       # Match person's residence at LGU level

@@ -44,6 +44,7 @@ required_attributes:
 data_sources:
   sgu_employment_distribution:
     type: "csv_lookup"
+    format: "gu_sampler"
     description: "SGU employment totals within each LGU for spatial distribution"
 
     files:

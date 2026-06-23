@@ -102,6 +102,7 @@ categories:
 data_sources:
   comorbidity_probabilities:
     type: "csv_lookup"
+    format: "multi_key"
     description: "Comorbidity probabilities stratified by demographics"
 
     files:
