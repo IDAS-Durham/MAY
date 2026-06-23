@@ -30,6 +30,25 @@ _THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value', 'copy'}
 _LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
 
 
+class _CompiledBlock:
+    """
+    A logic block parsed once at strategy-construction time (adr/0009).
+
+    Holds the predicate/action kinds (from `_classify_when`/`_classify_then`) and,
+    for a nested probabilistic `then`, a prebuilt strategy instance — so the
+    per-person `assign` path neither re-classifies nor reconstructs anything.
+    """
+
+    __slots__ = ('when_kind', 'when', 'then_kind', 'then', 'nested_strategy')
+
+    def __init__(self, when_kind, when, then_kind, then, nested_strategy):
+        self.when_kind = when_kind
+        self.when = when
+        self.then_kind = then_kind
+        self.then = then
+        self.nested_strategy = nested_strategy
+
+
 def _classify_when(when: Any) -> str:
     """
     Validate a declarative `when` predicate and return its kind (adr/0009).
@@ -391,6 +410,24 @@ class LogicBlockStrategy(AssignmentStrategy):
         super().__init__(config, data_manager)
         self.inherit_config = config.get('inherit_from', {})
         self.logic_blocks = config.get('logic', [])
+        # Precompile blocks once per strategy instance (instances are cached and
+        # reused across every person — see assigner._get_or_create_strategy), so
+        # the per-call `assign` path does no predicate classification, no expr
+        # compilation, and no nested-strategy construction. This is what the old
+        # eval()+lru_cache existed to approximate; with structured logic we can
+        # do the parsing once up front instead of guarding it per call.
+        self._compiled = [self._compile_block(b) for b in self.logic_blocks]
+
+    def _compile_block(self, block: Dict[str, Any]) -> '_CompiledBlock':
+        """Classify and pre-build a logic block once (raises on bad shapes)."""
+        when = block.get('when')
+        then = block.get('then')
+        when_kind = _classify_when(when)
+        then_kind = _classify_then(then)
+        nested = None
+        if then_kind == 'strategy' and then.get('strategy') == 'probabilistic':
+            nested = ProbabilisticStrategy(then, self.data_manager)
+        return _CompiledBlock(when_kind, when, then_kind, then, nested)
 
     def _resolve_role_attr(self, role: str, attr: str, context: Dict[str, Any]) -> Any:
         """Resolve a `role.attribute` reference to its assigned value, or raise."""
@@ -402,10 +439,10 @@ class LogicBlockStrategy(AssignmentStrategy):
             raise ValueError(f"logic predicate: role '{role}' has no '{attr}' assigned")
         return value
 
-    def _evaluate_when(self, when: Any, source_values: List[Any],
+    def _evaluate_when(self, block: '_CompiledBlock', source_values: List[Any],
                        context: Dict[str, Any]) -> bool:
-        """Evaluate a declarative `when` predicate; unknown shapes raise (adr/0009)."""
-        kind = _classify_when(when)
+        """Evaluate a precompiled `when` predicate (adr/0009)."""
+        kind, when = block.when_kind, block.when
         if kind == 'unique_count':
             return len(set(source_values)) == when['unique_count']
         if kind == 'unique_count_at_least':
@@ -416,17 +453,17 @@ class LogicBlockStrategy(AssignmentStrategy):
             return value == when['equals']
         return value in when['in']
 
-    def _resolve_then(self, then: Any, source_values: List[Any], person, household,
-                      context: Dict[str, Any], attribute_name: str) -> Any:
-        """Produce the value for a matched `then` action (adr/0009)."""
-        kind = _classify_then(then)
+    def _resolve_then(self, block: '_CompiledBlock', source_values: List[Any], person,
+                      household, context: Dict[str, Any], attribute_name: str) -> Any:
+        """Produce the value for a matched precompiled `then` action (adr/0009)."""
+        kind, then = block.then_kind, block.then
         if kind == 'value':
             return then['value']
         if kind == 'copy':
             spec = then['copy']
             return self._resolve_role_attr(spec['role'], spec['attr'], context)
         if kind == 'strategy':
-            return self._run_nested_strategy(then, person, household, context, attribute_name)
+            return self._run_nested_strategy(block, person, household, context, attribute_name)
         if kind == 'values[0]':
             if not source_values:
                 return self._fail(person, "'then: values[0]' but no source values collected")
@@ -434,27 +471,28 @@ class LogicBlockStrategy(AssignmentStrategy):
         # literal
         return then
 
-    def _run_nested_strategy(self, then: Dict[str, Any], person, household,
+    def _run_nested_strategy(self, block: '_CompiledBlock', person, household,
                              context: Dict[str, Any], attribute_name: str) -> Any:
-        """Run a nested strategy block, honouring any `exclude` constraint."""
-        strategy_type = then.get('strategy')
-        if strategy_type != 'probabilistic':
-            return self._fail(person, f"unsupported nested strategy '{strategy_type}' in logic block")
+        """Run a precompiled nested strategy block, honouring any `exclude` constraint."""
+        if block.nested_strategy is None:
+            return self._fail(
+                person,
+                f"unsupported nested strategy '{block.then.get('strategy')}' in logic block",
+            )
         excluded_values = self._resolve_exclude_values(
-            then.get('exclude', []), context, attribute_name
+            block.then.get('exclude', []), context, attribute_name
         )
         if excluded_values:
-            return self._sample_with_exclusion(person, household, context, then, excluded_values)
-        return ProbabilisticStrategy(then, self.data_manager).assign(person, household, context)
+            return self._sample_with_exclusion(person, household, context, block.then, excluded_values)
+        return block.nested_strategy.assign(person, household, context)
 
     def _run_logic(self, source_values: List[Any], person, household,
                    context: Dict[str, Any], attribute_name: str) -> Any:
         """First block whose `when` matches wins; no match fails loudly (adr/0010)."""
-        for logic_block in self.logic_blocks:
-            if self._evaluate_when(logic_block.get('when'), source_values, context):
+        for block in self._compiled:
+            if self._evaluate_when(block, source_values, context):
                 result = self._resolve_then(
-                    logic_block.get('then'), source_values,
-                    person, household, context, attribute_name,
+                    block, source_values, person, household, context, attribute_name,
                 )
                 logger.debug(f"{self.strategy_type}: {result} for {person.id}")
                 return result

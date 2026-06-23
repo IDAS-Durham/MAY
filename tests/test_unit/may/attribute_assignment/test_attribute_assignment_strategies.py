@@ -627,14 +627,12 @@ class TestInheritanceStrategy:
             strategy.assign(MinimalPerson(), MinimalVenue(), context)
 
     def test_unknown_predicate_raises(self):
-        """An unrecognized 'when' predicate fails loudly, not silently (adr/0009)."""
+        """An unrecognized 'when' predicate fails loudly at construction (adr/0009)."""
         logic = [
             {"when": {"bogus_operator": 1}, "then": "X"},
         ]
-        strategy = self._make_strategy(logic=logic)
-        context = self._make_context("W", "W")
         with pytest.raises(ValueError, match="unknown inheritance 'when' predicate"):
-            strategy.assign(MinimalPerson(), MinimalVenue(), context)
+            self._make_strategy(logic=logic)
 
     # ---- BUG DETECTION ----
 
