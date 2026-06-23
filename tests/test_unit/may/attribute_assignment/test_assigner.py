@@ -690,10 +690,10 @@ class TestAssignOtherResidences:
         assert person1.properties['ethnicity'] == 'W'
         assert person2.properties['ethnicity'] == 'A'
 
-    def test_strategy_returning_none_counts_as_unassigned(self):
-        """If strategy returns None, person counted as unassigned."""
-        # Probabilistic lookup against an unregistered source returns None
-        # (the silent-miss path the assigner must count, not crash on).
+    def test_missing_source_leaves_residents_unassigned(self):
+        """A probabilistic rule against an unregistered source produces no
+        distribution, so the strategy fails for that resident (adr/0010) — no
+        value is invented. The resident is left unassigned, not given a guess."""
         config = MinimalConfig(
             attribute_name="ethnicity",
             venue_assignment_rules=[
@@ -701,7 +701,7 @@ class TestAssignOtherResidences:
                  'assignment': {'strategy': 'probabilistic', 'data_source': 'missing_source'}}
             ],
         )
-        dm = SimpleDataManager(sources={})  # lookup misses → strategy returns None
+        dm = SimpleDataManager(sources={})  # lookup misses → no distribution
         assigner = AttributeAssigner(config, dm)
 
         geo = MinimalGeoUnit("E00001234")
@@ -710,7 +710,7 @@ class TestAssignOtherResidences:
 
         result = assigner._assign_other_residences([venue])
         assert result == 0
-        assert assigner.stats['unassigned_people'] > 0
+        assert 'ethnicity' not in person.properties
 
     def test_probabilistic_venue_assignment_assigns(self):
         """

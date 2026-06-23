@@ -245,6 +245,28 @@ class AssignmentStrategy:
             "alternative as explicit primary logic."
         )
 
+    def _weighted_draw(self, probs: Dict[str, float], person, *, size=None):
+        """
+        Draw value(s) from a {value: weight} distribution (adr/0007).
+
+        The single weighted-draw code path shared by every draw-family strategy:
+        clamp negative weights to zero, normalize, then `np.random.choice`. With
+        `size=None` returns one value; with `size=n` returns n values (batch).
+        An empty or zero-total distribution fails loudly — no silent None
+        (adr/0010).
+        """
+        if not probs:
+            self._fail(person, "data source returned no distribution")
+        values = list(probs.keys())
+        weights = np.asarray(list(probs.values()), dtype=float)
+        if np.any(weights < 0):
+            logger.warning(f"Negative weight(s) clamped to 0 for person {person.id}")
+            weights = np.clip(weights, 0.0, None)
+        total = weights.sum()
+        if total <= 0:
+            self._fail(person, "distribution has zero total weight")
+        return np.random.choice(values, size=size, p=weights / total)
+
     def _marginal_assign(self, person, household, context: Dict[str, Any]) -> Any:
         """
         Assign from the configured marginal distribution.
@@ -323,32 +345,17 @@ class ProbabilisticStrategy(AssignmentStrategy):
         Returns:
             Sampled attribute value
         """
-        # 1. Try to get geo unit from residence venue (household/CE)
+        # Resolve the residence geo unit: venue first, then the person's own.
         geo_unit = None
         if household and household.geographical_unit:
             geo_unit = household.geographical_unit.name
-            logger.debug(f"  Geographical unit for person {person.id} sourced from venue: {geo_unit}")
-        
-        # 2. Fall back to person's own geo unit (useful for individuals not yet distributed or CE residents)
         if not geo_unit and person.geographical_unit:
             geo_unit = person.geographical_unit.name
-            logger.debug(f"  Geographical unit for person {person.id} sourced from person: {geo_unit}")
-
         if not geo_unit:
-            logger.warning(f"No geographical unit found for person {person.id} (no residence venue and no person-level geo unit)")
-            return None
+            self._fail(person, "no geographical_unit (no residence venue and no person-level geo unit)")
 
-        # Get probability distribution from data source
         probs = self.data_manager.lookup(self.data_source_name, geo_unit)
-        if not probs:
-            logger.warning(f"No probabilities found for {self.data_source_name}({geo_unit})")
-            return None
-
-        # Sample from distribution
-        values = list(probs.keys())
-        probabilities = list(probs.values())
-        sampled = np.random.choice(values, p=probabilities)
-
+        sampled = self._weighted_draw(probs, person)
         logger.debug(f"Probabilistic: {sampled} for {person.id} in {geo_unit}")
         return sampled
 
@@ -1136,17 +1143,9 @@ class GUSamplerStrategy(AssignmentStrategy):
         # Process each group
         for workplace_parent_gu, indices in gu_groups.items():
             gu_probs = source.lookup(workplace_parent_gu)  # raises on miss (adr/0010)
-
-            # BATCH SAMPLE: Sample GUs for all people in this group at once
-            gu_codes = list(gu_probs.keys())
-            probabilities = list(gu_probs.values())
-            n_samples = len(indices)
-            sampled_gus = np.random.choice(gu_codes, size=n_samples, p=probabilities)
-
-            # Assign results
+            sampled_gus = self._weighted_draw(gu_probs, people_list[indices[0]], size=len(indices))
             for idx, sampled_gu in zip(indices, sampled_gus):
                 results[idx] = sampled_gu
-                logger.debug(f"GU Sampler (batch): {sampled_gu} for person at index {idx} in parent GU {workplace_parent_gu}")
 
         return results
 
@@ -1176,12 +1175,7 @@ class GUSamplerStrategy(AssignmentStrategy):
             )
 
         gu_probs = source.lookup(workplace_parent_gu)  # raises on miss (adr/0010)
-
-        # Sample GU weighted by distribution
-        gu_codes = list(gu_probs.keys())
-        probabilities = list(gu_probs.values())
-        sampled_gu = np.random.choice(gu_codes, p=probabilities)
-
+        sampled_gu = self._weighted_draw(gu_probs, person)
         logger.debug(f"GU Sampler: {sampled_gu} for person {person.id} in parent GU {workplace_parent_gu}")
         return sampled_gu
 
@@ -1245,16 +1239,7 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
         for lookup_key, group_data in lookup_key_groups.items():
             indices = [idx for idx, _ in group_data]
             probs = group_data[0][1]  # All have same probs for this key
-
-            categories, probabilities = self._sanitize_probabilities(probs)
-            if categories is None:
-                continue
-
-            # BATCH SAMPLE: Sample for all people in this group at once
-            n_samples = len(indices)
-            sampled_values = np.random.choice(categories, size=n_samples, p=probabilities)
-
-            # Assign results
+            sampled_values = self._weighted_draw(probs, people_list[indices[0]], size=len(indices))
             for idx, value in zip(indices, sampled_values):
                 results[idx] = value
 
@@ -1282,49 +1267,9 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
 
         # Look up probability distribution
         probs = source.lookup(person, household, context)
-        if not probs:
-            logger.warning(f"No probabilities found for person {person.id}")
-            return None
-
-        categories, probabilities = self._sanitize_probabilities(probs, person.id)
-        if categories is None:
-            return None
-
-        sampled = np.random.choice(categories, p=probabilities)
-
+        sampled = self._weighted_draw(probs, person)
         logger.debug(f"Categorical: {sampled} for person {person.id}")
         return sampled
-
-    @staticmethod
-    def _sanitize_probabilities(probs, person_id=None):
-        """
-        Clamp negatives, normalize, and validate probabilities.
-
-        Returns:
-            (categories, probabilities) tuple, or (None, None) if invalid.
-        """
-        categories = list(probs.keys())
-        probabilities = list(probs.values())
-
-        # Clamp negatives to 0
-        has_negative = False
-        for i, p in enumerate(probabilities):
-            if p < 0:
-                has_negative = True
-                probabilities[i] = 0.0
-        if has_negative:
-            logger.warning(f"Negative probability clamped to 0 for person {person_id}")
-
-        # Check total after clamping
-        total = sum(probabilities)
-        if total <= 0:
-            logger.warning(f"Invalid probabilities (sum={total}) for person {person_id}")
-            return None, None
-
-        # Always normalize to avoid numpy tolerance issues
-        probabilities = [p / total for p in probabilities]
-
-        return categories, probabilities
 
 
 class ConstantStrategy(AssignmentStrategy):

@@ -885,14 +885,14 @@ class TestCategoricalSamplerStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
         assert result in {"A", "B"}
 
-    def test_zero_total_returns_none(self):
-        """All probabilities 0 → total=0 → None."""
+    def test_zero_total_raises(self):
+        """All probabilities 0 → total=0 → fail loud (adr/0010)."""
         source = MultiKeySource(return_value={"A": 0.0, "B": 0.0})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="zero total weight"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
 
     # --- Missing data ---
 
@@ -903,13 +903,13 @@ class TestCategoricalSamplerStrategy:
         with pytest.raises(KeyError, match="not registered"):
             strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
 
-    def test_empty_probabilities_returns_none(self):
+    def test_empty_probabilities_raises(self):
         source = MultiKeySource(return_value={})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="no distribution"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
 
     # --- Batch mode ---
 
@@ -952,19 +952,19 @@ class TestCategoricalSamplerStrategy:
         )
         assert all(r == "X" for r in results)
 
-    def test_batch_zero_total_skipped(self):
-        """Batch: people with all-zero probabilities get None."""
+    def test_batch_zero_total_raises(self):
+        """Batch: an all-zero distribution is a data error → fail loud (adr/0010)."""
         source = MultiKeySource(return_value={"A": 0.0, "B": 0.0})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
         people = [MinimalPerson() for _ in range(3)]
-        results = strategy.assign_batch(
-            people,
-            [MinimalVenue()] * 3,
-            [{"attribute_name": "sector"}] * 3,
-        )
-        assert results == [None, None, None]
+        with pytest.raises(RuntimeError, match="zero total weight"):
+            strategy.assign_batch(
+                people,
+                [MinimalVenue()] * 3,
+                [{"attribute_name": "sector"}] * 3,
+            )
 
     # ---- BUG DETECTION ----
 

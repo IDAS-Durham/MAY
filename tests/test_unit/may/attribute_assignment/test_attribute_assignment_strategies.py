@@ -237,41 +237,42 @@ class TestProbabilisticStrategy:
         result = strategy.assign(person_with_geo, household_no_geo, {"attribute_name": "ethnicity"})
         assert result in {"W", "A", "B", "M", "O"}
 
-    def test_returns_none_when_no_geo_unit_anywhere(
+    def test_raises_when_no_geo_unit_anywhere(
         self, person_no_geo, household_no_geo, ethnicity_geo_source
     ):
+        """No geo unit at all → fail loud, no silent None (adr/0010)."""
         dm = SimpleDataManager(sources={"geo_distribution": ethnicity_geo_source})
         config = {"strategy": "probabilistic", "data_source": "geo_distribution"}
         strategy = ProbabilisticStrategy(config, dm)
 
-        result = strategy.assign(person_no_geo, household_no_geo, {"attribute_name": "ethnicity"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="geographical_unit"):
+            strategy.assign(person_no_geo, household_no_geo, {"attribute_name": "ethnicity"})
 
-    def test_returns_none_when_household_is_none(self, person_no_geo, ethnicity_geo_source):
-        """Household can be None entirely (person-level assignment)."""
+    def test_raises_when_household_is_none_and_no_person_geo(self, person_no_geo, ethnicity_geo_source):
+        """Household None and no person geo → fail loud (adr/0010)."""
         dm = SimpleDataManager(sources={"geo_distribution": ethnicity_geo_source})
         config = {"strategy": "probabilistic", "data_source": "geo_distribution"}
         strategy = ProbabilisticStrategy(config, dm)
 
-        result = strategy.assign(person_no_geo, None, {"attribute_name": "ethnicity"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="geographical_unit"):
+            strategy.assign(person_no_geo, None, {"attribute_name": "ethnicity"})
 
-    def test_returns_none_when_data_source_returns_empty(self, person_with_geo, household_with_geo):
+    def test_raises_when_data_source_returns_empty(self, person_with_geo, household_with_geo):
         empty_source = SimpleGeoSource(lookup_data={}, fallback={})
         dm = SimpleDataManager(sources={"geo_distribution": empty_source})
         config = {"strategy": "probabilistic", "data_source": "geo_distribution"}
         strategy = ProbabilisticStrategy(config, dm)
 
-        result = strategy.assign(person_with_geo, household_with_geo, {"attribute_name": "ethnicity"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="no distribution"):
+            strategy.assign(person_with_geo, household_with_geo, {"attribute_name": "ethnicity"})
 
-    def test_returns_none_when_data_source_not_registered(self, person_with_geo, household_with_geo):
+    def test_raises_when_data_source_not_registered(self, person_with_geo, household_with_geo):
         dm = SimpleDataManager(sources={})
         config = {"strategy": "probabilistic", "data_source": "geo_distribution"}
         strategy = ProbabilisticStrategy(config, dm)
 
-        result = strategy.assign(person_with_geo, household_with_geo, {"attribute_name": "ethnicity"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="no distribution"):
+            strategy.assign(person_with_geo, household_with_geo, {"attribute_name": "ethnicity"})
 
     def test_deterministic_distribution_always_returns_single_value(
         self, person_with_geo, household_with_geo
