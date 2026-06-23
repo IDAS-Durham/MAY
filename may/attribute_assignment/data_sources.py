@@ -99,6 +99,42 @@ class DataSource:
             )
 
 
+def _ordered_key_columns(file_config: Dict[str, Any], source_name: str,
+                         *, expected: Optional[int] = None) -> List[str]:
+    """
+    Read the canonical `key_columns` mapping and return its column names in order.
+
+    `key_columns` is always a mapping (adr/0006); a single key is a one-entry
+    mapping. The mapping's values carry per-key resolution config for MultiKey /
+    OD sources; positional sources (geo distribution, diversity, pair) use only
+    the column names, in declaration order. The retired singular `key_column`
+    fails loudly.
+    """
+    if 'key_column' in file_config:
+        raise ValueError(
+            f"source '{source_name}': 'key_column' is retired (adr/0006) — use "
+            "'key_columns' (a mapping; a single key is a one-entry mapping)."
+        )
+    key_columns = file_config.get('key_columns')
+    if not key_columns:
+        raise ValueError(
+            f"source '{source_name}' needs 'key_columns' (a mapping of CSV key "
+            "column name to optional resolution)."
+        )
+    if not isinstance(key_columns, dict):
+        raise ValueError(
+            f"source '{source_name}': 'key_columns' must be a mapping, got "
+            f"{type(key_columns).__name__} (adr/0006). A list is the retired form."
+        )
+    columns = list(key_columns)
+    if expected is not None and len(columns) != expected:
+        raise ValueError(
+            f"source '{source_name}': expected {expected} key column(s), got "
+            f"{len(columns)}: {columns}."
+        )
+    return columns
+
+
 class GeoDistributionSource(DataSource):
     """
     Data source for geographical unit-specific attribute distributions.
@@ -141,7 +177,7 @@ class GeoDistributionSource(DataSource):
                     df = pd.read_csv(file_path)
 
                     # Filter to needed areas
-                    key_column = file_config.get('key_column', 'geo_unit')
+                    key_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
                     if geo_units and key_column in df.columns:
                         df = df[df[key_column].isin(geo_units)]
 
@@ -259,7 +295,7 @@ class DiversitySource(DataSource):
             if file_path.exists():
                 try:
                     df = pd.read_csv(file_path)
-                    key_column = file_config.get('key_column', 'geo_unit')
+                    key_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
 
                     if geo_units and key_column in df.columns:
                         df = df[df[key_column].isin(geo_units)]
@@ -350,7 +386,7 @@ class PairProbabilitySource(DataSource):
                     df = pd.read_csv(file_path)
 
                     # Filter to needed areas if specified
-                    key_columns = file_config.get('key_columns', ['geo_unit', 'first_ethnicity'])
+                    key_columns = _ordered_key_columns(file_config, self.name, expected=2)
                     if geo_units and key_columns[0] in df.columns:
                         df = df[df[key_columns[0]].isin(geo_units)]
 

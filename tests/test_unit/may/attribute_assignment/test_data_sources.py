@@ -26,7 +26,37 @@ from may.attribute_assignment.data_sources import (
     OriginDestinationMatrixSource,
     GUSamplerSource,
     DataSourceManager,
+    _ordered_key_columns,
 )
+
+
+# =============================================================================
+# _ordered_key_columns — canonical key_columns mapping (adr/0006)
+# =============================================================================
+
+class TestOrderedKeyColumns:
+    def test_single_key_mapping(self):
+        assert _ordered_key_columns({"key_columns": {"geo_unit": None}}, "s", expected=1) == ["geo_unit"]
+
+    def test_two_key_mapping_preserves_order(self):
+        cfg = {"key_columns": {"geo_unit": None, "first_ethnicity": None}}
+        assert _ordered_key_columns(cfg, "s", expected=2) == ["geo_unit", "first_ethnicity"]
+
+    def test_retired_singular_key_column_raises(self):
+        with pytest.raises(ValueError, match="'key_column' is retired"):
+            _ordered_key_columns({"key_column": "geo_unit"}, "s")
+
+    def test_list_form_raises(self):
+        with pytest.raises(ValueError, match="must be a mapping"):
+            _ordered_key_columns({"key_columns": ["geo_unit", "first_ethnicity"]}, "s")
+
+    def test_missing_raises(self):
+        with pytest.raises(ValueError, match="needs 'key_columns'"):
+            _ordered_key_columns({}, "s")
+
+    def test_wrong_count_raises(self):
+        with pytest.raises(ValueError, match="expected 2 key column"):
+            _ordered_key_columns({"key_columns": {"geo_unit": None}}, "s", expected=2)
 
 
 # =============================================================================
