@@ -12,16 +12,16 @@ logger = logging.getLogger("may.attribute_assignment.strategies")
 # nothing rejected it; this is the guard against the next one.)
 # ---------------------------------------------------------------------------
 STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
-    'probabilistic': {'strategy', 'data_source', 'fallback'},
-    'partnership': {'strategy', 'data_source', 'partner_role', 'fallback'},
-    'inheritance': {'strategy', 'inherit_from', 'logic', 'fallback'},
-    'reverse_inheritance': {'strategy', 'inherit_from', 'logic', 'fallback'},
+    'probabilistic': {'strategy', 'data_source'},
+    'partnership': {'strategy', 'data_source', 'partner_role', 'marginal_source'},
+    'inheritance': {'strategy', 'inherit_from', 'logic', 'marginal_source'},
+    'reverse_inheritance': {'strategy', 'inherit_from', 'logic', 'marginal_source'},
     'probabilistic_conditions': {'strategy', 'data_source', 'conditions',
-                                 'selection_method', 'fallback'},
-    'commuting_likelihood': {'strategy', 'data_source', 'outputs', 'fallback'},
-    'geographical_unit_sampler': {'strategy', 'data_source', 'fallback'},
-    'categorical_sampler': {'strategy', 'data_source', 'fallback'},
-    'constant': {'strategy', 'value', 'fallback'},
+                                 'selection_method'},
+    'commuting_likelihood': {'strategy', 'data_source', 'outputs'},
+    'geographical_unit_sampler': {'strategy', 'data_source'},
+    'categorical_sampler': {'strategy', 'data_source'},
+    'constant': {'strategy', 'value'},
 }
 # Logic entries and nested then-blocks (reverse_inheritance reads these inline).
 _LOGIC_ENTRY_KEYS = {'when', 'then', 'note'}
@@ -58,23 +58,6 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
             f"{sorted(unknown)} — allowed keys are {sorted(allowed)}. "
             f"Remove them (dead config) or fix the typo."
         )
-
-    fallback = config.get('fallback')
-    if fallback is not None:
-        if not isinstance(fallback, dict):
-            raise ValueError(f"{where}.fallback: must be a mapping with a 'strategy'")
-        fb_strategy = fallback.get('strategy')
-        if fb_strategy not in ('probabilistic', 'constant'):
-            raise ValueError(
-                f"{where}.fallback: only 'probabilistic' and 'constant' fallback "
-                f"strategies are supported, got '{fb_strategy}'"
-            )
-        if fb_strategy == 'constant' and 'value' not in fallback:
-            raise ValueError(
-                f"{where}.fallback: a constant fallback must define 'value' "
-                "(other keys, e.g. 'data_source', are not read for constants)"
-            )
-        validate_assignment_config(fallback, where=f"{where}.fallback")
 
     for i, entry in enumerate(config.get('logic') or []):
         entry = entry or {}
@@ -143,45 +126,34 @@ class AssignmentStrategy:
         """
         raise NotImplementedError("Subclasses must implement assign()")
 
-    def _record_fallback(self, context: Dict[str, Any], reason: str):
-        """Record the reason for fallback in the context for diagnostics."""
-        context['fallback_reason'] = reason
-        logger.debug(f"      ! Fallback: {reason}")
-
-    def _fallback(self, person, household, context: Dict[str, Any], reason: str) -> Any:
-        """
-        Execute the fallback strategy configured in the YAML.
-
-        Fails loudly when none is configured: a silent default (the old
-        behavior invented a `geo_distribution` lookup) masks data and config
-        problems. If a miss is expected and acceptable, the config must say
-        so with an explicit `fallback:`.
-        """
-        self._record_fallback(context, reason)
-
-        fallback_config = self.config.get('fallback')
-        if not fallback_config:
-            raise RuntimeError(
-                f"Strategy '{self.strategy_type}' failed for person {person.id} "
-                f"({reason}) and the rule has no `fallback:` configured. "
-                "Add an explicit fallback to the rule or fix the data/config."
-            )
-
-        strategy_type = fallback_config.get('strategy')
-        if strategy_type == 'probabilistic':
-            strat = ProbabilisticStrategy(fallback_config, self.data_manager)
-            return strat.assign(person, household, context)
-        if strategy_type == 'constant':
-            if 'value' not in fallback_config:
-                raise ValueError(
-                    f"Constant fallback for strategy '{self.strategy_type}' has no "
-                    "'value' — other keys (e.g. 'data_source') are not read."
-                )
-            return fallback_config['value']
-        raise ValueError(
-            f"Unsupported fallback strategy '{strategy_type}' for "
-            f"'{self.strategy_type}' — only 'probabilistic' and 'constant' exist."
+    def _fail(self, person, reason: str):
+        """Abort assignment loudly. No fallbacks (adr/0010)."""
+        raise RuntimeError(
+            f"Strategy '{self.strategy_type}' could not assign person {person.id}: "
+            f"{reason}. No fallbacks (adr/0010) — fix the data/config, or express the "
+            "alternative as explicit primary logic."
         )
+
+    def _marginal_assign(self, person, household, context: Dict[str, Any]) -> Any:
+        """
+        Assign from the configured marginal distribution.
+
+        This is explicit primary logic for the defined case where a strategy has
+        nothing to condition on (e.g. inheritance with no parent values). The
+        marginal source is named by `marginal_source`; absence of that key means
+        the case is not expected and is a hard error.
+        """
+        marginal_source = self.config.get('marginal_source')
+        if not marginal_source:
+            self._fail(
+                person,
+                "no value to condition on and no 'marginal_source' configured",
+            )
+        strat = ProbabilisticStrategy(
+            {'strategy': 'probabilistic', 'data_source': marginal_source},
+            self.data_manager,
+        )
+        return strat.assign(person, household, context)
 
     def _get_person_by_role(self, context: Dict[str, Any], role_name: str):
         """
@@ -303,18 +275,18 @@ class PartnershipStrategy(AssignmentStrategy):
         if not first_person:
             logger.warning(f"Partner role '{self.partner_role}' not found in context")
             # Fall back to probabilistic
-            return self._fallback(person, household, context, "PARTNER_ROLE_NOT_FOUND")
+            return self._marginal_assign(person, household, context)
 
         # Get first person's attribute value
         attribute_name = context.get('attribute_name')
         first_value = self._get_attribute_value(first_person, attribute_name)
         if first_value is None:
             logger.warning(f"No {attribute_name} found for {self.partner_role}")
-            return self._fallback(person, household, context, "PARTNER_VALUE_MISSING")
+            return self._marginal_assign(person, household, context)
 
         if not household or not household.geographical_unit:
             logger.warning("No geographical unit found for household")
-            return self._fallback(person, household, context, "GEO_UNIT_MISSING")
+            return self._fail(person, "no geographical_unit available")
 
         geo_unit = household.geographical_unit.name
 
@@ -322,7 +294,7 @@ class PartnershipStrategy(AssignmentStrategy):
         probs = self.data_manager.lookup(self.data_source_name, geo_unit, first_value)
         if not probs:
             logger.warning(f"No pair probabilities for {geo_unit}, {first_value}")
-            return self._fallback(person, household, context, "DATA_SOURCE_MISSING")
+            return self._fail(person, "data source returned no distribution")
 
         # Sample from distribution
         values = list(probs.keys())
@@ -386,7 +358,7 @@ class InheritanceStrategy(AssignmentStrategy):
 
         if not parent_values:
             logger.warning(f"No parent values found for inheritance")
-            return self._fallback(person, household, context, "NO_PARENT_VALUES")
+            return self._marginal_assign(person, household, context)
 
         # Evaluate logic blocks
         unique_values = list(set(parent_values))
@@ -415,13 +387,13 @@ class InheritanceStrategy(AssignmentStrategy):
                     elif isinstance(then_action, dict):
                         # Nested strategy - not implemented yet, fall back
                         logger.warning(f"Nested strategy in inheritance not yet supported")
-                        return self._fallback(person, household, context, "NESTED_STRATEGY_UNSUPPORTED")
+                        return self._fail(person, "unsupported nested strategy in logic block")
             except Exception as e:
                 logger.warning(f"Error evaluating inheritance logic: {e}")
                 continue
 
         # No logic matched - fallback
-        return self._fallback(person, household, context, "LOGIC_NO_MATCH")
+        return self._fail(person, "no logic block matched")
 
     def _evaluate_condition(self, condition: str, context: dict) -> bool:
         """Evaluate a when condition with fast-paths for common patterns."""
@@ -497,18 +469,18 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         child_role = self.inherit_config.get('role')
         if not child_role:
             logger.warning("No child role specified for reverse inheritance")
-            return self._fallback(person, household, context, "NO_CHILD_ROLE")
+            return self._fail(person, "no child role configured for reverse inheritance")
 
         # Get child's attribute value
         child = self._get_person_by_role(context, child_role)
         if not child:
             logger.warning(f"Child role '{child_role}' not found")
-            return self._fallback(person, household, context, "CHILD_NOT_FOUND")
+            return self._marginal_assign(person, household, context)
 
         child_value = self._get_attribute_value(child, attribute_name)
         if child_value is None:
             logger.warning(f"No value found for child role '{child_role}'")
-            return self._fallback(person, household, context, "CHILD_VALUE_MISSING")
+            return self._marginal_assign(person, household, context)
 
         # Create evaluation context for logic blocks
         # Make child value accessible as "primary_adult.ethnicity" format
@@ -552,13 +524,13 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
                                 return fallback_strategy.assign(person, household, context)
                         else:
                             logger.warning(f"Unknown nested strategy: {strategy_type}")
-                            return self._fallback(person, household, context, "NESTED_STRATEGY_UNSUPPORTED")
+                            return self._fail(person, "unsupported nested strategy in logic block")
             except Exception as e:
                 logger.warning(f"Error evaluating reverse inheritance logic: {e}")
                 continue
 
         # No logic matched - fallback
-        return self._fallback(person, household, context, "LOGIC_NO_MATCH")
+        return self._fail(person, "no logic block matched")
 
     def _resolve_exclude_values(self, exclude_refs: List[str],
                                 context: Dict[str, Any],
@@ -629,13 +601,13 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
 
         if not geo_unit:
             logger.warning(f"No geo unit for exclusion sampling, person {person.id}")
-            return self._fallback(person, household, context, "GEO_UNIT_MISSING")
+            return self._fail(person, "no geographical_unit available")
 
         # Look up full distribution
         probs = self.data_manager.lookup(data_source_name, geo_unit)
         if not probs:
             logger.warning(f"No distribution for {data_source_name}({geo_unit})")
-            return self._fallback(person, household, context, "DATA_SOURCE_MISSING")
+            return self._fail(person, "data source returned no distribution")
 
         # Remove excluded values
         filtered_probs = {k: v for k, v in probs.items() if k not in excluded_values}
@@ -653,7 +625,7 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
         total = sum(filtered_probs.values())
         if total <= 0:
             logger.warning(f"Zero total probability after exclusion for person {person.id}")
-            return self._fallback(person, household, context, "ZERO_PROBABILITY")
+            return self._fail(person, "zero total probability after exclusion")
 
         values = list(filtered_probs.keys())
         probabilities = [v / total for v in filtered_probs.values()]
@@ -686,15 +658,6 @@ class ReverseInheritanceStrategy(AssignmentStrategy):
             return eval(condition, safe_context, {})
         except:
             return False
-
-    def _fallback_probabilistic(self, person, household, context: Dict[str, Any]) -> Any:
-        """Fallback to geographical distribution."""
-        fallback_strategy = ProbabilisticStrategy(
-            {'strategy': 'probabilistic', 'data_source': 'geo_distribution'},
-            self.data_manager
-        )
-        return fallback_strategy.assign(person, household, context)
-
 
 class ProbabilisticConditionsStrategy(AssignmentStrategy):
     """
@@ -869,7 +832,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
             logger.warning(f"Data source '{self.data_source_name}' not found")
-            return [self._get_fallback(person, household, context)
+            return [self._fail(person, "no commuting-flow row for this origin")
                     for person, household, context in zip(people_list, households_list, contexts_list)]
 
         # Group people by origin_code
@@ -894,7 +857,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
                     person = people_list[idx]
                     household = households_list[idx]
                     context = contexts_list[idx]
-                    results[idx] = self._get_fallback(person, household, context)
+                    results[idx] = self._fail(person, "no commuting-flow row for this origin")
                 continue
 
             # Prepare sampling arrays
@@ -932,19 +895,19 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         origin_code = self._resolve_origin_code(person)
         if not origin_code:
             logger.warning(f"Could not resolve origin code for person {person.id}")
-            return self._get_fallback(person, household, context)
+            return self._fail(person, "no commuting-flow row for this origin")
 
         # Get data source
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
             logger.warning(f"Data source '{self.data_source_name}' not found")
-            return self._get_fallback(person, household, context)
+            return self._fail(person, "no commuting-flow row for this origin")
 
         # Look up destinations from O-D matrix
         destinations = source.lookup(origin_code)
         if not destinations:
             logger.warning(f"No destinations found for origin {origin_code}")
-            return self._get_fallback(person, household, context)
+            return self._fail(person, "no commuting-flow row for this origin")
 
         # Sample from destinations weighted by likelihood
         # destinations is List[(destination, metadata_dict, likelihood)]
@@ -995,10 +958,6 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
                     f"Check outputs config."
                 )
         return result
-
-    def _get_fallback(self, person, household, context):
-        """Standard fallback for commuting."""
-        return self._fallback(person, household, context, "COMMUTING_DATA_MISSING")
 
 
 class GUSamplerStrategy(AssignmentStrategy):
@@ -1307,7 +1266,7 @@ class ConstantStrategy(AssignmentStrategy):
         """Assign the constant value."""
         if self.value is None:
             logger.warning(f"ConstantStrategy: No value configured for assignment to person {person.id}")
-            return self._fallback(person, household, context, "NO_CONSTANT_VALUE")
+            return self._fail(person, "constant strategy has no 'value'")
 
         return self.value
 

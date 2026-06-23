@@ -712,24 +712,22 @@ class TestAssignOtherResidences:
         assert result == 0
         assert assigner.stats['unassigned_people'] > 0
 
-    def test_strategy_returning_none_with_fallback_still_assigns(self):
+    def test_probabilistic_venue_assignment_assigns(self):
         """
-        ConstantStrategy with no value falls back to its EXPLICIT
-        probabilistic fallback. If that source exists, assignment succeeds.
-        (Fallbacks must be declared — there is no implicit default anymore.)
+        A venue rule with a probabilistic strategy assigns from the geo source.
+        No fallbacks (adr/0010) — venue residents are assigned by explicit
+        primary logic, not by a constant-with-fallback dance.
         """
         assigner = self._make_assigner(venue_assignment_rules=[
             {'venue_types': ['care_home'],
-             'assignment': {'strategy': 'constant',  # no value
-                            'fallback': {'strategy': 'probabilistic',
-                                         'data_source': 'geo_distribution'}}}
+             'assignment': {'strategy': 'probabilistic',
+                            'data_source': 'geo_distribution'}}
         ])
         geo = MinimalGeoUnit("E00001234")
         person = MinimalPerson(geographical_unit=geo)
         venue = MinimalVenue(venue_type="care_home", members=[person], geographical_unit=geo)
 
         result = assigner._assign_other_residences([venue])
-        # Fallback to geo_distribution succeeds → person gets assigned
         assert result == 1
         assert person.properties['ethnicity'] == 'W'
 
@@ -917,28 +915,6 @@ class TestStatisticsTracking:
         assigner._assign_other_residences([venue])
 
         assert assigner.stats['attribute_distribution']['W'] == 5
-
-    def test_fallback_reason_tracking(self):
-        """Fallback reasons should be recorded in stats."""
-        geo = MinimalGeoUnit("E00001234")
-        venue = MinimalVenue(venue_type="household", geographical_unit=geo)
-        dm = SimpleDataManager()
-        config = MinimalConfig(attribute_name="test_attr")
-        assigner = AttributeAssigner(config, dm)
-
-        class FallbackStrategy:
-            strategy_type = "test"
-            def assign(self, person, household, context):
-                context['fallback_reason'] = "TEST_FALLBACK"
-                return "fallback_val"
-
-        people = [MinimalPerson(geographical_unit=geo, residence_venue=venue) for _ in range(3)]
-        strategy = FallbackStrategy()
-        np.random.seed(42)
-        assigner._assign_all_people_sequential(people, strategy)
-
-        assert assigner.stats['fallbacks_by_reason']['TEST_FALLBACK'] == 3
-        assert assigner.stats['assigned_people'] == 3
 
     def test_strategy_type_tracking(self):
         """Strategy type should be tracked in stats."""

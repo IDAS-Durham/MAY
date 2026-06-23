@@ -357,15 +357,12 @@ class TestCommutingLikelihoodStrategy:
     def _make_od_source(self, data):
         return ODMatrixSource(lookup_data=data)
 
-    def _make_strategy(self, outputs, data_source_name="commuting_flows", fallback=None):
-        config = {
+    def _make_strategy(self, outputs, data_source_name="commuting_flows"):
+        return {
             "strategy": "commuting_likelihood",
             "data_source": data_source_name,
             "outputs": outputs,
         }
-        if fallback:
-            config["fallback"] = fallback
-        return config
 
     # --- Single output ---
 
@@ -436,85 +433,52 @@ class TestCommutingLikelihoodStrategy:
 
     # --- Origin resolution ---
 
-    def test_no_geographical_unit_triggers_fallback(self):
-        """Person with no geo unit → fallback."""
+    def test_no_geographical_unit_raises(self):
+        """Person with no geo unit → no origin to look up → raise (adr/0010)."""
         source = self._make_od_source({"ORIGIN_A": [("DEST_1", {}, 1.0)]})
-        geo_source = SimpleGeoSource(fallback={"W": 1.0})
-        dm = SimpleDataManager(sources={
-            "commuting_flows": source,
-            "geo_distribution": geo_source,
-        })
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+        dm = SimpleDataManager(sources={"commuting_flows": source})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=None)
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        # Should hit fallback because _resolve_origin_code returns None
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
-    def test_missing_data_source_triggers_fallback(self):
-        """Data source not registered → fallback."""
-        dm = SimpleDataManager(sources={"geo_distribution": SimpleGeoSource(fallback={"W": 1.0})})
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+    def test_missing_data_source_raises(self):
+        """Data source not registered → raise (adr/0010)."""
+        dm = SimpleDataManager(sources={})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("ORIGIN_A"))
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
-    def test_empty_destinations_triggers_fallback(self):
-        """Origin exists but has no destinations → fallback."""
+    def test_empty_destinations_raises(self):
+        """Origin exists but has no destinations → raise (adr/0010)."""
         source = self._make_od_source({"ORIGIN_A": []})
-        geo_source = SimpleGeoSource(fallback={"W": 1.0})
-        dm = SimpleDataManager(sources={
-            "commuting_flows": source,
-            "geo_distribution": geo_source,
-        })
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+        dm = SimpleDataManager(sources={"commuting_flows": source})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("ORIGIN_A"))
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
-    def test_unknown_origin_triggers_fallback(self):
-        """Origin code not in O-D matrix → fallback."""
+    def test_unknown_origin_raises(self):
+        """Origin code not in O-D matrix → raise (adr/0010)."""
         source = self._make_od_source({"ORIGIN_A": [("DEST_1", {}, 1.0)]})
-        geo_source = SimpleGeoSource(fallback={"W": 1.0})
-        dm = SimpleDataManager(sources={
-            "commuting_flows": source,
-            "geo_distribution": geo_source,
-        })
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+        dm = SimpleDataManager(sources={"commuting_flows": source})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("UNKNOWN"))
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
     # --- Batch mode ---
 
@@ -1036,33 +1000,26 @@ class TestConstantStrategyBatchConsistency:
     matching the sequential fallback behavior.
     """
 
-    def test_batch_with_no_value_triggers_fallback_like_assign(self):
+    def test_batch_with_no_value_raises_like_assign(self):
         """
-        Both assign() and assign_batch() should trigger the configured
-        fallback when value is None.
+        Both assign() and assign_batch() raise when there's no value.
+        No fallbacks (adr/0010).
         """
-        config = {
-            "strategy": "constant",  # no 'value' key → self.value = None
-            "fallback": {"strategy": "constant", "value": "W"},
-        }
+        config = {"strategy": "constant"}  # no 'value' key → self.value = None
         strategy = ConstantStrategy(config, SimpleDataManager())
 
         geo = MinimalGeoUnit("E00001234")
 
-        # Sequential: triggers fallback
         ctx_seq = {"attribute_name": "attr"}
-        result_seq = strategy.assign(
-            MinimalPerson(geographical_unit=geo),
-            MinimalVenue(geographical_unit=geo),
-            ctx_seq,
-        )
-        assert result_seq == "W"
-        assert ctx_seq.get("fallback_reason") == "NO_CONSTANT_VALUE"
+        with pytest.raises(RuntimeError, match="constant strategy has no 'value'"):
+            strategy.assign(
+                MinimalPerson(geographical_unit=geo),
+                MinimalVenue(geographical_unit=geo),
+                ctx_seq,
+            )
 
-        # Batch: now also triggers fallback (consistent with assign)
         people = [MinimalPerson(geographical_unit=geo) for _ in range(3)]
         venues = [MinimalVenue(geographical_unit=geo) for _ in range(3)]
         contexts = [{"attribute_name": "attr"} for _ in range(3)]
-        results_batch = strategy.assign_batch(people, venues, contexts)
-        assert results_batch == ["W", "W", "W"]
-        assert all(ctx.get("fallback_reason") == "NO_CONSTANT_VALUE" for ctx in contexts)
+        with pytest.raises(RuntimeError, match="constant strategy has no 'value'"):
+            strategy.assign_batch(people, venues, contexts)

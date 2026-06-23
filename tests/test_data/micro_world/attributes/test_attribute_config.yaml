@@ -96,9 +96,6 @@ assignment_rules:
           logic:
             - when: "True"
               then: "values[0]"
-          fallback:
-            strategy: "constant"
-            value: "parent_val"
 
 # Non-Household communals
 venue_assignment_rules:

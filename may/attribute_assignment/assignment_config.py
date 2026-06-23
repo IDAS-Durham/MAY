@@ -77,7 +77,6 @@ class DataSourceConfig:
     type: str
     description: str
     files: List[Dict[str, Any]] = field(default_factory=list)
-    fallbacks: List[Dict[str, Any]] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -486,7 +485,6 @@ class AttributeAssignmentConfig:
                 type=source_data.get('type', 'csv_lookup'),
                 description=source_data.get('description', ''),
                 files=source_data.get('files', []),
-                fallbacks=[source_data.get('fallback', {})],  # YAML uses 'fallback' key
                 config=source_data
             )
 

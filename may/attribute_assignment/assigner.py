@@ -118,7 +118,6 @@ class AttributeAssigner:
             'assignments_by_strategy': defaultdict(int),
             'attribute_distribution': defaultdict(int),
             'household_structure_counts': defaultdict(int),
-            'fallbacks_by_reason': defaultdict(int),
             'unassigned_people': 0,
             'filtered_people': 0,  # People filtered out by age/activity filters
             'assigned_people': 0,  # People successfully assigned
@@ -449,7 +448,6 @@ class AttributeAssigner:
         logger.info(f"✓ Filtered {self.stats['filtered_people']} people (age/activity filters)")
         logger.info(f"✓ Assigned {self.stats['assigned_people']} people")
         logger.info(f"✓ Unassigned {self.stats['unassigned_people']} people (failed assignment)")
-        logger.info(f"✓ Fallback used: {self.stats.get('fallback_count', 0)} times")
         logger.info("")
 
     def _assign_all_people_batch(self, eligible_people, strategy):
@@ -555,11 +553,6 @@ class AttributeAssigner:
 
                     self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
                     self.stats['assigned_people'] += 1
-
-                    # Record fallback reason
-                    if 'fallback_reason' in context:
-                        self.stats['fallbacks_by_reason'][context['fallback_reason']] += 1
-                        del context['fallback_reason']
                 else:
                     self.stats['unassigned_people'] += 1
             except Exception as e:
@@ -707,11 +700,6 @@ class AttributeAssigner:
                     # Track distribution — use str() for unhashable types (e.g. lists)
                     dist_key = str(value) if isinstance(value, (list, dict)) else value
                     self.stats['attribute_distribution'][dist_key] += 1
-
-                    # Record fallback reason
-                    if 'fallback_reason' in context:
-                        self.stats['fallbacks_by_reason'][context['fallback_reason']] += 1
-                        del context['fallback_reason']
 
                     if self.verbose:
                         logger.debug(f"    ✓ Assigned: {self.attribute_name}={value} "
@@ -899,14 +887,6 @@ class AttributeAssigner:
             logger.info("Assignments by venue type:")
             for venue_type, count in sorted(self.stats['assignments_by_venue_type'].items()):
                 logger.info(f"  {venue_type}: {count}")
-
-        # Show fallback diagnostics
-        if self.stats['fallbacks_by_reason']:
-            logger.info("")
-            logger.info("FALLBACK DIAGNOSTICS (Total fallbacks: {})".format(sum(self.stats['fallbacks_by_reason'].values())))
-            for reason, count in sorted(self.stats['fallbacks_by_reason'].items()):
-                logger.info(f"  {reason}: {count}")
-            logger.info("")
 
         # Household structure distribution (only if household-level)
         if self.stats['household_structure_counts']:
