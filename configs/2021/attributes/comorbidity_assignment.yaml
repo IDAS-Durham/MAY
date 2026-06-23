@@ -37,21 +37,6 @@ required_attributes:
       O: "CO"  # Internal "O" maps to CSV "CO" (Other)
 
 # ============================================================================
-# Region Mapping
-# ============================================================================
-# Map GU names to CSV names
-region_mapping:
-  "East of England": "East"
-  "East Midlands": "East Midlands"
-  "London": "London"
-  "North East": "North East"
-  "North West": "North West"
-  "South East": "South East"
-  "South West": "South West"
-  "West Midlands": "West Midlands"
-  "Yorkshire and The Humber": "Yorkshire and The Humber"
-
-# ============================================================================
 # Age Band Categories
 # ============================================================================
 # Define age bands that match the comorbidities CSV structure
@@ -139,7 +124,17 @@ data_sources:
             type: "ancestor_lookup"
             level: "XLGU"
             property: "name"
-            mapping: "region_mapping"  # Apply region name mapping
+            # Map GU names to CSV region names
+            mapping:
+              "East of England": "East"
+              "East Midlands": "East Midlands"
+              "London": "London"
+              "North East": "North East"
+              "North West": "North West"
+              "South East": "South East"
+              "South West": "South West"
+              "West Midlands": "West Midlands"
+              "Yorkshire and The Humber": "Yorkshire and The Humber"
 
         # Value columns: condition probabilities
         value_columns:

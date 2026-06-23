@@ -674,6 +674,26 @@ class TestMultiKeyLookupSource:
         result = source.lookup(person, household=household)
         assert "industry_a" in result
 
+    def test_ancestor_lookup_applies_inline_mapping(self):
+        """An inline `mapping` dict on the key column translates the resolved value."""
+        lgu = MinimalGeoUnit("East of England", level="LGU")
+        sgu = MinimalGeoUnit("SGU_1", level="SGU", parent=lgu)
+        source = self._make_source(
+            lookup_dict={("East",): {"cvd": 1.0}},
+            key_columns_config={
+                "region": {
+                    "attribute": "geographical_unit",
+                    "type": "ancestor_lookup",
+                    "level": "LGU",
+                    "property": "name",
+                    "mapping": {"East of England": "East"},
+                },
+            },
+        )
+        person = MinimalPerson(geographical_unit=sgu)
+        result = source.lookup(person)
+        assert "cvd" in result
+
     def test_mapping_in_required_attributes(self):
         """Direct lookup should apply mapping from required_attributes."""
         assignment_config = MinimalAssignmentConfig(

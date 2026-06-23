@@ -650,10 +650,9 @@ class MultiKeyLookupSource(DataSource):
             property_name = col_config.get('property', 'name')
             value = getattr(ancestor, property_name)
 
-            # Apply mapping if specified
-            mapping_name = col_config.get('mapping')
-            if mapping_name:
-                mapping = getattr(self.assignment_config, mapping_name, {})
+            # Apply inline mapping if specified (a dict on the key column)
+            mapping = col_config.get('mapping')
+            if mapping:
                 value = mapping.get(value, value)
 
             return value

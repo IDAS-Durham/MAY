@@ -336,7 +336,6 @@ class AttributeAssignmentConfig:
         self.residence_venue_types = self._parse_residence_venue_types()
         self.filters = self._parse_filters()
         self.required_attributes = self._parse_required_attributes()
-        self.region_mapping = self.raw_config.get('region_mapping', {})
         self.categories = self._parse_categories()
         self.roles = self._parse_roles()
         self.household_structures = self._parse_household_structures()
