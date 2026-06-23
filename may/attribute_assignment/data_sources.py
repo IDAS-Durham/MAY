@@ -65,8 +65,10 @@ class DataSource:
             Normalized probabilities that sum to 1.0
         """
         if not probs:
-            logger.warning(f"Empty probability distribution in source '{self.name}'")
-            return {}
+            raise ValueError(
+                f"Empty probability distribution in source '{self.name}'. No fallbacks "
+                "(adr/0010) — fix the data/config."
+            )
 
         # Clamp negative values to 0 — negative probabilities are invalid
         has_negatives = False
@@ -796,10 +798,15 @@ class OriginDestinationMatrixSource(DataSource):
             List of (destination, metadata, likelihood) tuples
         """
         if not self._data_loaded:
-            logger.warning(f"Data not loaded for source '{self.name}'")
-            return []
-
-        return self._lookup.get(origin, [])
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+            )
+        if origin not in self._lookup:
+            raise KeyError(
+                f"Source '{self.name}' has no destinations for origin '{origin}'. "
+                "No fallbacks (adr/0010) — the O-D matrix must cover every origin."
+            )
+        return self._lookup[origin]
 
 class GUSamplerSource(DataSource):
     """
@@ -886,9 +893,15 @@ class GUSamplerSource(DataSource):
             Dictionary mapping child GU codes to probabilities
         """
         if not self._data_loaded:
-            return {}
-
-        return self._lookup.get(parent_gu_name, {})
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+            )
+        if parent_gu_name not in self._lookup:
+            raise KeyError(
+                f"Source '{self.name}' has no child-GU distribution for parent "
+                f"'{parent_gu_name}'. No fallbacks (adr/0010)."
+            )
+        return self._lookup[parent_gu_name]
 
 
 class DataSourceManager:
@@ -986,8 +999,9 @@ class DataSourceManager:
             Probability distribution
         """
         source = self.get_source(source_name)
-        if source:
-            return source.lookup(*args, **kwargs)
-        else:
-            logger.warning(f"Data source '{source_name}' not found")
-            return {}
+        if not source:
+            raise KeyError(
+                f"Data source '{source_name}' is not registered. No fallbacks "
+                "(adr/0010) — fix the source name in the config."
+            )
+        return source.lookup(*args, **kwargs)

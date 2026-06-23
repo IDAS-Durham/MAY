@@ -689,27 +689,20 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         # Get data source name
         data_source_name = self.config.get('data_source')
         if not data_source_name:
-            logger.warning("No data_source specified for probabilistic_conditions strategy")
-            return []
+            self._fail(person, "probabilistic_conditions has no 'data_source'")
 
         # Look up probabilities using data source
         source = self.data_manager.get_source(data_source_name)
         if not source:
-            logger.warning(f"Data source '{data_source_name}' not found")
-            return []
+            self._fail(person, f"data source '{data_source_name}' not found")
 
-        # Perform lookup
+        # Perform lookup (raises on a miss — no fallbacks, adr/0010)
         probabilities = source.lookup(person, household, context)
-        if not probabilities:
-            logger.warning(f"No probabilities found for person {person.id}")
-            return []
 
         # Sample conditions based on selection method
         if self.selection_method == 'independent_bernoulli':
             return self._sample_independent_bernoulli(probabilities)
-        else:
-            logger.warning(f"Unknown selection method: {self.selection_method}")
-            return []
+        self._fail(person, f"unknown selection_method '{self.selection_method}'")
 
     def _sample_independent_bernoulli(self, probabilities: Dict[str, float]) -> List[str]:
         """
@@ -993,8 +986,10 @@ class GUSamplerStrategy(AssignmentStrategy):
         # Get data source
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
-            logger.warning(f"Data source '{self.data_source_name}' not found")
-            return [None] * len(people_list)
+            raise KeyError(
+                f"Data source '{self.data_source_name}' is not registered. "
+                "No fallbacks (adr/0010)."
+            )
 
         # Group people by (workplace_parent_gu, home_parent_gu)
         # This allows efficient batch sampling with fallback logic
@@ -1068,8 +1063,10 @@ class GUSamplerStrategy(AssignmentStrategy):
         # Look up GU distribution for this parent GU
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
-            logger.warning(f"Data source '{self.data_source_name}' not found")
-            return None
+            raise KeyError(
+                f"Data source '{self.data_source_name}' is not registered. "
+                "No fallbacks (adr/0010)."
+            )
 
         gu_probs = source.lookup(workplace_parent_gu)
 
@@ -1140,8 +1137,10 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
         # Get data source
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
-            logger.warning(f"Data source '{self.data_source_name}' not found")
-            return [None] * len(people_list)
+            raise KeyError(
+                f"Data source '{self.data_source_name}' is not registered. "
+                "No fallbacks (adr/0010)."
+            )
 
         # Group people by their lookup keys
         # lookup_key_groups: {lookup_key: [indices]}
@@ -1192,8 +1191,10 @@ class CategoricalSamplerStrategy(AssignmentStrategy):
         # Get data source
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
-            logger.warning(f"Data source '{self.data_source_name}' not found")
-            return None
+            raise KeyError(
+                f"Data source '{self.data_source_name}' is not registered. "
+                "No fallbacks (adr/0010)."
+            )
 
         # Look up probability distribution
         probs = source.lookup(person, household, context)

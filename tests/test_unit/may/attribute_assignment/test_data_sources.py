@@ -164,14 +164,10 @@ class TestNormalizeProbabilities:
         result = self._normalize(probs)
         assert set(result.keys()) == {"W", "A"}
 
-    def test_empty_dict_returns_empty_and_warns(self, caplog):
-        """Empty dict is caught early, returns {} with a warning."""
-        import logging
-        probs = {}
-        with caplog.at_level(logging.WARNING):
-            result = self._normalize(probs)
-        assert result == {}
-        assert any("Empty probability" in msg for msg in caplog.messages)
+    def test_empty_dict_raises(self):
+        """Empty distribution → raise. No fallbacks (adr/0010)."""
+        with pytest.raises(ValueError, match="Empty probability"):
+            self._normalize({})
 
     def test_negative_sum_to_zero_raises(self):
         """
@@ -354,17 +350,17 @@ class TestOriginDestinationMatrixSource:
         assert result[0][0] == "DEST_1"
         assert result[0][2] == 0.7
 
-    def test_lookup_missing_origin_returns_empty(self):
+    def test_lookup_missing_origin_raises(self):
         source = self._make_source_with_data({
             "ORIGIN_A": [("DEST_1", {}, 1.0)]
         })
-        result = source.lookup("MISSING")
-        assert result == []
+        with pytest.raises(KeyError, match="no destinations for origin"):
+            source.lookup("MISSING")
 
-    def test_lookup_before_data_loaded_returns_empty(self):
+    def test_lookup_before_data_loaded_raises(self):
         source = OriginDestinationMatrixSource("test_od", {"files": []})
-        result = source.lookup("ORIGIN_A")
-        assert result == []
+        with pytest.raises(RuntimeError, match="Data not loaded"):
+            source.lookup("ORIGIN_A")
 
     def test_destination_exclusion_in_parsing(self):
         """Excluded destinations should not appear in lookup results."""
@@ -469,17 +465,17 @@ class TestGUSamplerSource:
         result = source.lookup("ParentGU_A")
         assert result == {"SGU_1": 0.6, "SGU_2": 0.4}
 
-    def test_lookup_missing_parent_returns_empty(self):
+    def test_lookup_missing_parent_raises(self):
         source = self._make_source_with_data({
             "ParentGU_A": {"SGU_1": 1.0}
         })
-        result = source.lookup("MISSING")
-        assert result == {}
+        with pytest.raises(KeyError, match="no child-GU distribution"):
+            source.lookup("MISSING")
 
-    def test_lookup_before_data_loaded_returns_empty(self):
+    def test_lookup_before_data_loaded_raises(self):
         source = GUSamplerSource("test_gu_sampler", {"files": []})
-        result = source.lookup("ParentGU_A")
-        assert result == {}
+        with pytest.raises(RuntimeError, match="Data not loaded"):
+            source.lookup("ParentGU_A")
 
     def test_weight_normalization(self):
         """Weights should be normalized to probabilities summing to 1.0."""
@@ -827,11 +823,11 @@ class TestDataSourceManagerRouting:
         result = manager.lookup("test_geo", "E00001")
         assert result == {"W": 1.0}
 
-    def test_lookup_missing_source_returns_empty(self):
+    def test_lookup_missing_source_raises(self):
         config = self._make_config({})
         manager = DataSourceManager(config)
-        result = manager.lookup("nonexistent", "key")
-        assert result == {}
+        with pytest.raises(KeyError, match="not registered"):
+            manager.lookup("nonexistent", "key")
 
 
 # =============================================================================

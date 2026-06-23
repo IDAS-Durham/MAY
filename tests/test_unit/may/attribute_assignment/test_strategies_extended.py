@@ -226,25 +226,25 @@ class TestProbabilisticConditionsStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
         assert result == []
 
-    def test_missing_data_source_returns_empty(self):
-        """Data source not registered → empty list."""
+    def test_missing_data_source_raises(self):
+        """Data source not registered → raise. No fallbacks (adr/0010)."""
         conditions = [{"name": "cvd"}]
         dm = SimpleDataManager(sources={})  # no source
         strategy = ProbabilisticConditionsStrategy(
             self._make_strategy(conditions), dm
         )
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
-        assert result == []
+        with pytest.raises(RuntimeError, match="not found"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
 
-    def test_no_data_source_name_returns_empty(self):
+    def test_no_data_source_name_raises(self):
         conditions = [{"name": "cvd"}]
         config = {"strategy": "probabilistic_conditions", "conditions": conditions}
         dm = SimpleDataManager()
         strategy = ProbabilisticConditionsStrategy(config, dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
-        assert result == []
+        with pytest.raises(RuntimeError, match="no 'data_source'"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
 
     def test_data_source_returns_empty_dict_returns_empty(self):
         """Data source returns {} for this person → empty list."""
@@ -258,8 +258,8 @@ class TestProbabilisticConditionsStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
         assert result == []
 
-    def test_unknown_selection_method_returns_empty(self):
-        """Unknown selection method → empty list."""
+    def test_unknown_selection_method_raises(self):
+        """Unknown selection method → raise. No fallbacks (adr/0010)."""
         conditions = [{"name": "cvd"}]
         source = MultiKeySource(return_value={"cvd": 1.0})
         dm = SimpleDataManager(sources={"comorbidity_probs": source})
@@ -267,8 +267,8 @@ class TestProbabilisticConditionsStrategy:
             self._make_strategy(conditions, selection_method="not_real"), dm
         )
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
-        assert result == []
+        with pytest.raises(RuntimeError, match="unknown selection_method"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
 
     def test_condition_without_name_key_is_skipped(self):
         """Condition dict missing 'name' → skipped silently."""
@@ -676,13 +676,13 @@ class TestGUSamplerStrategy:
         result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
         assert result is None
 
-    def test_no_data_source_returns_none(self):
+    def test_no_data_source_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
         person = MinimalPerson(properties={"workplace_location": "Manchester"})
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
 
     def test_no_lgu_ancestor_falls_through(self):
         """Person's geo unit has no LGU ancestor → can't fall back."""
@@ -767,15 +767,15 @@ class TestGUSamplerStrategy:
         )
         assert results[0] == "SGU_HOME"
 
-    def test_no_data_source_batch_returns_all_none(self):
+    def test_no_data_source_batch_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
         p1 = MinimalPerson(properties={"workplace_location": "Manchester"})
-        results = strategy.assign_batch(
-            [p1], [MinimalVenue()], [{"attribute_name": "sgu"}]
-        )
-        assert results == [None]
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign_batch(
+                [p1], [MinimalVenue()], [{"attribute_name": "sgu"}]
+            )
 
 
 # =============================================================================
@@ -844,12 +844,12 @@ class TestCategoricalSamplerStrategy:
 
     # --- Missing data ---
 
-    def test_missing_data_source_returns_none(self):
+    def test_missing_data_source_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
-        assert result is None
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
 
     def test_empty_probabilities_returns_none(self):
         source = MultiKeySource(return_value={})
@@ -874,17 +874,17 @@ class TestCategoricalSamplerStrategy:
         )
         assert results == ["only_one"] * 5
 
-    def test_batch_empty_data_source_returns_all_none(self):
+    def test_batch_missing_data_source_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
         people = [MinimalPerson() for _ in range(3)]
-        results = strategy.assign_batch(
-            people,
-            [MinimalVenue()] * 3,
-            [{"attribute_name": "sector"}] * 3,
-        )
-        assert results == [None, None, None]
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign_batch(
+                people,
+                [MinimalVenue()] * 3,
+                [{"attribute_name": "sector"}] * 3,
+            )
 
     def test_batch_groups_identical_distributions(self):
         """People with same distribution should be grouped and batch-sampled."""
@@ -941,22 +941,6 @@ class TestCategoricalSamplerStrategy:
         # Should always work now
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
         assert result in {"A", "B"}
-
-    def test_no_fallback_mechanism(self):
-        """
-        Unlike ProbabilisticStrategy/PartnershipStrategy which call self._fallback(),
-        CategoricalSamplerStrategy returns None directly when data is missing.
-        This means no fallback_reason is recorded in context and no geo_distribution
-        fallback is attempted.
-        """
-        dm = SimpleDataManager(sources={})
-        strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
-
-        context = {"attribute_name": "sector"}
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), context)
-        assert result is None
-        assert "fallback_reason" not in context  # no fallback mechanism
-
 
 # =============================================================================
 # StrategyFactory — Complete Registration Tests
