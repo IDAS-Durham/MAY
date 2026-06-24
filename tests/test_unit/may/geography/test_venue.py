@@ -554,3 +554,52 @@ def test_add_to_subset_does_not_duplicate_the_same_subset(geo):
     assert len(recorded_subsets) == 1
 
 
+# ============================================================================
+# get_all_members Tests
+# ============================================================================
+
+def test_get_all_members_default_returns_every_subset(geo):
+    """Default behaviour (no filtering) must match existing callers' expectations."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+    resident = Person(age=30, sex='male', geographical_unit=geo_unit)
+    guest = Person(age=40, sex='female', geographical_unit=geo_unit)
+
+    venue.add_to_subset(resident, subset_key='Adults', activity_name='residence', activity_type='household')
+    venue.add_to_subset(guest, subset_key='guest', activity_name='Fair_accommodation', activity_type='Fair')
+
+    assert set(venue.get_all_members()) == {resident, guest}
+
+
+def test_get_all_members_exclude_subset_keys_skips_named_subset(geo):
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+    resident = Person(age=30, sex='male', geographical_unit=geo_unit)
+    guest = Person(age=40, sex='female', geographical_unit=geo_unit)
+
+    venue.add_to_subset(resident, subset_key='Adults', activity_name='residence', activity_type='household')
+    venue.add_to_subset(guest, subset_key='guest', activity_name='Fair_accommodation', activity_type='Fair')
+
+    assert venue.get_all_members(exclude_subset_keys=['guest']) == [resident]
+
+
+def test_get_all_members_include_subset_keys_restricts_to_named_subset(geo):
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+    resident = Person(age=30, sex='male', geographical_unit=geo_unit)
+    guest = Person(age=40, sex='female', geographical_unit=geo_unit)
+
+    venue.add_to_subset(resident, subset_key='Adults', activity_name='residence', activity_type='household')
+    venue.add_to_subset(guest, subset_key='guest', activity_name='Fair_accommodation', activity_type='Fair')
+
+    assert venue.get_all_members(include_subset_keys=['guest']) == [guest]
+
+
+def test_get_all_members_exclude_and_include_are_mutually_exclusive(geo):
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+
+    with pytest.raises(ValueError):
+        venue.get_all_members(exclude_subset_keys=['guest'], include_subset_keys=['Adults'])
+
+

@@ -230,15 +230,28 @@ class Venue:
         if not subset_already_added:
             person.activity_map[activity_name][venue_type_key].append(subset)
 
-    def get_all_members(self):
+    def get_all_members(self, exclude_subset_keys=None, include_subset_keys=None):
         """
         Get all members from all subsets.
+
+        Args:
+            exclude_subset_keys: Optional iterable of subset_key values to skip.
+            include_subset_keys: Optional iterable of subset_key values to restrict to.
+                                  Mutually exclusive with exclude_subset_keys.
 
         Returns:
             List of Person objects
         """
+        if exclude_subset_keys is not None and include_subset_keys is not None:
+            raise ValueError(
+                "get_all_members: exclude_subset_keys and include_subset_keys are mutually exclusive"
+            )
         members = []
-        for subset in self.subsets.values():
+        for subset_key, subset in self.subsets.items():
+            if exclude_subset_keys is not None and subset_key in exclude_subset_keys:
+                continue
+            if include_subset_keys is not None and subset_key not in include_subset_keys:
+                continue
             members.extend(list(subset.members))
         return members
 
