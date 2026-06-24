@@ -233,6 +233,7 @@ class VenueDistributor(BaseDistributor):
 
         # Phase 3: Normal Allocation
         if remaining:
+            vt = self.venue_type
             deprioritize_flag = self.config.get('allocation', {}).get('deprioritize_flag')
             if deprioritize_flag:
                 # adr/0016: allocate people WITHOUT the flag (e.g. native workers)
@@ -246,15 +247,25 @@ class VenueDistributor(BaseDistributor):
                 flagged = [p for p in remaining if p.properties.get(deprioritize_flag)]
                 native_unallocated = self._allocate_normal(native, venues) if native else []
                 flagged_unallocated = self._allocate_normal(flagged, venues) if flagged else []
-                if flagged:
-                    logger.info(
-                        f"  [capacity priority, adr/0016] {len(native)} non-flagged allocated first, "
-                        f"then {len(flagged)} '{deprioritize_flag}'; {len(flagged_unallocated)} of the "
-                        f"flagged exceeded capacity -> outside (kept their attempted destination, no venue)."
-                    )
+                # "Unplaced" = reached this step but found no in-boundary venue of this
+                # type — capacity full OR no eligible venue (e.g. no matching sector
+                # nearby). For a workplace distributor that is effectively unemployment.
+                logger.info(
+                    f"  [capacity priority, adr/0016] '{vt}': "
+                    f"{len(native) - len(native_unallocated):,}/{len(native):,} non-flagged placed "
+                    f"({len(native_unallocated):,} unplaced — no in-boundary {vt}: "
+                    f"capacity full or no eligible venue); "
+                    f"{len(flagged) - len(flagged_unallocated):,}/{len(flagged):,} '{deprioritize_flag}' placed "
+                    f"({len(flagged_unallocated):,} unplaced -> outside, kept attempted destination, no venue)."
+                )
                 unallocated_total.extend(native_unallocated)
                 unallocated_total.extend(flagged_unallocated)
             else:
+                # No deprioritisation: single normal pass. The honest eligible-vs-
+                # allocated tally (incl. anything placed in the priority phase above)
+                # is reported by reporting.log_allocation_summary — we don't log the
+                # phase-3 remainder here, which would understate placement for
+                # priority-allocation distributors (e.g. university).
                 normal_unallocated = self._allocate_normal(remaining, venues)
                 unallocated_total.extend(normal_unallocated)
 
