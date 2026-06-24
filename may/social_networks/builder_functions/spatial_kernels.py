@@ -354,7 +354,17 @@ def _spatial_ws_build_lattice(
     all_connections,    # (N, k) int32 — output; -1 = empty slot
     k,                  # int32 — connections per person
 ):
-    """Build spatial W-S lattice: each person connects to k nearest inter-unit people."""
+    """
+    Build spatial W-S lattice: each person connects to k nearest inter-unit people.
+
+    Targets within a neighbour unit h are offset by the source person's global
+    index i (mod unit_size(h)), so different people — including people from
+    different source units that share h as a neighbour — land on different
+    targets in h rather than all collapsing onto h's first k people. Self-loops
+    are structurally impossible here: h is always a different geo_unit from g
+    (candidate lists exclude self before distance filtering), and each person
+    belongs to exactly one geo_unit, so i can never appear inside h.
+    """
     n_people = len(person_unit)
     for i in nb.prange(n_people):
         g = person_unit[i]
@@ -367,12 +377,14 @@ def _spatial_ws_build_lattice(
             h = neighbor_flat[nb_idx]
             p_start = unit_starts[h]
             p_end = unit_ends[h]
-            for p_idx in range(p_start, p_end):
-                if n_assigned >= k:
-                    break
-                w = unit_people_flat[p_idx]
-                if w == i:
-                    continue
+            unit_size = p_end - p_start
+            if unit_size == 0:
+                continue
+            remaining = k - n_assigned
+            take_count = remaining if remaining < unit_size else unit_size
+            for slot in range(take_count):
+                target_local = (i + slot) % unit_size
+                w = unit_people_flat[p_start + target_local]
                 all_connections[i, n_assigned] = w
                 n_assigned += 1
 
