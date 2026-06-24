@@ -96,6 +96,13 @@ allocation:
   track_capacity: true
   when_full: "exclude"  # Remove full companies from options
 
+  # Capacity priority (adr/0016): people carrying this property are allocated
+  # AFTER everyone else, so native in-boundary workers claim real jobs first and
+  # redistributed (bounced-back) workers take only the leftover slack. Those that
+  # still don't fit are an explicit overflow-to-outside category (no venue, counted).
+  # Must match `redistributed_flag` in workplace_assignment.yaml. Omit to disable.
+  deprioritize_flag: "workplace_redistributed"
+
   # Batch processing for performance
   batch_by: "geo_unit"
 

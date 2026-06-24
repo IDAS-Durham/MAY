@@ -31,6 +31,15 @@ filters:
       min: 18
       max: 64
 
+  # Skip workers whose workplace is outside the loaded world (adr/0015). They
+  # carry the out-of-boundary sentinel from workplace_assignment and have no
+  # in-world LGU to sample an SGU within. Must match `outside_value` there.
+  out_of_boundary:
+    attribute: "workplace_location"
+    type: "categorical"
+    description: "Exclude out-of-area workers (no in-world workplace SGU)"
+    exclude: ["OUTSIDE"]
+
 # ============================================================================
 # Required Attributes (Dependencies)
 # ============================================================================

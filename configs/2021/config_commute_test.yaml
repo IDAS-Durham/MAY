@@ -17,6 +17,8 @@
 # (world_state.h5, london_xlgu.h5, world_msm_hubs.h5) so this run will not
 # overwrite them.
 
+data_root: data
+
 geography:
   data_dir: "data/geography"
   levels: ["SGU", "MGU", "LGU", "XLGU"]
@@ -171,4 +173,4 @@ serialization:
   enabled: true
   config_file: "configs/2021/serialization_config.yaml"
   output_dir: "output/2021"
-  filename: "commute_test_world.h5"
+  filename: "commute_test_world_v3.h5"

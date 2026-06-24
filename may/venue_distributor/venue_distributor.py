@@ -233,8 +233,30 @@ class VenueDistributor(BaseDistributor):
 
         # Phase 3: Normal Allocation
         if remaining:
-            normal_unallocated = self._allocate_normal(remaining, venues)
-            unallocated_total.extend(normal_unallocated)
+            deprioritize_flag = self.config.get('allocation', {}).get('deprioritize_flag')
+            if deprioritize_flag:
+                # adr/0016: allocate people WITHOUT the flag (e.g. native workers)
+                # first so they claim capacity; people WITH it (e.g. redistributed
+                # workers bounced back in-boundary) take only the remaining slack.
+                # Capacity is tracked on the venues, so the second pass sees what the
+                # first consumed. Flagged people left unallocated are an explicit
+                # overflow category (kept as-is, counted — not silently dropped, not
+                # rewritten to a sentinel).
+                native = [p for p in remaining if not p.properties.get(deprioritize_flag)]
+                flagged = [p for p in remaining if p.properties.get(deprioritize_flag)]
+                native_unallocated = self._allocate_normal(native, venues) if native else []
+                flagged_unallocated = self._allocate_normal(flagged, venues) if flagged else []
+                if flagged:
+                    logger.info(
+                        f"  [capacity priority, adr/0016] {len(native)} non-flagged allocated first, "
+                        f"then {len(flagged)} '{deprioritize_flag}'; {len(flagged_unallocated)} of the "
+                        f"flagged exceeded capacity -> outside (kept their attempted destination, no venue)."
+                    )
+                unallocated_total.extend(native_unallocated)
+                unallocated_total.extend(flagged_unallocated)
+            else:
+                normal_unallocated = self._allocate_normal(remaining, venues)
+                unallocated_total.extend(normal_unallocated)
 
         # Phase 4: Fallbacks and Verification
         if unallocated_total:

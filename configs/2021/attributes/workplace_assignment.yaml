@@ -51,6 +51,25 @@ data_sources:
     format: "origin_destination_matrix"
     description: "Commuting likelihood from residence to workplace (LGU to LGU)"
 
+    # Out-of-boundary destination policy (adr/0015). REQUIRED — no default.
+    # A region run (e.g. Manchester-only) draws workplace LGUs outside the loaded
+    # world; this says what to do with them. Whole-country runs never trigger it.
+    #   error        -> fail loud if any drawn destination is out of boundary
+    #   redistribute -> keep workers in-boundary: drop out-of-boundary destinations
+    #                   and renormalise each origin onto its in-boundary ones
+    #   outside      -> model them as working outside the area (outside_value sentinel)
+    out_of_boundary: "redistribute"
+    # Required under redistribute: what to do for an origin whose ENTIRE
+    # distribution is out of boundary (nothing to redistribute onto).
+    on_empty: "outside"
+    # Required whenever the 'outside' outcome can occur. The explicit sentinel
+    # value written to workplace_location for out-of-area workers.
+    outside_value: "OUTSIDE"
+    # Optional (redistribute only): person property flagging a worker who was
+    # bounced back in-boundary, so the venue layer can deprioritise them when
+    # workplace capacity is scarce (adr/0016). Scenario-named, not hardcoded.
+    redistributed_flag: "workplace_redistributed"
+
     files:
       - path: "${data_root}/activities/work/EW-work-destination-likelihood.csv"
 

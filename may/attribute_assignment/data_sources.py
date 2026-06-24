@@ -712,6 +712,58 @@ class OriginDestinationMatrixSource(DataSource):
         self._lookup: Dict[str, List[Tuple[str, Dict[str, Any], float]]] = {}
         self._file_configs = config.get('files', [])
 
+        # Out-of-boundary destination policy (adr/0015). Required, no default —
+        # a destination drawn outside the loaded world boundary is routine in
+        # region runs and impossible in whole-country runs, so the engine refuses
+        # to guess what to do with it.
+        self._out_of_boundary = config.get('out_of_boundary')
+        if self._out_of_boundary is None:
+            raise ValueError(
+                f"O-D source '{self.name}' must declare 'out_of_boundary' "
+                "(error | redistribute | outside). It is required, with no "
+                "default — silence is never interpreted (adr/0015)."
+            )
+        if self._out_of_boundary not in ('error', 'redistribute', 'outside'):
+            raise ValueError(
+                f"O-D source '{self.name}': out_of_boundary='{self._out_of_boundary}' "
+                "is not one of error | redistribute | outside (adr/0015)."
+            )
+        self._outside_value = config.get('outside_value')
+        self._on_empty = config.get('on_empty')
+        if self._out_of_boundary == 'redistribute':
+            if self._on_empty not in ('error', 'outside'):
+                raise ValueError(
+                    f"O-D source '{self.name}': out_of_boundary='redistribute' "
+                    "requires 'on_empty' (error | outside) for origins whose entire "
+                    "distribution is out-of-boundary (adr/0015)."
+                )
+        # The sentinel value is required whenever the 'outside' outcome can occur.
+        outside_can_occur = (
+            self._out_of_boundary == 'outside'
+            or (self._out_of_boundary == 'redistribute' and self._on_empty == 'outside')
+        )
+        if outside_can_occur and not self._outside_value:
+            raise ValueError(
+                f"O-D source '{self.name}': 'outside_value' is required when the "
+                "'outside' outcome can occur (adr/0015)."
+            )
+
+        # Optional marker for redistributed assignments (adr/0016). Names the
+        # person property set true when an assignment was bounced back in-boundary,
+        # so the venue layer can deprioritise it. Config-named — the engine carries
+        # whatever the scenario calls it, never a hardcoded attribute (adr/0001).
+        # Only meaningful under 'redistribute': flag it elsewhere and we refuse
+        # rather than silently ignore it (no silent no-ops).
+        self._redistributed_flag = config.get('redistributed_flag')
+        if self._redistributed_flag is not None and self._out_of_boundary != 'redistribute':
+            raise ValueError(
+                f"O-D source '{self.name}': 'redistributed_flag' is only valid under "
+                f"out_of_boundary='redistribute', not '{self._out_of_boundary}' (adr/0016)."
+            )
+        # Per-origin fraction of flow that was bounced back in-boundary, populated
+        # by the redistribute branch of _apply_boundary_policy. Empty otherwise.
+        self._redistributed_fraction: Dict[str, float] = {}
+
     def load_data(self, geo_units: Optional[set] = None):
         """Load origin-destination flow data from CSV."""
         logger.info(f"Loading data for source '{self.name}'...")
@@ -767,7 +819,110 @@ class OriginDestinationMatrixSource(DataSource):
             else:
                 logger.warning(f"  ✗ File not found: {file_path}")
 
+        # Apply the out-of-boundary policy AFTER parsing and OUTSIDE the
+        # per-file try/except above — policy violations must fail loud, not be
+        # swallowed into a warning (adr/0010, adr/0015).
+        self._apply_boundary_policy(geo_units)
+
         self._data_loaded = True
+
+    def _apply_boundary_policy(self, geo_units: Optional[set]):
+        """
+        Resolve destinations that fall outside the loaded world boundary
+        according to the configured `out_of_boundary` policy (adr/0015).
+
+        Boundary membership is "destination value is among the loaded geo_units".
+        With no geo_units (an unbounded / whole-world run) there is no boundary,
+        so the policy is a no-op.
+        """
+        if not geo_units:
+            return
+
+        # Metadata keys carried per destination (e.g. work_mode) — the sentinel
+        # destination must carry the same keys so output wiring still resolves.
+        meta_keys = []
+        for fc in self._file_configs:
+            for k in fc.get('metadata_columns', {}).keys():
+                if k not in meta_keys:
+                    meta_keys.append(k)
+
+        new_lookup: Dict[str, List[Tuple[str, Dict[str, Any], float]]] = {}
+        error_offenders: Dict[str, List[str]] = {}
+        empty_origins: List[str] = []
+        origins_with_out = 0
+        dropped_options = 0
+        out_mass_total = 0.0
+        outside_origins = 0
+
+        for origin, dests in self._lookup.items():
+            in_b = [(d, m, l) for (d, m, l) in dests if d in geo_units]
+            out_b = [(d, m, l) for (d, m, l) in dests if d not in geo_units]
+            if not out_b:
+                new_lookup[origin] = dests
+                continue
+
+            origins_with_out += 1
+            out_mass = sum(l for _, _, l in out_b)
+            out_mass_total += out_mass
+
+            if self._out_of_boundary == 'error':
+                error_offenders[origin] = [d for d, _, _ in out_b]
+                new_lookup[origin] = dests
+            elif self._out_of_boundary == 'redistribute':
+                dropped_options += len(out_b)
+                in_total = sum(l for _, _, l in in_b)
+                if in_total <= 0:
+                    empty_origins.append(origin)
+                    new_lookup[origin] = []  # resolved by on_empty below
+                else:
+                    new_lookup[origin] = [(d, m, l / in_total) for (d, m, l) in in_b]
+                    # Probability a worker from this origin was bounced back in
+                    # (= the out-of-boundary mass that got redistributed). Drives
+                    # the per-person Bernoulli mark in the strategy (adr/0016).
+                    self._redistributed_fraction[origin] = out_mass
+            else:  # 'outside'
+                outside_origins += 1
+                sentinel_meta = {k: self._outside_value for k in meta_keys}
+                new_lookup[origin] = in_b + [(self._outside_value, sentinel_meta, out_mass)]
+
+        if self._out_of_boundary == 'error' and error_offenders:
+            sample = sorted({d for ds in error_offenders.values() for d in ds})[:15]
+            raise ValueError(
+                f"O-D source '{self.name}': out_of_boundary='error' but "
+                f"{len(error_offenders)} origin(s) have out-of-boundary destinations "
+                f"(e.g. {sample}). Set out_of_boundary to 'redistribute' or 'outside', "
+                "or load those destinations into the world (adr/0010, adr/0015)."
+            )
+
+        if self._out_of_boundary == 'redistribute':
+            if empty_origins:
+                logger.warning(
+                    f"  [out_of_boundary] {len(empty_origins)} origin(s) have NO "
+                    f"in-boundary destination (e.g. {empty_origins[:15]})."
+                )
+                if self._on_empty == 'error':
+                    raise ValueError(
+                        f"O-D source '{self.name}': {len(empty_origins)} origin(s) have "
+                        f"no in-boundary destination and on_empty='error' "
+                        f"(e.g. {empty_origins[:15]}). Switch on_empty to 'outside', or "
+                        "shrink/extend the world (adr/0015)."
+                    )
+                for origin in empty_origins:
+                    sentinel_meta = {k: self._outside_value for k in meta_keys}
+                    new_lookup[origin] = [(self._outside_value, sentinel_meta, 1.0)]
+            mean_pct = 100.0 * out_mass_total / origins_with_out if origins_with_out else 0.0
+            logger.info(
+                f"  [out_of_boundary=redistribute] dropped {dropped_options} out-of-boundary "
+                f"destination option(s) across {origins_with_out} origin(s); mean "
+                f"{mean_pct:.1f}% of flow redistributed inward per affected origin."
+            )
+        elif self._out_of_boundary == 'outside':
+            logger.info(
+                f"  [out_of_boundary=outside] {outside_origins} origin(s) route "
+                f"out-of-boundary flow to sentinel '{self._outside_value}'."
+            )
+
+        self._lookup = new_lookup
 
     def _parse_od_dataframe(self, df: pd.DataFrame,
                            origin_column: str,

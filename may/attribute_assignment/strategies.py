@@ -1005,6 +1005,37 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
                 sampled_metadata = metadata_list[sampled_idx]
                 results[idx] = self._build_output(sampled_dest, sampled_metadata)
 
+            # Mark redistributed assignments (adr/0016). A worker from this origin
+            # was bounced back in-boundary with probability = the origin's
+            # out-of-boundary mass; a per-person Bernoulli reproduces that fraction.
+            flag = getattr(source, '_redistributed_flag', None)
+            fraction = getattr(source, '_redistributed_fraction', {}).get(origin_code, 0.0)
+            if flag and fraction > 0.0:
+                marks = np.random.random(len(indices)) < fraction
+                for idx, marked in zip(indices, marks):
+                    if marked:
+                        results[idx] = self._with_redistributed_flag(results[idx], flag)
+
+        # Headcount of out-of-boundary assignments (adr/0015). Under the 'outside'
+        # policy the sentinel is a normal destination value, so report how many
+        # people drew it — the per-step exclusion downstream reports the rest.
+        outside_value = getattr(source, '_outside_value', None)
+        if outside_value:
+            # The sentinel lands on whichever output is wired to 'destination'.
+            dest_attr = next(
+                (attr for attr, src in self.outputs.items() if src == 'destination'),
+                None,
+            )
+            n_outside = sum(
+                1 for r in results
+                if (r.get(dest_attr) if isinstance(r, dict) else r) == outside_value
+            )
+            if n_outside:
+                logger.info(
+                    f"  [out_of_boundary] {n_outside}/{len(results)} people assigned the "
+                    f"'{outside_value}' sentinel (no in-world destination)."
+                )
+
         return results
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
@@ -1055,6 +1086,28 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             return result
         logger.debug(f"Commuting: {person.id} -> {result}")
         return result
+
+    def _with_redistributed_flag(self, result, flag: str):
+        """
+        Attach the config-named redistributed flag (adr/0016) to a result.
+
+        Dict results gain the flag key. A scalar (single-output) result is promoted
+        to a dict so the flag can ride alongside it. If there is no 'destination'
+        output to anchor that promotion, we fail loud rather than drop the flag.
+        """
+        if isinstance(result, dict):
+            result[flag] = True
+            return result
+        dest_attr = next(
+            (attr for attr, src in self.outputs.items() if src == 'destination'),
+            None,
+        )
+        if dest_attr is None:
+            raise ValueError(
+                f"Strategy '{self.strategy_type}': cannot attach redistributed flag "
+                f"'{flag}' — no output is wired to 'destination' (adr/0016)."
+            )
+        return {dest_attr: result, flag: True}
 
     def _build_output(self, sampled_dest, sampled_metadata):
         """

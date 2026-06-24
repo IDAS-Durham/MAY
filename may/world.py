@@ -315,10 +315,10 @@ def setup_households(geo, population, venues, config, strategy_file=None):
 
     if debug_outputs_enabled:
         export_file = household_config.get("export_file", "household_allocations.csv")
-        household_distributor.export_households_to_csv(export_file)
+        #household_distributor.export_households_to_csv(export_file)
 
         venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
-        venues.export_venues_to_csv(venue_export_file)
+        #venues.export_venues_to_csv(venue_export_file)
     else:
         logger.info("Skipping household/venue allocation CSV exports (debug_outputs.enabled=false)")
 

@@ -91,12 +91,16 @@ class AttributeAssigner:
                 # Categorical "include" values: accept either nested
                 # (categorical: {values: [...]}) or flat (values: [...]) form.
                 cat_values = cfg.get('categorical', {}).get('values', cfg.get('values'))
+                # Categorical "exclude" values: reject people whose value is in
+                # this list (e.g. the out-of-boundary sentinel — adr/0015).
+                cat_exclude = cfg.get('categorical', {}).get('exclude', cfg.get('exclude'))
                 self._optimized_filters.append({
                     'attr': attr,
                     'type': ftype,
                     'min': num.get('min'),
                     'max': num.get('max'),
                     'values': cat_values,
+                    'exclude': cat_exclude,
                 })
 
         self._activity_filters = config.filters.get('activities', {}) if self._has_filters else {}
@@ -120,6 +124,9 @@ class AttributeAssigner:
             'unassigned_people': 0,
             'filtered_people': 0,  # People filtered out by age/activity filters
             'assigned_people': 0,  # People successfully assigned
+            # People dropped by a categorical 'exclude' filter, keyed by attribute
+            # (e.g. the out-of-boundary sentinel — adr/0015).
+            'value_excluded': defaultdict(int),
         }
 
     def _get_or_create_strategy(self, assignment_config):
@@ -335,6 +342,10 @@ class AttributeAssigner:
                 values = f['values']
                 if values is not None and person_value not in values:
                     return False
+                exclude = f['exclude']
+                if exclude is not None and person_value in exclude:
+                    self.stats['value_excluded'][f['attr']] += 1
+                    return False
 
         # 2. Activity filters (Fast set intersection check)
         if self._include_activities or self._exclude_activities:
@@ -414,6 +425,11 @@ class AttributeAssigner:
         self.stats['total_people'] = len(all_people)
         logger.info(f"  ✓ Eligible for assignment: {len(eligible_people)} / {len(all_people)} people")
         logger.info(f"  ✓ Filtered out: {self.stats['filtered_people']} people")
+        for attr, n in self.stats['value_excluded'].items():
+            logger.info(
+                f"  ✓ Excluded {n} people from '{self.attribute_name}' "
+                f"({attr} value in exclude list, e.g. out of boundary)"
+            )
         logger.info("")
 
         # Get assignment rule and strategy
