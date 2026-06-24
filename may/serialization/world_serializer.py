@@ -1016,12 +1016,10 @@ class WorldSerializer:
         """Write Subset.member_metadata as a generic side-table.
 
         Produces /activity_mappings/membership_metadata with one row per
-        (person, venue, subset) membership that carries metadata:
-            person_id     : int32
-            venue_id      : int32 (global venue id, matches activity_data col 2)
-            subset_index  : int32 (disambiguates multiple subsets at one venue,
-                            e.g. multi-feast accommodation sharing a guest house)
-            <field_name>  : float32 — one column per metadata field name found
+        (person, venue) membership that carries metadata:
+            person_id    : int32
+            venue_id     : int32 (global venue id, matches activity_data col 2)
+            <field_name> : float32 — one column per metadata field name found
 
         Field names are discovered by scanning all subsets' member_metadata
         dicts. Datasets are float32 to accept both ints and floats; -1.0 is
@@ -1064,7 +1062,6 @@ class WorldSerializer:
         # (nothing mutates between passes), so row k lands in slot k.
         person_arr = np.empty(n_rows, dtype=np.int32)
         venue_arr = np.empty(n_rows, dtype=np.int32)
-        subset_arr = np.empty(n_rows, dtype=np.int32)
         per_field = {f: np.full(n_rows, -1.0, dtype=np.float32) for f in field_names}
         k = 0
         for venue in world.venues.get_all_venues_list():
@@ -1078,7 +1075,6 @@ class WorldSerializer:
                 for pid, fields in meta.items():
                     person_arr[k] = pid
                     venue_arr[k] = global_id
-                    subset_arr[k] = subset.subset_index
                     for fname, val in fields.items():
                         per_field[fname][k] = float(val)
                     k += 1
@@ -1097,7 +1093,6 @@ class WorldSerializer:
         meta_group = rel_group.create_group('membership_metadata')
         self._create_dataset(meta_group, 'person_ids', person_arr)
         self._create_dataset(meta_group, 'venue_ids', venue_arr)
-        self._create_dataset(meta_group, 'subset_indices', subset_arr)
         # Field-name registry (string array, ordered) so consumers can iterate.
         self._create_dataset(
             meta_group, 'field_names',
