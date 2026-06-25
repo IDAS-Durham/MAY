@@ -217,7 +217,8 @@ class ReportingManager:
         with open(output_path, 'w', newline='') as f:
             writer = csv.writer(f)
             sample_venues = world.venues_by_type(self.distributor.venue_type)
-            prop_cols = sorted(sample_venues[0].properties.keys()) if sample_venues else []
+            first_venue = next(iter(sample_venues), None)
+            prop_cols = sorted(first_venue.properties.keys()) if first_venue else []
             header = ['person_id', 'person_sex', 'person_age', 'residence_type', 'residence_pattern', 'residence_geo_unit', 'venue_name', 'venue_type'] + prop_cols
             writer.writerow(header)
 

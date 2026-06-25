@@ -85,7 +85,7 @@ def create_world(config_path):
     )
     yaml_config_file = venue_config.get("config_file", "venues_config.yaml")
     venues.load_from_yaml_config(yaml_config_file)
-    logger.info(f"Venues loaded: {len(venues.get_all_venues())} venues")
+    logger.info(f"Venues loaded: {sum(len(d) for d in venues.venues_by_type_and_id.values())} venues")
 
     # Load population
     logger.info("Loading population...")

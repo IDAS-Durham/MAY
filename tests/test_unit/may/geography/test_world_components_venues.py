@@ -18,7 +18,7 @@ def test_venue_manager_initialization(loaded_geography):
     assert vm.geography is not None
     assert vm.data_dir == "tests/test_data/micro_world/venues"
     assert vm.filter_by_geography is True
-    assert len(vm.venues) == 0
+    assert len(vm.get_all_venues_list()) == 0
 
 def test_venue_manager_load_from_yaml(loaded_geography):
     """
@@ -33,8 +33,6 @@ def test_venue_manager_load_from_yaml(loaded_geography):
     vm = VenueManager(geography=loaded_geography, data_dir="tests/test_data/micro_world/venues")
     vm.load_from_yaml_config("test_venues_config.yaml")
 
-    all_venues = vm.get_all_venues()
-    
     # Check households
     households = vm.get_venues_by_type("household")
     # There are 4 in the CSV, but hh_out_of_bounds has SGU_999 which is not loaded in Micro-World Geo
@@ -77,7 +75,7 @@ def test_venue_manager_create_child_venue(loaded_geography):
     
     # Check parent-child linkage
     assert len(parent_school.children) == 2
-    classrooms = vm.get_venues_by_type("classroom")
+    classrooms = list(vm.get_venues_by_type("classroom"))
     assert len(classrooms) == 2
     assert classrooms[0].parent == parent_school
     
@@ -92,4 +90,4 @@ def test_venue_manager_create_child_venue(loaded_geography):
     
     assert parent_factory.type == "factory"
     assert len(factories) == 3
-    assert vm.get_venues_by_type("assembly_line")[0].properties.get("risk") == "high"
+    assert next(iter(vm.get_venues_by_type("assembly_line"))).properties.get("risk") == "high"

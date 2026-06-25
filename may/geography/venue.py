@@ -16,9 +16,9 @@ class Venue:
     Generic design that works for any geography, past or present.
 
     Attributes:
-      id (id):
-        Unique numeric ID for the venue. Generated using id(),
-        so will essentially be the memory location of the Venue instance.
+      id (int):
+        Globally unique integer ID, assigned once at construction via a
+        class-level counter. Immutable after creation.
       name (str):
         A string giving the name of the venue, e.g. "St Mary's Hospital".
       type :
@@ -32,7 +32,7 @@ class Venue:
     """
 
     __slots__ = [
-        'id',
+        '_id',
         'name',
         'type',
         'geographical_unit',
@@ -42,6 +42,22 @@ class Venue:
         'parent',      # Parent venue (e.g., School for a Classroom)
         'children',    # List of child venues (e.g., Classrooms for a School)
     ]
+
+    _next_venue_id: int = 0
+
+    @classmethod
+    def _allocate_id(cls) -> int:
+        allocated = cls._next_venue_id
+        cls._next_venue_id += 1
+        return allocated
+
+    @classmethod
+    def reset_id_counter(cls) -> None:
+        cls._next_venue_id = 0
+
+    @property
+    def id(self) -> int:
+        return self._id
 
     def __init__(self,
                  name: str,
@@ -53,7 +69,7 @@ class Venue:
                  parent=None,
                  children=None,
                  ):
-        self.id = id(self)              # Unique numeric ID (generated)
+        self._id = Venue._allocate_id()
         self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
         self.type = venue_type          # Type of venue (e.g., "hospital", "school")
         self.geographical_unit = geographical_unit  # Reference to GeographicalUnit
