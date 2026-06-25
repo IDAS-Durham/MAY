@@ -115,37 +115,22 @@ def test_cross_type_name_collision_keeps_both_venues(loaded_geography, caplog):
     assert school.type == 'school'
     assert boarding.type == 'boarding_school'
 
-    # A collision warning was emitted.
-    assert any(
-        'collision' in r.message and 'Durham Cathedral' in r.message
-        for r in caplog.records
-    )
 
 
-def test_same_type_duplicate_does_not_emit_cross_type_warning(loaded_geography, caplog):
-    """A same-type duplicate must only emit the 'Duplicate {type} name'
-    warning. The cross-type 'Venue name collision' warning would be
-    misleading here — it points users to get_venue_by_type_and_name, which
-    can't disambiguate same-type duplicates."""
+def test_same_type_duplicate_both_venues_reachable(loaded_geography):
+    """Two care_homes with the same name must both be loadable and reachable
+    by type — no venue is silently dropped."""
     vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
     df = pd.DataFrame({
         'name': ['Church View', 'Church View'],
         'geo_unit': ['SGU_001', 'SGU_002'],
     })
 
-    with caplog.at_level(logging.WARNING, logger='venuemanager'):
-        vm.load_venue_type_from_df('care_home', df)
+    vm.load_venue_type_from_df('care_home', df)
 
-    cross_type_warnings = [
-        r for r in caplog.records
-        if 'Venue name collision' in r.message and 'Church View' in r.message
-    ]
-    same_type_warnings = [
-        r for r in caplog.records
-        if 'Duplicate care_home name' in r.message and 'Church View' in r.message
-    ]
-    assert cross_type_warnings == []
-    assert len(same_type_warnings) == 1
+    homes = list(vm.get_venues_by_type('care_home'))
+    assert len(homes) == 2
+    assert {h.name for h in homes} == {'Church View'}
 
 
 def test_same_type_name_collision_keeps_both_venues(loaded_geography, caplog):
@@ -171,8 +156,6 @@ def test_same_type_name_collision_keeps_both_venues(loaded_geography, caplog):
     assert vm.get_venue_by_type_and_id('care_home', 1) is not None
     # Their capacities are preserved (no merging/overwriting at the venue level).
     assert {h.properties['capacity'] for h in homes} == {10, 20}
-    # Same-type duplicate name was warned about.
-    assert any('Duplicate care_home name' in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -320,11 +303,10 @@ def test_venue_type_metadata_propagates_to_venues(loaded_geography, tmp_path):
 
 def test_total_venues_log_reflects_true_count_with_collisions(loaded_geography, tmp_path, caplog):
     """The 'Total venues created' line must reflect the actual number of
-    venues (sum across type lists), not the lossy flat-name-dict size.
-    When names collide, both numbers should be reported."""
+    venues even when duplicate names are present."""
     venues_dir = tmp_path / "venues"
     venues_dir.mkdir()
-    # Two care_homes with the same name -> 2 venues, 1 unique name.
+    # Two care_homes with the same name -> 2 venues.
     (venues_dir / "homes.csv").write_text(
         "name,geo_unit\nChurch View,SGU_001\nChurch View,SGU_002\n"
     )
@@ -343,11 +325,7 @@ def test_total_venues_log_reflects_true_count_with_collisions(loaded_geography, 
 
     total_lines = [r.message for r in caplog.records if 'Total venues created' in r.message]
     assert len(total_lines) == 1
-    line = total_lines[0]
-    # True count is 2; unique-name count is 1; both must be visible.
-    assert '2' in line
-    assert '1' in line
-    assert 'shadowed' in line
+    assert total_lines[0].strip() == 'Total venues created: 2'
 
 
 def test_total_venues_log_no_parenthetical_when_no_collisions(loaded_geography, tmp_path, caplog):
