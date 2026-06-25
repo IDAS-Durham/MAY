@@ -97,33 +97,35 @@ class VenueManager:
         Remove a venue from the VenueManager and its geographical_unit.
 
         Mirror of add_venue. The venue must be a leaf (no children) and must
-        have no remaining subset members - migrate_subsets_to should be
-        called first if the venue has residents.
+        have no remaining subsets — call migrate_subsets_to first if needed.
 
         Args:
             venue: Venue object to remove.
 
         Raises:
-            AssertionError: if venue has children, or still has subsets.
+            ValueError: if venue has children, or still has subsets.
         """
-        assert not venue.children, (
-            f"Cannot remove {venue}: it has child venues. Remove each child first."
-        )
-        assert not venue.subsets, (
-            f"Cannot remove {venue}: it still has subsets. "
-            f"Call migrate_subsets_to first."
-        )
+        if venue.children:
+            raise ValueError(
+                f"Cannot remove {venue}: has child venues. Remove each child first."
+            )
+        if venue.subsets:
+            raise ValueError(
+                f"Cannot remove {venue}: has subsets. Call migrate_subsets_to first."
+            )
 
         if venue.parent is not None:
             venue.parent.children.remove(venue)
 
-        if self.venues.get(venue.name) is venue:
-            del self.venues[venue.name]
         self.venues_by_type_and_id[venue.type].pop(venue.id, None)
-        if self.venues_by_type_and_name[venue.type].get(venue.name) is venue:
-            del self.venues_by_type_and_name[venue.type][venue.name]
-        self.venues_by_type[venue.type].remove(venue)
-        venue.geographical_unit.venues.remove(venue)
+
+        name_ids = self.type_and_name_to_id[venue.type].get(venue.name)
+        if name_ids is not None:
+            name_ids.remove(venue.id)
+            if not name_ids:
+                del self.type_and_name_to_id[venue.type][venue.name]
+
+        venue.geographical_unit.venues.discard(venue)
 
     def create_child_venue(self, parent_venue, child_venue_type, properties=None, geo_unit=None):
         """
