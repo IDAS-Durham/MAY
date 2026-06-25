@@ -341,7 +341,11 @@ def setup_households(geo, population, venues, config, strategy_file=None):
     # Show a few example households
     if all_households:
         logger.info("Example Households (5 random):")
-        for household in sample(all_households, min(5, len(all_households))):
+        n = len(all_households)
+        sampled_indices = set(sample(range(n), min(5, n)))
+        for i, household in enumerate(all_households):
+            if i not in sampled_indices:
+                continue
             age_categories = household.properties.get('_age_categories', [])
             composition = household.get_composition(age_categories)
             members = household.get_all_members()
