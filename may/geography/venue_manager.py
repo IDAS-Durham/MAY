@@ -19,8 +19,8 @@ class VenueManager:
 
         self.filter_by_geography = filter_by_geography  # Only load venues in loaded geo units
 
-        # ID counter per venue type for generating type-scoped unique IDs
-        self._next_id_by_type = defaultdict(int)  # {venue_type: next_id}
+        # Per-type counter used only for generating human-readable venue names
+        self._venue_number_by_type = defaultdict(int)  # {venue_type: next_number}
 
         # Get set of loaded geographical unit names for filtering
         self._loaded_geo_units = set(self.geography.get_all_units().keys())
@@ -38,26 +38,15 @@ class VenueManager:
         # (first-match) wrappers over this structure for backwards compatibility.
         self.type_and_name_to_id: defaultdict = defaultdict(lambda: defaultdict(list))
 
-    def _generate_id(self, venue_type: str) -> int:
-        """
-        Generate a unique sequential ID for a venue type.
-
-        Args:
-            venue_type: Type of venue (e.g., "household", "hospital")
-
-        Returns:
-            Unique integer ID within that venue type
-        """
-        next_id = self._next_id_by_type[venue_type]
-        self._next_id_by_type[venue_type] += 1
-        return next_id
+    def _get_venue_number(self, venue_type: str) -> int:
+        """Return next sequential number for naming venues of this type."""
+        number = self._venue_number_by_type[venue_type]
+        self._venue_number_by_type[venue_type] += 1
+        return number
 
     def add_venue(self, venue):
         """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
         self.venues_by_type_and_id[venue.type][venue.id] = venue
-        # Keep the per-type ID counter ahead of any externally-set IDs
-        if venue.id >= self._next_id_by_type[venue.type]:
-            self._next_id_by_type[venue.type] = venue.id + 1
         # Add venue to its geographical unit
         venue.geographical_unit.add_venue(venue)
         self.type_and_name_to_id[venue.type][venue.name].append(venue.id)
@@ -75,8 +64,7 @@ class VenueManager:
         Returns:
             Venue object
         """
-        # Generate type-scoped ID
-        venue_id = self._generate_id(venue_type)
+        venue_number = self._get_venue_number(venue_type)
 
         # Prepare properties, adding is_residence from config if available
         venue_properties = properties or {}
@@ -85,7 +73,7 @@ class VenueManager:
         if venue_type in self.venue_configs:
             config = self.venue_configs[venue_type]
             venue_properties['is_residence'] = config.get('is_residence', False)
-            
+
             # Explicitly copy subset configuration
             if 'subset_categories' in config:
                 venue_properties['subset_categories'] = config['subset_categories']
@@ -93,14 +81,11 @@ class VenueManager:
                 venue_properties['subset_key'] = config['subset_key']
 
         venue = Venue(
-            name=f"{venue_type}_{venue_id}",
+            name=f"{venue_type}_{venue_number}",
             venue_type=venue_type,
             geographical_unit=geo_unit,
             properties=venue_properties
         )
-
-        # Set the ID on the venue
-        venue.id = venue_id
 
         # Add to manager
         self.add_venue(venue)
@@ -528,14 +513,10 @@ class VenueManager:
         for venue_type, id_dict in other.venues_by_type_and_id.items():
             self.venues_by_type_and_id[venue_type].update(id_dict)
 
-        # Advance per-type ID counters past every imported venue so future
-        # create_venue calls don't reuse an existing ID.
-        for venue_type, id_dict in other.venues_by_type_and_id.items():
-            if not id_dict:
-                continue
-            highest = max(id_dict.keys())
-            if highest >= self._next_id_by_type[venue_type]:
-                self._next_id_by_type[venue_type] = highest + 1
+        # Advance naming counters past imported venues to avoid duplicate names
+        for venue_type, other_number in other._venue_number_by_type.items():
+            if other_number > self._venue_number_by_type[venue_type]:
+                self._venue_number_by_type[venue_type] = other_number
 
         for venue_type, name_dict in other.type_and_name_to_id.items():
             for name, ids in name_dict.items():
