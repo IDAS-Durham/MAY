@@ -128,9 +128,9 @@ def test_venue_numbers_correct(venue_type, expected_num, result, venues):
     assert (len(venues.get_venues_by_type(venue_type)) == expected_num) == result
 
 def test_venues_are_venues(venues):
-    for name,v in venues.venues.items():
+    for v in venues.get_all_venues_list():
         assert isinstance(v, Venue)
-        assert isinstance(name, str)
+        assert isinstance(v.name, str)
 
 
 # ============================================================================
@@ -178,7 +178,7 @@ def test_venue_geographical_unit(venues):
 
 def test_venue_id_uniqueness(venues):
     """Test that all venues have unique IDs"""
-    venue_ids = [v.id for v in venues.get_all_venues().values()]
+    venue_ids = [v.id for v in venues.get_all_venues_list()]
 
     assert len(venue_ids) == len(set(venue_ids)), "Venue IDs should be unique"
 
@@ -297,22 +297,13 @@ def test_get_venues_by_nonexistent_type(venues):
     assert not result
 
 
-def test_get_all_venues(venues):
-    """Test retrieving all venues as a dictionary"""
-    all_venues = venues.get_all_venues()
-
-    assert isinstance(all_venues, dict)
-    assert len(all_venues) == 18  # 3+4+3+2+4+2 = 18 total venues
-    assert 'St Mary\'s Hospital' in all_venues
-
-
-def test_get_all_venues_as_list(venues):
+def test_get_all_venues_list(venues):
     """Test retrieving all venues as a list"""
-    all_venues = venues.get_all_venues()
-    venue_list = list(all_venues.values())
+    all_venues = venues.get_all_venues_list()
 
-    assert isinstance(venue_list, list)
-    assert len(venue_list) == 18
+    assert isinstance(all_venues, list)
+    assert len(all_venues) == 18  # 3+4+3+2+4+2 = 18 total venues
+    assert any(v.name == 'St Mary\'s Hospital' for v in all_venues)
 
 
 def test_get_venue_types(venues):
@@ -347,10 +338,6 @@ def test_add_venue_updates_all_dicts(geo):
     )
 
     manager.add_venue(venue)
-
-    # Check venues dict
-    assert 'New Hospital' in manager.venues
-    assert manager.venues['New Hospital'] == venue
 
     # Check venues_by_type_and_id dict
     assert venue.id in manager.venues_by_type_and_id['hospital']
@@ -394,10 +381,10 @@ def test_extend_combines_venue_managers(geo):
     manager1.extend(manager2)
 
     # Check that both venues are now in manager1
-    assert len(manager1.venues) == 2
-    assert 'Hospital A' in manager1.venues
-    assert 'Hospital B' in manager1.venues
     assert len(manager1.get_venues_by_type('hospital')) == 2
+    hospital_ids = {v.id for v in manager1.get_venues_by_type('hospital')}
+    assert venue1.id in hospital_ids
+    assert venue2.id in hospital_ids
 
 
 # ============================================================================
