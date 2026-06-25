@@ -110,6 +110,39 @@ class VenueManager:
 
         return venue
 
+    def remove_venue(self, venue):
+        """
+        Remove a venue from the VenueManager and its geographical_unit.
+
+        Mirror of add_venue. The venue must be a leaf (no children) and must
+        have no remaining subset members - migrate_subsets_to should be
+        called first if the venue has residents.
+
+        Args:
+            venue: Venue object to remove.
+
+        Raises:
+            AssertionError: if venue has children, or still has subsets.
+        """
+        assert not venue.children, (
+            f"Cannot remove {venue}: it has child venues. Remove each child first."
+        )
+        assert not venue.subsets, (
+            f"Cannot remove {venue}: it still has subsets. "
+            f"Call migrate_subsets_to first."
+        )
+
+        if venue.parent is not None:
+            venue.parent.children.remove(venue)
+
+        if self.venues.get(venue.name) is venue:
+            del self.venues[venue.name]
+        self.venues_by_type_and_id[venue.type].pop(venue.id, None)
+        if self.venues_by_type_and_name[venue.type].get(venue.name) is venue:
+            del self.venues_by_type_and_name[venue.type][venue.name]
+        self.venues_by_type[venue.type].remove(venue)
+        venue.geographical_unit.venues.remove(venue)
+
     def create_child_venue(self, parent_venue, child_venue_type, properties=None, geo_unit=None):
         """
         Create a child venue and attach it to a parent venue.

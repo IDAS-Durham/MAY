@@ -230,6 +230,53 @@ class Venue:
         if not subset_already_added:
             person.activity_map[activity_name][venue_type_key].append(subset)
 
+    def migrate_subsets_to(self, new_venue):
+        """
+        Move every Subset from this venue to new_venue, keeping members'
+        activity_map entries consistent with the new venue's type.
+
+        Reassigns each migrated Subset's subset_index to a fresh value
+        scoped to new_venue (the old index may already be taken there,
+        and (venue_id, subset_index) must stay unique for serialisation).
+
+        Args:
+            new_venue: Venue to move this venue's subsets into.
+
+        Raises:
+            ValueError: if new_venue already has a subset under one of
+                this venue's subset_keys.
+        """
+        for subset_key in self.subsets:
+            if subset_key in new_venue.subsets:
+                raise ValueError(
+                    f"Cannot migrate subset '{subset_key}' from {self} to "
+                    f"{new_venue}: new_venue already has a subset under that key."
+                )
+
+        for subset_key, subset in self.subsets.items():
+            subset.subset_index = len(new_venue.subsets)
+            subset.venue = new_venue
+            new_venue.subsets[subset_key] = subset
+
+            for person in subset.members:
+                for activity_name, venue_type_map in person.activity_map.items():
+                    if not isinstance(venue_type_map, dict):
+                        continue
+                    found_key = None
+                    for venue_type_key, subsets_list in venue_type_map.items():
+                        if any(s is subset for s in subsets_list):
+                            found_key = venue_type_key
+                            break
+                    if found_key is None:
+                        continue
+                    venue_type_map[found_key].remove(subset)
+                    if not venue_type_map[found_key]:
+                        del venue_type_map[found_key]
+                    target_key = new_venue.type if found_key == self.type else found_key
+                    venue_type_map.setdefault(target_key, []).append(subset)
+
+        self.subsets.clear()
+
     def get_all_members(self, exclude_subset_keys=None, include_subset_keys=None):
         """
         Get all members from all subsets.
