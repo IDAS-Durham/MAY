@@ -1,0 +1,5 @@
+# Name,Code,Parent,Level
+Test Country,TC,,country
+Test Region,TR,TC,region
+Test City,TCY,TR,city
+Test Ward,TW001,TCY,ward

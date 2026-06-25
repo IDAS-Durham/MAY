@@ -1,0 +1,3 @@
+name,geo_unit,capacity,age_50_64_male,age_50_64_female,age_65_74_male,age_65_74_female,age_75_84_male,age_75_84_female,age_85_94_male,age_85_94_female,age_95_plus_male,age_95_plus_female
+care_home_0,SGU_S1,2,0,0,0,1,1,0,0,0,0,0
+care_home_1,SGU_S2,2,0,0,1,0,0,1,0,0,0,0
