@@ -1,0 +1,5 @@
+name,SGU,capacity
+hh_1,SGU_001,4
+hh_2,SGU_001,2
+hh_3,SGU_002,5
+hh_out_of_bounds,SGU_999,3
