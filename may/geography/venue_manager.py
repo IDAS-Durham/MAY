@@ -15,9 +15,7 @@ class VenueManager:
     def __init__(self, geography, data_dir="data/venues", filter_by_geography=True):
         self.geography = geography      # Reference to Geography object
         self.data_dir = data_dir
-        self.venues = {}                # All venues by name: {name: Venue}
         self.venues_by_type_and_id = defaultdict(dict)  # Venues by type and ID: {type: {id: Venue}}
-        self.venues_by_type_and_name = defaultdict(dict)  # Lossless name lookup scoped by type: {type: {name: Venue}}
 
         self.filter_by_geography = filter_by_geography  # Only load venues in loaded geo units
 
@@ -35,6 +33,11 @@ class VenueManager:
         # venues_config.yaml itself no longer carries capacity rules.
         self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
+        # Lossless name index: {type: {name: [id, ...]}}. Preserves all ids for
+        # duplicate-named venues; get_venue / get_venue_by_type_and_name are lossy
+        # (first-match) wrappers over this structure for backwards compatibility.
+        self.type_and_name_to_id: defaultdict = defaultdict(lambda: defaultdict(list))
+
     def _generate_id(self, venue_type: str) -> int:
         """
         Generate a unique sequential ID for a venue type.
@@ -51,16 +54,13 @@ class VenueManager:
 
     def add_venue(self, venue):
         """ Adds a venue to the VenueManager in the appropriate place and relates it with the geography object """
-        self.venues[venue.name] = venue
-        # Store by type and ID
         self.venues_by_type_and_id[venue.type][venue.id] = venue
-        # Lossless type-scoped name lookup
-        self.venues_by_type_and_name[venue.type][venue.name] = venue
         # Keep the per-type ID counter ahead of any externally-set IDs
         if venue.id >= self._next_id_by_type[venue.type]:
             self._next_id_by_type[venue.type] = venue.id + 1
         # Add venue to its geographical unit
         venue.geographical_unit.add_venue(venue)
+        self.type_and_name_to_id[venue.type][venue.name].append(venue.id)
 
     def create_venue(self, venue_type, geo_unit, properties=None):
         """
@@ -294,38 +294,15 @@ class VenueManager:
             )
             venues_created += 1
 
-            # Override name if the CSV provided one
+            # Override name if the CSV provided one. Update type_and_name_to_id
+            # to remove the auto-generated name entry and add the csv name.
             if csv_name is not None:
-                # Drop the auto-generated name from the flat lookup; the type-scoped
-                # name index will be re-keyed below.
                 auto_name = venue.name
-                if auto_name in self.venues and self.venues[auto_name] is venue:
-                    del self.venues[auto_name]
-                self.venues_by_type_and_name[venue.type].pop(auto_name, None)
-
-                # Distinguish same-type duplication (real source-data duplication)
-                # from cross-type collision (different venue types sharing a name).
-                # Same-type takes precedence: get_venue_by_type_and_name can't
-                # disambiguate same-type duplicates, only get_venue_by_type_and_id can.
-                same_type_prior = self.venues_by_type_and_name[venue.type].get(csv_name)
-                if same_type_prior is not None:
-                    logger.warning(
-                        f"Duplicate {venue_type} name '{csv_name}' in source data: "
-                        f"existing id={same_type_prior.id} will be shadowed in name lookup by id={venue.id}. "
-                        f"Both venues remain accessible via get_venue_by_type_and_id."
-                    )
-                elif csv_name in self.venues:
-                    existing = self.venues[csv_name]
-                    logger.warning(
-                        f"Venue name collision: '{csv_name}' already exists as "
-                        f"type='{existing.type}' (id={existing.id}). "
-                        f"Flat lookup will return type='{venue_type}' (id={venue.id}); "
-                        f"use get_venue_by_type_and_name for unambiguous access."
-                    )
-
+                self.type_and_name_to_id[venue.type][auto_name].remove(venue.id)
+                if not self.type_and_name_to_id[venue.type][auto_name]:
+                    del self.type_and_name_to_id[venue.type][auto_name]
                 venue.name = csv_name
-                self.venues[csv_name] = venue
-                self.venues_by_type_and_name[venue.type][csv_name] = venue
+                self.type_and_name_to_id[venue.type][csv_name].append(venue.id)
 
             # Set coordinates if available
             if coordinates:
@@ -548,15 +525,8 @@ class VenueManager:
 
         """
         # Should add something to check that self.geography and other.geography are equal.
-        self.venues.update(other.venues)
-
-        # Merge venues_by_type_and_id
         for venue_type, id_dict in other.venues_by_type_and_id.items():
             self.venues_by_type_and_id[venue_type].update(id_dict)
-
-        # Merge venues_by_type_and_name
-        for venue_type, name_dict in other.venues_by_type_and_name.items():
-            self.venues_by_type_and_name[venue_type].update(name_dict)
 
         # Advance per-type ID counters past every imported venue so future
         # create_venue calls don't reuse an existing ID.
@@ -567,28 +537,21 @@ class VenueManager:
             if highest >= self._next_id_by_type[venue_type]:
                 self._next_id_by_type[venue_type] = highest + 1
 
-    def get_venue(self, name):
-        """
-        Get a venue by its name (flat lookup across all types).
+        for venue_type, name_dict in other.type_and_name_to_id.items():
+            for name, ids in name_dict.items():
+                self.type_and_name_to_id[venue_type][name].extend(ids)
 
-        Note: venue names are not guaranteed unique across types — different
-        venue types can legitimately share a name (e.g. a school and a
-        boarding school of the same institution). On collision this returns
-        the most recently registered venue. Use ``get_venue_by_type_and_name``
-        or ``get_venue_by_type_and_id`` for unambiguous access.
-        """
-        return self.venues.get(name)
+    def get_venue(self, name):
+        """Lossy: returns the first venue found with this name across all types."""
+        for venue_type, name_dict in self.type_and_name_to_id.items():
+            if name in name_dict:
+                return self.get_venue_by_type_and_id(venue_type, name_dict[name][0])
+        return None
 
     def get_venue_by_type_and_name(self, venue_type, name):
-        """
-        Get a venue by its type and name. Lossless across types: a school and
-        a boarding_school sharing a name are both retrievable here.
-
-        Within a single type, source data may still contain duplicate names;
-        this returns the most recently registered venue of that (type, name).
-        Use get_venue_by_type_and_id to address every venue unambiguously.
-        """
-        return self.venues_by_type_and_name.get(venue_type, {}).get(name)
+        """Lossy: returns the first registered venue of this type with this name."""
+        ids = self.type_and_name_to_id.get(venue_type, {}).get(name)
+        return self.get_venue_by_type_and_id(venue_type, ids[0]) if ids else None
 
     def get_venue_by_type_and_id(self, venue_type, venue_id):
         """
@@ -606,10 +569,6 @@ class VenueManager:
     def get_venues_by_type(self, venue_type):
         """Get all venues of a specific type"""
         return self.venues_by_type_and_id.get(venue_type, {}).values()
-
-    def get_all_venues(self):
-        """Get all venues (returns dict of name -> venue)"""
-        return self.venues
 
     def get_all_venues_list(self):
         """Get all venues as a flat list from venues_by_type_and_id (authoritative source)."""
@@ -788,19 +747,8 @@ class VenueManager:
         return residences
 
     def _log_total_created(self):
-        """Log the true total venue count, plus the unique-name count if it
-        differs (which signals collisions in the flat name dict)."""
         total = sum(len(vs) for vs in self.venues_by_type_and_id.values())
-        unique_names = len(self.venues)
-        if total == unique_names:
-            logger.info(f"Total venues created: {total}")
-        else:
-            shadowed = total - unique_names
-            logger.info(
-                f"Total venues created: {total} "
-                f"({unique_names} unique names; {shadowed} shadowed by name collisions, "
-                f"still accessible via get_venue_by_type_and_id)"
-            )
+        logger.info(f"Total venues created: {total}")
 
     def _log_summary(self):
         """Log summary statistics about venues"""
@@ -809,4 +757,4 @@ class VenueManager:
             logger.info(f"  {venue_type}: {count} venues")
 
     def __repr__(self):
-        return f"<VenueManager: {len(self.venues)} venues, {len(self.venues_by_type_and_id)} types>"
+        return f"<VenueManager: {sum(len(d) for d in self.venues_by_type_and_id.values())} venues, {len(self.venues_by_type_and_id)} types>"
