@@ -361,9 +361,9 @@ class TestPersonEqualityIntegration:
         person2.add_activity('leisure')
         person2.add_activity('residence')
 
-        venue2 = Venue(name='home_0', venue_type='household', geographical_unit=geo_unit2)
-        venue2.id = venue.id  # Same venue ID
-        subset2 = Subset(venue=venue2, subset_index=0, subset_name='adults')
+        # Venue ids are globally unique and immutable, so two distinct venues
+        # can never compare equal. Reuse the same venue to test person equality.
+        subset2 = Subset(venue=venue, subset_index=0, subset_name='adults')
         person2.activity_map['residence']['household'] = [subset2]
 
         # Should be equal despite different object instances

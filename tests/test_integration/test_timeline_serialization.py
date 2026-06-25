@@ -137,13 +137,10 @@ def minimal_world():
     geo.add_geo_unit(sgu)
     
     venues = VenueManager(geo, data_dir="")
-    # Manually inject 3 venues
+    # Manually inject 3 venues (ids are assigned automatically at construction)
     h1 = Venue(name="house_1", venue_type="company", geographical_unit=sgu)
-    h1.id = 1
     h2 = Venue(name="house_2", venue_type="company", geographical_unit=sgu)
-    h2.id = 2
     s1 = Venue(name="school_1", venue_type="school", geographical_unit=sgu)
-    s1.id = 3
     
     venues.add_venue(h1)
     venues.add_venue(h2)

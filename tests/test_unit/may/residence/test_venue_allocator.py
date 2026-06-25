@@ -302,7 +302,7 @@ class TestCheckAttributeConstraints:
 
     def test_empty_constraints_always_passes(self, hd):
         """An empty constraints dict must not reject any person."""
-        school = hd.venue_manager.get_venues_by_type("boarding_school")[0]
+        school = next(iter(hd.venue_manager.get_venues_by_type("boarding_school")))
         p = person_by_id(hd, 0)  # id=0, age=3 — any person
         assert _check_attribute_constraints(p, school, {}) is True
 

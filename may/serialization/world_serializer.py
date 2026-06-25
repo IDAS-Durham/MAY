@@ -71,7 +71,7 @@ class WorldSerializer:
             # Write venues
             logger.info("Serializing venues...")
             stats['num_subsets'] = self._write_venues(f, world)
-            stats['num_venues'] = len(world.venues.get_all_venues())
+            stats['num_venues'] = sum(len(d) for d in world.venues.venues_by_type_and_id.values())
 
             # Write activity mappings
             logger.info("Serializing activity mappings...")
@@ -102,7 +102,7 @@ class WorldSerializer:
 
         # Always include counts
         f.attrs['num_people'] = len(world.population.people)
-        f.attrs['num_venues'] = len(world.venues.get_all_venues())
+        f.attrs['num_venues'] = sum(len(d) for d in world.venues.venues_by_type_and_id.values())
         f.attrs['num_geo_units'] = len(world.geography.get_all_units())
 
         # Optional metadata fields
