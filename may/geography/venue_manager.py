@@ -548,8 +548,8 @@ class VenueManager:
         return self.venues_by_type_and_id.get(venue_type, {}).get(venue_id)
 
     def get_venues_by_type(self, venue_type):
-        """Get all venues of a specific type"""
-        return self.venues_by_type_and_id.get(venue_type, {}).values()
+        """Get all venues of a specific type as a list."""
+        return list(self.venues_by_type_and_id.get(venue_type, {}).values())
 
     def get_all_venues_list(self):
         """Get all venues as a flat list from venues_by_type_and_id (authoritative source)."""
