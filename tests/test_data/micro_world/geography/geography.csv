@@ -1,0 +1,6 @@
+# Name,Code,Parent,Level
+United Kingdom,UK,,country
+England,ENG,UK,region
+Durham,DUR,ENG,city
+Durham Central,DUR001,DUR,ward
+Durham North,DUR002,DUR,ward
