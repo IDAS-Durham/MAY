@@ -77,7 +77,7 @@ def test_venue_manager_create_child_venue(loaded_geography):
     
     # Check parent-child linkage
     assert len(parent_school.children) == 2
-    classrooms = vm.get_venues_by_type("classroom")
+    classrooms = list(vm.get_venues_by_type("classroom"))
     assert len(classrooms) == 2
     assert classrooms[0].parent == parent_school
     
@@ -92,4 +92,4 @@ def test_venue_manager_create_child_venue(loaded_geography):
     
     assert parent_factory.type == "factory"
     assert len(factories) == 3
-    assert vm.get_venues_by_type("assembly_line")[0].properties.get("risk") == "high"
+    assert next(iter(vm.get_venues_by_type("assembly_line"))).properties.get("risk") == "high"

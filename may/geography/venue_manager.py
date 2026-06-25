@@ -18,7 +18,6 @@ class VenueManager:
         self.venues = {}                # All venues by name: {name: Venue}
         self.venues_by_type_and_id = defaultdict(dict)  # Venues by type and ID: {type: {id: Venue}}
         self.venues_by_type_and_name = defaultdict(dict)  # Lossless name lookup scoped by type: {type: {name: Venue}}
-        self.venues_by_type = defaultdict(list)        # Venues grouped by type: {type: [Venue, ...]}
 
         self.filter_by_geography = filter_by_geography  # Only load venues in loaded geo units
 
@@ -57,8 +56,6 @@ class VenueManager:
         self.venues_by_type_and_id[venue.type][venue.id] = venue
         # Lossless type-scoped name lookup
         self.venues_by_type_and_name[venue.type][venue.name] = venue
-        # Group by type
-        self.venues_by_type[venue.type].append(venue)
         # Keep the per-type ID counter ahead of any externally-set IDs
         if venue.id >= self._next_id_by_type[venue.type]:
             self._next_id_by_type[venue.type] = venue.id + 1
@@ -561,10 +558,6 @@ class VenueManager:
         for venue_type, name_dict in other.venues_by_type_and_name.items():
             self.venues_by_type_and_name[venue_type].update(name_dict)
 
-        # Merge venues_by_type
-        for venue_type, venue_list in other.venues_by_type.items():
-            self.venues_by_type[venue_type] = self.venues_by_type.get(venue_type, []) + venue_list
-
         # Advance per-type ID counters past every imported venue so future
         # create_venue calls don't reuse an existing ID.
         for venue_type, id_dict in other.venues_by_type_and_id.items():
@@ -612,22 +605,22 @@ class VenueManager:
 
     def get_venues_by_type(self, venue_type):
         """Get all venues of a specific type"""
-        return self.venues_by_type.get(venue_type, [])
+        return self.venues_by_type_and_id.get(venue_type, {}).values()
 
     def get_all_venues(self):
         """Get all venues (returns dict of name -> venue)"""
         return self.venues
 
     def get_all_venues_list(self):
-        """Get all venues as a flat list from venues_by_type (authoritative source)."""
+        """Get all venues as a flat list from venues_by_type_and_id (authoritative source)."""
         all_venues = []
-        for venue_list in self.venues_by_type.values():
-            all_venues.extend(venue_list)
+        for id_dict in self.venues_by_type_and_id.values():
+            all_venues.extend(id_dict.values())
         return all_venues
 
     def get_venue_types(self):
         """Get list of all venue types"""
-        return list(self.venues_by_type.keys())
+        return list(self.venues_by_type_and_id.keys())
 
     def get_capacity_config(self, venue_type):
         """
@@ -797,7 +790,7 @@ class VenueManager:
     def _log_total_created(self):
         """Log the true total venue count, plus the unique-name count if it
         differs (which signals collisions in the flat name dict)."""
-        total = sum(len(vs) for vs in self.venues_by_type.values())
+        total = sum(len(vs) for vs in self.venues_by_type_and_id.values())
         unique_names = len(self.venues)
         if total == unique_names:
             logger.info(f"Total venues created: {total}")
@@ -811,9 +804,9 @@ class VenueManager:
 
     def _log_summary(self):
         """Log summary statistics about venues"""
-        for venue_type in sorted(self.venues_by_type.keys()):
-            count = len(self.venues_by_type[venue_type])
+        for venue_type in sorted(self.venues_by_type_and_id.keys()):
+            count = len(self.venues_by_type_and_id[venue_type])
             logger.info(f"  {venue_type}: {count} venues")
 
     def __repr__(self):
-        return f"<VenueManager: {len(self.venues)} venues, {len(self.venues_by_type)} types>"
+        return f"<VenueManager: {len(self.venues)} venues, {len(self.venues_by_type_and_id)} types>"

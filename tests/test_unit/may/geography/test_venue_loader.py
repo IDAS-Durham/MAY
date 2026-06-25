@@ -207,7 +207,7 @@ def test_missing_csv_warns_and_other_types_still_load(loaded_geography, tmp_path
     # The present type loaded.
     assert len(vm.get_venues_by_type('cinema')) == 1
     # The missing one did not crash and produced no venues.
-    assert vm.get_venues_by_type('field') == []
+    assert not vm.get_venues_by_type('field')
     # We surfaced the missing file.
     assert any(
         'not found' in r.message and 'field.csv' in r.message

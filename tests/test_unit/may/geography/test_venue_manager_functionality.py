@@ -303,7 +303,7 @@ class TestYamlConfig:
         vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
         vm.load_from_yaml_config("config.yaml")
         assert vm.is_residence_type('household') is True
-        assert vm.get_venues_by_type('household') == []
+        assert not vm.get_venues_by_type('household')
 
 
 # ===========================================================================

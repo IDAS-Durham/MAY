@@ -125,7 +125,7 @@ def venues(geo):
     ('narnia', 2, False)    
 ])
 def test_venue_numbers_correct(venue_type, expected_num, result, venues):
-    assert (len(venues.venues_by_type[venue_type]) == expected_num) == result
+    assert (len(venues.get_venues_by_type(venue_type)) == expected_num) == result
 
 def test_venues_are_venues(venues):
     for name,v in venues.venues.items():
@@ -291,10 +291,10 @@ def test_get_venues_by_type(venues):
 
 
 def test_get_venues_by_nonexistent_type(venues):
-    """Test retrieving venues of nonexistent type returns empty list"""
+    """Test retrieving venues of nonexistent type returns empty"""
     result = venues.get_venues_by_type('dragon_lair')
 
-    assert result == []
+    assert not result
 
 
 def test_get_all_venues(venues):
@@ -356,9 +356,9 @@ def test_add_venue_updates_all_dicts(geo):
     assert venue.id in manager.venues_by_type_and_id['hospital']
     assert manager.venues_by_type_and_id['hospital'][venue.id] == venue
 
-    # Check venues_by_type dict
-    assert 'hospital' in manager.venues_by_type
-    assert venue in manager.venues_by_type['hospital']
+    # Check venues_by_type lookup
+    assert 'hospital' in manager.get_venue_types()
+    assert venue in manager.get_venues_by_type('hospital')
 
 
 # ============================================================================
@@ -397,7 +397,7 @@ def test_extend_combines_venue_managers(geo):
     assert len(manager1.venues) == 2
     assert 'Hospital A' in manager1.venues
     assert 'Hospital B' in manager1.venues
-    assert len(manager1.venues_by_type['hospital']) == 2
+    assert len(manager1.get_venues_by_type('hospital')) == 2
 
 
 # ============================================================================
