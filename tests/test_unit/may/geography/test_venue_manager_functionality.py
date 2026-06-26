@@ -556,7 +556,7 @@ class TestRemoveVenue:
         assert vm.get_venue_by_type_and_id('hospital', venue_id) is None
         assert vm.get_venue_by_type_and_name('hospital', venue_name) is None
         assert venue not in vm.get_venues_by_type('hospital')
-        assert venue_name not in vm.get_all_venues()
+        assert venue not in vm.get_all_venues_list()
         assert venue not in sgu.venues
 
     def test_remove_venue_raises_if_venue_has_children(self, loaded_geography):
@@ -565,7 +565,7 @@ class TestRemoveVenue:
         school = vm.create_venue('school', sgu)
         vm.create_child_venue(school, 'classroom')
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             vm.remove_venue(school)
 
     def test_remove_venue_raises_if_venue_has_subsets(self, loaded_geography):
@@ -577,7 +577,7 @@ class TestRemoveVenue:
         resident = Person(age=40, sex='male', geographical_unit=sgu)
         household.add_to_subset(resident, subset_key='residents', activity_name='residence', activity_type='household')
 
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             vm.remove_venue(household)
 
     def test_remove_venue_detaches_from_parent_children(self, loaded_geography):
