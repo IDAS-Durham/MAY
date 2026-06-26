@@ -1,0 +1,3 @@
+name,MGU,capacity,type
+sch_1,MGU_01,50,primary
+sch_2,MGU_02,100,secondary

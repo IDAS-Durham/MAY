@@ -83,6 +83,8 @@ simulation_profile.stats
 world_state.h5
 people.csv
 friendships.csv
+# Test fixtures are tiny and must be version-controlled (override *.csv / people.csv above)
+!tests/test_data/**/*.csv
 1911_data/
 *.zip
 june_analysis/
