@@ -416,13 +416,14 @@ def export_people(world, output_file="people.csv"):
             'geographical_unit': person.geographical_unit.name if person.geographical_unit else None,
         }
 
-        # Get LGU (Large Geographical Unit) name
+        # Get the large-unit (levels[2]) name, if the hierarchy has a third level (adr/0002)
+        levels = world.geography.levels
+        lgu_level = levels[2] if len(levels) > 2 else None
         lgu_name = None
-        if person.geographical_unit:
-            # Traverse up the hierarchy to find the LGU
+        if lgu_level and person.geographical_unit:
             current_unit = person.geographical_unit
             while current_unit:
-                if current_unit.level == "LGU":
+                if current_unit.level == lgu_level:
                     lgu_name = current_unit.name
                     break
                 current_unit = current_unit.parent
@@ -551,7 +552,7 @@ def print_world_examples(world):
     all_units = geo.get_all_units_list()
     if all_units:
         # Get an example SGU
-        sgu_units = [u for u in all_units if u.level == "SGU"]
+        sgu_units = [u for u in all_units if u.level == geo.levels[0]]
         if sgu_units:
             example_sgu = sgu_units[0]
             logger.info(f"   SGU Example: {example_sgu}")
@@ -562,7 +563,7 @@ def print_world_examples(world):
                     logger.info(f"   - Parent LGU: {example_sgu.parent.parent.name}")
 
         # Get an example MGU with venues
-        mgu_with_venues = [u for u in all_units if u.level == "MGU" and len(u.venues) > 0]
+        mgu_with_venues = [u for u in all_units if u.level == geo.levels[1] and len(u.venues) > 0]
         if mgu_with_venues:
             example_mgu = mgu_with_venues[0]
             logger.info("")
@@ -638,7 +639,7 @@ def print_world_examples(world):
 
     logger.info("")
     logger.info("   # Get venues in a specific area")
-    mgu_with_venues = [u for u in all_units if u.level == "MGU" and len(u.venues) > 0]
+    mgu_with_venues = [u for u in all_units if u.level == geo.levels[1] and len(u.venues) > 0]
     if mgu_with_venues:
         unit_venues = mgu_with_venues[0].venues
         logger.info(f"   geo.get_unit('{mgu_with_venues[0].name}').venues -> {len(unit_venues)} venues")

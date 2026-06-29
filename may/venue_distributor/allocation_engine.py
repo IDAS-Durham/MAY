@@ -112,7 +112,7 @@ class AllocationEngine:
             if geo: people_by_geo[geo].append(person)
 
         venues_by_geo = defaultdict(list)
-        v_level = self.distributor.venue_geo_level
+        v_level = self.distributor._require_venue_geo_level()
         for v in venues:
             if not v.geographical_unit:
                 continue

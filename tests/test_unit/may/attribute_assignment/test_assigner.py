@@ -512,10 +512,12 @@ class TestGetDependencyAwareOrder:
         # adult was created before child → lower id → comes first in base order
         assert result[0].id == adult.id
 
-    def test_cycle_detection_falls_back_gracefully(self):
+    def test_cycle_fails_loud(self):
         """
-        If roles A and B depend on each other (cycle), remaining nodes
-        should be appended in base order instead of crashing.
+        If roles A and B depend on each other (cycle), the order can't be
+        satisfied — fail loud rather than silently appending in id order
+        (adr/0019). Real cycles are caught at config load; reaching the assigner
+        with one is a backstop that must still raise.
         """
         roles = {
             "role_a": Role(name="role_a", description="", subsets=["Adults"], role_type="primary"),
@@ -538,11 +540,10 @@ class TestGetDependencyAwareOrder:
         person_b = MinimalPerson(age=8, category="Kids")
         person_categories = {person_a.id: "Adults", person_b.id: "Kids"}
 
-        # Should not crash — cycle causes fallback to base order
-        result = assigner._get_dependency_aware_order(
-            [person_a, person_b], "Family", person_categories
-        )
-        assert len(result) == 2
+        with pytest.raises(RuntimeError, match="unordered"):
+            assigner._get_dependency_aware_order(
+                [person_a, person_b], "Family", person_categories
+            )
 
     def test_isolated_node_no_dependencies(self):
         """Person with no dependencies and nobody depends on them."""

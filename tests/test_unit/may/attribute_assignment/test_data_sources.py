@@ -381,7 +381,7 @@ class TestOriginDestinationMatrixSource:
     """Tests O-D matrix loading and lookup."""
 
     def _make_source_with_data(self, lookup_data):
-        source = OriginDestinationMatrixSource("test_od", {"files": []})
+        source = OriginDestinationMatrixSource("test_od", {"files": [], "out_of_boundary": "error"})
         source._lookup = lookup_data
         source._data_loaded = True
         return source
@@ -406,13 +406,13 @@ class TestOriginDestinationMatrixSource:
             source.lookup("MISSING")
 
     def test_lookup_before_data_loaded_raises(self):
-        source = OriginDestinationMatrixSource("test_od", {"files": []})
+        source = OriginDestinationMatrixSource("test_od", {"files": [], "out_of_boundary": "error"})
         with pytest.raises(RuntimeError, match="Data not loaded"):
             source.lookup("ORIGIN_A")
 
     def test_destination_exclusion_in_parsing(self):
         """Excluded destinations should not appear in lookup results."""
-        source = OriginDestinationMatrixSource("test_od", {"files": []})
+        source = OriginDestinationMatrixSource("test_od", {"files": [], "out_of_boundary": "error"})
         df = pd.DataFrame({
             "origin": ["A", "A", "A"],
             "destination": ["D1", "D2", "D3"],
@@ -430,7 +430,7 @@ class TestOriginDestinationMatrixSource:
 
     def test_likelihood_normalization(self):
         """Likelihoods should be normalized to sum to 1.0 per origin."""
-        source = OriginDestinationMatrixSource("test_od", {"files": []})
+        source = OriginDestinationMatrixSource("test_od", {"files": [], "out_of_boundary": "error"})
         df = pd.DataFrame({
             "origin": ["A", "A"],
             "destination": ["D1", "D2"],
@@ -445,7 +445,7 @@ class TestOriginDestinationMatrixSource:
         assert abs(result["A"][1][2] - 0.7) < 1e-10  # D2
 
     def test_metadata_columns_collected(self):
-        source = OriginDestinationMatrixSource("test_od", {"files": []})
+        source = OriginDestinationMatrixSource("test_od", {"files": [], "out_of_boundary": "error"})
         df = pd.DataFrame({
             "origin": ["A"],
             "destination": ["D1"],
@@ -463,7 +463,7 @@ class TestOriginDestinationMatrixSource:
         assert meta["distance"] == 10.5
 
     def test_multiple_origins(self):
-        source = OriginDestinationMatrixSource("test_od", {"files": []})
+        source = OriginDestinationMatrixSource("test_od", {"files": [], "out_of_boundary": "error"})
         df = pd.DataFrame({
             "origin": ["A", "A", "B"],
             "destination": ["D1", "D2", "D3"],
@@ -479,7 +479,7 @@ class TestOriginDestinationMatrixSource:
 
     def test_exclusion_with_all_destinations_excluded(self):
         """If all destinations are excluded, origin has empty list."""
-        source = OriginDestinationMatrixSource("test_od", {"files": []})
+        source = OriginDestinationMatrixSource("test_od", {"files": [], "out_of_boundary": "error"})
         df = pd.DataFrame({
             "origin": ["A"],
             "destination": ["D1"],
@@ -823,6 +823,8 @@ class TestDataSourceManagerRouting:
         config = self._make_config({
             "commuting_flows": ("csv_lookup", {
                 "format": "origin_destination_matrix",
+                # Required since adr/0015 — no default, silence is never interpreted.
+                "out_of_boundary": "error",
                 "files": [{"path": "/fake/path.csv", "key_columns": {"origin": "origin_col"}}],
             })
         })

@@ -35,8 +35,7 @@ def reset_person_counter():
 def _make_geo(level_units):
     """Build a Geography hand-stitched from {level: [unit_names]} so tests
     don't need a CSV fixture for the smaller cases."""
-    geo = Geography()
-    geo.levels = list(level_units.keys())
+    geo = Geography(levels=list(level_units.keys()))
     geo.units = {}
     geo.units_by_level = {lvl: {} for lvl in geo.levels}
     next_id = 0

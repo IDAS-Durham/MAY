@@ -41,8 +41,10 @@ class BaseDistributor:
         self.stats = {}
         self.allocated_this_run = 0
 
-        # Geographical level configuration
-        self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level', 'SGU')
+        # Geographical level configuration. No literal default (adr/0002, adr/0010):
+        # required at the point of use, so distributors that never do geo venue
+        # search (e.g. route) don't have to declare it.
+        self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level')
         self.batch_geo_level = self.config.get('venue_selection', {}).get('batch_geo_level', self.venue_geo_level)
 
         # Spatial indexing (supports multiple venue types)
@@ -116,6 +118,15 @@ class BaseDistributor:
         c = 2 * np.arcsin(np.sqrt(a))
         return c * 6371
 
+    def _require_venue_geo_level(self):
+        """The configured venue geography level, or fail loud (adr/0002, adr/0010)."""
+        if self.venue_geo_level is None:
+            raise ValueError(
+                f"{type(self).__name__}: 'venue_selection.venue_geo_level' is required "
+                f"for geo-based venue allocation; there is no default (adr/0002, adr/0010)."
+            )
+        return self.venue_geo_level
+
     def _get_geo_unit_at_level(self, person, world, target_level=None):
         """
         Get the person's geographical unit at a specified level.
@@ -123,7 +134,7 @@ class BaseDistributor:
         Supports custom location attributes via 'person_location_source' config.
         """
         if target_level is None:
-            target_level = self.venue_geo_level
+            target_level = self._require_venue_geo_level()
 
         # Get the person_location_source config (default to 'geographical_unit')
         loc_source = self.config.get('venue_selection', {}).get('person_location_source', 'geographical_unit')

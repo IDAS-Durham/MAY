@@ -802,14 +802,19 @@ class AttributeAssigner:
                     neighbor = next(p for p in members if p.id == neighbor_id)
                     queue.append(neighbor)
 
-        # 4. Handle remaining people (cycle or isolated)
+        # 4. Every member must be orderable. Cross-role cycles are rejected at
+        #    config load (adr/0019), so unprocessed people here mean the derived
+        #    per-person graph is inconsistent — fail loud rather than silently
+        #    assigning the leftovers in id order.
         if processed_count < len(members):
-            # If there's a cycle or missing dependencies, just append remaining in base order
             processed_ids = {p.id for p in result}
-            for p in base_sorted:
-                if p.id not in processed_ids:
-                    result.append(p)
-                    
+            unordered = [p.id for p in base_sorted if p.id not in processed_ids]
+            raise RuntimeError(
+                f"Assignment ordering for structure {structure!r} left people "
+                f"{unordered} unordered — a cross-role dependency cycle escaped "
+                f"load-time validation (adr/0019)."
+            )
+
         return result
 
     def _get_person_category(self, person) -> str:

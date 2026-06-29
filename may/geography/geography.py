@@ -13,8 +13,16 @@ class Geography:
         self.units = {}           # All units by name: {name: GeographicalUnit}
         self.units_by_id = {}     # All units by ID: {id: GeographicalUnit}
 
-        # Define hierarchy levels (most granular to least granular)
-        self.levels = levels if levels is not None else ["SGU", "MGU", "LGU"]
+        # Hierarchy levels (most granular to least granular). Required: code
+        # never assumes label strings (adr/0002) and never falls back to a
+        # default set (adr/0010); callers pass the scenario's configured labels.
+        if not levels:
+            raise ValueError(
+                "Geography requires 'levels' — the ordered list of level labels "
+                "(smallest to largest) from geography config. There is no default "
+                "(adr/0002, adr/0010)."
+            )
+        self.levels = levels
 
         # Separate lookups by level for efficiency
         self.units_by_level = {level: {} for level in self.levels}

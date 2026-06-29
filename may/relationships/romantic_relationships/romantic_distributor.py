@@ -100,7 +100,7 @@ class RomanticDistributor:
         self._prevalence_bands: List[Tuple[int, int]] = []
         # Dense prior table: shape (n_sexes, n_bands, n_orients).
         self._prevalence_table: Optional[np.ndarray] = None
-        self._msoa_geo_level: str = 'MGU'
+        self._geo_level: Optional[str] = None  # required from config; no default (adr/0002)
         # MSOA marginal table: shape (n_msoas, n_orients), aligned to self._msoa_codes.
         self._msoa_table: Optional[np.ndarray] = None
         self._msoa_codes: List[str] = []
@@ -142,7 +142,13 @@ class RomanticDistributor:
             logger.warning(f"msoa_marginal_path missing or not found: {msoa_path}; falling back to YAML probabilities")
             return
 
-        self._msoa_geo_level = ds.get('geo_level', 'MGU')
+        geo_level = ds.get('geo_level')
+        if not geo_level:
+            raise ValueError(
+                f"{self.name}: data_sources needs 'geo_level' (the geography level "
+                f"the marginal table is keyed at); there is no default (adr/0002)."
+            )
+        self._geo_level = geo_level
 
         # ---- National prior ---------------------------------------------------
         rows: List[Dict] = []
@@ -254,7 +260,7 @@ class RomanticDistributor:
             iterator = units.values() if isinstance(units, dict) else units
             for unit in iterator:
                 try:
-                    ancestor = unit.get_ancestor_by_level(self._msoa_geo_level)
+                    ancestor = unit.get_ancestor_by_level(self._geo_level)
                 except Exception:
                     ancestor = None
                 if ancestor is None:
@@ -274,7 +280,7 @@ class RomanticDistributor:
             return idx
         # Fallback: walk the parent chain on demand (used by mocks in tests).
         try:
-            ancestor = unit.get_ancestor_by_level(self._msoa_geo_level)
+            ancestor = unit.get_ancestor_by_level(self._geo_level)
         except Exception:
             return -1
         if ancestor is None:

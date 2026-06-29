@@ -29,8 +29,7 @@ from may.residence.household_distributor import HouseholdDistributor
 
 def _make_geo(sgus):
     """Make a single-level geography with the given SGU names."""
-    geo = Geography()
-    geo.levels = ['SGU']
+    geo = Geography(levels=['SGU'])
     geo.units = {}
     geo.units_by_level = {'SGU': {}}
     for i, name in enumerate(sgus):

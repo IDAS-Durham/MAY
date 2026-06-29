@@ -7,8 +7,7 @@ from may.geography import Geography, GeographicalUnit
 
 @pytest.fixture
 def mock_geography():
-    geography = Geography()
-    geography.levels = ['SGU']
+    geography = Geography(levels=['SGU'])
     sgu = GeographicalUnit(id=1, name='E00000001', level='SGU')
     geography.units = {'E00000001': sgu}
     geography.units_by_level = {'SGU': {'E00000001': sgu}}

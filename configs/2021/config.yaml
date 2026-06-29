@@ -17,7 +17,15 @@ geography:
   #   - ["SGU", "MGU", "LGU"]           # 3 levels (default)
   #   - ["SGU", "MGU", "LGU", "XLGU"]   # 4 levels
   #   - ["Block", "Tract", "County"]    # Custom names
-  # Current: Output Areas -> MSOAs -> Local Authorities -> Regions
+  # These are generic size labels (Small/Medium/Large/eXtra-Large Geographical
+  # Unit); the engine attaches no country meaning to them (see docs/adr/0002).
+  # In THIS UK build they map to real census units as follows:
+  #   SGU  -> Output Area (OA)
+  #   MGU  -> Middle-layer Super Output Area (MSOA)
+  #   LGU  -> Local Authority District (LAD)   e.g. "County Durham", "Darlington"
+  #   XLGU -> region for England (e.g. "North East"); a whole nation for
+  #           Scotland / Wales / Northern Ireland. This dataset is UK-wide, so
+  #           the top level is a mix of regions and nations.
   levels: ["SGU", "MGU", "LGU", "XLGU"]
 
   # Load all geographical units (ignores all filters below if true)

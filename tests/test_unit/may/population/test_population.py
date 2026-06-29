@@ -18,10 +18,7 @@ from may.geography import Geography, GeographicalUnit
 @pytest.fixture
 def mock_geography():
     """Create a mock geography with some geographical units."""
-    geography = Geography()
-
-    # Set up levels
-    geography.levels = ['SGU', 'MSOA', 'LAD']
+    geography = Geography(levels=['SGU', 'MSOA', 'LAD'])
 
     # Create some SGUs (smallest geographical units)
     sgu1 = GeographicalUnit(id=0, name='E00000001', level='SGU')

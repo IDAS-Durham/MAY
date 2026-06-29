@@ -210,13 +210,13 @@ class VenueManager:
             venue_df = venue_df[venue_df[filter_column].astype(str).str.strip().str.upper().isin(target_values)]
             logger.info(f"Filtered {venue_type} venues by {filter_column}: {len(venue_df)} rows kept (from {original_count})")
 
-        # Required columns - we support SGU, MGU or any levels defined in geography
+        # Required columns - 'geo_unit' or any level label defined in geography
         geo_levels = set(self.geography.levels)
-        geo_cols = {'geo_unit', 'SGU', 'MGU'}.union(geo_levels)
+        geo_cols = {'geo_unit'}.union(geo_levels)
         actual_geo_col = next((col for col in venue_df.columns if col in geo_cols), None)
 
         if actual_geo_col is None:
-            raise ValueError(f"Missing required geographical column (e.g., 'geo_unit', 'SGU', 'MGU') in file for {venue_type}")
+            raise ValueError(f"Missing required geographical column ('geo_unit' or one of {sorted(geo_levels)}) in file for {venue_type}")
 
         # Optional coordinate columns (check both lowercase and capitalized)
         lat_col = None
@@ -519,8 +519,8 @@ class VenueManager:
             batch_mode = type_config.get('batch_mode', False)
             
             if batch_mode:
-                # 1. Identify all MGUs in current geography
-                mgu_units = self.geography.get_units_by_level("MGU")
+                # 1. Identify all units at the batch-partition level (levels[1]; adr/0002)
+                mgu_units = self.geography.get_units_by_level(self.geography.levels[1])
                 for mgu_name in mgu_units.keys():
                     mgu_filename = f"{mgu_name}_loc.csv"
                     self.load_venue_type_from_csv(

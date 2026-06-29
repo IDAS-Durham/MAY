@@ -228,9 +228,10 @@ class RouteDistributor(BaseDistributor):
         # Attach the line venue to the rider's residence MGU. This MGU is
         # guaranteed loaded (the rider lives there) and gives the venue a
         # stable, deterministic location for HDF5 partitioning.
+        mgu_level = world.geography.levels[1]  # batch-partition level (adr/0002)
         geo_unit = getattr(person, "geographical_unit", None)
-        if geo_unit is not None and geo_unit.level != "MGU":
-            geo_unit = geo_unit.get_ancestor_by_level("MGU")
+        if geo_unit is not None and geo_unit.level != mgu_level:
+            geo_unit = geo_unit.get_ancestor_by_level(mgu_level)
         if geo_unit is None:
             return None
         # No per-venue properties: line_id is recorded as venue.name below

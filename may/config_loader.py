@@ -96,7 +96,7 @@ def setup_geography(config=None):
     # Get data directory and levels from config
     geo_config = config.get('geography', {})
     data_dir = pr.resolve(geo_config.get('data_dir', 'data/geography'))
-    levels = geo_config.get('levels', None)  # None = use Geography default
+    levels = geo_config.get('levels')  # required; Geography fails loud if absent (adr/0002)
 
     # Create Geography object
     geo = Geography(data_dir=data_dir, filters=filters, levels=levels)

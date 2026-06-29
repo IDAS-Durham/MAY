@@ -26,8 +26,7 @@ from may.residence.relationship_rules import RelationshipRulesValidator
 def _make_two_level_geo():
     """SGU children under MGU parents, with parent links wired so
     get_ancestor_by_level('MGU') resolves from a child SGU."""
-    geo = Geography()
-    geo.levels = ['SGU', 'MGU']
+    geo = Geography(levels=['SGU', 'MGU'])
     geo.units = {}
     geo.units_by_level = {'SGU': {}, 'MGU': {}}
     next_id = 0

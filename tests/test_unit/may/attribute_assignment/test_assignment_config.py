@@ -7,8 +7,10 @@ Unit tests for assignment_config.py:
 - get_household_structure(): classification + caching
 """
 import pytest
+from pathlib import Path
 from may.attribute_assignment.assignment_config import (
     _pattern_matches_cached,
+    _extract_role_dependencies,
     MatchingRule,
     HouseholdStructure,
     Role,
@@ -872,11 +874,118 @@ class _MinimalConfig:
 
 class _RawOnly:
     """Carries just raw_config so the unbound parser can run in isolation."""
-    def __init__(self, raw_config):
+    def __init__(self, raw_config, config_path=Path("test_config.yaml")):
         self.raw_config = raw_config
+        self.config_path = config_path
 
     _parse_required_attributes = AttributeAssignmentConfig._parse_required_attributes
     _parse_attributes = AttributeAssignmentConfig._parse_attributes
+    _parse_assignment_rules = AttributeAssignmentConfig._parse_assignment_rules
+    _validate_role_dependencies = AttributeAssignmentConfig._validate_role_dependencies
+    _raise_on_dependency_cycle = AttributeAssignmentConfig._raise_on_dependency_cycle
+
+
+class TestExtractRoleDependencies:
+    """`_extract_role_dependencies` collects every cross-role reference (adr/0019)."""
+
+    def test_inherit_from_roles_list(self):
+        assert sorted(_extract_role_dependencies(
+            {"inherit_from": {"roles": ["primary_adult", "secondary_adult"]}}
+        )) == ["primary_adult", "secondary_adult"]
+
+    def test_inherit_from_single_role(self):
+        assert _extract_role_dependencies(
+            {"inherit_from": {"role": "primary_adult"}}
+        ) == ["primary_adult"]
+
+    def test_partner_role(self):
+        assert _extract_role_dependencies(
+            {"strategy": "partnership", "partner_role": "primary_adult"}
+        ) == ["primary_adult"]
+
+    def test_exclude_in_logic_then_block(self):
+        assignment = {
+            "strategy": "reverse_inheritance",
+            "inherit_from": {"role": "primary_adult"},
+            "logic": [
+                {"when": {"role": "primary_adult", "attr": "ethnicity", "equals": "M"},
+                 "then": {"strategy": "probabilistic", "data_source": "geo",
+                          "exclude": ["primary_elder.ethnicity"]}},
+            ],
+        }
+        # inherit_from role + the exclude reference role, deduped by the caller.
+        assert sorted(set(_extract_role_dependencies(assignment))) == [
+            "primary_adult", "primary_elder",
+        ]
+
+    def test_no_references_is_empty(self):
+        assert _extract_role_dependencies(
+            {"strategy": "probabilistic", "data_source": "geo"}
+        ) == []
+
+
+def _rules(rule_dicts):
+    """Wrap assignment-rule dicts in the raw_config shape for one structure."""
+    return {"assignment_rules": {"Family": {"rules": rule_dicts}}}
+
+
+class TestRoleDependencyValidation:
+    """Load-time validation of cross-role references (adr/0019)."""
+
+    def test_valid_partnership_and_exclude_load(self):
+        cfg = _RawOnly(_rules([
+            {"role": "primary_adult",
+             "assignment": {"strategy": "probabilistic", "data_source": "geo"}},
+            {"role": "secondary_adult",
+             "assignment": {"strategy": "partnership", "data_source": "pair",
+                            "partner_role": "primary_adult"}},
+        ]))
+        parsed = cfg._parse_assignment_rules()
+        deps = {r.role: set(r.dependencies) for r in parsed["Family"].rules}
+        assert deps["secondary_adult"] == {"primary_adult"}
+
+    def test_undefined_role_reference_raises(self):
+        cfg = _RawOnly(_rules([
+            {"role": "secondary_adult",
+             "assignment": {"strategy": "partnership", "data_source": "pair",
+                            "partner_role": "primary_adult"}},
+        ]))
+        with pytest.raises(ValueError, match="undefined role 'primary_adult'"):
+            cfg._parse_assignment_rules()
+
+    def test_cyclic_exclude_references_raise(self):
+        cfg = _RawOnly(_rules([
+            {"role": "role_a",
+             "assignment": {"strategy": "reverse_inheritance",
+                            "inherit_from": {"role": "role_b"},
+                            "logic": [{"when": {"unique_count": 1},
+                                       "then": {"strategy": "probabilistic",
+                                                "data_source": "geo",
+                                                "exclude": ["role_b.x"]}}]}},
+            {"role": "role_b",
+             "assignment": {"strategy": "reverse_inheritance",
+                            "inherit_from": {"role": "role_a"},
+                            "logic": [{"when": {"unique_count": 1},
+                                       "then": {"strategy": "probabilistic",
+                                                "data_source": "geo",
+                                                "exclude": ["role_a.x"]}}]}},
+        ]))
+        with pytest.raises(ValueError, match="cycle"):
+            cfg._parse_assignment_rules()
+
+    def test_list_role_satisfies_dependency_definition(self):
+        """A reference to a role defined only inside a list-form rule is valid."""
+        cfg = _RawOnly(_rules([
+            {"role": ["primary_adult", "extra_adult"],
+             "assignment": {"strategy": "probabilistic", "data_source": "geo"}},
+            {"role": "child",
+             "assignment": {"strategy": "inheritance",
+                            "inherit_from": {"roles": ["primary_adult"]},
+                            "logic": [{"when": {"unique_count": 1},
+                                       "then": "values[0]"}]}},
+        ]))
+        parsed = cfg._parse_assignment_rules()  # must not raise
+        assert parsed["Family"].rules
 
 
 class TestParseAttributes:

@@ -191,9 +191,9 @@ class PopulationManager:
         target_to_csv = column_mapping
         
         # Identify geographical column
-        # Priority: 1. mapped 'geo_unit', 2. literal 'geo_unit', 3. literal 'SGU', 4. literal 'MGU'
+        # Priority: 1. mapped 'geo_unit', 2. literal 'geo_unit', 3. any configured level label
         geo_levels = set(self.geography.levels)
-        geo_cols = {'geo_unit', 'SGU', 'MGU'}.union(geo_levels)
+        geo_cols = {'geo_unit'}.union(geo_levels)
         
         mapped_geo_col = target_to_csv.get('geo_unit')
         actual_geo_col = None
@@ -204,7 +204,7 @@ class PopulationManager:
             actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
             
         if actual_geo_col is None:
-             raise ValueError(f"Missing required geographical column (e.g., 'geo_unit', 'SGU', 'MGU') in population data")
+             raise ValueError(f"Missing required geographical column ('geo_unit' or one of {sorted(geo_levels)}) in population data")
 
         people_count = 0
         
@@ -459,12 +459,12 @@ class PopulationManager:
         """
         Load individual-level population data from multiple MGU-level CSV files.
         """
-        # 1. Identify all MGUs in the current geography
-        mgu_units = self.geography.get_units_by_level("MGU")
+        # 1. Identify all units at the batch-partition level (levels[1]; adr/0002)
+        mgu_units = self.geography.get_units_by_level(self.geography.levels[1])
         mgu_names = set(mgu_units.keys())
-        
-        # 2. Identify all loaded SGUs for internal filtering
-        loaded_sgus = set(self.geography.get_units_by_level("SGU").keys())
+
+        # 2. Identify all loaded smallest-level units for internal filtering
+        loaded_sgus = set(self.geography.get_units_by_level(self.geography.levels[0]).keys())
         
         # Reset ID counter once for the whole batch
         Person.reset_counter()
@@ -482,9 +482,9 @@ class PopulationManager:
             total_files += 1
             
             # Filter rows by geographical unit to only keep what is in our geography
-            # Check for any valid geo level column (SGU, MGU, or custom levels)
+            # Check for any valid geo level column ('geo_unit' or any configured level)
             geo_levels = set(self.geography.levels)
-            geo_cols = {'SGU', 'MGU', 'geo_unit'}.union(geo_levels)
+            geo_cols = {'geo_unit'}.union(geo_levels)
             actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
 
             if actual_geo_col and actual_geo_col in df.columns:

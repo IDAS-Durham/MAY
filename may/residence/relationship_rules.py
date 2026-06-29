@@ -173,7 +173,12 @@ class RelationshipRulesValidator:
             return
 
         geo_code_column = source.get('geo_code_column', 'geo_unit')
-        geo_level = source.get('geo_level', 'MGU')
+        geo_level = source.get('geo_level')
+        if not geo_level:
+            raise ValueError(
+                f"same_category_source[{attribute}] needs 'geo_level' (the geography "
+                f"level its codes refer to); there is no default (adr/0002)."
+            )
         formula = source.get('formula') or []
         if not formula:
             logger.warning(f"same_category_source[{attribute}] has no formula; skipped")

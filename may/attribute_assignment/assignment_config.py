@@ -10,6 +10,7 @@ Simplified attribute assignment configuration:
 
 import yaml
 import logging
+from collections import defaultdict
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -313,6 +314,43 @@ class StructureAssignmentRules:
     rules: List[AssignmentRule] = field(default_factory=list)
 
 
+def _extract_role_dependencies(assignment: Dict[str, Any]) -> List[str]:
+    """
+    Collect every role this assignment references and must therefore be assigned
+    after (adr/0019).
+
+    A strategy may read another role's already-assigned value three ways:
+    `inherit_from` (copy it), `partner_role` (match it), or `exclude` (differ
+    from it). Each referenced role becomes an ordering dependency so the topo-sort
+    assigns it first whenever both roles are present in a household. Only declared
+    references count — an absent reference is the author choosing not to relate
+    the roles, not a dependency.
+    """
+    deps: List[str] = []
+
+    inherit_from = assignment.get('inherit_from') or {}
+    if isinstance(inherit_from, dict):
+        # Forward inheritance uses 'roles' (list); reverse uses 'role' (string).
+        if 'roles' in inherit_from:
+            deps.extend(inherit_from['roles'])
+        elif 'role' in inherit_from:
+            deps.append(inherit_from['role'])
+
+    partner_role = assignment.get('partner_role')
+    if partner_role:
+        deps.append(partner_role)
+
+    # `exclude` lists live inside declarative logic `then` blocks; each entry is a
+    # "role.attr" reference to a role this one must differ from.
+    for entry in assignment.get('logic') or []:
+        then = entry.get('then') if isinstance(entry, dict) else None
+        if isinstance(then, dict):
+            for ref in then.get('exclude') or []:
+                deps.append(ref.split('.', 1)[0])
+
+    return deps
+
+
 class AttributeAssignmentConfig:
     """
     Configuration loader for attribute assignment.
@@ -536,16 +574,9 @@ class AttributeAssignmentConfig:
                           f"{structure_name}.rules[{i}]",
                 )
 
-                # Extract dependencies from inheritance strategies
-                dependencies = []
-                inherit_from = assignment_data.get('inherit_from', {})
-                if inherit_from:
-                    # Forward inheritance uses 'roles' (list)
-                    if 'roles' in inherit_from:
-                        dependencies.extend(inherit_from['roles'])
-                    # Reverse inheritance uses 'role' (string)
-                    elif 'role' in inherit_from:
-                        dependencies.append(inherit_from['role'])
+                # Ordering dependencies derived from every cross-role reference
+                # (inherit_from/partner_role/exclude), not just inheritance (adr/0019).
+                dependencies = _extract_role_dependencies(assignment_data)
 
                 rules.append(AssignmentRule(
                     role=rule_data.get('role'),  # Can be string or list
@@ -558,6 +589,10 @@ class AttributeAssignmentConfig:
             # Sort rules by priority
             rules.sort(key=lambda r: r.priority)
 
+            # Ordering failures fail loud at load: a reference to an undefined role
+            # is a typo, a cycle is genuinely unorderable (adr/0019).
+            self._validate_role_dependencies(structure_name, rules)
+
             structure_rules[structure_name] = StructureAssignmentRules(
                 structure_name=structure_name,
                 description=struct_rules_data.get('description', ''),
@@ -565,6 +600,69 @@ class AttributeAssignmentConfig:
             )
 
         return structure_rules
+
+    def _validate_role_dependencies(self, structure_name: str,
+                                    rules: List[AssignmentRule]) -> None:
+        """
+        Reject unorderable cross-role references in one structure (adr/0019).
+
+        Every dependency derived by `_extract_role_dependencies` must name a role
+        defined in this structure (else it is a typo), and the role-level
+        dependency graph must be acyclic (else no assignment order can satisfy it).
+        A role defined here that simply has no member in a given household is fine
+        — that is handled quietly at assignment time, not a structural error.
+        """
+        defined_roles = set()
+        for rule in rules:
+            roles = rule.role if isinstance(rule.role, list) else [rule.role]
+            defined_roles.update(r for r in roles if r is not None)
+
+        # Build role -> {roles it must follow}, validating each reference exists.
+        edges = defaultdict(set)
+        for rule in rules:
+            roles = rule.role if isinstance(rule.role, list) else [rule.role]
+            for dep in rule.dependencies:
+                if dep not in defined_roles:
+                    raise ValueError(
+                        f"{self.config_path.name}: assignment_rules.{structure_name}: "
+                        f"rule for role {rule.role!r} references undefined role "
+                        f"{dep!r}. A cross-role reference "
+                        f"(inherit_from/partner_role/exclude) must name a role "
+                        f"defined in this structure (adr/0019)."
+                    )
+                for role in roles:
+                    if role is not None and role != dep:
+                        edges[role].add(dep)
+
+        self._raise_on_dependency_cycle(structure_name, defined_roles, edges)
+
+    def _raise_on_dependency_cycle(self, structure_name: str, roles: set,
+                                   edges: Dict[str, set]) -> None:
+        """Raise if the role dependency graph has a cycle (adr/0019)."""
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {role: WHITE for role in roles}
+        path: List[str] = []
+
+        def visit(role: str) -> None:
+            color[role] = GRAY
+            path.append(role)
+            for dep in edges.get(role, ()):
+                if color[dep] == GRAY:
+                    cycle = path[path.index(dep):] + [dep]
+                    raise ValueError(
+                        f"{self.config_path.name}: assignment_rules."
+                        f"{structure_name}: cross-role references form a cycle "
+                        f"({' -> '.join(cycle)}); no assignment order can satisfy "
+                        f"them (adr/0019)."
+                    )
+                if color[dep] == WHITE:
+                    visit(dep)
+            path.pop()
+            color[role] = BLACK
+
+        for role in roles:
+            if color[role] == WHITE:
+                visit(role)
 
     def _parse_venue_assignment_rules(self) -> List[Dict[str, Any]]:
         """Parse venue assignment rules."""
