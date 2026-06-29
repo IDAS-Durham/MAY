@@ -1,0 +1,6487 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../about/">
+      
+      
+        <link rel="next" href="../create-world/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>User Guide - MAY Docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+      <link rel="stylesheet" href="../assets/stylesheets/logo.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#user-guide-building-a-world-with-create_worldpy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="MAY Docs" class="md-header__button md-logo" aria-label="MAY Docs" data-md-component="logo">
+      
+  <img src="../assets/images/May_docs_white_path.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MAY Docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              User Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="deep-purple" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="MAY Docs" class="md-nav__button md-logo" aria-label="MAY Docs" data-md-component="logo">
+      
+  <img src="../assets/images/May_docs_white_path.svg" alt="logo">
+
+    </a>
+    MAY Docs
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LICENSE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    LICENSE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    About
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-environment-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Environment Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Environment Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-a-conda-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option A — Conda (recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-venv-built-into-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option B — venv (built into Python)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-the-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying the environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#downloading-the-input-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Downloading the input data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-two-folders-you-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The Two Folders You Edit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-master-config-configs2021configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The Master Config — configs/2021/config.yaml
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. The Master Config — configs/2021/config.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-geography-which-area-to-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 geography: — which area to build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-population-demographics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 population: — demographics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-venues-places-people-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 venues: — places people go
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-households-where-people-live" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 households: — where people live
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-timeline-the-order-things-happen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 timeline: — the order things happen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#46-relationship_pipeline-romantic_relationships-and-serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.6 relationship_pipeline:, romantic_relationships:, and serialization:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-the-other-yamls-what-each-folder-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. The Other YAMLs — what each folder controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. The Other YAMLs — what each folder controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-configs2021venuesvenues_configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 configs/2021/venues/venues_config.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-household-allocation-the-three-cooperating-yamls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Household allocation — the three cooperating YAMLs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.2 Household allocation — the three cooperating YAMLs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-is-the-pipeline-so-elaborate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why is the pipeline so elaborate?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#521-households_configyaml-categories-global-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.1 households_config.yaml — categories + global rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#522-allocation_strategyyaml-the-ordered-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.2 allocation_strategy.yaml — the ordered pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#523-relationship_rulesyaml-internal-household-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.3 relationship_rules.yaml — internal household structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#524-what-youll-typically-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.4 What you'll typically edit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-configs2021attributesyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 configs/2021/attributes/*.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-configs2021distributorsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 configs/2021/distributors/*.yaml
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.4 configs/2021/distributors/*.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#541-the-route-distributor-transit-lines-commuting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4.1 The route distributor — transit lines &amp; commuting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.4.1 The route distributor — transit lines &amp; commuting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-you-must-provide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you must provide
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#route_legscsv-format-the-file-the-distributor-consumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        route_legs.csv format (the file the distributor consumes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-build-route_legscsv-the-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to build route_legs.csv (the algorithm)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-distributor-yaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The distributor YAML
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites &amp; ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#serialization-downstream-geometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization &amp; downstream geometry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-configs2021venue_child_creatorsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.5 configs/2021/venue_child_creators/*.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#56-configs2021relationshipsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.6 configs/2021/relationships/*.yaml
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.6 configs/2021/relationships/*.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#social_networksyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        social_networks.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#romantic_relationshipsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        romantic_relationships.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#57-configs2021serialization_configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.7 configs/2021/serialization_config.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-data-folder-input-csvs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The data/ Folder — input CSVs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. The data/ Folder — input CSVs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-required-column-conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Required column conventions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-householdscsv-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 households.csv format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-adding-a-new-area-new-census-year" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Adding a new area / new census year
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-common-customisations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Common Customisations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-validating-a-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Validating a Run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-example-building-england-2021" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Example: building England 2021
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../create-world/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    World Creation Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Configuration Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/master-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Master Config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_3" id="__nav_6_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venues
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Venues
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/venues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/venues/venues-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    venues_config.yaml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_4" id="__nav_6_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Households
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Households
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/households/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Households
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/households/households-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    households_config.yaml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/households/allocation-strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    allocation_strategy.yaml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/households/relationship-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    relationship_rules.yaml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_5" id="__nav_6_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attributes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Attributes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/attributes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attributes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/attributes/attribute-assignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attribute Assignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/attributes/workplace-assignment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workplace Assignment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_6" id="__nav_6_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Distributors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/distributors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/distributors/venue-distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue Distributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/distributors/multi-venue-distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Venue Distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/distributors/specific-workplace-distributors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specific Workplace Distributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/distributors/care-home-visits/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Care Home Visits Distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_7" id="__nav_6_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue Child Creators
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Venue Child Creators
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/venue-child-creators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue Child Creators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/venue-child-creators/venue-child-creators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue Child Creators
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_8" id="__nav_6_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relationships
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Relationships
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/relationships/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relationships
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/relationships/social-networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    social_networks.yaml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/relationships/romantic-relationships/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    romantic_relationships.yaml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_9" id="__nav_6_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Serialization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/serialization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configs/serialization/serialization-config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    serialization_config.yaml
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    may
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    may
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    May
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    May
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/config_loader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config loader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/world/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    World
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_3" id="__nav_7_1_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attribute assignment
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Attribute assignment
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/attribute_assignment/assigner/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assigner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/attribute_assignment/assignment_config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Assignment config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/attribute_assignment/data_sources/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/attribute_assignment/strategies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strategies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_4" id="__nav_7_1_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geography
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Geography
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/geography/geographical_unit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geographical unit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/geography/geography/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geography
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/geography/venue/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/geography/venue_manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue manager
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_5" id="__nav_7_1_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Population
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/population/abstract_set/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abstract set
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/population/person/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Person
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/population/population/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Population
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/population/subset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Subset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_6" id="__nav_7_1_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relationships
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Relationships
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_6_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_6_1" id="__nav_7_1_6_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Romantic relationships
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_7_1_6_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_6_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Romantic relationships
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/relationships/romantic_relationships/romantic_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Romantic distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_7" id="__nav_7_1_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Residence
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Residence
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/allocation_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Allocation strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/composition_pattern/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Composition pattern
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/household_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Household distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/household_excess_handler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Household excess handler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/household_promoter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Household promoter
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/household_round_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Household round distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/relationship_rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relationship rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/residence/venue_allocator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue allocator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_8" id="__nav_7_1_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Serialization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/serialization/export_properties/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Export properties
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/serialization/serialization_config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serialization config
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/serialization/world_loader/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    World loader
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/serialization/world_serializer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    World serializer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_9" id="__nav_7_1_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Social networks
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Social networks
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/network_builders/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network builders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/social_networks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Social networks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_9_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_9_3" id="__nav_7_1_9_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Builder functions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_7_1_9_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_9_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Builder functions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/numba_random/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Numba random
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/spatial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spatial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/spatial_kernels/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spatial kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/store/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_9_3_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_9_3_5" id="__nav_7_1_9_3_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters and constraints
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_7_1_9_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_9_3_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Filters and constraints
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/filters_and_constraints/constraints/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Constraints
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/filters_and_constraints/filters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_9_3_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_9_3_6" id="__nav_7_1_9_3_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geo
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_7_1_9_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_9_3_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Geo
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/geo/geo_neighbors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Geo neighbors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_9_3_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_9_3_7" id="__nav_7_1_9_3_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graph
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_7_1_9_3_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_9_3_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Graph
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/graph/clustered_graph/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Clustered graph
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/social_networks/builder_functions/graph/graph_relationship_builder/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graph relationship builder
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_10" id="__nav_7_1_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stats
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Stats
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/stats/print_world_examples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Print world examples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/stats/statmaker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Statmaker
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/stats/stats_people/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stats people
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/stats/stats_venues/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Stats venues
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_11" id="__nav_7_1_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Utils
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Utils
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/utils/attribute_access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attribute access
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/utils/debug_output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Debug output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/utils/path_resolver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Path resolver
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_12" id="__nav_7_1_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue child creator
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Venue child creator
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_child_creator/venue_child_creator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue child creator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_1_13" id="__nav_7_1_13_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue distributor
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_7_1_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_1_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Venue distributor
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/allocation_engine/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Allocation engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/base_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Base distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/fallbacks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fallbacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/filtering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Filtering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/matcher/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Matcher
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/multi_venue_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi venue distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/property_matching_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Property matching distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/reporting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reporting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/resident_linked_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resident linked distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/route_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Route distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/social_contact_visit_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Social contact visit distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/special_cases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Special cases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../may/venue_distributor/venue_distributor/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Venue distributor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-environment-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Environment Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Environment Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-a-conda-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option A — Conda (recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-venv-built-into-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option B — venv (built into Python)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-the-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying the environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#downloading-the-input-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Downloading the input data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output path
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-two-folders-you-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The Two Folders You Edit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-the-master-config-configs2021configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. The Master Config — configs/2021/config.yaml
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. The Master Config — configs/2021/config.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-geography-which-area-to-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 geography: — which area to build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-population-demographics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 population: — demographics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-venues-places-people-go" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 venues: — places people go
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-households-where-people-live" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 households: — where people live
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#45-timeline-the-order-things-happen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.5 timeline: — the order things happen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#46-relationship_pipeline-romantic_relationships-and-serialization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.6 relationship_pipeline:, romantic_relationships:, and serialization:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-the-other-yamls-what-each-folder-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. The Other YAMLs — what each folder controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. The Other YAMLs — what each folder controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-configs2021venuesvenues_configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 configs/2021/venues/venues_config.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-household-allocation-the-three-cooperating-yamls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Household allocation — the three cooperating YAMLs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.2 Household allocation — the three cooperating YAMLs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-is-the-pipeline-so-elaborate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why is the pipeline so elaborate?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#521-households_configyaml-categories-global-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.1 households_config.yaml — categories + global rules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#522-allocation_strategyyaml-the-ordered-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.2 allocation_strategy.yaml — the ordered pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#523-relationship_rulesyaml-internal-household-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.3 relationship_rules.yaml — internal household structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#524-what-youll-typically-edit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2.4 What you'll typically edit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-configs2021attributesyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 configs/2021/attributes/*.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-configs2021distributorsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 configs/2021/distributors/*.yaml
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.4 configs/2021/distributors/*.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#541-the-route-distributor-transit-lines-commuting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4.1 The route distributor — transit lines &amp; commuting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.4.1 The route distributor — transit lines &amp; commuting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-you-must-provide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you must provide
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#route_legscsv-format-the-file-the-distributor-consumes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        route_legs.csv format (the file the distributor consumes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-build-route_legscsv-the-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to build route_legs.csv (the algorithm)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-distributor-yaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The distributor YAML
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites-ordering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites &amp; ordering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#serialization-downstream-geometry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serialization &amp; downstream geometry
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-configs2021venue_child_creatorsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.5 configs/2021/venue_child_creators/*.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#56-configs2021relationshipsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.6 configs/2021/relationships/*.yaml
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5.6 configs/2021/relationships/*.yaml">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#social_networksyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        social_networks.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#romantic_relationshipsyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        romantic_relationships.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#57-configs2021serialization_configyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.7 configs/2021/serialization_config.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-the-data-folder-input-csvs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. The data/ Folder — input CSVs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. The data/ Folder — input CSVs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-required-column-conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Required column conventions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-householdscsv-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 households.csv format
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-adding-a-new-area-new-census-year" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Adding a new area / new census year
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-common-customisations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Common Customisations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-validating-a-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Validating a Run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-example-building-england-2021" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Example: building England 2021
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="user-guide-building-a-world-with-create_worldpy">User Guide — Building a World with <code>create_world.py</code></h1>
+<p>This guide is for users who want to <strong>generate a synthetic population world</strong> (e.g. England 2021) by editing configuration files and input data only — no Python edits required.</p>
+<p>The whole pipeline is driven by:</p>
+<ol>
+<li><strong>YAML config files</strong> in <code>configs/</code> — control <em>what</em> the simulation does and <em>how</em>.</li>
+<li><strong>CSV data files</strong> in <code>data/</code> — provide the <em>raw inputs</em> (geography, demographics, venues, etc.).</li>
+<li><strong>One command</strong> — <code>python create_world.py</code> — runs everything end-to-end and writes <code>world_state.h5</code>.</li>
+</ol>
+<hr />
+<h2 id="1-environment-setup">1. Environment Setup</h2>
+<p>We strongly recommend running this project in an <strong>isolated Python environment</strong> so its dependencies (numba, numpy, pandas, scipy, h5py, PyYAML) don't conflict with anything else on your machine. You only need to do this once.</p>
+<p>The project requires <strong>Python 3.13+</strong>. Pick whichever environment manager you already use:</p>
+<h3 id="option-a-conda-recommended">Option A — Conda (recommended)</h3>
+<pre><code class="language-bash"># Create the environment
+conda create -n MayEnv python=3.13 -y
+
+# Activate it (do this every time you open a new terminal)
+conda activate MayEnv
+
+# Install dependencies
+pip install -r requirements.txt
+</code></pre>
+<h3 id="option-b-venv-built-into-python">Option B — <code>venv</code> (built into Python)</h3>
+<pre><code class="language-bash"># Create the environment in a local .venv folder
+python3.13 -m venv .venv
+
+# Activate it (every new terminal)
+source .venv/bin/activate          # macOS / Linux
+.venv\Scripts\activate             # Windows PowerShell
+
+# Install dependencies
+pip install -r requirements.txt
+</code></pre>
+<h3 id="verifying-the-environment">Verifying the environment</h3>
+<p>After activation, run:</p>
+<pre><code class="language-bash">python --version          # should report 3.13.x
+pip list | grep -E &quot;numba|numpy|pandas|scipy|h5py|PyYAML&quot;
+</code></pre>
+<p>All six packages should appear at the versions pinned in <code>requirements.txt</code>. If anything is missing or mismatched, re-run <code>pip install -r requirements.txt</code>.</p>
+<blockquote>
+<p><strong>Reminder:</strong> activate the environment in every new terminal session <strong>before</strong> running <code>python create_world.py</code>. If you forget, you'll either get the wrong Python version or <code>ModuleNotFoundError</code>.</p>
+</blockquote>
+<h3 id="downloading-the-input-data">Downloading the input data</h3>
+<p>The repository ships with code and configs but <strong>not</strong> the bulky census/venue CSVs that live under <code>data/</code>. Fetch them with:</p>
+<pre><code class="language-bash">bash scripts/get_data.sh
+</code></pre>
+<p>This downloads <code>data_may.zip</code> from the project's data server, unpacks it into <code>data/</code>, and removes the zip. You only need to do this once (or whenever the upstream dataset is refreshed).</p>
+<hr />
+<h2 id="2-quick-start">2. Quick Start</h2>
+<p>Once the environment is active:</p>
+<pre><code class="language-bash"># Run with the default config (configs/2021/config.yaml)
+python create_world.py
+
+# Or point at a custom config
+python create_world.py --config configs/2021/config.yaml
+
+# Override the output filename
+python create_world.py --filename my_world.h5
+</code></pre>
+<p>CLI arguments:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code></td>
+<td><code>configs/2021/config.yaml</code></td>
+<td>Path to the master config file.</td>
+</tr>
+<tr>
+<td><code>--filename</code></td>
+<td><em>(see below)</em></td>
+<td>Output HDF5 filename. Overrides <code>serialization.filename</code> in config. Falls back to <code>world_state.h5</code> if neither is set.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="output-path">Output path</h3>
+<p>The output location is controlled by two keys in the <code>serialization:</code> section of <code>config.yaml</code>:</p>
+<pre><code class="language-yaml">serialization:
+  enabled: true
+  config_file: &quot;configs/2021/serialization_config.yaml&quot;
+  output_dir: &quot;output/2021&quot;   # directory; created automatically if absent
+  filename: &quot;world_state.h5&quot;  # filename within that directory
+</code></pre>
+<p>The default 2021 config writes to <strong><code>output/2021/world_state.h5</code></strong>. If you pass <code>--filename</code> on the command line it takes precedence over <code>serialization.filename</code> in the config; <code>output_dir</code> is always taken from the config.</p>
+<p>When the run finishes you will have:</p>
+<ul>
+<li><code>output/2021/world_state.h5</code> — the serialized world (people, geography, venues, relationships). <strong>This is the canonical output.</strong></li>
+<li><em>(opt-in)</em> debug CSVs — <code>household_allocations.csv</code>, <code>venue_allocations.csv</code>, <code>residence_venues.csv</code>, <code>unallocated_people.csv</code>. These are <strong>off by default</strong> because each one builds a DataFrame the size of the population/venue set, which can blow memory on country-scale runs. Enable them only for small worlds via <code>debug_outputs.enabled: true</code> in <code>configs/2021/config.yaml</code>.</li>
+</ul>
+<hr />
+<h2 id="3-the-two-folders-you-edit">3. The Two Folders You Edit</h2>
+<pre><code>MAY/
+├── configs/   ← edit YAMLs to change behaviour, scope, scenarios
+└── data/      ← edit CSVs to change the input statistics / locations
+</code></pre>
+<p>Everything else (<code>may/</code>, <code>world_specific_code/</code>, <code>create_world.py</code>) is the engine. <strong>You do not need to touch Python code.</strong></p>
+<p>The <code>configs/</code> folder contains subdirectories for each world scenario. You can edit any files under <code>configs/</code>. The rest of this guide focuses on <code>configs/2021/</code> (modern-day UK). See §5 for a description of what else is in <code>configs/</code>.</p>
+<hr />
+<h2 id="4-the-master-config-configs2021configyaml">4. The Master Config — <code>configs/2021/config.yaml</code></h2>
+<p><code>configs/2021/config.yaml</code> is the single entry point. It points to all the other YAMLs and tells the engine which steps to run. Open it and edit in place.</p>
+<p>It has seven top-level sections:</p>
+<h3 id="41-geography-which-area-to-build">4.1 <code>geography:</code> — which area to build</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data_dir</code></td>
+<td>Folder with <code>hierarchy.csv</code>, <code>coord_sgu.csv</code>, <code>coord_mgu.csv</code>.</td>
+</tr>
+<tr>
+<td><code>levels</code></td>
+<td>Names of the geographical hierarchy levels, smallest → largest. The default for England is <code>["SGU", "MGU", "LGU", "XLGU"]</code> (Output Area → MSOA → Local Authority → Region).</td>
+</tr>
+<tr>
+<td><code>load_all</code></td>
+<td><code>true</code> to build the entire dataset, <code>false</code> to use the filter below.</td>
+</tr>
+<tr>
+<td><code>filter.level</code></td>
+<td>Which level the filter applies to (<code>SGU</code>, <code>MGU</code>, <code>LGU</code>, <code>XLGU</code>).</td>
+</tr>
+<tr>
+<td><code>filter.codes</code></td>
+<td>Inline list of codes to include (small lists).</td>
+</tr>
+<tr>
+<td><code>filter.file</code></td>
+<td>Path to a text file with one code per line (large lists).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example — build all of England:</strong></p>
+<pre><code class="language-yaml">geography:
+  data_dir: &quot;data/geography&quot;
+  levels: [&quot;SGU&quot;, &quot;MGU&quot;, &quot;LGU&quot;, &quot;XLGU&quot;]
+  load_all: true
+</code></pre>
+<p><strong>Example — build only London:</strong></p>
+<pre><code class="language-yaml">geography:
+  load_all: false
+  filter:
+    level: XLGU
+    codes: [&quot;London&quot;]
+</code></pre>
+<h3 id="42-population-demographics">4.2 <code>population:</code> — demographics</h3>
+<pre><code class="language-yaml">population:
+  data_dir: &quot;data/population&quot;
+  demographics_male_file: &quot;demographics_male.csv&quot;
+  demographics_female_file: &quot;demographics_female.csv&quot;
+</code></pre>
+<p>The two CSVs are matrices: rows = SGU codes, columns = ages 0–99.</p>
+<h3 id="43-venues-places-people-go">4.3 <code>venues:</code> — places people go</h3>
+<pre><code class="language-yaml">venues:
+  data_dir: &quot;data/venues&quot;
+  config_file: &quot;configs/2021/venues/venues_config.yaml&quot;   # which venue types to load
+  export_file: &quot;venue_allocations.csv&quot;
+</code></pre>
+<p>See <strong>§5.1</strong> to enable/disable venue types and §6 for the CSVs they read.</p>
+<h3 id="44-households-where-people-live">4.4 <code>households:</code> — where people live</h3>
+<pre><code class="language-yaml">households:
+  data_dir: &quot;data/households&quot;
+  data_file: &quot;households.csv&quot;
+  config_file: &quot;configs/2021/households/households_config.yaml&quot;
+  strategy_file: &quot;configs/2021/households/allocation_strategy.yaml&quot;
+  export_file: &quot;household_allocations.csv&quot;
+</code></pre>
+<h3 id="45-timeline-the-order-things-happen">4.5 <code>timeline:</code> — the order things happen</h3>
+<p>The <code>timeline.steps</code> list is the <strong>execution order</strong> of the entire simulation. Each step is one of:</p>
+<ul>
+<li><code>type: attribute</code> — assign a property to people (e.g. ethnicity, comorbidities, work sector).</li>
+<li><code>type: distributor</code> — place people into venues (school, hospital, company, leisure).</li>
+<li><code>type: child_creator</code> — sub-divide a venue (school → classrooms; company → offices).</li>
+</ul>
+<p>Each step references a YAML in <code>configs/2021/attributes/</code>, <code>configs/2021/distributors/</code>, or <code>configs/2021/venue_child_creators/</code>.</p>
+<p><strong>To skip a step</strong>, comment it out. <strong>To reorder</strong>, move the YAML block. Order matters — for example, in the <strong>default</strong> pipeline, schools/universities are assigned <strong>before</strong> workplaces, because workplace assignment skips anyone who already has a <code>primary_activity</code>. This is just how things are wired right now; with enough tinkering across the related YAMLs (eligibility filters, attribute dependencies, <code>require_unassigned</code>, etc.) the steps can in principle be reordered to suit a different scenario — but the order documented here is what currently ships.</p>
+<h3 id="46-relationship_pipeline-romantic_relationships-and-serialization">4.6 <code>relationship_pipeline:</code>, <code>romantic_relationships:</code>, and <code>serialization:</code></h3>
+<p><strong><code>relationship_pipeline:</code></strong> builds social networks after venues are assigned. It takes a <code>relationships:</code> list; each entry points to a network config YAML. Set <code>enabled: false</code> to skip all networks.</p>
+<pre><code class="language-yaml">relationship_pipeline:
+  enabled: true
+  relationships:
+    - config: &quot;configs/2021/relationships/social_networks.yaml&quot;
+    # add further network configs here
+</code></pre>
+<p><strong><code>romantic_relationships:</code></strong> builds sexual orientation and partnership networks. Set <code>enabled: false</code> to skip.</p>
+<pre><code class="language-yaml">romantic_relationships:
+  enabled: true
+  config: &quot;configs/2021/relationships/romantic_relationships.yaml&quot;
+</code></pre>
+<p><strong><code>serialization:</code></strong> controls where the output HDF5 is written and which serialization config to use.</p>
+<pre><code class="language-yaml">serialization:
+  enabled: true
+  config_file: &quot;configs/2021/serialization_config.yaml&quot;
+  output_dir: &quot;output/2021&quot;
+  filename: &quot;world_state.h5&quot;
+</code></pre>
+<hr />
+<h2 id="5-the-other-yamls-what-each-folder-controls">5. The Other YAMLs — what each folder controls</h2>
+<pre><code>configs/
+├── 2021/                             # modern-day UK world (this guide)
+│   ├── config.yaml                       # master config (above)
+│   ├── serialization_config.yaml         # what gets exported to world_state.h5
+│   ├── venues/venues_config.yaml         # venue types catalogue
+│   ├── households/
+│   │   ├── households_config.yaml        # age categories + demotion/promotion rules
+│   │   ├── allocation_strategy.yaml      # household allocation order
+│   │   └── relationship_rules.yaml       # how people inside a household relate
+│   ├── attributes/                       # one YAML per attribute to assign
+│   ├── distributors/                     # one YAML per venue distributor
+│   ├── venue_child_creators/             # rules to break venues into sub-venues
+│   └── relationships/
+│       ├── social_networks.yaml
+│       └── romantic_relationships.yaml
+└── 1911/                             # example configs for building a portion of the UK in 1911
+    └── *.yaml                            # flat layout — no subfolders
+</code></pre>
+<p><code>configs/1911/</code> contains a flat set of YAML files for building a historical 1911 UK world. Its structure and keys differ from <code>configs/2021/</code>; it is provided as an example and is not covered further in this guide.</p>
+<p>The rest of this section documents each file under <code>configs/2021/</code>.</p>
+<h3 id="51-configs2021venuesvenues_configyaml">5.1 <code>configs/2021/venues/venues_config.yaml</code></h3>
+<p>Catalogue of all venue types. For each one:</p>
+<pre><code class="language-yaml">hospital:
+  enabled: true                       # set false to skip this venue type entirely
+  filename: medical/hospitals.csv     # path under data/venues/
+  is_residence: false                 # true =&gt; people live here
+  capacity_config:                    # optional: how to read capacity
+    total_capacity_column: &quot;n_beds&quot;
+</code></pre>
+<p>Some venues (care homes, boarding schools, dorms) include <code>attribute_capacities</code> that map CSV columns to age/sex slots — keep these aligned with your CSV columns.</p>
+<h3 id="52-household-allocation-the-three-cooperating-yamls">5.2 Household allocation — the three cooperating YAMLs</h3>
+<p>Household allocation is the most intricate part of the pipeline, so it gets its own walkthrough. Three files cooperate:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>configs/2021/households/households_config.yaml</code></td>
+<td>Defines <strong>what</strong> people are (age categories) and the global <strong>demotion/promotion</strong> safety nets.</td>
+</tr>
+<tr>
+<td><code>configs/2021/households/allocation_strategy.yaml</code></td>
+<td>Defines <strong>the ordered list of steps</strong> that places people into households (and into communal residences).</td>
+</tr>
+<tr>
+<td><code>configs/2021/households/relationship_rules.yaml</code></td>
+<td>Defines <strong>how members of a household relate to each other</strong> (parent–child age gaps, couple compatibility, multi-generational structure).</td>
+</tr>
+</tbody>
+</table>
+<h4 id="why-is-the-pipeline-so-elaborate">Why is the pipeline so elaborate?</h4>
+<p>The short answer: <strong>census data is heavily obfuscated at the smallest geographical level</strong>, and the two inputs we rely on don't have to be self-consistent.</p>
+<p>For disclosure-control reasons, the ONS perturbs counts in OA-level (SGU-level) tables before publication. The age-by-sex demographics in <code>demographics_male.csv</code> / <code>demographics_female.csv</code> are obfuscated independently of the household-composition counts in <code>households.csv</code>, and there is no constraint that the two add up. So in any given Output Area you can get mismatches like:</p>
+<blockquote>
+<p>The demographics for OA <code>E00000123</code> say there are 5 kids living there.
+But the household table for the same OA lists 5 households whose composition pattern is <code>"&gt;=2 &gt;=0 2 0"</code> — at least 2 kids each, i.e. ≥10 kids.</p>
+</blockquote>
+<p>A naive allocator handed those two files would either error out, leave 5 households empty, or invent 5 phantom kids. We don't want any of those: we want the resulting world to honour the <strong>demographics</strong> (the population we have is what we have) while staying as close as possible to the <strong>household structure</strong> (most kids really do live in two-adult households, etc.).</p>
+<p>That's exactly what the pipeline is built to do, and it's why it has so many phases:</p>
+<ul>
+<li><strong>Demotion</strong> (§5.2.1) handles the "household table demands more people than we've got" direction. If the OA only has 5 kids and demands ≥10, the engine relaxes patterns (<code>"&gt;=2 &gt;=0 2 0"</code> → <code>"1 &gt;=0 2 0"</code> → <code>"0 &gt;=0 2 0"</code>) until what's asked for matches what's available.</li>
+<li><strong>Promotion + <code>household_excess</code> + <code>household_overflow</code></strong> (§5.2.2 phases D–F) handle the opposite direction. If the OA has people left over (the household table didn't account for them), existing households are loosened (<code>"0 0 2 0"</code> → <code>"&gt;=0 &gt;=0 2 0"</code>) and topped up via probabilistic excess steps, with the final overflow rounds guaranteeing every person ends up housed.</li>
+<li><strong>Relationship rules + backtracking</strong> (§5.2.3) make sure that even after demotion/promotion, the resulting households remain demographically plausible — kids end up with adults of a parent-aged spread, couples have realistic age and sex compatibility, etc.</li>
+</ul>
+<p>The order matters: structurally constrained households (families with kids, multi-generational) are formed <strong>first</strong>, while there's a full population to choose from. Looser, flexible patterns are formed <strong>last</strong> so they can absorb whatever's left without breaking realism elsewhere. The phases below are arranged accordingly.</p>
+<p>Composition patterns appear throughout. They use the format <strong><code>Kids YoungAdults Adults OldAdults</code></strong>, where each slot is either an exact count (<code>2</code>) or a flexible bound (<code>&gt;=2</code>, <code>&gt;=0</code>). Examples:</p>
+<ul>
+<li><code>"&gt;=2 &gt;=0 2 0"</code> — 2 + kids, any young adults, exactly 2 adults, no elderly (a classic two-adult family).</li>
+<li><code>"0 0 0 2"</code> — 2 elderly, nothing else (an elderly couple).</li>
+<li><code>"0 &gt;=0 &gt;=0 &gt;=0"</code> — flexible adult-only household used as a catch-all.</li>
+</ul>
+<h4 id="521-households_configyaml-categories-global-rules">5.2.1 <code>households_config.yaml</code> — categories + global rules</h4>
+<p>Defaults shipped with the project:</p>
+<ul>
+<li><strong>Age categories.</strong> <code>Kids</code> 0–17, <code>Young Adults</code> 18–24, <code>Adults</code> 25–64, <code>Old Adults</code> 65+. These are the four slots in every composition pattern. Editing the <code>categories</code> list changes the age boundaries everywhere downstream.</li>
+<li><strong>Demotion</strong> (<code>demotion.enabled: true</code>, <code>max_attempts: 10</code>): if the population can't fill the requested pattern (e.g. not enough kids in this OA), the engine relaxes the pattern by reducing slots in priority order <strong>Kids → Young Adults → Old Adults → Adults</strong>. Adults are demoted last because the engine wants to preserve at least one adult for child supervision.</li>
+<li><strong>Promotion</strong> (<code>promotion.enabled: true</code>, <code>max_attempts: 4</code>): when there are <em>leftover</em> people, fixed slots like <code>0</code> are promoted to <code>&gt;=0</code> / <code>&gt;=1</code> so existing households can absorb them. Priority: <strong>Young Adults → Adults → Old Adults → Kids</strong> (kids are promoted last, again to keep supervision realistic).</li>
+<li><strong>Validation rule.</strong> Both demotion and promotion are gated by <em>"if Kids ≥ 1, then Adults ≥ 1"</em> — patterns that would leave children unsupervised are rejected.</li>
+</ul>
+<p>You'll typically only edit this file if you want different age bands or a new validation rule (e.g. "Old Adults ≥ 2 must have at least one Adult").</p>
+<h4 id="522-allocation_strategyyaml-the-ordered-pipeline">5.2.2 <code>allocation_strategy.yaml</code> — the ordered pipeline</h4>
+<p><code>enabled: true</code> plus a <code>steps:</code> list. The engine walks the list <strong>top to bottom</strong>; earlier steps get first pick of the population pool. There are <strong>five step types</strong> in use today:</p>
+<table>
+<thead>
+<tr>
+<th><code>type:</code></th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>household</code></td>
+<td>Create new households matching a pattern, optionally invoking a <code>rule:</code> from <code>relationship_rules.yaml</code> to enforce internal structure.</td>
+</tr>
+<tr>
+<td><code>household_excess</code></td>
+<td>Add extra members of a given category into <em>existing</em> households matching <code>target_patterns</code>, with a probabilistic <code>add_distribution</code> (poisson / weighted / normal) and <code>constraints</code> capping size.</td>
+</tr>
+<tr>
+<td><code>household_promotion</code></td>
+<td>Loosen an existing household's pattern (e.g. <code>"0 0 2 0"</code> → <code>"&gt;=0 &gt;=0 2 0"</code>) so it can accept new categories.</td>
+</tr>
+<tr>
+<td><code>household_overflow</code></td>
+<td>"Final desperation" round — distribute <em>all</em> remaining people across listed <code>target_patterns</code> weighted by <code>pattern_bias</code>.</td>
+</tr>
+<tr>
+<td><code>venue</code></td>
+<td>Send eligible people to communal residences (boarding schools, care homes, student dorms). Uses <code>attribute_aware</code> allocation that respects the age/sex slot capacities defined in <code>venues_config.yaml</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Some useful per-step knobs you'll see repeatedly:
+- <code>refresh_pools: true</code> — re-scan the population for who is still unallocated before this step. Used after venue steps so household steps don't try to place residents who are now in a care home.
+- <code>assumption:</code> (on a pattern) — when a pattern is open-ended (<code>"&gt;=2 &gt;=0 &gt;=0 &gt;=0"</code>), the engine assumes a concrete shape for sizing purposes (<code>"2 0 1 1"</code>).
+- <code>demotion_rules:</code> — if a step's pattern demotes mid-allocation, switch to a different relationship rule (e.g. a two-adult family rule demotes to a single-adult family rule).</p>
+<p><strong>The default sequence ships in six broad phases. This is what currently runs:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Steps (in order)</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A. Core families</strong></td>
+<td>1a Two-adult families w/ kids · 1b Single-parent families w/ kids · 2 Multi-generational households · 3a/3b Families w/ young adults (no kids)</td>
+<td>Build the most structurally-constrained households first, while there's a full population to choose from.</td>
+</tr>
+<tr>
+<td><strong>B. Couples / singles</strong></td>
+<td>4a Elderly couples · 4b Elderly singles · 5a Adult couples · 5b Adult singles · 6 Young-adult pairs</td>
+<td>Pair off and place remaining adults / elderly.</td>
+</tr>
+<tr>
+<td><strong>C. Communal residences</strong></td>
+<td>Kids → Boarding schools · Elderly (50+) → Care homes (<code>oldest_first</code>) · Young adults (16+) → Student dorms · 10 Multi-elderly households (<code>refresh_pools: true</code>)</td>
+<td>These <code>venue</code> steps move people <em>out</em> of the household pool. The multi-elderly step refreshes pools afterwards so we don't try to re-place care-home residents.</td>
+</tr>
+<tr>
+<td><strong>D. Top up existing households</strong> (<code>household_excess</code>)</td>
+<td>11 Extra kids → kid-families · 11 More YA → YA households · 12a/12b YA → adult families w/o kids · 13 YA → families w/ kids · 14 YA → multi-gen · 15 Old Adults → multi-gen · 16 More elderly → multi-elderly · 17 More adults → multi-gen</td>
+<td>Inflate already-built households using poisson-distributed counts to mop up surplus people while respecting size constraints (<code>category_sum max: ...</code>).</td>
+</tr>
+<tr>
+<td><strong>E. Flexible households</strong></td>
+<td>18 Flexible households (<code>pattern: "0 &gt;=0 &gt;=0 &gt;=0"</code>, <code>max_household_size: 10</code>) · then add Adults / Old Adults / YA to them</td>
+<td>A general-purpose adult-only household pattern that absorbs whoever's left.</td>
+</tr>
+<tr>
+<td><strong>F. Final cleanup</strong></td>
+<td><code>household_promotion</code> (couples accept young adults; singles become multi-adult; elderly singles → couples) · <code>household_overflow</code> for remaining YA / Adults / Old Adults · final <code>Promote and allocate all remaining</code></td>
+<td>Last-ditch passes that <em>will</em> place everyone, even if it means stretching existing patterns.</td>
+</tr>
+</tbody>
+</table>
+<p>If a population is balanced, very few steps in Phase F need to fire. If it's unbalanced, the demotion/promotion logic in §5.2.1 plus these final steps make sure no person goes unallocated.</p>
+<p>To <strong>change the order</strong>, reorder the <code>steps:</code> list. To <strong>drop a step</strong>, comment its block. To <strong>tighten</strong> allocations, lower <code>max_household_size</code>, lower <code>category_sum max</code>, or narrow <code>add_distribution.max</code>.</p>
+<h4 id="523-relationship_rulesyaml-internal-household-structure">5.2.3 <code>relationship_rules.yaml</code> — internal household structure</h4>
+<p>Steps that say <code>rule: "..."</code> look up that rule here. The shipped rules:</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th>Used by</th>
+<th>Constraints enforced</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Two-adult family with kids</code></td>
+<td>Step 1a</td>
+<td>Kids vs. Adults age gap 16–50 (preferred normal(μ=32, σ=6)); 2 Adults form a romantic pair (≈3-yr age diff, std 5, max 19).</td>
+</tr>
+<tr>
+<td><code>Single-adult family with kids</code></td>
+<td>Step 1b + demoted 1a</td>
+<td>Same parent–child age gap; no pair constraint (single parent).</td>
+</tr>
+<tr>
+<td><code>Two-adult family with young adults</code></td>
+<td>Step 3a</td>
+<td>Same as 1a but Adults vs. Young Adults.</td>
+</tr>
+<tr>
+<td><code>Single-adult family with young adults</code></td>
+<td>Step 3b + demoted 3a</td>
+<td>Single-parent variant.</td>
+</tr>
+<tr>
+<td><code>Adult pair</code></td>
+<td>Step 5a</td>
+<td>Two compatible adults; flagged as romantic couple.</td>
+</tr>
+<tr>
+<td><code>Elderly pair</code></td>
+<td>Step 4a</td>
+<td>Two compatible elderly; flagged as romantic couple.</td>
+</tr>
+<tr>
+<td><code>Add young adults to existing family</code></td>
+<td>Steps 12a/12b/13/14</td>
+<td>New YA must be 16–50 yrs younger than existing adults.</td>
+</tr>
+<tr>
+<td><code>Multi-generational household</code></td>
+<td>Steps 2, 15, 17</td>
+<td>Three age tiers: Kids ↔ Adults gap (μ=32, σ=6), Adults ↔ Old Adults gap (μ=30, σ=7), 2-Adult pair sex/age compatibility.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Two important data-driven mechanisms:</strong></p>
+<ol>
+<li><strong>Same-sex pairing per area.</strong> The <code>same_category_sources:</code> block at the top of <code>relationship_rules.yaml</code> reads <code>data/population/sexual_orientation/orientation_by_msoa_normalized.csv</code> (per-MSOA ONS marginals) and computes <code>P(same-sex couple) = homosexual + 0.5 * bisexual</code> per MSOA. Couple-forming rules use this live, falling back to <code>same_category_probability_fallback: 0.05</code> only when an MSOA isn't in the table.</li>
+<li><strong><code>creates_romantic_couple: true</code>.</strong> Rules with this flag mark pairs as cohabiting couples; the romantic relationships step downstream picks them up automatically (rather than re-pairing them).</li>
+</ol>
+<p>The selection engine uses <strong>backtracking</strong> (<code>max_backtracks: 3</code>) before resorting to demotion: if a later role can't be filled, it retries with a different first-role person, then if all backtracks fail it falls back on the demotion ladder from §5.2.1.</p>
+<h4 id="524-what-youll-typically-edit">5.2.4 What you'll typically edit</h4>
+<table>
+<thead>
+<tr>
+<th>If you want to…</th>
+<th>File / key</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Change age band cut-offs</td>
+<td><code>households_config.yaml</code> → <code>categories</code></td>
+</tr>
+<tr>
+<td>Allow children alone</td>
+<td><code>households_config.yaml</code> → remove the <code>Kids require adult supervision</code> validation rule</td>
+</tr>
+<tr>
+<td>Re-order the allocation pipeline</td>
+<td><code>allocation_strategy.yaml</code> → reorder <code>steps</code></td>
+</tr>
+<tr>
+<td>Skip a phase entirely</td>
+<td>comment out the relevant blocks in <code>allocation_strategy.yaml</code></td>
+</tr>
+<tr>
+<td>Cap household sizes more tightly</td>
+<td><code>allocation_strategy.yaml</code> → <code>max_household_size</code> and per-step <code>constraints</code></td>
+</tr>
+<tr>
+<td>Tweak parent–child age realism</td>
+<td><code>relationship_rules.yaml</code> → <code>preferred_distribution</code> on the relevant rule</td>
+</tr>
+<tr>
+<td>Change couple age gap</td>
+<td><code>relationship_rules.yaml</code> → <code>pair_matching.numerical_attribute</code></td>
+</tr>
+<tr>
+<td>Change same-sex couple probability</td>
+<td><code>relationship_rules.yaml</code> → <code>same_category_sources</code> formula, or the per-rule <code>same_category_probability_fallback</code> if you have no per-area data</td>
+</tr>
+</tbody>
+</table>
+<h3 id="53-configs2021attributesyaml">5.3 <code>configs/2021/attributes/*.yaml</code></h3>
+<p>One file per attribute the simulation assigns:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Assigns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>attribute_assignment.yaml</code></td>
+<td>Ethnicity (with parent → child inheritance rules).</td>
+</tr>
+<tr>
+<td><code>comorbidity_assignment.yaml</code></td>
+<td>Health comorbidities, by age × sex × ethnicity × region.</td>
+</tr>
+<tr>
+<td><code>workplace_assignment.yaml</code></td>
+<td>Workplace LGU + work mode (Home / Hybrid / Normal).</td>
+</tr>
+<tr>
+<td><code>workplace_sgu_assignment.yaml</code></td>
+<td>Workplace SGU within the chosen LGU.</td>
+</tr>
+<tr>
+<td><code>work_sector_assignment.yaml</code></td>
+<td>Industry sector (A, Q, P …).</td>
+</tr>
+</tbody>
+</table>
+<p>Each YAML declares its <strong>dependencies</strong> (e.g. comorbidities require ethnicity), <strong>filters</strong> (who is eligible), and <strong>data sources</strong> (which CSV provides the probabilities).</p>
+<h3 id="54-configs2021distributorsyaml">5.4 <code>configs/2021/distributors/*.yaml</code></h3>
+<p>One file per venue distribution step. Each tells the engine:</p>
+<ul>
+<li>which venue type to fill (<code>venue_type</code>),</li>
+<li>which <code>activity_map_key</code> to set on the person (<code>primary_activity</code>, <code>medical</code>, <code>leisure</code>, …),</li>
+<li>eligibility filters,</li>
+<li>selection logic (distance, capacity, attribute matching),</li>
+<li>subset assignment (e.g. school → "student" subset).</li>
+</ul>
+<p>Common distributors:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>school_distributor.yaml</code></td>
+<td>Assigns children to schools.</td>
+</tr>
+<tr>
+<td><code>university_distributor.yaml</code></td>
+<td>Assigns students to universities.</td>
+</tr>
+<tr>
+<td><code>company_distributor.yaml</code></td>
+<td>Assigns working-age adults to companies.</td>
+</tr>
+<tr>
+<td><code>hospital_distributor.yaml</code></td>
+<td>Assigns people to a registered hospital (non-resident).</td>
+</tr>
+<tr>
+<td><code>multi_venue_distributor.yaml</code></td>
+<td>Assigns leisure venues (cinemas, gyms, pubs, etc.).</td>
+</tr>
+<tr>
+<td><code>specific_workplace_hospitals_distributor.yaml</code></td>
+<td>Q-sector workers → hospitals as workplace.</td>
+</tr>
+<tr>
+<td><code>specific_workplace_care_homes_distributor.yaml</code></td>
+<td>Q-sector workers → care homes as workplace.</td>
+</tr>
+<tr>
+<td><code>specific_workplace_classrooms_distributor.yaml</code></td>
+<td>P-sector workers → schools as workplace.</td>
+</tr>
+<tr>
+<td><code>care_home_visits_distributor.yaml</code></td>
+<td>Links households of care home residents to visit that care home as a leisure activity.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="541-the-route-distributor-transit-lines-commuting">5.4.1 The <code>route</code> distributor — transit lines &amp; commuting</h4>
+<p>The <code>route</code> distributor (<code>distributor_type: "route"</code>) is how MAY puts people onto
+<strong>shared transport lines</strong> (train / tube / bus) and, more generally, onto any
+origin→destination journey made of one or more <strong>legs</strong>. Commuting is the built-in
+use-case, but the distributor is generic: school buses, ferries, or freight routes
+plug in the same way — only the YAML and the input CSV change.</p>
+<p><strong>Key idea — it is a lookup, not a router.</strong> The distributor does <strong>no</strong> pathfinding
+at world-build time. For each eligible person it forms a key <code>(origin, destination,
+mode)</code> and looks that key up in a <strong>precomputed routing table</strong> you supply. If the
+key is found, the person is placed as a rider on <strong>every leg already listed</strong> for
+that journey; if not, a fallback property is applied (a "miss"). This is what lets
+it scale to tens of millions of agents — all the route-finding happens once,
+offline, before the run.</p>
+<h5 id="what-you-must-provide">What you must provide</h5>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Required?</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>route_legs.csv</code></td>
+<td><strong>Yes</strong> — the distributor reads this</td>
+<td>The itinerary table: one row per leg, keyed by <code>(origin, destination, mode)</code>.</td>
+</tr>
+<tr>
+<td><code>routes.csv</code></td>
+<td>Optional</td>
+<td>A human-readable per-journey summary. <strong>Not read by the distributor</strong> — keep it for your own QA if you like.</td>
+</tr>
+<tr>
+<td>A line→stops mapping</td>
+<td>Only if you want geometry</td>
+<td>Ordered stops per line. <strong>Not used by the distributor</strong>, but needed downstream (e.g. to draw the lines on a map). See note at the end.</td>
+</tr>
+</tbody>
+</table>
+<p>Put the CSVs anywhere under <code>data/</code> and point the YAML at them (paths are resolved
+relative to the project root). The conventional location is <code>data/activities/commute/</code>.</p>
+<h5 id="route_legscsv-format-the-file-the-distributor-consumes"><code>route_legs.csv</code> format (the file the distributor consumes)</h5>
+<p>One row per leg. <strong>Required columns</strong> (the distributor errors if any are missing):</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>origin_mgu</code></td>
+<td>Journey origin, an <strong>MGU</strong> name/code. Must match <code>GeographicalUnit.name</code>.</td>
+</tr>
+<tr>
+<td><code>dest_mgu</code></td>
+<td>Journey destination, an <strong>MGU</strong> name/code.</td>
+</tr>
+<tr>
+<td><code>mode_class</code></td>
+<td>The transport class (<code>train</code>, <code>tube</code>, <code>bus</code>, …). Matched against the person's mode (see <code>class_source</code>/<code>class_map</code>).</td>
+</tr>
+<tr>
+<td><code>leg_idx</code></td>
+<td>0-based leg order within the journey. Rows are sorted by this.</td>
+</tr>
+<tr>
+<td><code>line_id</code></td>
+<td>Stable identifier of the line ridden on this leg. <strong>Becomes the venue name</strong> (<code>/metadata/names/venues</code>), so one venue is materialised per distinct <code>line_id</code>.</td>
+</tr>
+<tr>
+<td><code>board_mgu</code></td>
+<td>Where the rider boards this leg (an MGU).</td>
+</tr>
+<tr>
+<td><code>alight_mgu</code></td>
+<td>Where the rider alights this leg.</td>
+</tr>
+</tbody>
+</table>
+<p>Plus any <strong>per-leg metadata columns</strong> you reference in the YAML's <code>leg_metadata</code>
+(the commute configs use <code>t_board_min</code>, <code>t_alight_min</code> — minutes from start of day):</p>
+<pre><code class="language-csv">origin_mgu,dest_mgu,mode_class,leg_idx,line_id,board_mgu,alight_mgu,t_board_min,t_alight_min
+E02000001,E02000016,train,0,three_bridges_west_hampstead_thameslink_0911,E02000001,E02000192,63,65
+E02000001,E02000016,train,1,reading_abbey_wood_el_0739,E02000192,E02000878,58,60
+</code></pre>
+<p>A journey with two rows like the above (<code>leg_idx</code> 0 and 1) is a <strong>two-leg trip with
+one interchange</strong>. The keying is <strong>only</strong> <code>(origin_mgu, dest_mgu, mode_class)</code> — so
+every person travelling that O→D by that mode rides the <strong>identical</strong> leg sequence
+(no per-person variation). Origin/destination are at <strong>MGU</strong> granularity, even though
+people live and work at finer (SGU) units — the distributor rolls each up to its MGU
+ancestor before the lookup (see <code>origin_source</code>/<code>destination_source</code> below).</p>
+<h5 id="how-to-build-route_legscsv-the-algorithm">How to build <code>route_legs.csv</code> (the algorithm)</h5>
+<p>You produce this table however you like; the distributor only cares about the
+columns above. The reference approach used to generate the shipped commute tables is
+a standard <strong>shortest-path over a transit graph</strong>, and you can reproduce it with any
+graph library (e.g. <code>scipy.sparse.csgraph</code> or <code>networkx</code>):</p>
+<ol>
+<li><strong>Define lines.</strong> For each line, list its stops in order, map each stop to an MGU,
+   and record a cumulative time offset per stop (from a timetable, or estimated from
+   inter-stop distance).</li>
+<li><strong>Build a graph.</strong> Create <em>stop-nodes</em> <code>(line, stop)</code> and one <em>hub-node</em> per MGU.
+   Add <strong>ride edges</strong> between consecutive stops on a line (weight = travel time) and
+   <strong>transfer edges</strong> between a stop-node and its MGU hub (weight = a transfer
+   penalty). The hub-per-MGU keeps transfers cheap to model (O(lines), not O(lines²)).</li>
+<li><strong>Shortest path per (origin, mode).</strong> For each origin MGU, run a multi-source
+   Dijkstra from <em>all</em> that MGU's stop-nodes at once (so the <strong>first boarding is
+   free</strong> and only <strong>transfers pay the penalty</strong>). Every destination MGU is reached
+   at its hub; walk the predecessor tree back and <strong>split the node path into legs at
+   hub crossings</strong> — a leg is a maximal run of stops on one line.</li>
+<li><strong>Cap and emit.</strong> Drop journeys over a max time or max leg count (the shipped
+   tables use ≤120 min, ≤4 legs), then write one <code>route_legs.csv</code> row per leg.</li>
+</ol>
+<p>Run this <strong>once per mode class</strong> (keep <code>train</code>/<code>tube</code>/<code>bus</code> graphs separate) and
+concatenate the results into a single <code>route_legs.csv</code> with the right <code>mode_class</code>.</p>
+<h5 id="the-distributor-yaml">The distributor YAML</h5>
+<p>One file per mode class (so each instance filters to one <code>class_filter</code>). Annotated
+example (<code>configs/2021/distributors/route_commute_train.yaml</code>):</p>
+<pre><code class="language-yaml">distributor_type: &quot;route&quot;
+distributor_name: &quot;route_commute_train&quot;
+
+activity_map_key: &quot;commute&quot;      # activity bucket set on the person
+leg_venue_type:   &quot;train_line&quot;   # venue type created per line_id (must be a known venue type)
+leg_subset_key:   &quot;rider&quot;        # subset each rider is added to on every leg venue
+
+routes_table: &quot;data/activities/commute/routes.csv&quot;      # optional summary (unused at runtime)
+legs_table:   &quot;data/activities/commute/route_legs.csv&quot;  # REQUIRED — the table read above
+
+# How to form the routing-table key from each person:
+origin_source:        # -&gt; origin_mgu
+  type: &quot;ancestor&quot;
+  from: &quot;geographical_unit&quot;          # the person's residence unit (an SGU)...
+  level: &quot;MGU&quot;                        # ...rolled up to its MGU ancestor
+destination_source:   # -&gt; dest_mgu
+  type: &quot;ancestor&quot;
+  from: &quot;properties.workplace_sgu&quot;   # the workplace unit set by workplace assignment...
+  level: &quot;MGU&quot;                        # ...rolled up to MGU
+
+# How to form mode_class, and which class this instance handles:
+class_source: &quot;properties.commute_mode&quot;  # person property holding the mode
+class_filter: &quot;train&quot;                     # only act on people with commute_mode == &quot;train&quot;
+class_map: { train: &quot;train&quot; }             # person value -&gt; mode_class in the CSV (identity here)
+
+require_properties: [&quot;commute_mode&quot;]      # skip people missing these properties
+
+# Per-leg CSV columns to store on Subset.member_metadata, keyed by field name:
+leg_metadata:
+  t_board_min:  &quot;t_board_min&quot;
+  t_alight_min: &quot;t_alight_min&quot;
+
+on_miss:                 # applied when (origin,dest,mode) isn't in the table
+  set:
+    commute_mode: &quot;car_solo&quot;
+</code></pre>
+<p>Field reference:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>distributor_type</code></td>
+<td>Must be <code>"route"</code>.</td>
+</tr>
+<tr>
+<td><code>leg_venue_type</code></td>
+<td>Venue type materialised once per <code>line_id</code>. Must be a venue type the world knows (e.g. <code>train_line</code>, <code>tube_line</code>, <code>bus_line</code>). The line venue is attached to a rider's residence MGU purely for stable HDF5 partitioning — its <code>geo_unit</code> is <strong>not</strong> the line's location.</td>
+</tr>
+<tr>
+<td><code>leg_subset_key</code></td>
+<td>Subset every rider is added to on each leg venue (e.g. <code>rider</code>).</td>
+</tr>
+<tr>
+<td><code>origin_source</code> / <code>destination_source</code></td>
+<td>Recipe to derive the O/D key. <code>type: ancestor</code> reads a unit (<code>from: geographical_unit</code> or <code>from: properties.&lt;name&gt;</code>) and rolls it up to <code>level</code>. <code>type: property</code> uses a raw property string.</td>
+</tr>
+<tr>
+<td><code>class_source</code></td>
+<td>Person attribute/property giving the transport class.</td>
+</tr>
+<tr>
+<td><code>class_filter</code></td>
+<td>Run this instance only for people whose class equals this. Run one distributor per class.</td>
+</tr>
+<tr>
+<td><code>class_map</code></td>
+<td>Maps the person's class value to the <code>mode_class</code> string in the CSV (identity if omitted).</td>
+</tr>
+<tr>
+<td><code>require_properties</code></td>
+<td>People missing any of these are skipped entirely (not even counted as misses).</td>
+</tr>
+<tr>
+<td><code>leg_metadata</code></td>
+<td><code>{ field_name: csv_column }</code> — per-leg numbers copied onto <code>Subset.member_metadata[person.id]</code>.</td>
+</tr>
+<tr>
+<td><code>on_miss.set</code></td>
+<td>Property overrides applied when the key isn't found (the fallback, e.g. send unrouted commuters to <code>car_solo</code>).</td>
+</tr>
+</tbody>
+</table>
+<h5 id="prerequisites-ordering">Prerequisites &amp; ordering</h5>
+<p>The <code>route</code> distributor only works if, by the time it runs, each eligible person
+already has the properties its key needs. For commuting that means the timeline must
+run, <strong>in order</strong>:</p>
+<ol>
+<li><strong>Workplace assignment</strong> — sets <code>workplace_sgu</code> (the destination unit).</li>
+<li><strong>Commute-mode assignment</strong> (<code>attributes/commute_mode_assignment.yaml</code>) — sets
+   <code>commute_mode</code> (the class).</li>
+<li><strong>The <code>route</code> distributors</strong> — one <code>type: distributor</code> step per mode class.</li>
+</ol>
+<p>In <code>config.yaml</code> the commute block looks like:</p>
+<pre><code class="language-yaml">    - type: attribute
+      config: &quot;configs/2021/attributes/commute_mode_assignment.yaml&quot;
+    - type: distributor
+      config: &quot;configs/2021/distributors/route_commute_train.yaml&quot;
+    - type: distributor
+      config: &quot;configs/2021/distributors/route_commute_tube.yaml&quot;
+    - type: distributor
+      config: &quot;configs/2021/distributors/route_commute_bus.yaml&quot;
+</code></pre>
+<h5 id="serialization-downstream-geometry">Serialization &amp; downstream geometry</h5>
+<p>Each line venue is serialized with its <code>line_id</code> as the venue <strong>name</strong>, and the
+per-leg <code>t_board_min</code>/<code>t_alight_min</code> land on the membership metadata side-table in
+<code>world_state.h5</code>. To know <em>who rides each line</em>, read the line venue's <code>rider</code>
+subset; to reconstruct a person's full journey, order their legs by <code>t_board_min</code>.</p>
+<p>The distributor stores <strong>board/alight MGUs</strong>, not the stops in between. If you need
+the drawable shape of a line (a polyline through its stations), keep your line→stops
+mapping (<code>line_id, position, node_mgu, name, …</code>) alongside the world and join on
+<code>line_id</code> at render time — slicing each line's stop sequence between a rider's
+<code>board_mgu</code> and <code>alight_mgu</code> gives exactly the segment they travel.</p>
+<h3 id="55-configs2021venue_child_creatorsyaml">5.5 <code>configs/2021/venue_child_creators/*.yaml</code></h3>
+<p>Break a parent venue into children. Examples: <code>school_classrooms.yaml</code> (school → classrooms by age), <code>university_uni_years.yaml</code> (university → year groups), <code>company_offices.yaml</code> (company → offices by sizeband).</p>
+<h3 id="56-configs2021relationshipsyaml">5.6 <code>configs/2021/relationships/*.yaml</code></h3>
+<h4 id="social_networksyaml"><code>social_networks.yaml</code></h4>
+<p>Defines one or more social networks to build. The file contains a top-level <code>networks:</code> list; each entry is one network. The 2021 config builds three networks that all write into the same <code>friendships</code> storage key, so contacts across networks are automatically deduplicated:</p>
+<pre><code class="language-yaml">networks:
+  - name: activity_peers
+    network_type: activity_peers      # same venue, similar age
+    pool_type: activity
+    pool:
+      activity: primary_activity
+    algorithm: random
+    mean_count: 3                     # mean contacts per person from this network
+    degree_variants:
+      - probability: 0.10
+        count: 6                      # 10% of people get double contacts
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 5
+
+  - name: geographic_local
+    network_type: intra_geo_unit      # same SGU (Output Area)
+    pool_type: geographic
+    pool:
+      level: SGU
+    algorithm: random
+    mean_count: 2
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 10
+
+  - name: geographic_community
+    network_type: intra_geo_unit      # same MGU (MSOA)
+    pool_type: geographic
+    pool:
+      level: MGU
+    algorithm: random
+    mean_count: 1
+    storage_key: friendships
+    constraints:
+      - type: numerical_attribute_difference
+        attribute: age
+        max_difference: 15
+</code></pre>
+<p>Key knobs per network entry:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>network_type</code></td>
+<td>Pool selection strategy. <code>activity_peers</code>: same venue. <code>intra_geo_unit</code>: same geographic unit. Other types (e.g. <code>spatial_social_network</code>, <code>local_social_network</code> with Watts-Strogatz) exist for other world configs.</td>
+</tr>
+<tr>
+<td><code>algorithm</code></td>
+<td>Contact-sampling algorithm. <code>random</code>: uniform random draw. <code>watts_strogatz</code>: clustered small-world graph (used in other configs).</td>
+</tr>
+<tr>
+<td><code>mean_count</code></td>
+<td>Mean number of contacts per person from this network.</td>
+</tr>
+<tr>
+<td><code>degree_variants</code></td>
+<td>Optional list of <code>{probability, count}</code> overrides — gives a subset of people a different contact count.</td>
+</tr>
+<tr>
+<td><code>storage_key</code></td>
+<td>Where contacts are stored on the person. Multiple networks sharing the same key are merged (deduplicated).</td>
+</tr>
+<tr>
+<td><code>constraints</code></td>
+<td>List of filters on who can be paired. <code>numerical_attribute_difference</code> enforces a max gap on a numeric attribute (e.g. age).</td>
+</tr>
+</tbody>
+</table>
+<p>To <strong>add a new network</strong>, append a new entry to <code>networks:</code>. To <strong>change total contacts</strong>, adjust <code>mean_count</code> across entries. To <strong>skip social networks entirely</strong>, set <code>relationship_pipeline.enabled: false</code> in <code>config.yaml</code>.</p>
+<h4 id="romantic_relationshipsyaml"><code>romantic_relationships.yaml</code></h4>
+<p>Controls sexual orientation assignment and partnership formation. Key sections:</p>
+<ul>
+<li><code>data_sources:</code> — for UK runs, reads ONS-derived prevalence and per-MSOA orientation marginals to compute orientation probabilities. Worlds without UK MSOA codes should omit this block and use the <code>probabilities:</code> fallback below.</li>
+<li><code>sexual_orientations.probabilities:</code> — fallback national-level orientation probabilities by sex, used when <code>data_sources</code> is absent or an MSOA isn't in the table.</li>
+<li><code>sexual_orientations.age_adjustments:</code> — multiplicative tweaks to orientation probabilities by age band.</li>
+<li><code>sexual_orientations.compatibility:</code> — which orientations can pair with which.</li>
+<li><code>storage:</code> — keys under which orientation and relationship status are stored on the person.</li>
+<li><code>diagnostics.verbose:</code> — set <code>true</code> to log detailed national vs. empirical orientation comparisons. Leave <code>false</code> for production runs.</li>
+</ul>
+<h3 id="57-configs2021serialization_configyaml">5.7 <code>configs/2021/serialization_config.yaml</code></h3>
+<p>Controls <strong>what is written to <code>world_state.h5</code></strong>. Edit to:</p>
+<ul>
+<li>Add/remove fields under <code>population.properties</code> (e.g. enable <code>work_sector</code>).</li>
+<li>Add/remove fields under each <code>venues.types.*.properties</code>.</li>
+<li>Toggle coordinates, hierarchy export, compression level.</li>
+</ul>
+<p>If you add a new property (e.g. <code>income</code>) to people via attribute YAMLs, you must also list it here for it to appear in the HDF5 file.</p>
+<hr />
+<h2 id="6-the-data-folder-input-csvs">6. The <code>data/</code> Folder — input CSVs</h2>
+<pre><code>data/
+├── geography/
+│   ├── hierarchy.csv          # SGU,MGU,LGU,XLGU
+│   ├── coord_sgu.csv
+│   └── coord_mgu.csv
+├── population/
+│   ├── demographics_male.csv  # rows=SGU, cols=ages 0–99
+│   ├── demographics_female.csv
+│   ├── comorbidities/
+│   ├── ethnicity/
+│   ├── leisure_participation/
+│   └── sexual_orientation/
+├── households/
+│   ├── households.csv         # geo_unit + columns of composition patterns
+│   └── household_allocations.csv  (output)
+├── venues/
+│   ├── primary_activities/    # Schools_EW.csv, uk_universities.csv, companies.csv
+│   ├── medical/hospitals.csv
+│   ├── residences/            # care_homes.csv, boarding_schools.csv, student_dorms.csv
+│   ├── leisure/               # cinemas.csv, groceries.csv, gyms.csv, pubs.csv
+│   └── venue_allocations.csv  (output)
+└── activities/
+    └── work/                  # commuting flows + sex × industry × LAD
+</code></pre>
+<h3 id="61-required-column-conventions">6.1 Required column conventions</h3>
+<p>Every venue CSV must include:</p>
+<ul>
+<li><code>geo_unit</code> — geographical code matching one of the levels in <code>hierarchy.csv</code>.</li>
+<li><code>name</code> — unique within the file.</li>
+<li><code>latitude</code>, <code>longitude</code> — optional but used by distance-based distributors.</li>
+</ul>
+<p>Beyond that, columns must match what the relevant YAML expects. For example:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Required by</th>
+<th>Required columns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Schools_EW.csv</code></td>
+<td><code>school_distributor.yaml</code></td>
+<td><code>StatutoryLowAge</code>, <code>StatutoryHighAge</code>, <code>Gender</code>, <code>SchoolCapacity</code></td>
+</tr>
+<tr>
+<td><code>uk_universities.csv</code></td>
+<td><code>university_distributor.yaml</code></td>
+<td><code>n_students</code></td>
+</tr>
+<tr>
+<td><code>companies.csv</code></td>
+<td><code>company_distributor.yaml</code></td>
+<td><code>industry_code</code>, <code>sizeband</code>, <code>employee_count</code></td>
+</tr>
+<tr>
+<td><code>hospitals.csv</code></td>
+<td><code>hospital_distributor.yaml</code></td>
+<td><code>n_beds</code>, <code>estimated_staff</code></td>
+</tr>
+<tr>
+<td><code>care_homes.csv</code></td>
+<td><code>venues_config.yaml</code> (care_home)</td>
+<td><code>capacity</code>, <code>age_50_64_male</code>, … <code>age_95_plus_female</code></td>
+</tr>
+<tr>
+<td><code>boarding_schools.csv</code></td>
+<td><code>venues_config.yaml</code> (boarding_school)</td>
+<td><code>n_total</code>, <code>n_0_15_male</code>, <code>n_16_24_female</code>, …</td>
+</tr>
+<tr>
+<td><code>student_dorms.csv</code></td>
+<td><code>venues_config.yaml</code> (student_dorms)</td>
+<td><code>n_total</code>, <code>n_16_24</code>, … <code>n_65_99</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="62-householdscsv-format">6.2 <code>households.csv</code> format</h3>
+<pre><code>geo_unit, &quot;0 0 0 2&quot;, &quot;0 0 2 0&quot;, &quot;0 0 0 1&quot;, &quot;1 &gt;=0 2 0&quot;, ...
+E00000001, 16,        22,        16,        6, ...
+</code></pre>
+<p>Each non-<code>geo_unit</code> column header is a household composition pattern using the categories defined in <code>households_config.yaml</code>. The cell value is the <strong>count of households</strong> of that pattern in that area. Patterns can be exact (<code>2</code>) or open (<code>&gt;=2</code>).</p>
+<h3 id="63-adding-a-new-area-new-census-year">6.3 Adding a new area / new census year</h3>
+<p>For an England-2021 build:</p>
+<ol>
+<li>Replace the files under <code>data/geography/</code> with 2021 OA → MSOA → LAD → Region hierarchy and centroids.</li>
+<li>Replace <code>data/population/demographics_{male,female}.csv</code> with 2021 census age × sex per OA.</li>
+<li>Replace <code>data/households/households.csv</code> with 2021 household composition counts per OA.</li>
+<li>Update venue CSVs (<code>Schools_EW.csv</code>, <code>uk_universities.csv</code>, <code>companies.csv</code>, <code>hospitals.csv</code>, …) with 2021 inventories.</li>
+<li>Update region-keyed reference files: <code>data/population/comorbidities/</code>, <code>data/population/ethnicity/</code>, <code>data/population/sexual_orientation/</code>.</li>
+<li>Update commuting flow / industry tables under <code>data/activities/work/</code>.</li>
+</ol>
+<p>You do <strong>not</strong> need to change YAML structure unless you change column names or category boundaries.</p>
+<hr />
+<h2 id="7-common-customisations">7. Common Customisations</h2>
+<table>
+<thead>
+<tr>
+<th>You want to…</th>
+<th>Edit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Build only one region</td>
+<td><code>configs/2021/config.yaml</code> → <code>geography.filter</code></td>
+</tr>
+<tr>
+<td>Skip leisure venues</td>
+<td>In <code>configs/2021/config.yaml</code> timeline, comment out the <code>multi_venue_distributor</code> step</td>
+</tr>
+<tr>
+<td>Disable a venue type</td>
+<td><code>configs/2021/venues/venues_config.yaml</code> → set <code>enabled: false</code></td>
+</tr>
+<tr>
+<td>Change age categories</td>
+<td><code>configs/2021/households/households_config.yaml</code> → <code>categories</code></td>
+</tr>
+<tr>
+<td>Change household allocation order</td>
+<td><code>configs/2021/households/allocation_strategy.yaml</code> → reorder <code>steps</code></td>
+</tr>
+<tr>
+<td>Add a new attribute to HDF5 export</td>
+<td><code>configs/2021/serialization_config.yaml</code> → <code>population.properties</code></td>
+</tr>
+<tr>
+<td>Turn off romantic relationships</td>
+<td><code>configs/2021/config.yaml</code> → <code>romantic_relationships.enabled: false</code></td>
+</tr>
+<tr>
+<td>Turn off friendships</td>
+<td><code>configs/2021/config.yaml</code> → <code>relationship_pipeline.enabled: false</code></td>
+</tr>
+<tr>
+<td>Re-enable the debug CSV outputs (small worlds only)</td>
+<td><code>configs/2021/config.yaml</code> → <code>debug_outputs.enabled: true</code></td>
+</tr>
+<tr>
+<td>Change number of friend connections</td>
+<td><code>configs/2021/relationships/social_networks.yaml</code> → <code>mean_count</code> on the relevant network entry</td>
+</tr>
+<tr>
+<td>Filter who can go to leisure venues</td>
+<td><code>configs/2021/distributors/multi_venue_distributor.yaml</code> → <code>eligibility.global_filters</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-validating-a-run">8. Validating a Run</h2>
+<p>After <code>python create_world.py</code> finishes, sanity-check:</p>
+<ol>
+<li><strong>Console summary</strong> — the script logs counts of people, venues, and allocations.</li>
+<li><strong><code>output/2021/world_state.h5</code></strong> — open in Python with <code>h5py</code> to inspect the exported groups (<code>population</code>, <code>geography</code>, <code>venues</code>, <code>relationships</code>).</li>
+<li><strong><code>data/venues/venue_allocations.csv</code></strong> and <strong><code>data/households/household_allocations.csv</code></strong> — quick CSV-level checks (totals, distribution).</li>
+<li><strong>Detailed romantic CSVs</strong> (if enabled) — <code>romantic_relationships_detailed.csv</code>, <code>cheating_network_detailed.csv</code>.</li>
+</ol>
+<p>Tests live in <code>tests/</code>. Run <code>pytest</code> to verify nothing is broken before/after a change.</p>
+<hr />
+<h2 id="9-troubleshooting">9. Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KeyError</code> on a CSV column</td>
+<td>A YAML references a column name that doesn't exist in the CSV — align them.</td>
+</tr>
+<tr>
+<td>Many people unallocated to households</td>
+<td>Population doesn't match <code>households.csv</code> totals; check demotion/promotion settings in <code>households_config.yaml</code>.</td>
+</tr>
+<tr>
+<td><code>if_no_match: error</code> from school distributor</td>
+<td>Boarding-school name in residences CSV doesn't match a school in <code>Schools_EW.csv</code>.</td>
+</tr>
+<tr>
+<td>Workplace step assigns no one</td>
+<td>Education steps haven't been run before workplace assignment, or <code>primary_activity</code> filter is excluding everyone.</td>
+</tr>
+<tr>
+<td>Property missing from <code>world_state.h5</code></td>
+<td>Add it to <code>configs/2021/serialization_config.yaml</code>.</td>
+</tr>
+<tr>
+<td>Geography filter returns 0 areas</td>
+<td><code>filter.level</code> doesn't match the level the codes belong to (e.g. LAD codes with <code>level: MGU</code>).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="10-example-building-england-2021">10. Example: building England 2021</h2>
+<p>A minimal <code>configs/2021/config.yaml</code> change for an England-wide 2021 run:</p>
+<p>The shipped geography data covers the whole UK (England + Scotland + Wales + Northern Ireland), so to restrict the build to <strong>England only</strong> filter on the <code>XLGU</code> (region) level and list every English region explicitly:</p>
+<pre><code class="language-yaml">geography:
+  data_dir: &quot;data/geography&quot;
+  levels: [&quot;SGU&quot;, &quot;MGU&quot;, &quot;LGU&quot;, &quot;XLGU&quot;]   # OA -&gt; MSOA -&gt; LAD -&gt; Region
+  load_all: false                         # use the filter below
+  filter:
+    level: XLGU
+    codes: [&quot;East Midlands&quot;, &quot;East of England&quot;, &quot;London&quot;, &quot;North East&quot;, &quot;North West&quot;, &quot;South East&quot;, &quot;South West&quot;, &quot;West Midlands&quot;, &quot;Yorkshire and The Humber&quot;]
+
+population:
+  data_dir: &quot;data/population&quot;
+  demographics_male_file: &quot;demographics_male.csv&quot;
+  demographics_female_file: &quot;demographics_female.csv&quot;
+
+# Leave venues, households, timeline, relationship_pipeline, romantic_relationships
+# at their defaults — they already point at the modern UK YAMLs.
+</code></pre>
+<blockquote>
+<p>Tip: omitting any of the nine regions narrows the build to the listed subset (e.g. drop everything except <code>London</code> and <code>South East</code> for a London-region run). Setting <code>load_all: true</code> instead would include Scotland, Wales, and Northern Ireland.</p>
+</blockquote>
+<p>Then ensure all CSVs under <code>data/</code> reflect 2021 inputs (see §6.3) and run:</p>
+<pre><code class="language-bash">python create_world.py --config configs/2021/config.yaml --filename england_2021.h5
+</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
