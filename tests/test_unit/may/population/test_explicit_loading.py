@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 import os
 import tempfile
-from may.population import PopulationManager, Person
+from may.population import PopulationManager, Person, PopulationError
 from may.geography import Geography, GeographicalUnit
 
 @pytest.fixture
@@ -48,7 +48,8 @@ def test_load_explicit_from_csv(mock_geography):
         assert p2.sex == 'female'
         assert p2.properties['Extra'] == 'B'
 
-def test_load_explicit_missing_file(mock_geography, caplog):
+def test_load_explicit_missing_file(mock_geography):
+    """A missing explicit population file fails loud (adr/0010)."""
     pop_manager = PopulationManager(geography=mock_geography, data_dir='/tmp')
-    pop_manager.load_explicit_from_csv('nonexistent.csv', {})
-    assert "not found" in caplog.text
+    with pytest.raises(PopulationError, match="not found"):
+        pop_manager.load_explicit_from_csv('nonexistent.csv', {})

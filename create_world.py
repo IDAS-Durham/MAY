@@ -7,8 +7,8 @@ import numpy as np
 import numba as nb
 import yaml
 from may.config_loader import setup_geography
-from may.geography import VenueManager
-from may.population import PopulationManager
+from may.geography import VenueManager, VenueError
+from may.population import PopulationManager, PopulationError
 from may.world import World, setup_households
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
@@ -43,6 +43,48 @@ def set_random_seed(seed=999):
     return
 
 set_random_seed(0)
+
+
+VALID_POPULATION_TYPES = {"matrix", "explicit", "explicit_batch"}
+
+
+def setup_population(config, geo):
+    """Build the PopulationManager, failing loud on bad config or missing data
+    (adr/0010, adr/0004, adr/0005). ``data_dir`` is resolved once and used by
+    every mode; ``type`` is validated against the closed set rather than
+    silently dispatching to matrix. Raises PopulationError on any miss."""
+    pop_config = config.get("population", {})
+    data_dir = pr.resolve(pop_config.get("data_dir", "data/population"))
+    population = PopulationManager(geography=geo, data_dir=data_dir)
+
+    pop_type = pop_config.get("type", "matrix")
+    if pop_type not in VALID_POPULATION_TYPES:
+        raise PopulationError(
+            f"Unknown population.type {pop_type!r}; expected one of "
+            f"{sorted(VALID_POPULATION_TYPES)}."
+        )
+
+    column_mapping = pop_config.get("column_mapping", {})
+    if pop_type == "explicit_batch":
+        population.load_batch_explicit_from_csv(
+            data_dir=data_dir, column_mapping=column_mapping
+        )
+    elif pop_type == "explicit":
+        filename = pop_config.get("filename")
+        if not filename:
+            raise PopulationError(
+                "population.type 'explicit' requires a 'filename' in configuration."
+            )
+        population.load_explicit_from_csv(
+            filename=filename, column_mapping=column_mapping
+        )
+    else:  # matrix
+        male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
+        female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
+        population.load_demographics_from_csv(male_file, female_file)
+        population.generate_population()
+
+    return population
 
 
 def main():
@@ -100,44 +142,20 @@ def main():
     )
 
     yaml_config_file = pr.resolve(venue_config.get("config_file", "venues_config.yaml"))
-    venues.load_from_yaml_config(yaml_config_file)
+    try:
+        venues.load_from_yaml_config(yaml_config_file)
+    except VenueError as e:
+        logger.error(f"Venue loading failed: {e}")
+        sys.exit(1)
 
     # Load population
     logger.info("")
     logger.info("Loading population...")
-    pop_config = config.get("population", {})
-    population = PopulationManager(
-        geography=geo,
-        data_dir=pr.resolve(pop_config.get("data_dir", "data/population"))
-    )
-
-    pop_type = pop_config.get("type", "matrix")
-    if pop_type == "explicit" or pop_type == "explicit_batch":
-        column_mapping = pop_config.get("column_mapping", {})
-        
-        if pop_type == "explicit_batch":
-            population.load_batch_explicit_from_csv(
-                data_dir=pop_config.get("data_dir", "1911_data/population"),
-                column_mapping=column_mapping
-            )
-        else:
-            filename = pop_config.get("filename")
-            if not filename:
-                logger.error("Population type 'explicit' required a 'filename' in configuration")
-                sys.exit(1)
-                
-            population.load_explicit_from_csv(
-                filename=filename,
-                column_mapping=column_mapping
-            )
-    else:
-        # Load demographic data (matrix style)
-        male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
-        female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
-        population.load_demographics_from_csv(male_file, female_file)
-
-        # Generate population
-        population.generate_population()
+    try:
+        population = setup_population(config, geo)
+    except PopulationError as e:
+        logger.error(f"Population loading failed: {e}")
+        sys.exit(1)
 
     # Households are allocated by the explicit `residence_allocation` timeline
     # step (see the timeline loop below), not implicitly before the timeline.

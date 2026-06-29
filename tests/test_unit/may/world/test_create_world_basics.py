@@ -4,7 +4,10 @@ import numpy as np
 import numba as nb
 import pytest
 from unittest.mock import patch, MagicMock
-from create_world import set_random_seed, main
+import create_world
+from create_world import set_random_seed, main, setup_population
+from may.population import PopulationError
+from may.utils import path_resolver as pr
 
 def test_set_random_seed_consistency():
     """
@@ -82,3 +85,35 @@ def test_main_cli_arg_parsing(mock_setup_geography):
                                 
             # Assert config was attempted to be opened
             mock_open.assert_any_call(test_config_path, "r")
+
+
+def test_unknown_population_type_rejected():
+    """A typo'd population.type must fail loud, not silently run matrix (adr/0005)."""
+    config = {"population": {"type": "explict"}}
+    with pytest.raises(PopulationError, match="Unknown population.type"):
+        setup_population(config, MagicMock())
+
+
+def test_explicit_population_missing_filename_rejected():
+    """explicit mode without a filename fails loud through the same mechanism."""
+    config = {"population": {"type": "explicit"}}
+    with pytest.raises(PopulationError, match="requires a 'filename'"):
+        setup_population(config, MagicMock())
+
+
+def test_batch_data_dir_is_resolved_once_for_every_mode():
+    """${data_root} templating applies in explicit_batch mode: data_dir is
+    resolved once and the same resolved value reaches both the constructor and
+    the batch loader (no divergent raw re-read)."""
+    old = pr._resolver
+    pr.init(config_root="/cfg", data_root="/data", output_root="/out")
+    try:
+        config = {"population": {"type": "explicit_batch",
+                                 "data_dir": "${data_root}/population"}}
+        with patch("create_world.PopulationManager") as MockPM:
+            setup_population(config, MagicMock())
+        assert MockPM.call_args.kwargs["data_dir"] == "/data/population"
+        loader = MockPM.return_value.load_batch_explicit_from_csv
+        assert loader.call_args.kwargs["data_dir"] == "/data/population"
+    finally:
+        pr._resolver = old

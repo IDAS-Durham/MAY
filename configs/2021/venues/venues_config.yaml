@@ -6,9 +6,10 @@
 # Venue types to load
 # Each venue type can specify:
 #   - enabled: Whether to load this venue type (default: true)
-#   - filename: CSV file to load from (default: {venue_type}s.csv)
+#   - filename: CSV file to load from, relative to venues data_dir (required
+#               for enabled types; for batch_mode use a "{unit}" placeholder)
 #   - is_residence: Whether people live at this venue type (default: false)
-#   - properties: Optional metadata about this venue type
+#   - description: Free-text note (not consumed by the engine)
 
 venue_types:
   # =============================================

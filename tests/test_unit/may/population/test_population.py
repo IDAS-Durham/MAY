@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch, MagicMock
 import os
 import tempfile
 
-from may.population import PopulationManager, Person
+from may.population import PopulationManager, Person, PopulationError
 from may.geography import Geography, GeographicalUnit
 
 
@@ -99,14 +99,13 @@ class TestDemographicsLoading:
         test_key = result['test_key']
         assert isinstance(test_key, dict)
 
-    def test_load_demographics_file_not_found(self, mock_geography, caplog):
-        """Test behavior when demographics files don't exist."""
+    def test_load_demographics_file_not_found(self, mock_geography):
+        """Missing demographics files fail loud (adr/0010) rather than leaving
+        an empty manager that silently builds a zero-person world."""
         pop_manager = PopulationManager(geography=mock_geography, data_dir="/nonexistent/path")
 
-        pop_manager.load_demographics_from_csv()
-
-        # Should log error and return without crashing
-        assert "not found" in caplog.text.lower()
+        with pytest.raises(PopulationError, match="not found"):
+            pop_manager.load_demographics_from_csv()
         assert len(pop_manager.precise_demographics) == 0
 
     def test_load_demographics_from_csv_success(self, mock_geography):
@@ -157,13 +156,13 @@ class TestDemographicsLoading:
 class TestPopulationGeneration:
     """Test population generation functionality."""
 
-    def test_generate_population_without_demographics(self, mock_geography, caplog):
-        """Test that generation fails gracefully without demographics."""
+    def test_generate_population_without_demographics(self, mock_geography):
+        """Generation with nothing loaded fails loud (adr/0010), not an empty
+        population."""
         pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
-        pop_manager.generate_population()
-
-        assert "No demographics data loaded" in caplog.text
+        with pytest.raises(PopulationError, match="No demographics data loaded"):
+            pop_manager.generate_population()
         assert len(pop_manager.people) == 0
 
     def test_generate_population_basic(self, mock_geography):

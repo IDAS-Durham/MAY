@@ -18,7 +18,7 @@ import pandas as pd
 import pytest
 
 from may.geography import Geography, GeographicalUnit
-from may.population import Person, PopulationManager
+from may.population import Person, PopulationManager, PopulationError
 
 
 # ---------------------------------------------------------------------------
@@ -126,29 +126,24 @@ class TestLoadDemographicsFromCsv:
         assert 0 not in sgu_data
         assert sgu_data[1]['male'] == 4
 
-    def test_geography_with_no_smallest_level_units_warns_and_returns(
-        self, tmp_path, caplog
-    ):
+    def test_geography_with_no_smallest_level_units_raises(self, tmp_path):
         """If the geography hierarchy was wiped or never loaded, demographics
-        loading must short-circuit with a warning, not crash."""
+        loading must fail loud (adr/0010), not short-circuit to an empty world."""
         empty = _make_geo({'SGU': []})
         df = pd.DataFrame({'geo_unit': ['SGU_001'], '0': [1]})
         data_dir = self._write_demographics_pair(tmp_path, df, df)
         pm = PopulationManager(geography=empty, data_dir=data_dir)
-        with caplog.at_level(logging.WARNING, logger='population'):
+        with pytest.raises(PopulationError, match="No SGU units"):
             pm.load_demographics_from_csv()
         assert pm.precise_demographics == {}
-        assert any('No SGU units' in r.message for r in caplog.records)
 
-    def test_missing_files_does_not_corrupt_state(self, sgu_geo, tmp_path, caplog):
-        """A missing demographics file is logged as an error and the manager
-        is left empty — generate_population then refuses to run, rather than
-        producing a phantom population."""
+    def test_missing_files_raises(self, sgu_geo, tmp_path):
+        """A missing demographics file fails loud (adr/0010) — the run must not
+        continue toward a phantom (empty) population."""
         pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
-        with caplog.at_level(logging.ERROR, logger='population'):
+        with pytest.raises(PopulationError, match="not found"):
             pm.load_demographics_from_csv()
         assert pm.precise_demographics == {}
-        assert any('not found' in r.message.lower() for r in caplog.records)
 
     def test_second_load_replaces_first(self, sgu_geo, tmp_path):
         """Calling load_demographics_from_csv twice must not double-count the

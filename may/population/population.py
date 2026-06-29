@@ -20,6 +20,12 @@ from .person import Person
 logger = logging.getLogger("population")
 
 
+class PopulationError(Exception):
+    """Population data is missing, empty, or unloadable — fail loud, no empty
+    world (adr/0010, adr/0004). ``create_world`` is the only place that turns
+    this into a process exit."""
+
+
 class PopulationManager:
     """
     Manages population generation and distribution.
@@ -80,9 +86,9 @@ class PopulationManager:
         female_path = os.path.join(self.data_dir, female_file)
 
         if not os.path.exists(male_path) or not os.path.exists(female_path):
-            logger.error(f"Demographics files not found: {male_path} or {female_path}")
-            logger.info("Cannot generate population without demographics data")
-            return
+            raise PopulationError(
+                f"Demographics files not found: {male_path} or {female_path}"
+            )
 
         # Get the smallest geographical level from the loaded geography
         # to filter demographics to only relevant geo units
@@ -90,8 +96,9 @@ class PopulationManager:
         smallest_units_dict = self.geography.get_units_by_level(smallest_level)
 
         if not smallest_units_dict:
-            logger.warning(f"No {smallest_level} units found in geography. Cannot load demographics.")
-            return
+            raise PopulationError(
+                f"No {smallest_level} units found in geography. Cannot load demographics."
+            )
 
         # Create a set of geo unit names that exist in our geography for fast lookup
         valid_geo_units = set(smallest_units_dict.keys())
@@ -173,8 +180,7 @@ class PopulationManager:
         """
         path = os.path.join(self.data_dir, filename)
         if not os.path.exists(path):
-            logger.error(f"Explicit population file not found: {path}")
-            return
+            raise PopulationError(f"Explicit population file not found: {path}")
 
         logger.info(f"Loading explicit population from {path}")
         df = pd.read_csv(path)
@@ -291,8 +297,9 @@ class PopulationManager:
                     
         """
         if not self.precise_demographics:
-            logger.error("No demographics data loaded. Cannot generate population.")
-            return
+            raise PopulationError(
+                "No demographics data loaded. Cannot generate population."
+            )
 
         logger.info("Generating population from precise demographics...")
         Person.reset_counter()
@@ -302,8 +309,9 @@ class PopulationManager:
         smallest_units_dict = self.geography.get_units_by_level(smallest_level)
 
         if not smallest_units_dict:
-            logger.warning(f"No {smallest_level} units found in geography. Cannot generate population.")
-            return
+            raise PopulationError(
+                f"No {smallest_level} units found in geography. Cannot generate population."
+            )
 
         # Collect all (age, sex, geo_unit, count) tuples and sort by age
         all_age_sex_geo = []

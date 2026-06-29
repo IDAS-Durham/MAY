@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 from may.geography import Geography
-from may.geography.venue_manager import VenueManager
+from may.geography.venue_manager import VenueManager, VenueError
 
 
 @pytest.fixture
@@ -179,15 +179,15 @@ def test_same_type_name_collision_keeps_both_venues(loaded_geography, caplog):
 # Missing CSV file
 # ---------------------------------------------------------------------------
 
-def test_missing_csv_warns_and_other_types_still_load(loaded_geography, tmp_path, caplog):
-    """If a configured CSV is absent, we warn and continue loading the rest."""
+def test_missing_csv_fails_loud(loaded_geography, tmp_path):
+    """An enabled venue type pointing at an absent CSV is a hard error — the
+    engine works on complete data or fails loudly (adr/0010, 0004). A typo'd
+    filename must not silently build an empty venue set."""
     venues_dir = tmp_path / "venues"
     venues_dir.mkdir()
-    # Provide one real file…
     (venues_dir / "cinemas.csv").write_text(
         "name,geo_unit\nOdeon,SGU_001\n"
     )
-    # …and a config that also references a non-existent file.
     (venues_dir / "test_venues_config.yaml").write_text(
         "venue_types:\n"
         "  cinema:\n"
@@ -195,24 +195,14 @@ def test_missing_csv_warns_and_other_types_still_load(loaded_geography, tmp_path
         "    filename: cinemas.csv\n"
         "  field:\n"
         "    enabled: true\n"
-        "    filename: field.csv\n"
+        "    filename: field.csv\n"   # does not exist
         "settings:\n"
         "  filter_by_geography: true\n"
     )
 
     vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
-    with caplog.at_level(logging.WARNING, logger='venuemanager'):
+    with pytest.raises(VenueError, match="field.csv"):
         vm.load_from_yaml_config("test_venues_config.yaml")
-
-    # The present type loaded.
-    assert len(vm.get_venues_by_type('cinema')) == 1
-    # The missing one did not crash and produced no venues.
-    assert vm.get_venues_by_type('field') == []
-    # We surfaced the missing file.
-    assert any(
-        'not found' in r.message and 'field.csv' in r.message
-        for r in caplog.records
-    )
 
 
 # ---------------------------------------------------------------------------

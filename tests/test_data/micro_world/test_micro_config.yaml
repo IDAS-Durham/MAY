@@ -8,4 +8,4 @@ geography:
 population:
   type: "explicit"
   data_dir: "tests/test_data/micro_world/population"
-  filename: "tests/test_data/micro_world/population/people.csv"
+  filename: "people.csv"   # relative to data_dir
