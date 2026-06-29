@@ -56,9 +56,17 @@ class MinimalVenue:
         self.children = []
         self.geographical_unit = None
 
-    def get_all_members(self):
+    def get_all_members(self, exclude_subset_keys=None, include_subset_keys=None):
+        if exclude_subset_keys is not None and include_subset_keys is not None:
+            raise ValueError(
+                "get_all_members: exclude_subset_keys and include_subset_keys are mutually exclusive"
+            )
         members = []
-        for subset in self.subsets.values():
+        for subset_key, subset in self.subsets.items():
+            if exclude_subset_keys is not None and subset_key in exclude_subset_keys:
+                continue
+            if include_subset_keys is not None and subset_key not in include_subset_keys:
+                continue
             members.extend(list(subset.members))
         return members
 
@@ -197,6 +205,17 @@ class TestInit:
         assert creator.replace_parent_activity is True
         assert creator.remove_from_parent is False
         assert creator.member_filters == []
+        assert creator.exclude_subset_keys is None
+        assert creator.include_subset_keys is None
+
+    def test_exclude_and_include_subset_keys_are_mutually_exclusive(self):
+        with pytest.raises(ValueError):
+            VenueChildCreator(
+                parent_venue_type="household",
+                child_venue_type="land",
+                exclude_subset_keys=["guest"],
+                include_subset_keys=["Adults"],
+            )
 
     def test_custom_values(self):
         creator = VenueChildCreator(
@@ -277,6 +296,17 @@ class TestFromYaml:
         assert creator.replace_parent_activity is False
         assert creator.remove_from_parent is True
         assert len(creator.member_filters) == 1
+
+    def test_loads_exclude_subset_keys(self, tmp_path):
+        yaml_file = tmp_path / "test.yaml"
+        yaml_file.write_text(
+            "parent_venue_type: household\n"
+            "child_venue_type: land\n"
+            "exclude_subset_keys: [\"guest\"]\n"
+        )
+        creator = VenueChildCreator.from_yaml(str(yaml_file))
+        assert creator.exclude_subset_keys == ["guest"]
+        assert creator.include_subset_keys is None
 
 
 # =============================================================================
@@ -900,6 +930,40 @@ class TestProcessParentVenue:
         creator._process_parent_venue(school, world)
         assert creator.stats["parents_processed"] == 0
         assert creator.stats["people_filtered_out"] == 10
+
+    def test_exclude_subset_keys_skips_guest_subset(self, world, venue_manager):
+        creator = VenueChildCreator(
+            "household", "land",
+            exclude_subset_keys=["guest"],
+        )
+        household = MinimalVenue(name="household", venue_type="household")
+        venue_manager.add_venue(household)
+
+        residents = make_people(3, age=30)
+        guests = make_people(5, age=30)
+        populate_venue(household, residents, subset_key="Adults")
+        populate_venue(household, guests, subset_key="guest")
+
+        creator._process_parent_venue(household, world)
+
+        assert creator.stats["people_redistributed"] == 3
+
+    def test_include_subset_keys_restricts_to_named_subset(self, world, venue_manager):
+        creator = VenueChildCreator(
+            "household", "land",
+            include_subset_keys=["Adults"],
+        )
+        household = MinimalVenue(name="household", venue_type="household")
+        venue_manager.add_venue(household)
+
+        residents = make_people(3, age=30)
+        guests = make_people(5, age=30)
+        populate_venue(household, residents, subset_key="Adults")
+        populate_venue(household, guests, subset_key="guest")
+
+        creator._process_parent_venue(household, world)
+
+        assert creator.stats["people_redistributed"] == 3
 
 
 # =============================================================================

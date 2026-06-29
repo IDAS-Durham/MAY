@@ -2,6 +2,7 @@ import logging
 
 from may.geography import VenueManager, Venue, Geography
 from may.geography import GeographicalUnit
+from may.population import Person
 
 import pytest
 
@@ -504,5 +505,193 @@ def test_get_capacity_config_with_stored_config(geo):
 
     retrieved = manager.get_capacity_config('care_home')
     assert retrieved == test_config
+
+
+# ============================================================================
+# add_to_subset Tests
+# ============================================================================
+
+def test_add_to_subset_records_multiple_distinct_subsets_at_same_venue(geo):
+    """A person added to two distinct subsets of the same venue, under the
+    same activity_name/activity_type, should end up with both subsets in
+    their activity_map list (not just the first, deduped-by-venue-id)."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Fair Ground', venue_type='Fair', geographical_unit=geo_unit, properties={})
+    person = Person(age=30, sex='male', geographical_unit=geo_unit)
+
+    venue.add_to_subset(person, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+    venue.add_to_subset(person, subset_key='feast_2', activity_name='Fair', activity_type='Fair')
+
+    recorded_subsets = person.activity_map['Fair']['Fair']
+    assert len(recorded_subsets) == 2
+    assert {subset.subset_name for subset in recorded_subsets} == {'feast_1', 'feast_2'}
+
+
+def test_add_to_subset_does_not_duplicate_the_same_subset(geo):
+    """Re-adding the same person to the same subset twice should not create
+    a duplicate entry in their activity_map list."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Fair Ground', venue_type='Fair', geographical_unit=geo_unit, properties={})
+    person = Person(age=30, sex='male', geographical_unit=geo_unit)
+
+    venue.add_to_subset(person, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+    venue.add_to_subset(person, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+
+    recorded_subsets = person.activity_map['Fair']['Fair']
+    assert len(recorded_subsets) == 1
+
+
+# ============================================================================
+# get_all_members Tests
+# ============================================================================
+
+def test_get_all_members_default_returns_every_subset(geo):
+    """Default behaviour (no filtering) must match existing callers' expectations."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+    resident = Person(age=30, sex='male', geographical_unit=geo_unit)
+    guest = Person(age=40, sex='female', geographical_unit=geo_unit)
+
+    venue.add_to_subset(resident, subset_key='Adults', activity_name='residence', activity_type='household')
+    venue.add_to_subset(guest, subset_key='guest', activity_name='Fair_accommodation', activity_type='Fair')
+
+    assert set(venue.get_all_members()) == {resident, guest}
+
+
+def test_get_all_members_exclude_subset_keys_skips_named_subset(geo):
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+    resident = Person(age=30, sex='male', geographical_unit=geo_unit)
+    guest = Person(age=40, sex='female', geographical_unit=geo_unit)
+
+    venue.add_to_subset(resident, subset_key='Adults', activity_name='residence', activity_type='household')
+    venue.add_to_subset(guest, subset_key='guest', activity_name='Fair_accommodation', activity_type='Fair')
+
+    assert venue.get_all_members(exclude_subset_keys=['guest']) == [resident]
+
+
+def test_get_all_members_include_subset_keys_restricts_to_named_subset(geo):
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+    resident = Person(age=30, sex='male', geographical_unit=geo_unit)
+    guest = Person(age=40, sex='female', geographical_unit=geo_unit)
+
+    venue.add_to_subset(resident, subset_key='Adults', activity_name='residence', activity_type='household')
+    venue.add_to_subset(guest, subset_key='guest', activity_name='Fair_accommodation', activity_type='Fair')
+
+    assert venue.get_all_members(include_subset_keys=['guest']) == [guest]
+
+
+def test_get_all_members_exclude_and_include_are_mutually_exclusive(geo):
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue = Venue(name='Household 1', venue_type='household', geographical_unit=geo_unit, properties={})
+
+    with pytest.raises(ValueError):
+        venue.get_all_members(exclude_subset_keys=['guest'], include_subset_keys=['Adults'])
+
+
+# ============================================================================
+# migrate_subsets_to Tests
+# ============================================================================
+
+def test_migrate_subsets_to_moves_residence_type_and_activity_map(geo):
+    """Migrating a household's subsets to a care_home must move the person's
+    activity_map entries from 'household' to 'care_home', with no stale
+    entries left under the old type."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    old_venue = Venue(name='Old House', venue_type='household', geographical_unit=geo_unit, properties={'is_residence': True})
+    new_venue = Venue(name='Care Home', venue_type='care_home', geographical_unit=geo_unit, properties={'is_residence': True})
+    resident = Person(age=80, sex='female', geographical_unit=geo_unit)
+
+    old_venue.add_to_subset(resident, subset_key='residents', activity_name='residence', activity_type='household')
+
+    old_venue.migrate_subsets_to(new_venue)
+
+    assert old_venue.subsets == {}
+    assert 'residents' in new_venue.subsets
+    moved_subset = new_venue.subsets['residents']
+    assert moved_subset.venue is new_venue
+
+    assert 'household' not in resident.activity_map['residence']
+    assert resident.activity_map['residence']['care_home'] == [moved_subset]
+
+
+def test_migrate_subsets_to_only_touches_migrated_venues_subset(geo):
+    """A person resident at venue A and a guest at venue B (same type) —
+    migrating A must not disturb B's entry."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    venue_a = Venue(name='House A', venue_type='household', geographical_unit=geo_unit, properties={})
+    venue_b = Venue(name='House B', venue_type='household', geographical_unit=geo_unit, properties={})
+    new_venue = Venue(name='Care Home', venue_type='care_home', geographical_unit=geo_unit, properties={})
+    person = Person(age=40, sex='male', geographical_unit=geo_unit)
+
+    venue_a.add_to_subset(person, subset_key='residents', activity_name='residence', activity_type='household')
+    venue_b.add_to_subset(person, subset_key='guests', activity_name='visiting', activity_type='household')
+
+    venue_a.migrate_subsets_to(new_venue)
+
+    assert venue_a.subsets == {}
+    resident_subset_moved = new_venue.subsets['residents']
+    assert resident_subset_moved.venue is new_venue
+    assert person.activity_map['residence']['care_home'] == [resident_subset_moved]
+
+    # venue B's subset is untouched.
+    guest_subset = venue_b.subsets['guests']
+    assert person.activity_map['visiting']['household'] == [guest_subset]
+
+
+def test_migrate_subsets_to_preserves_activity_type_override_key(geo):
+    """A subset registered under an activity_type override unrelated to
+    venue.type (e.g. Fair attendance) must keep its override key after
+    migration, not get remapped to the new venue's type."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    old_venue = Venue(name='Fair Ground', venue_type='fair', geographical_unit=geo_unit, properties={})
+    new_venue = Venue(name='New Fair Ground', venue_type='fair_relocated', geographical_unit=geo_unit, properties={})
+    attendee = Person(age=25, sex='female', geographical_unit=geo_unit)
+
+    old_venue.add_to_subset(attendee, subset_key='feast_1', activity_name='Fair', activity_type='Fair')
+
+    old_venue.migrate_subsets_to(new_venue)
+
+    moved_subset = new_venue.subsets['feast_1']
+    # Key preserved as 'Fair' (the override), not remapped to 'fair_relocated'.
+    assert attendee.activity_map['Fair']['Fair'] == [moved_subset]
+    assert 'fair_relocated' not in attendee.activity_map['Fair']
+
+
+def test_migrate_subsets_to_raises_on_subset_key_collision(geo):
+    geo_unit = list(geo.get_all_units().values())[0]
+    old_venue = Venue(name='Old House', venue_type='household', geographical_unit=geo_unit, properties={})
+    new_venue = Venue(name='New House', venue_type='household', geographical_unit=geo_unit, properties={})
+    person_a = Person(age=30, sex='male', geographical_unit=geo_unit)
+    person_b = Person(age=35, sex='female', geographical_unit=geo_unit)
+
+    old_venue.add_to_subset(person_a, subset_key='residents', activity_name='residence', activity_type='household')
+    new_venue.add_to_subset(person_b, subset_key='residents', activity_name='residence', activity_type='household')
+
+    with pytest.raises(ValueError):
+        old_venue.migrate_subsets_to(new_venue)
+
+
+def test_migrate_subsets_to_reassigns_subset_index_to_avoid_collision(geo):
+    """subset_index must stay unique within new_venue — migrating a subset
+    whose old index collides with one already present must be reassigned."""
+    geo_unit = list(geo.get_all_units().values())[0]
+    old_venue = Venue(name='Old House', venue_type='household', geographical_unit=geo_unit, properties={})
+    new_venue = Venue(name='New House', venue_type='household', geographical_unit=geo_unit, properties={})
+    person_a = Person(age=30, sex='male', geographical_unit=geo_unit)
+    person_b = Person(age=35, sex='female', geographical_unit=geo_unit)
+
+    # Both venues' first subset gets index 0 (per add_to_subset's len()-based assignment).
+    old_venue.add_to_subset(person_a, subset_key='old_residents', activity_name='residence', activity_type='household')
+    new_venue.add_to_subset(person_b, subset_key='existing_residents', activity_name='residence', activity_type='household')
+
+    assert old_venue.subsets['old_residents'].subset_index == 0
+    assert new_venue.subsets['existing_residents'].subset_index == 0
+
+    old_venue.migrate_subsets_to(new_venue)
+
+    indices = [s.subset_index for s in new_venue.subsets.values()]
+    assert len(indices) == len(set(indices)), "subset_index must stay unique within new_venue"
 
 

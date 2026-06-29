@@ -27,7 +27,7 @@ class GeographicalUnit:
         self.coordinates = coordinates  # Tuple of (latitude, longitude) or None
         self.parent = parent      # Reference to parent unit (one level up)
         self.children = []        # List of child units (one level down)
-        self.venues = []          # List of venues in this geographical unit
+        self.venues = set()        # Set of venues in this geographical unit
         self.people = []          # List of people in this geographical unit (populated at smallest level)
         self.properties = properties if properties is not None else {}      # Extensible dict for any additional data
 
@@ -38,7 +38,7 @@ class GeographicalUnit:
 
     def add_venue(self, venue):
         """Add a venue to this geographical unit"""
-        self.venues.append(venue)
+        self.venues.add(venue)
 
     def add_person(self, person):
         """Add a person to this geographical unit"""
