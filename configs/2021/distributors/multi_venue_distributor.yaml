@@ -100,7 +100,7 @@ venue_selection:
   batch_geo_level: "SGU"  # Batch by SGU for performance
 
   # Location sources - FULLY CUSTOMIZABLE
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
   venue_location_source: "coordinates"
 
   # Distance calculation - FULLY CUSTOMIZABLE

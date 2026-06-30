@@ -7,7 +7,7 @@ settings:
   use_spatial_index: true
 
 venue_selection:
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
   venue_geo_level: "SGU"
   batch_geo_level: "SGU"
   consider_by: "count"

@@ -131,13 +131,13 @@ class BaseDistributor:
         """
         Get the person's geographical unit at a specified level.
         Enables traversal up the hierarchy (e.g. SGU -> MSOA).
-        Supports custom location attributes via 'person_location_source' config.
+        Supports custom location attributes via 'locate_person_by' config.
         """
         if target_level is None:
             target_level = self._require_venue_geo_level()
 
-        # Get the person_location_source config (default to 'geographical_unit')
-        loc_source = self.config.get('venue_selection', {}).get('person_location_source', 'geographical_unit')
+        # Get the locate_person_by config (default to 'geographical_unit')
+        loc_source = self.config.get('venue_selection', {}).get('locate_person_by', 'geographical_unit')
         
         person_geo_unit = None
 

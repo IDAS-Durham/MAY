@@ -65,10 +65,10 @@ class VenueDistributor(BaseDistributor):
         self.allocation = AllocationEngine(self)
         self.reporting = ReportingManager(self)
 
-        # Parsing location attribute
+        # Where to locate the person for venue matching (e.g. 'geographical_unit.coordinates'
+        # for residence, or 'properties.workplace_sgu' for work location).
         self.person_loc_attr = (self.config.get('venue_selection', {})
-                                .get('person_location_source', 'geographical_unit.coordinates'))
-        self.person_location_attribute_config = self._parse_location_attribute(self.person_loc_attr)
+                                .get('locate_person_by', 'geographical_unit.coordinates'))
 
         self._pre_processed_filters = self._pre_process_filters(
             self.config.get('eligibility', {}).get('global_filters', [])
@@ -86,23 +86,6 @@ class VenueDistributor(BaseDistributor):
         self._load_probability_files()
 
         logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}'")
-
-    def _parse_location_attribute(self, attr_string: str) -> Dict:
-        """
-        Parses the person_location_source string into a dictionary for easier lookup.
-        Examples:
-        - 'geographical_unit' -> {'type': 'direct', 'attribute': 'geographical_unit'}
-        - 'geographical_unit.coordinates' -> {'type': 'nested', 'attribute': 'geographical_unit', 'sub_attribute': 'coordinates'}
-        - 'properties.workplace_sgu' -> {'type': 'properties', 'attribute': 'workplace_sgu'}
-        """
-        if '.' in attr_string:
-            parts = attr_string.split('.')
-            if parts[0] == 'properties':
-                return {'type': 'properties', 'attribute': parts[1]}
-            else:
-                return {'type': 'nested', 'attribute': parts[0], 'sub_attribute': parts[1]}
-        else:
-            return {'type': 'direct', 'attribute': attr_string}
 
     def _load_probability_files(self):
         """

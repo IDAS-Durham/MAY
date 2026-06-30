@@ -249,7 +249,8 @@ def main():
                 except Exception as e:
                     logger.error(f"Failed to run distributor {step_config}: {e}")
                     logger.exception(e)
-                    
+                    sys.exit(1)
+
             elif step_type == "child_creator":
                 logger.info("")
                 logger.info(f"[CHILD CREATOR] {step_config}")

@@ -258,7 +258,7 @@ venue_selection:
   # Location calculation
   # --------------------------------
   # Where to measure distance FROM
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
   # Options:
   #   - "geographical_unit.coordinates": Use person's geographical unit coordinates (lat/lon)
   #                                     Will automatically use the ancestor at venue_geo_level

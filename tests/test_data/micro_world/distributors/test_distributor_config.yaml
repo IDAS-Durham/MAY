@@ -30,7 +30,7 @@ standard_distributor:
   # Test standard nearest capacity allocation functionality
   venue_selection:
     strategy: "closest"
-    person_location_source: "geographical_unit.coordinates"
+    locate_person_by: "geographical_unit.coordinates"
     venue_geo_level: "SGU"  # the level this mock population is keyed at (adr/0002)
 
   # Fallback to nearest alternative if full

@@ -19,7 +19,7 @@ settings:
 # --- VENUE SELECTION ---
 # Controls HOW candidate venues are found for each person/batch.
 #
-#   person_location_source: Dot-path to get (lat, lon) from a Person object.
+#   locate_person_by: Dot-path to get (lat, lon) from a Person object.
 #       Examples: "geographical_unit.coordinates", "properties.workplace_sgu"
 #
 #   venue_geo_level: The geography level at which venues are grouped (e.g., "SGU").
@@ -35,7 +35,7 @@ settings:
 #       Higher = broader search, more likely to find capacity, but slower.
 #       50 means each batch considers the 50 closest schools.
 venue_selection:
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
   venue_geo_level: "SGU"
   batch_geo_level: "SGU"
   consider_by: "count"

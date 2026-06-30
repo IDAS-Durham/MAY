@@ -80,7 +80,7 @@ venue_selection:
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to care homes near their WORK location, not home
-  person_location_attribute: "properties.workplace_sgu"
+  locate_person_by: "properties.workplace_sgu"
 
   # Batch at SGU level (workplace) for better performance
   batch_geo_level: "SGU"
