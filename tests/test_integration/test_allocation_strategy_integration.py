@@ -150,8 +150,8 @@ class TestStressWorldSetup:
         assert hd.fallback_priority == [0, 1, 3, 2]
 
     def test_promotion_config(self, hd):
-        """Promotion is enabled with correct priority order."""
-        assert hd.config['promotion']['enabled'] is True
+        """Promotion knobs load (promotion runs where the strategy invokes it —
+        there is no global enable flag)."""
         assert hd.config['promotion']['max_attempts'] == 4
 
 
@@ -263,7 +263,7 @@ class TestDemotionUnderPressure:
         sgu_s1_hh = get_households_by_geo_unit(hd, "SGU_S1")
         demoted = [
             h for h in sgu_s1_hh
-            if h.properties.get('actual_pattern') != h.properties.get('original_pattern')
+            if h.properties.get('allocation_pattern') != h.properties.get('original_pattern')
         ]
         assert len(demoted) == 1, f"Expected exactly 1 demoted household, got {len(demoted)}"
 
@@ -300,7 +300,7 @@ class TestDemotionUnderPressure:
         sgu_s1_hh = get_households_by_geo_unit(hd, "SGU_S1")
         non_demoted = [
             h for h in sgu_s1_hh
-            if h.properties.get('actual_pattern') == h.properties.get('original_pattern')
+            if h.properties.get('allocation_pattern') == h.properties.get('original_pattern')
         ]
         assert len(non_demoted) == 1, f"Expected exactly 1 non-demoted household"
 
@@ -331,7 +331,7 @@ class TestDemotionUnderPressure:
         sgu_s1_hh = get_households_by_geo_unit(hd, "SGU_S1")
         demoted = [
             h for h in sgu_s1_hh
-            if h.properties.get('actual_pattern') != h.properties.get('original_pattern')
+            if h.properties.get('allocation_pattern') != h.properties.get('original_pattern')
         ]
         for h in demoted:
             for person in h.get_all_members():
@@ -363,7 +363,7 @@ class TestDemotionUnderPressure:
             if comp["Kids"] >= 1:
                 assert comp["Adults"] >= 1, (
                     f"VALIDATION FAILURE: Household {h.id} has {comp['Kids']} kid(s) "
-                    f"but {comp['Adults']} adult(s). Pattern: {h.properties.get('actual_pattern')}"
+                    f"but {comp['Adults']} adult(s). Pattern: {h.properties.get('allocation_pattern')}"
                 )
 
     def test_pool_state_after_demotion_round(self, hd):
@@ -590,7 +590,7 @@ class TestPatternAssumptions:
         # original_pattern must be census pattern for excess targeting
         assert ya_households[0].properties['original_pattern'] == "0 >=0 0 0"
         # actual_pattern should reflect what was actually allocated
-        actual = ya_households[0].properties['actual_pattern']
+        actual = ya_households[0].properties['allocation_pattern']
         assert actual == "0 2 0 0", (
             f"actual_pattern should be '0 2 0 0' (the assumption), got '{actual}'"
         )
@@ -687,7 +687,7 @@ class TestExcessAllocation:
             comp = get_household_composition(h, hd.categories)
             assert comp["Kids"] <= 5, (
                 f"CONSTRAINT VIOLATION: Household {h.id} has {comp['Kids']} kids (max 5). "
-                f"Pattern: {h.properties.get('actual_pattern')}"
+                f"Pattern: {h.properties.get('allocation_pattern')}"
             )
 
     def test_excess_people_tracked_in_allocated_set(self, hd):
@@ -857,7 +857,7 @@ class TestPromotionAllocation:
 
         # Record patterns before promotion
         all_hh = hd.venue_manager.get_venues_by_type("household")
-        patterns_before = {h.id: h.properties.get('actual_pattern') for h in all_hh}
+        patterns_before = {h.id: h.properties.get('allocation_pattern') for h in all_hh}
 
         stats = hd.promote_and_allocate(
             target_categories=["Kids", "Young Adults"],
@@ -868,10 +868,10 @@ class TestPromotionAllocation:
             # At least one household should have a different (promoted) pattern
             changed = 0
             for h in all_hh:
-                if h.properties.get('actual_pattern') != patterns_before.get(h.id):
+                if h.properties.get('allocation_pattern') != patterns_before.get(h.id):
                     changed += 1
                     # Promoted patterns should contain ">=" (flexible)
-                    new_pattern = h.properties.get('actual_pattern', '')
+                    new_pattern = h.properties.get('allocation_pattern', '')
                     assert ">=" in new_pattern, (
                         f"Promoted pattern should be flexible (contain '>='), "
                         f"got '{new_pattern}'"
@@ -913,7 +913,7 @@ class TestPromotionAllocation:
             if comp["Kids"] >= 1 and comp["Adults"] == 0:
                 pytest.fail(
                     f"VALIDATION FAILURE: Household {h.id} has {comp['Kids']} kids "
-                    f"and 0 adults after promotion. Pattern: {h.properties.get('actual_pattern')}. "
+                    f"and 0 adults after promotion. Pattern: {h.properties.get('allocation_pattern')}. "
                     f"Full composition: {comp}"
                 )
 
@@ -1087,7 +1087,7 @@ class TestFullPipelineIntegration:
         all_hh = venue_manager.get_venues_by_type("household")
         for h in all_hh:
             assert h.size() > 0, (
-                f"Empty household {h.id}! Pattern: {h.properties.get('actual_pattern')}"
+                f"Empty household {h.id}! Pattern: {h.properties.get('allocation_pattern')}"
             )
 
     def test_full_pipeline_households_in_all_sgus(self, hd, population_manager, venue_manager):
@@ -1152,7 +1152,7 @@ class TestFullPipelineIntegration:
             elderly_hh = [
                 h for h in hh
                 if h.properties.get('original_pattern') == "0 0 0 2"
-                or h.properties.get('actual_pattern') == "0 0 0 2"
+                or h.properties.get('allocation_pattern') == "0 0 0 2"
             ]
             assert len(elderly_hh) == 1, (
                 f"Expected exactly 1 elderly couple in {sgu}, got {len(elderly_hh)}"
@@ -1182,7 +1182,7 @@ class TestFullPipelineIntegration:
         # Check none were demoted
         for h in sgu_s2_hh:
             original = h.properties.get('original_pattern', '')
-            actual = h.properties.get('actual_pattern', '')
+            actual = h.properties.get('allocation_pattern', '')
             if original in ("1 >=0 2 0", "0 0 2 0", "0 0 0 2"):
                 # For initial households, actual should match original
                 # (demotion would change it)
@@ -1248,5 +1248,5 @@ class TestFullPipelineIntegration:
                 assert comp["Adults"] >= 1, (
                     f"SUPERVISION VIOLATION: Household {h.id} has {comp['Kids']} kids "
                     f"but {comp['Adults']} adults. Full composition: {comp}. "
-                    f"Pattern: {h.properties.get('actual_pattern')}"
+                    f"Pattern: {h.properties.get('allocation_pattern')}"
                 )

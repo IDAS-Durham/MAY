@@ -264,7 +264,7 @@ class TestExcessConstraints:
             comp = composition(hh, hd.categories)
             assert comp.get("Kids", 0) <= 4, (
                 f"Household {hh.id} has {comp['Kids']} kids — constraint max=4 violated. "
-                f"Pattern: {hh.properties.get('actual_pattern')}"
+                f"Pattern: {hh.properties.get('allocation_pattern')}"
             )
 
     def test_max_per_household_never_exceeded(self, hd):
@@ -1052,5 +1052,5 @@ class TestFullPipelineNoStrandedPeople:
                     f"Supervision rule violated: household {hh.id} has "
                     f"{comp['Kids']} kids but 0 adults. "
                     f"Full composition: {comp}. "
-                    f"Pattern: {hh.properties.get('actual_pattern')}"
+                    f"Pattern: {hh.properties.get('allocation_pattern')}"
                 )

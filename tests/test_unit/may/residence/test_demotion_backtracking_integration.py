@@ -125,7 +125,7 @@ class TestAttemptWithDemotion:
         # Should have been demoted to 1 kid + 2 adults = 3 people
         assert household.num_members <= 3
         # Check the actual pattern was demoted
-        actual = household.properties.get('actual_pattern')
+        actual = household.properties.get('allocation_pattern')
         assert actual != ">=2 >=0 2 0"  # Pattern was modified
 
     def test_demotion_uses_fallback_priority_when_no_category_idx(self, distributor):
@@ -240,7 +240,7 @@ class TestAttemptWithDemotion:
         assert household is not None
         assert household.num_members == 1
         # The actual pattern should show the demotion
-        assert household.properties['actual_pattern'] == '0 0 1 0'
+        assert household.properties['allocation_pattern'] == '0 0 1 0'
 
     def test_demotion_with_none_category_idx_no_crash(self, distributor):
         """Bug fix test: when failed_category_idx is None, intelligent demotion is skipped safely."""
@@ -290,7 +290,7 @@ class TestAllocateHouseholdWithRules:
         assert failed_idx is None
         assert household.num_members == 3
         assert household.properties['original_pattern'] == "1 >=0 2 0"
-        assert household.properties['actual_pattern'] == "1 >=0 2 0"
+        assert household.properties['allocation_pattern'] == "1 >=0 2 0"
 
     def test_allocate_with_rules_removes_from_pools(self, distributor):
         """Selected people are removed from pools and added to allocated_people."""

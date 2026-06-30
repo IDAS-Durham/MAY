@@ -204,6 +204,20 @@ same_category_source:
             for r in caplog.records
         )
 
+    def test_invalid_geo_level_fails_loud(self, two_level_geo, tmp_path):
+        """A geo_level that isn't a configured geography level must raise —
+        an unmatched level otherwise silently degrades to the scalar fallback
+        for every person (adr/0002)."""
+        csv = tmp_path / "src.csv"
+        csv.write_text("geo_unit,a\nM_a,0.5\n")
+        rules_path = _write_yaml(tmp_path, self._config_for_source(
+            'sex', str(csv), geo_level='NOT_A_LEVEL'
+        ))
+        with pytest.raises(ValueError, match="not a configured geography level"):
+            RelationshipRulesValidator(
+                categories=[], config_file=rules_path, geography=two_level_geo
+            )
+
     def test_probabilities_clamped_to_unit_interval(self, two_level_geo, tmp_path):
         """Formulas can overflow if weights and inputs are mis-specified.
         The loader must clamp to [0, 1] so downstream `np.random.random() < p`

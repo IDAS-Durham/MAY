@@ -203,11 +203,6 @@ steps:
     capacity_config:
       total_capacity_column: "n_total"
       attribute_capacities:
-        filter_attributes:
-          - name: "age"
-            type: "age_band"
-          - name: "sex"
-            type: "categorical"
         column_mappings:
           n_0_15_male:
             age_band: [0, 15]
@@ -226,7 +221,6 @@ steps:
         age:
           min_column: "StatutoryLowAge"
           max_column: "StatutoryHighAge"
-      fallback_strategy: "flexible"
 
     strategy: "random"
     max_allocations: null
@@ -253,11 +247,6 @@ steps:
     capacity_config:
       total_capacity_column: "capacity"
       attribute_capacities:
-        filter_attributes:
-          - name: "age"
-            type: "age_band"
-          - name: "sex"
-            type: "categorical"
         column_mappings:
           age_50_64_male:
             age_band: [50, 64]
@@ -289,7 +278,6 @@ steps:
           age_95_plus_female:
             age_band: [95, 120]
             sex: "female"
-      fallback_strategy: "total_capacity"
 
     strategy: "oldest_first"  # Prioritize oldest within each age/sex group
     max_allocations: null
@@ -316,9 +304,6 @@ steps:
     capacity_config:
       total_capacity_column: "n_total"
       attribute_capacities:
-        filter_attributes:
-          - name: "age"
-            type: "age_band"
         column_mappings:
           n_16_24:
             age_band: [18, 24]
@@ -330,7 +315,6 @@ steps:
             age_band: [50, 64]
           n_65_99:
             age_band: [65, 99]
-      fallback_strategy: "flexible"
 
     strategy: "random"
     max_allocations: null

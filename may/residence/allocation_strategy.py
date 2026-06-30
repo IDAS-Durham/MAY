@@ -9,7 +9,7 @@ import logging
 import yaml
 from typing import Dict, List
 from .venue_allocator import _allocate_to_venue_type
-from may.venue_distributor import distributor_from_yaml
+from .household_distributor import HouseholdError
 from may.utils import path_resolver as pr
 
 logger = logging.getLogger("allocation_strategy")
@@ -62,6 +62,8 @@ def execute_allocation_strategy(population,
         logger.warning("No allocation steps defined in strategy")
         return {}
 
+    _validate_step_patterns(steps, household_distributor.household_pattern_vocabulary)
+
     logger.info(f"Found {len(steps)} allocation steps")
     logger.info("")
 
@@ -73,7 +75,7 @@ def execute_allocation_strategy(population,
         step_type = step_config.get('type')
         step_name = step_config.get('name', f'Step {step_number}')
 
-        if step_type not in ['household', 'venue', 'household_excess', 'household_overflow', 'household_promotion', 'resident_linked']:
+        if step_type not in ['household', 'venue', 'household_excess', 'household_overflow', 'household_promotion']:
             logger.warning(f"Unknown step type '{step_type}' for step '{step_name}', skipping")
             continue
 
@@ -97,8 +99,6 @@ def execute_allocation_strategy(population,
             stats = _execute_household_overflow_step(step_config, household_distributor)
         elif step_type == 'household_promotion':
             stats = _execute_household_promotion_step(step_config, household_distributor)
-        elif step_type == 'resident_linked':
-            stats = _execute_resident_linked_step(step_config, population, venues, household_distributor)
 
         all_stats[step_name] = {
             'type': step_type,
@@ -168,11 +168,6 @@ def execute_allocation_strategy(population,
     logger.info(f"  People added to households (excess): {total_excess_alloc:,}")
     logger.info(f"  People added to households (overflow): {total_overflow_alloc:,}")
     logger.info(f"  People in venues: {total_venue_alloc:,}")
-    
-    # Optional: Log resident_linked total if needed
-    total_resident_linked = sum(s.get('total_links', 0) for s in all_stats.values() if s['type'] == 'resident_linked')
-    if total_resident_linked > 0:
-        logger.info(f"  Resident-linked connections: {total_resident_linked:,}")
 
     logger.info(f"  Total allocated: {len(household_distributor.allocated_people):,}")
     logger.info(f"  Remaining unallocated: {household_distributor.get_available_people_count():,}")
@@ -188,6 +183,35 @@ def execute_allocation_strategy(population,
         household_distributor.export_unallocated_people_to_csv()
 
     return all_stats
+
+
+def _validate_step_patterns(steps: List[Dict], vocabulary: set) -> None:
+    """Fail loud on a `household` build-step pattern absent from households.csv.
+
+    A build step's matcher iterates the CSV columns, so a pattern that isn't a
+    column never appears — it builds nothing with no log at all (the silent
+    exact-string foot-gun: typo / stray space / wrong operator). Only build steps
+    are checked: `household_excess`/`household_overflow` `target_patterns` are a
+    catch-all superset matched against existing households' original_pattern and
+    already warn ("matched no households") on a miss, and `household_promotion`
+    source_patterns match a runtime allocation_pattern, not the CSV.
+    """
+    if not vocabulary:
+        return  # no data loaded to validate against
+    unknown: Dict[str, List[str]] = {}
+    for step in steps:
+        if step.get('type') != 'household':
+            continue
+        names = [p.get('pattern') if isinstance(p, dict) else p
+                 for p in (step.get('patterns') or [])]
+        for name in names:
+            if name and name not in vocabulary:
+                unknown.setdefault(step.get('name', 'household'), []).append(name)
+    if unknown:
+        raise HouseholdError(
+            f"household build step(s) reference composition patterns absent from "
+            f"households.csv: {unknown}. Known patterns: {sorted(vocabulary)}"
+        )
 
 
 def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
@@ -438,54 +462,4 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         household_distributor=household_distributor
     )
 
-    return stats
-
-
-def _execute_resident_linked_step(step_config: Dict, population, venues, household_distributor) -> Dict:
-    """
-    Execute a resident-linked allocation step (e.g., care home visits).
-
-    Args:
-        step_config: Configuration dict for this step
-        population: PopulationManager
-        venues: VenueManager
-        household_distributor: HouseholdDistributor
-
-    Returns:
-        dict: Statistics for this step
-    """
-    config_file = step_config.get('config_file')
-    if not config_file:
-        logger.error("No 'config_file' specified for resident_linked step")
-        return {'total_links': 0, 'error': "Missing 'config_file' parameter"}
-
-    # Use factory to get the distributor
-    distributor = distributor_from_yaml(config_file)
-    
-    # Create a proxy for World to avoid circular imports and satisfy distributor interface
-    class WorldProxy:
-        def __init__(self, geo, pop, vns, hhd):
-            self.geography = geo
-            self.population = pop
-            self.venues = vns
-            self.household_distributor = hhd
-        
-        @property
-        def people(self):
-            return self.population.get_all_people()
-            
-        def venues_by_type(self, venue_type):
-            return self.venues.get_venues_by_type(venue_type)
-
-    world_proxy = WorldProxy(household_distributor.geography, population, venues, household_distributor)
-    
-    # Execute allocation
-    stats = distributor.allocate(world_proxy)
-    
-    # Handle export if requested
-    export_file = step_config.get('export_file')
-    if export_file:
-        distributor.export_links(world_proxy, export_file)
-        stats['export_file'] = export_file
-    
     return stats

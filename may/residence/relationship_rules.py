@@ -179,6 +179,13 @@ class RelationshipRulesValidator:
                 f"same_category_source[{attribute}] needs 'geo_level' (the geography "
                 f"level its codes refer to); there is no default (adr/0002)."
             )
+        geo_levels = getattr(self.geography, 'levels', None)
+        if geo_levels and geo_level not in geo_levels:
+            raise ValueError(
+                f"same_category_source[{attribute}] geo_level '{geo_level}' is not a "
+                f"configured geography level {geo_levels} (adr/0002). "
+                f"An unmatched level silently degrades to the scalar fallback for every person."
+            )
         formula = source.get('formula') or []
         if not formula:
             logger.warning(f"same_category_source[{attribute}] has no formula; skipped")

@@ -310,18 +310,6 @@ def setup_households(geo, population, venues, config, strategy_file=None):
             export_debug_csv=debug_outputs_enabled,
         )
 
-    # Export household + venue allocation CSVs (debug aid; skipped for large worlds
-    # because each builds a DataFrame across the whole population/venue set).
-
-    if debug_outputs_enabled:
-        export_file = household_config.get("export_file", "household_allocations.csv")
-        #household_distributor.export_households_to_csv(export_file)
-
-        venue_export_file = config.get("venues", {}).get("export_file", "venue_allocations.csv")
-        #venues.export_venues_to_csv(venue_export_file)
-    else:
-        logger.info("Skipping household/venue allocation CSV exports (debug_outputs.enabled=false)")
-
     # Show where households are located and examples
     logger.info("")
     logger.info("=" * 60)

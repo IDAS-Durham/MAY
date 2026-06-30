@@ -111,8 +111,6 @@ households:
 # The canonical output is always `world_state.h5`; these CSVs are extras.
 #
 # Files controlled by this flag:
-#   - household_allocations.csv   (one row per household member)
-#   - venue_allocations.csv       (one row per venue)
 #   - residence_venues.csv        (one row per residence assignment)
 #   - unallocated_people.csv      (one row per person not placed in a household)
 

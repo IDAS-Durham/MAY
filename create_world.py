@@ -10,6 +10,7 @@ from may.config_loader import setup_geography
 from may.geography import VenueManager, VenueError
 from may.population import PopulationManager, PopulationError
 from may.world import World, setup_households
+from may.residence.household_distributor import HouseholdError
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
@@ -182,15 +183,12 @@ def main():
         logger.info("=" * 60)
 
         # Households/residence venues are allocated by an explicit
-        # `residence_allocation` step. Warn loudly if households are enabled
-        # but no such step exists — otherwise they'd silently never allocate.
+        # `residence_allocation` step. A households: block only exists to wire
+        # data for that step, so a block with no step is almost always a mistake.
         step_types = [s.get("type") for s in timeline_config.get("steps", [])]
-        if (
-            config.get("households", {}).get("enabled", True)
-            and "residence_allocation" not in step_types
-        ):
+        if config.get("households") and "residence_allocation" not in step_types:
             logger.warning(
-                "households.enabled is true but the timeline has no "
+                "a households: block is configured but the timeline has no "
                 "'residence_allocation' step — households will NOT be allocated."
             )
 
@@ -213,9 +211,13 @@ def main():
                         "`config:` to an allocation-strategy YAML file "
                         "(e.g. configs/<scenario>/households/allocation_strategy.yaml)."
                     )
-                world.household_distributor = setup_households(
-                    geo, population, venues, config, strategy_file=step_config
-                )
+                try:
+                    world.household_distributor = setup_households(
+                        geo, population, venues, config, strategy_file=step_config
+                    )
+                except HouseholdError as e:
+                    logger.error(f"Household allocation failed: {e}")
+                    sys.exit(1)
 
             elif step_type == "attribute":
                 logger.info("")

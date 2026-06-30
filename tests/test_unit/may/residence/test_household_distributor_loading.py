@@ -20,7 +20,7 @@ import pytest
 from may.geography import Geography, GeographicalUnit
 from may.geography.venue_manager import VenueManager
 from may.population.population import PopulationManager
-from may.residence.household_distributor import HouseholdDistributor
+from may.residence.household_distributor import HouseholdDistributor, HouseholdError
 
 
 # ---------------------------------------------------------------------------
@@ -116,21 +116,19 @@ class TestLoadHouseholdDataHappyPath:
 
 class TestLoadHouseholdDataSadPaths:
 
-    def test_missing_file_warns_and_leaves_state_empty(self, tmp_path, caplog):
-        """A missing households CSV must log a warning and leave the
-        distributor with empty counts — parallel to load_demographics_from_csv
-        and load_venue_type_from_csv. Crashing here would diverge from the
-        rest of the loader contract and abort world creation."""
+    def test_missing_file_raises(self, tmp_path):
+        """A missing households CSV must fail loud (HouseholdError), like
+        PopulationError/VenueError — the engine works on complete data or not
+        at all (adr/0010). Once a residence_allocation step is in the timeline,
+        missing household data is a misconfiguration, not a tolerable no-op."""
         geo = _make_geo(['SGU_001'])
         hd = _make_distributor(geo, str(tmp_path))
-        with caplog.at_level(logging.WARNING, logger='household'):
+        with pytest.raises(HouseholdError, match="not found"):
             hd.load_household_data("does_not_exist.csv")
-        assert hd.household_counts_by_geo_unit == {}
-        assert any('not found' in r.message for r in caplog.records)
 
-    def test_empty_geography_warns_and_returns(self, tmp_path, caplog):
+    def test_empty_geography_raises(self, tmp_path):
         """If the geography hierarchy has no smallest-level units, loading
-        must short-circuit with a warning rather than process the file."""
+        must fail loud rather than silently build an empty world."""
         geo = _make_geo([])  # No SGUs at all
         hd = _make_distributor(geo, str(tmp_path))
         _write_households_csv(
@@ -138,10 +136,21 @@ class TestLoadHouseholdDataSadPaths:
             ['1 0 0 0'],
             [('SGU_001', [3])],
         )
-        with caplog.at_level(logging.WARNING, logger='household'):
+        with pytest.raises(HouseholdError, match="No SGU units"):
             hd.load_household_data("households.csv")
-        assert hd.household_counts_by_geo_unit == {}
-        assert any('No SGU units' in r.message for r in caplog.records)
+
+    def test_no_rows_match_geography_raises(self, tmp_path):
+        """A present file whose rows are all outside the loaded geography
+        would build zero households — fail loud instead."""
+        geo = _make_geo(['SGU_001'])
+        hd = _make_distributor(geo, str(tmp_path))
+        _write_households_csv(
+            tmp_path / "households.csv",
+            ['1 0 0 0'],
+            [('SGU_999', [3])],  # not in geography
+        )
+        with pytest.raises(HouseholdError, match="matched the loaded geography"):
+            hd.load_household_data("households.csv")
 
 
 # ===========================================================================
@@ -178,10 +187,10 @@ class TestLoadHouseholdDataReload:
         assert set(hd.household_counts_by_geo_unit.keys()) == {'SGU_002'}
         assert hd.household_counts_by_geo_unit['SGU_002'] == {'1 0 0 0': 5}
 
-    def test_reload_after_missing_file_does_not_keep_stale_state(self, tmp_path):
-        """If a re-load points at a missing file, prior state must be
-        cleared rather than silently re-served. The world otherwise looks
-        loaded when in fact the new run has no household data."""
+    def test_reload_after_missing_file_raises_and_clears_state(self, tmp_path):
+        """A re-load pointing at a missing file must fail loud, and must clear
+        prior state before raising — so a caught error can't leave stale counts
+        that make the world look loaded."""
         geo = _make_geo(['SGU_001'])
         hd = _make_distributor(geo, str(tmp_path))
         _write_households_csv(
@@ -192,5 +201,6 @@ class TestLoadHouseholdDataReload:
         hd.load_household_data("first.csv")
         assert hd.household_counts_by_geo_unit  # populated
 
-        hd.load_household_data("vanished.csv")
-        assert hd.household_counts_by_geo_unit == {}
+        with pytest.raises(HouseholdError):
+            hd.load_household_data("vanished.csv")
+        assert hd.household_counts_by_geo_unit == {}  # stale state cleared, not re-served

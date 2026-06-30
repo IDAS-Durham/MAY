@@ -228,7 +228,7 @@ class HouseholdRoundDistributor:
 
                     if household:
                         # Get the actual pattern that was used (may have been demoted)
-                        actual_pattern_used = household.properties.get('actual_pattern')
+                        actual_pattern_used = household.properties.get('allocation_pattern')
 
                         # DEBUG: Log what we're comparing
 

@@ -602,7 +602,7 @@ class AttributeAssigner:
                         f"(geo_unit={household.geographical_unit.name if household.geographical_unit else 'None'})")
             logger.debug(f"  Members: {len(members)}")
             logger.debug(f"  Original pattern: {household.properties.get('original_pattern', 'N/A')}")
-            logger.debug(f"  Actual pattern: {household.properties.get('actual_pattern', 'N/A')}")
+            logger.debug(f"  Allocation pattern: {household.properties.get('allocation_pattern', 'N/A')}")
 
         # Pre-calculate person categories (subsets) to avoid repeated lookups
         # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
