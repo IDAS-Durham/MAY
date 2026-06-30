@@ -193,9 +193,12 @@ class GeoDistributionSource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -313,9 +316,12 @@ class DiversitySource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -403,9 +409,12 @@ class PairProbabilitySource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookups)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -532,9 +541,12 @@ class MultiKeyLookupSource(DataSource):
 
                     logger.info(f"  ✓ Loaded {len(self._lookup_dict)} rows from {file_path.name} into dictionary")
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -653,14 +665,7 @@ class MultiKeyLookupSource(DataSource):
         col_type = col_config.get('type', 'direct')
 
         if col_type == 'direct':
-            value = get_person_attribute(person, attr_name)
-
-            # Check if this is a required attribute with mapping
-            if attr_name in self.assignment_config.required_attributes:
-                mapping = self.assignment_config.required_attributes[attr_name].get('mapping', {})
-                value = mapping.get(value, value)
-
-            return value
+            return get_person_attribute(person, attr_name)
 
         elif col_type == 'category_lookup':
             # Get attribute value, find matching category
@@ -685,14 +690,7 @@ class MultiKeyLookupSource(DataSource):
                 return None
 
             property_name = col_config.get('property', 'name')
-            value = getattr(ancestor, property_name)
-
-            # Apply inline mapping if specified (a dict on the key column)
-            mapping = col_config.get('mapping')
-            if mapping:
-                value = mapping.get(value, value)
-
-            return value
+            return getattr(ancestor, property_name)
 
         return None
 
@@ -815,9 +813,12 @@ class OriginDestinationMatrixSource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} origins from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         # Apply the out-of-boundary policy AFTER parsing and OUTSIDE the
         # per-file try/except above — policy violations must fail loud, not be
@@ -1085,9 +1086,12 @@ class GUSamplerSource(DataSource):
                     logger.info(f"  ✓ Loaded {geo_unit_level} distributions for {len(self._lookup)} parent GUs from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 

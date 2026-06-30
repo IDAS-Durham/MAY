@@ -344,57 +344,42 @@ class TestPassesFilters:
         assert assigner._passes_filters(MinimalPerson(age=30, activities={'study'})) is False
 
     # --- Required attributes ---
+    # required_attributes no longer gates _passes_filters: a missing dependency
+    # is enforced at the point of use (strategy/lookup fails loud → assign_all
+    # guard, adr/0010), not by silently dropping the person. So presence/absence
+    # of a required attribute does not change filtering.
 
-    def test_required_attribute_present(self):
+    def test_required_attribute_present_passes(self):
         assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}}
+            required_attributes={'ethnicity': {'required': True}}
         )
-        person = MinimalPerson(properties={'ethnicity': 'W'})
-        assert assigner._passes_filters(person) is True
+        assert assigner._passes_filters(MinimalPerson(properties={'ethnicity': 'W'})) is True
 
-    def test_required_attribute_missing_with_error_if_missing(self):
+    def test_required_attribute_missing_no_longer_filters(self):
+        """A missing required attribute passes filters now — enforcement is
+        downstream, not a silent drop here."""
         assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}}
+            required_attributes={'ethnicity': {'required': True}}
         )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is False
+        assert assigner._passes_filters(MinimalPerson(properties={})) is True
 
-    def test_required_attribute_missing_without_error_if_missing(self):
-        """If error_if_missing is False, missing required attr still passes."""
+    def test_required_attribute_missing_without_filters_passes(self):
+        """No filters dict + missing required attr → still passes (not dropped)."""
         assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': False}}
+            required_attributes={'ethnicity': {'required': True}}
         )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is True
+        assert assigner._passes_filters(MinimalPerson(properties={})) is True
 
-    def test_required_attribute_not_required_passes(self):
-        assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': False}}
-        )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is True
-
-    def test_required_attributes_checked_even_without_filters(self):
-        """No filters dict but required_attributes should still be checked."""
-        assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}}
-        )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is False
-
-    def test_required_attributes_with_filters_also_present(self):
-        """Both filters and required attributes apply."""
+    def test_required_attribute_does_not_override_real_filter(self):
+        """Real filters still apply; required_attributes don't add a gate."""
         assigner = self._make_assigner(
             filters={'age': {'attribute': 'age', 'type': 'numerical', 'numerical': {'min': 18}}},
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}},
+            required_attributes={'ethnicity': {'required': True}},
         )
-        # Passes age, has ethnicity
-        person1 = MinimalPerson(age=25, properties={'ethnicity': 'W'})
-        assert assigner._passes_filters(person1) is True
-
-        # Passes age, missing ethnicity
-        person2 = MinimalPerson(age=25, properties={})
-        assert assigner._passes_filters(person2) is False
+        # Fails the age filter regardless of the missing required attribute.
+        assert assigner._passes_filters(MinimalPerson(age=10, properties={})) is False
+        # Passes the age filter even though the required attribute is missing.
+        assert assigner._passes_filters(MinimalPerson(age=25, properties={})) is True
 
         # Fails age, has ethnicity
         person3 = MinimalPerson(age=10, properties={'ethnicity': 'W'})

@@ -930,20 +930,6 @@ class AttributeAssignmentConfig:
 
         return person_rules.rules[0]
 
-    def get_required_attribute_mapping(self, attr_name: str) -> Dict[str, str]:
-        """
-        Get mapping for a required attribute.
-
-        Args:
-            attr_name: Name of required attribute
-
-        Returns:
-            Mapping dict or empty dict
-        """
-        if attr_name in self.required_attributes:
-            return self.required_attributes[attr_name].get('mapping', {})
-        return {}
-
     @classmethod
     def from_yaml(cls, config_path: Path) -> 'AttributeAssignmentConfig':
         """Load configuration from YAML file."""

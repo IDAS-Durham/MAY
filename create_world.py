@@ -11,6 +11,7 @@ from may.geography import VenueManager, VenueError
 from may.population import PopulationManager, PopulationError
 from may.world import World, setup_households
 from may.residence.household_distributor import HouseholdError
+from may.attribute_assignment import AttributeAssignmentError
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
@@ -222,8 +223,12 @@ def main():
             elif step_type == "attribute":
                 logger.info("")
                 logger.info(f"[ATTRIBUTE] {step_config}")
-                world.assign_attributes(step_config)
-                
+                try:
+                    world.assign_attributes(step_config)
+                except AttributeAssignmentError as e:
+                    logger.error(f"Attribute assignment failed: {e}")
+                    sys.exit(1)
+
             elif step_type == "distributor":
                 logger.info("")
                 logger.info(f"[DISTRIBUTOR] {step_config}")

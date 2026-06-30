@@ -28,15 +28,6 @@ required_attributes:
   - name: "ethnicity"
     description: "Ethnicity attribute must be assigned first"
     required: true
-    error_if_missing: true
-
-    # Map internal ethnicity codes to CSV ethnicity codes
-    mapping:
-      W: "W"
-      A: "A"
-      B: "B"
-      M: "M"
-      O: "CO"  # Internal "O" maps to CSV "CO" (Other)
 
 # ============================================================================
 # Age Band Categories
@@ -127,17 +118,6 @@ data_sources:
             type: "ancestor_lookup"
             level: "XLGU"
             property: "name"
-            # Map GU names to CSV region names
-            mapping:
-              "East of England": "East"
-              "East Midlands": "East Midlands"
-              "London": "London"
-              "North East": "North East"
-              "North West": "North West"
-              "South East": "South East"
-              "South West": "South West"
-              "West Midlands": "West Midlands"
-              "Yorkshire and The Humber": "Yorkshire and The Humber"
 
         # Value columns: condition probabilities
         value_columns:

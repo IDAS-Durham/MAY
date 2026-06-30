@@ -60,7 +60,6 @@ required_attributes:
   - name: "work_mode"
     description: "Work mode must be assigned first (workplace_assignment)"
     required: true
-    error_if_missing: true
 
 # ============================================================================
 # Data Sources

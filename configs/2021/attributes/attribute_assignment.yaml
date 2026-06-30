@@ -216,7 +216,7 @@ data_sources:
           A: "A"
           B: "B"
           M: "M"
-          O: "CO"
+          O: "O"
         total_column: "total"
 
 

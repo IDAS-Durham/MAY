@@ -16,7 +16,7 @@ import logging
 import numpy as np
 from collections import defaultdict
 
-from may.attribute_assignment.assigner import AttributeAssigner
+from may.attribute_assignment.assigner import AttributeAssigner, AttributeAssignmentError
 from may.attribute_assignment.assignment_config import (
     AssignmentRule,
     Role,
@@ -666,6 +666,20 @@ class TestAssignAll:
 
         vm = MinimalVenueManager([])
         with pytest.raises(ValueError, match="Unknown assignment_level"):
+            assigner.assign_all(vm)
+
+    def test_unassigned_person_fails_loud(self, geo_unit):
+        """A full run that leaves anyone unassigned aborts (adr/0010), instead
+        of returning stats with unassigned_people > 0 and a green build."""
+        config = _build_family_config(SimpleGeoSource())
+        dm = SimpleDataManager(sources={"geo_distribution": SimpleGeoSource()})
+        assigner = AttributeAssigner(config, dm)
+
+        # 1-member household with no pattern → unclassifiable → 1 unassigned.
+        person = MinimalPerson(age=30, category="Adults", geographical_unit=geo_unit)
+        vm = MinimalVenueManager([MinimalVenue(venue_type="household", members=[person])])
+
+        with pytest.raises(AttributeAssignmentError, match="unassigned"):
             assigner.assign_all(vm)
 
 

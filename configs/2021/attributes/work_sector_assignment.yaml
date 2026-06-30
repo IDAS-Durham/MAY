@@ -32,6 +32,18 @@ filters:
       min: 18
       max: 64
 
+  # Only people with an in-boundary workplace get a sector. Students
+  # (primary_activity) have no workplace_location; OUTSIDE workers (below) have no
+  # in-world workplace — both would miss the LGU+sex lookup key.
+  activities:
+    exclude: ["primary_activity"]
+
+  out_of_boundary:
+    attribute: "workplace_location"
+    type: "categorical"
+    description: "Exclude out-of-area workers (no in-world workplace, no sector row)"
+    exclude: ["OUTSIDE"]
+
 # ============================================================================
 # Required Attributes (Dependencies)
 # ============================================================================
@@ -39,11 +51,9 @@ required_attributes:
   - name: "workplace_location"
     description: "Workplace LGU must be assigned first"
     required: true
-    error_if_missing: true
   - name: "workplace_sgu"
     description: "Workplace SGU must be assigned first"
     required: true
-    error_if_missing: true
 
 # ============================================================================
 # Data Sources

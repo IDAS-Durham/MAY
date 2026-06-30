@@ -31,6 +31,11 @@ filters:
       min: 18
       max: 64
 
+  # Only people who have a workplace get an SGU within it. People with a
+  # primary_activity (e.g. students) have no workplace_location to sample within.
+  activities:
+    exclude: ["primary_activity"]
+
   # Skip workers whose workplace is outside the loaded world (adr/0015). They
   # carry the out-of-boundary sentinel from workplace_assignment and have no
   # in-world LGU to sample an SGU within. Must match `outside_value` there.
@@ -47,7 +52,6 @@ required_attributes:
   - name: "workplace_location"
     description: "Workplace LGU must be assigned first"
     required: true
-    error_if_missing: true
 
 # ============================================================================
 # Data Sources

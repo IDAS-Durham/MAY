@@ -67,7 +67,6 @@ required_attributes:
   - name: "work_mode"
     description: "work_mode must already be assigned by workplace_assignment"
     required: true
-    error_if_missing: true
 
 # ============================================================================
 # Assignment Rules (Person-Level)

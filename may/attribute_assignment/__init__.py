@@ -23,11 +23,12 @@ Usage:
 
 from .assignment_config import AttributeAssignmentConfig
 from .strategies import StrategyFactory
-from .assigner import AttributeAssigner, assign_attributes
+from .assigner import AttributeAssigner, AttributeAssignmentError, assign_attributes
 
 __all__ = [
     'AttributeAssignmentConfig',
     'StrategyFactory',
     'AttributeAssigner',
+    'AttributeAssignmentError',
     'assign_attributes',
 ]

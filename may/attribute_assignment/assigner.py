@@ -10,6 +10,15 @@ from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("may.attribute_assignment.assigner")
 
+
+class AttributeAssignmentError(Exception):
+    """Raised when assignment can't complete on the given data/config. Mirrors
+    PopulationError/VenueError/HouseholdError: every eligible person is assigned
+    on complete data, or the build fails loud (adr/0010). A person left unassigned
+    — strategy failure, unclassifiable residence, no matching role, no value —
+    aborts the run."""
+
+
 def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] = None) -> Dict[str, Any]:
     """
     Convenience function to assign attributes to a population.
@@ -28,13 +37,19 @@ def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] 
     # Initialize data manager
     data_manager = DataSourceManager(config)
 
-    # Load data
-    if geo_units:
-        logger.info(f"Preloading data for {len(geo_units)} geographical units...")
-        data_manager.load_all(geo_units)
-    else:
-        logger.info("Loading all data sources...")
-        data_manager.load_all()
+    # Surface a data-source load failure as AttributeAssignmentError so
+    # create_world exits cleanly (adr/0010).
+    try:
+        if geo_units:
+            logger.info(f"Preloading data for {len(geo_units)} geographical units...")
+            data_manager.load_all(geo_units)
+        else:
+            logger.info("Loading all data sources...")
+            data_manager.load_all()
+    except (FileNotFoundError, RuntimeError, ValueError, KeyError) as e:
+        raise AttributeAssignmentError(
+            f"could not load data sources for '{config_path}': {e}"
+        ) from e
 
     # Create assigner and run
     assigner = AttributeAssigner(config, data_manager)
@@ -106,7 +121,6 @@ class AttributeAssigner:
         self._activity_filters = config.filters.get('activities', {}) if self._has_filters else {}
         self._include_activities = self._activity_filters.get('include', [])
         self._exclude_activities = self._activity_filters.get('exclude', [])
-        self._required_attrs = list(config.required_attributes.items()) if config.required_attributes else []
 
         # Statistics
         self.stats = {
@@ -177,6 +191,18 @@ class AttributeAssigner:
 
         # Report statistics
         self._report_statistics()
+
+        # Fail loud if anyone who should have been assigned wasn't; the
+        # per-person cause was logged above (adr/0010).
+        if self.stats['unassigned_people'] > 0:
+            raise AttributeAssignmentError(
+                f"{self.stats['unassigned_people']} person(s) left unassigned for "
+                f"attribute '{self.attribute_name}' — see the logged errors/warnings "
+                f"above for the per-person cause (missing data, unclassifiable "
+                f"residence, no matching role, or a strategy returning no value). "
+                f"The engine assigns every eligible person on complete data or fails "
+                f"loud (adr/0010)."
+            )
 
         return self.stats
 
@@ -316,12 +342,6 @@ class AttributeAssigner:
             bool: True if person passes all filters
         """
         if not self._has_filters:
-            # Check required attributes even if no filters
-            for attr_name, attr_config in self._required_attrs:
-                if attr_config.get('required', False):
-                    if attr_name not in person.properties:
-                        if attr_config.get('error_if_missing', False):
-                            return False
             return True
 
         # 1. Attribute filters
@@ -387,13 +407,6 @@ class AttributeAssigner:
                     break
             if not matched:
                 return False
-
-        # 3. Required attributes
-        for attr_name, attr_config in self._required_attrs:
-            if attr_config.get('required', False):
-                if attr_name not in person.properties:
-                    if attr_config.get('error_if_missing', False):
-                        return False
 
         return True
 
@@ -477,9 +490,14 @@ class AttributeAssigner:
         households = [self._get_person_residence_venue(p) for p in eligible_people]
         contexts = [{'attribute_name': self.attribute_name} for _ in eligible_people]
 
-        # Call batch assignment
+        # A batch fails as a whole; surface it as AttributeAssignmentError (adr/0010).
         logger.info(f"  Running batch assignment...")
-        results = strategy.assign_batch(eligible_people, households, contexts)
+        try:
+            results = strategy.assign_batch(eligible_people, households, contexts)
+        except Exception as e:
+            raise AttributeAssignmentError(
+                f"batch assignment of '{self.attribute_name}' failed: {e}"
+            ) from e
 
         # Assign results to people
         logger.info(f"  Applying results to people...")

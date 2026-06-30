@@ -286,6 +286,15 @@ class TestGeoDistributionSource:
         with pytest.raises(RuntimeError, match="Data not loaded"):
             source.lookup("E00001")
 
+    def test_missing_file_fails_loud_at_load(self):
+        """A missing data file aborts at load, not a silent empty source that
+        explodes later at lookup (adr/0010, adr/0004)."""
+        source = GeoDistributionSource("test_geo", {
+            "files": [{"path": "/no/such/file.csv", "key_columns": {"geo_unit": None}}]
+        })
+        with pytest.raises(FileNotFoundError, match="not found"):
+            source.load_data()
+
     def test_parse_dataframe_with_total_column(self):
         """When total_column is provided, values are divided by total first."""
         source = GeoDistributionSource("test", {
@@ -732,43 +741,34 @@ class TestMultiKeyLookupSource:
         result = source.lookup(person, household=household)
         assert "industry_a" in result
 
-    def test_ancestor_lookup_applies_inline_mapping(self):
-        """An inline `mapping` dict on the key column translates the resolved value."""
+    def test_ancestor_lookup_keys_on_resolved_name(self):
+        """An ancestor_lookup keys on the resolved ancestor name."""
         lgu = MinimalGeoUnit("East of England", level="LGU")
         sgu = MinimalGeoUnit("SGU_1", level="SGU", parent=lgu)
         source = self._make_source(
-            lookup_dict={("East",): {"cvd": 1.0}},
+            lookup_dict={("East of England",): {"cvd": 1.0}},
             key_columns_config={
                 "region": {
                     "attribute": "geographical_unit",
                     "type": "ancestor_lookup",
                     "level": "LGU",
                     "property": "name",
-                    "mapping": {"East of England": "East"},
                 },
             },
         )
         person = MinimalPerson(geographical_unit=sgu)
-        result = source.lookup(person)
-        assert "cvd" in result
+        assert "cvd" in source.lookup(person)
 
-    def test_mapping_in_required_attributes(self):
-        """Direct lookup should apply mapping from required_attributes."""
-        assignment_config = MinimalAssignmentConfig(
-            required_attributes={
-                "sex": {"mapping": {"M": 1, "F": 2}}
-            }
-        )
+    def test_direct_keys_on_person_value(self):
+        """A direct lookup keys on the person's attribute value."""
         source = self._make_source(
-            lookup_dict={(1,): {"cvd": 0.05}},
+            lookup_dict={("M",): {"cvd": 0.05}},
             key_columns_config={
                 "sex_col": {"attribute": "sex", "type": "direct"},
             },
-            assignment_config=assignment_config,
         )
         person = MinimalPerson(sex="M")
-        result = source.lookup(person)
-        assert "cvd" in result
+        assert "cvd" in source.lookup(person)
 
 
 # =============================================================================

@@ -1014,10 +1014,10 @@ class TestParseAttributes:
 class TestParseRequiredAttributes:
     def test_list_form_keyed_by_name(self):
         obj = _RawOnly({"required_attributes": [
-            {"name": "ethnicity", "required": True, "mapping": {"O": "CO"}},
+            {"name": "ethnicity", "required": True, "description": "needed first"},
         ]})
         result = obj._parse_required_attributes()
-        assert result == {"ethnicity": {"required": True, "mapping": {"O": "CO"}}}
+        assert result == {"ethnicity": {"required": True, "description": "needed first"}}
 
     def test_missing_section_is_empty(self):
         assert _RawOnly({})._parse_required_attributes() == {}
