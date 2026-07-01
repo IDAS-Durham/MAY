@@ -271,24 +271,21 @@ relationship_pipeline:
   # - Add property names to serialization_config.yaml to include in HDF5 export
 
 # ========================================
-# ROMANTIC RELATIONSHIPS - Sexual orientation and partnerships
+# ROMANTIC RELATIONSHIPS - Sexual orientation
 # ========================================
-# Build romantic/sexual relationship networks including:
-# - Sexual orientation assignment
-# - Exclusive relationships (monogamous couples)
-# - Non-exclusive relationships (polyamorous/consensual non-monogamy)
-# - Cheating/infidelity
-# All parameters are configurable via YAML (probabilities, age differences, partner limits, etc.)
+# Assigns a sexual orientation to every adult and stamps a relationship_status.
 
 romantic_relationships:
-  enabled: true  # Set to false to skip romantic relationship distribution
+  enabled: true  # Set to false to skip
   config: "${config_root}/relationships/romantic_relationships.yaml"
 
   # Notes:
-  # - Runs AFTER household distribution and social relationships
-  # - Recognizes household couples (flagged with creates_romantic_couple in relationship_rules.yaml)
-  # - Uses ethnicity partnership probabilities from data/population/ethnicity/
-  # - Exports detailed CSVs: romantic_relationships_detailed.csv and cheating_network_detailed.csv
+  # - Runs AFTER the timeline and social relationships (order fixed in create_world.py)
+  # - Recognizes existing household couples via the cohabiting_couple property that
+  #   household allocation writes when a relationship_rules.yaml pair rule is flagged
+  #   creates_romantic_couple. It only READS that couple; it does not match partners.
+  # - Orientation source is declared explicitly (see romantic_relationships.yaml):
+  #   data_sources present -> raked from CSVs (fail loud if missing); absent -> YAML probabilities.
 
 serialization:
   enabled: true

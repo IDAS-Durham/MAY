@@ -4,35 +4,29 @@ Romantic relationship distributor for large-scale simulations.
 Assigns sexual orientations to all adults (and identifies existing cohabiting
 couples).
 
-Probability sources, in order of preference:
+The orientation source is declared explicitly by the config, one of two
+mutually-exclusive paths (no silent fallback — adr/0010):
 
-1. Data-driven (when ``data_sources`` is set in the YAML config):
-   - National prior: ``P_nat(orientation | sex, age_band)`` from
-     ``orientation_prevalence_extended.csv`` (6 ONS bands + 3 extrapolated).
-   - MSOA marginal: per-MSOA ``P_msoa(orientation)`` from
-     ``orientation_by_msoa_normalized.csv``.
+1. Data-driven (when ``data_sources`` IS set): the two declared files must
+   exist or construction fails loud.
+   - Demographic prior: ``P(orientation | sex, age_band)`` from the
+     ``demographic_distribution`` source's ``path`` (e.g. orientation_prevalence_extended.csv).
+   - Geographic marginal: ``P(orientation | geo_unit)`` from the ``geo_distribution``
+     source's ``path`` (e.g. orientation_by_msoa_normalized.csv), keyed at its ``geo_level``.
    - The two are reconciled via Iterative Proportional Fitting (IPF) on a
-     cell table indexed by ``(sex, age_band, msoa)``. After convergence the
-     cell-level distributions respect both marginals simultaneously.
-   - Sampling is then **cell-batched and vectorized** (one np.random.choice
-     per cell, not per person), so wall time scales near-linearly in MSOA
-     count, not in population. This keeps England-scale builds (~60M people,
-     ~6.8k MSOAs) feasible.
+     cell table indexed by ``(sex, age_band, area)``, then sampling is
+     cell-batched and vectorized (one np.random.choice per cell), so wall
+     time scales in area count, not population.
 
-2. YAML fallback: hand-tuned ``probabilities`` + ``age_adjustments`` from
-   ``romantic_relationships.yaml``. Used only when ``data_sources`` is absent
-   or the files are missing — keeps non-UK / historical worlds working
-   unchanged. This path is per-person and intended for small populations.
+2. YAML path (when ``data_sources`` is ABSENT): hand-tuned ``probabilities``
+   + ``age_adjustments`` from ``romantic_relationships.yaml`` — for non-UK /
+   historical worlds without area data. Per-person; intended for small
+   populations.
 
 Cohabiting-couple compatibility (orientations must agree with partner sex)
 is applied in both paths: in the vectorized path by filtering the cell
-probability vector before sampling each (sex, age_band, msoa, partner_sex)
+probability vector before sampling each (sex, age_band, area, partner_sex)
 group.
-
-Verbose per-run diagnostics (national-vs-empirical comparison, MSOA
-quintile sweep, etc.) are gated behind the ``diagnostics.verbose`` config
-flag and default to off; they exist to verify behavior after a code change
-and have no business running on a production build.
 """
 
 from __future__ import annotations
@@ -46,6 +40,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import yaml
 from may.utils import path_resolver as pr
+from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("romantic_relationships")
 
@@ -53,12 +48,6 @@ logger = logging.getLogger("romantic_relationships")
 SEX_FEMALE = 0
 SEX_MALE = 1
 N_SEXES = 2
-
-# Bands that come straight from ONS — anything else is extrapolated and
-# logged as such when verbose diagnostics are enabled.
-_ONS_BAND_NAMES = frozenset(
-    {"16-24", "25-34", "35-44", "45-54", "55-64", "65-74"}
-)
 
 
 class RomanticDistributor:
@@ -91,8 +80,9 @@ class RomanticDistributor:
         self.orientation_key = storage.get('orientation_key', 'sexual_orientation')
         self.status_key = storage.get('status_key', 'relationship_status')
 
-        self.min_age = self.config.get('min_age', 18)
-        self.max_age = self.config.get('max_age', 120)
+        # Eligibility predicate (same global_filters shape as distributors): a
+        # person must pass ALL filters to be assigned an orientation.
+        self.global_filters = self.config.get('eligibility', {}).get('global_filters', [])
 
         # Data-source state (set by _load_data_sources when configured).
         self._use_data_sources = False
@@ -106,19 +96,13 @@ class RomanticDistributor:
         self._msoa_codes: List[str] = []
         self._msoa_idx_by_code: Dict[str, int] = {}
 
-        # Diagnostics flag — see the top-of-file note.
-        self._verbose_diagnostics = bool(
-            self.config.get('diagnostics', {}).get('verbose', False)
-        )
-
         ds = self.config.get('data_sources')
         if ds:
             self._load_data_sources(ds)
 
         logger.info(
             f"Initialized {self.name} distributor "
-            f"(data_sources={'on' if self._use_data_sources else 'off (YAML fallback)'},"
-            f" verbose_diagnostics={'on' if self._verbose_diagnostics else 'off'})"
+            f"(data_sources={'on' if self._use_data_sources else 'off (YAML path)'})"
         )
 
     @staticmethod
@@ -133,20 +117,28 @@ class RomanticDistributor:
     # ------------------------------------------------------------------
 
     def _load_data_sources(self, ds: Dict):
-        prev_path = pr.resolve(ds.get('prevalence_path', '')) or None
-        msoa_path = pr.resolve(ds.get('msoa_marginal_path', '')) or None
+        demo_src = ds.get('demographic_distribution', {})
+        geo_src = ds.get('geo_distribution', {})
+        prev_path = pr.resolve(demo_src.get('path', '')) or None
+        area_path = pr.resolve(geo_src.get('path', '')) or None
         if not prev_path or not os.path.exists(prev_path):
-            logger.warning(f"prevalence_path missing or not found: {prev_path}; falling back to YAML probabilities")
-            return
-        if not msoa_path or not os.path.exists(msoa_path):
-            logger.warning(f"msoa_marginal_path missing or not found: {msoa_path}; falling back to YAML probabilities")
-            return
+            raise ValueError(
+                f"{self.name}: data_sources declared but demographic_distribution.path "
+                f"missing or not found: {prev_path} (adr/0010). Omit data_sources to "
+                f"use the YAML probabilities path instead."
+            )
+        if not area_path or not os.path.exists(area_path):
+            raise ValueError(
+                f"{self.name}: data_sources declared but geo_distribution.path missing "
+                f"or not found: {area_path} (adr/0010). Omit data_sources to use the "
+                f"YAML probabilities path instead."
+            )
 
-        geo_level = ds.get('geo_level')
+        geo_level = geo_src.get('geo_level')
         if not geo_level:
             raise ValueError(
-                f"{self.name}: data_sources needs 'geo_level' (the geography level "
-                f"the marginal table is keyed at); there is no default (adr/0002)."
+                f"{self.name}: data_sources.geo_distribution needs 'geo_level' (the "
+                f"geography level the distribution is keyed at); no default (adr/0002)."
             )
         self._geo_level = geo_level
 
@@ -191,7 +183,7 @@ class RomanticDistributor:
 
         # ---- MSOA marginals ---------------------------------------------------
         msoa_rows: Dict[str, np.ndarray] = {}
-        with open(msoa_path) as f:
+        with open(area_path) as f:
             for row in csv.DictReader(f):
                 code = row['geo_unit'].strip()
                 arr = np.zeros(self._n_orients, dtype=np.float64)
@@ -567,6 +559,30 @@ class RomanticDistributor:
 
         return orientations
 
+    def _passes_filters(self, person) -> bool:
+        """True if the person passes ALL eligibility.global_filters (AND-ed).
+
+        Same shape/semantics as distributor global_filters: numerical uses
+        inclusive min/max; categorical uses value/values; a missing attribute
+        fails the filter.
+        """
+        for f in self.global_filters:
+            val = get_person_attribute(person, f['attribute'])
+            if val is None:
+                return False
+            if f.get('type', 'numerical') == 'numerical':
+                lo, hi = f.get('min'), f.get('max')
+                if lo is not None and val < lo:
+                    return False
+                if hi is not None and val > hi:
+                    return False
+            else:  # categorical
+                if 'value' in f and val != f['value']:
+                    return False
+                if 'values' in f and val not in f['values']:
+                    return False
+        return True
+
     # ------------------------------------------------------------------
     # Top-level orchestration
     # ------------------------------------------------------------------
@@ -580,7 +596,7 @@ class RomanticDistributor:
 
         eligible_people = [
             p for p in self.world.population.people
-            if self.min_age <= p.age <= self.max_age
+            if self._passes_filters(p)
         ]
         n = len(eligible_people)
         logger.info(f"Processing {n:,} eligible people")
@@ -623,12 +639,9 @@ class RomanticDistributor:
         else:
             t0 = time.time()
             orientations = self._sample_orientations_yaml(eligible_people, arrays)
-            logger.info(f"Sampled {n:,} orientations in {time.time() - t0:.2f}s (YAML fallback)")
+            logger.info(f"Sampled {n:,} orientations in {time.time() - t0:.2f}s (YAML path)")
 
         self._write_results(eligible_people, arrays, orientations)
-
-        if self._verbose_diagnostics:
-            self._log_verbose_diagnostics(eligible_people, orientations)
 
         total_time = time.time() - total_start
         logger.info(f"Relationship processing complete in {total_time:.2f}s")
@@ -682,246 +695,3 @@ class RomanticDistributor:
                 person.properties[self.status_key] = {'type': 'exclusive', 'consensual': True}
             else:
                 person.properties[self.status_key] = {'type': 'no_partner', 'consensual': True}
-
-    # ------------------------------------------------------------------
-    # Verbose diagnostics (off by default — see top-of-file note)
-    # ------------------------------------------------------------------
-
-    def _log_verbose_diagnostics(self, adults: List, orientations: np.ndarray):
-        self._log_stage1_same_category_diagnostic()
-        self._log_compatibility_diagnostic(adults)
-        if self._use_data_sources:
-            self._log_band_assignment_diagnostic(adults, orientations)
-            self._log_msoa_quintile_diagnostic(adults, orientations)
-
-    def _log_stage1_same_category_diagnostic(self):
-        hd = getattr(self.world, 'household_distributor', None)
-        rules = getattr(hd, 'relationship_rules', None)
-        if rules is None:
-            return
-        lookup_stats = rules.stats.get('same_category_lookup') or {}
-        if not lookup_stats:
-            return
-
-        logger.info("-" * 40)
-        logger.info("STAGE 1 — same_category lookup usage (household pair_matching)")
-        logger.info("-" * 40)
-        for attr, st in lookup_stats.items():
-            n_hits = st['source_hits']
-            n_fb = st['fallback_hits']
-            total = n_hits + n_fb
-            mean = (st['prob_sum'] / st['prob_n']) if st['prob_n'] else 0.0
-            logger.info(
-                f"  attribute={attr!r}: total_calls={total:,}  "
-                f"source_hits={n_hits:,} ({(n_hits / total * 100 if total else 0):.1f}%)  "
-                f"fallback_hits={n_fb:,}"
-            )
-            if st['prob_n']:
-                logger.info(
-                    f"    P(same-{attr}) used: mean={mean:.4f}  "
-                    f"min={st['prob_min']:.4f}  max={st['prob_max']:.4f}  "
-                    f"n={st['prob_n']:,}"
-                )
-        logger.info("-" * 40)
-
-    def _log_compatibility_diagnostic(self, adults: List):
-        logger.info("-" * 40)
-        logger.info("ORIENTATION COMPATIBILITY DIAGNOSTIC")
-        logger.info("-" * 40)
-
-        couples = []
-        seen = set()
-        id_to_person = {p.id: p for p in self.world.population.people}
-
-        for p in adults:
-            if p.id in seen:
-                continue
-            cc = p.properties.get('cohabiting_couple')
-            if cc and isinstance(cc, list) and len(cc) > 0:
-                partner_id = cc[0]
-                if partner_id in id_to_person:
-                    couples.append((p, id_to_person[partner_id]))
-                    seen.add(p.id)
-                    seen.add(partner_id)
-
-        stats = {
-            'same_sex': {'count': 0, 'orientations': {}},
-            'diff_sex': {'count': 0, 'orientations': {}},
-        }
-        inconsistent_count = 0
-
-        for p1, p2 in couples:
-            is_same_sex = p1.sex == p2.sex
-            key = 'same_sex' if is_same_sex else 'diff_sex'
-            stats[key]['count'] += 1
-            for p in (p1, p2):
-                o = p.properties.get(self.orientation_key)
-                stats[key]['orientations'][o] = stats[key]['orientations'].get(o, 0) + 1
-                if is_same_sex and o == 'heterosexual':
-                    inconsistent_count += 1
-                elif not is_same_sex and o == 'homosexual':
-                    inconsistent_count += 1
-
-        logger.info(f"Total Cohabiting Couples Found: {len(couples)}")
-        logger.info(f"  Same-sex Couples: {stats['same_sex']['count']}")
-        for o, count in stats['same_sex']['orientations'].items():
-            logger.info(f"    - {o}: {count}")
-        logger.info(f"  Different-sex Couples: {stats['diff_sex']['count']}")
-        for o, count in stats['diff_sex']['orientations'].items():
-            logger.info(f"    - {o}: {count}")
-
-        if inconsistent_count == 0:
-            logger.info("✓ ALL cohabiting couples have orientations.")
-        else:
-            logger.error(f"✗ FOUND {inconsistent_count} inconsistencies in orientation assignment!")
-        logger.info("-" * 40)
-
-    def _log_band_assignment_diagnostic(self, adults: List, orientations: np.ndarray):
-        if not self._prevalence_band_names:
-            return
-        logger.info("-" * 40)
-        logger.info("STAGE 2 — orientation distribution per (sex, age band)")
-        logger.info("(empirical from this run; prior = national P_nat from prevalence file)")
-        logger.info("-" * 40)
-
-        n_orients = self._n_orients
-        observed = np.zeros((N_SEXES, len(self._prevalence_band_names), n_orients), dtype=np.int64)
-        ages = np.fromiter((p.age for p in adults), dtype=np.int64, count=len(adults))
-        sexes = np.fromiter(
-            (SEX_MALE if p.sex.lower().startswith('m') else SEX_FEMALE for p in adults),
-            dtype=np.int64, count=len(adults),
-        )
-        bands = self._age_array_to_band_idx(ages)
-        valid = bands >= 0
-        np.add.at(
-            observed,
-            (sexes[valid], bands[valid], orientations[valid].astype(np.int64)),
-            1,
-        )
-
-        header = f"  {'sex':<6} {'band':<7} {'n':>7}  " + "  ".join(
-            f"{name[:6]:>10}" for name in self.orientation_names
-        ) + "    source"
-        logger.info(header)
-
-        extrapolated_count = 0
-        for s_code in (SEX_MALE, SEX_FEMALE):
-            s_name = 'male' if s_code == SEX_MALE else 'female'
-            for b_idx, band_name in enumerate(self._prevalence_band_names):
-                n_in = int(observed[s_code, b_idx].sum())
-                if n_in == 0:
-                    continue
-                if band_name not in _ONS_BAND_NAMES:
-                    extrapolated_count += n_in
-                emp = observed[s_code, b_idx] / n_in
-                prior = (self._prevalence_table[s_code, b_idx]
-                         if self._prevalence_table is not None else None)
-                cells = []
-                for o_idx in range(n_orients):
-                    e = emp[o_idx]
-                    p = prior[o_idx] if prior is not None else float('nan')
-                    cells.append(f"{e * 100:5.2f}/{p * 100:4.2f}".rjust(10))
-                src = "ons" if band_name in _ONS_BAND_NAMES else "extrapolated"
-                logger.info(
-                    f"  {s_name:<6} {band_name:<7} {n_in:>7,}  "
-                    + "  ".join(cells)
-                    + f"    {src}"
-                )
-        logger.info(
-            "(cells = empirical%/prior%; values close ⇒ raking is honoring the prior)"
-        )
-        logger.info(
-            f"Adults assigned via extrapolated 75+ bands: {extrapolated_count:,}"
-        )
-        logger.info("-" * 40)
-
-    def _log_msoa_quintile_diagnostic(self, adults: List, orientations: np.ndarray):
-        if not self._msoa_codes:
-            return
-        try:
-            n_homo = self.orientation_names.index('homosexual')
-            n_bi = self.orientation_names.index('bisexual')
-        except ValueError:
-            return
-
-        sgu_cache = self._build_sgu_to_msoa_cache()
-
-        n_msoas = len(self._msoa_codes)
-        msoa_total = np.zeros(n_msoas, dtype=np.int64)
-        msoa_lgb = np.zeros(n_msoas, dtype=np.int64)
-        msoa_couples = np.zeros(n_msoas, dtype=np.int64)
-        msoa_same_sex = np.zeros(n_msoas, dtype=np.int64)
-
-        adult_msoa_idx: List[int] = []
-        for p in adults:
-            adult_msoa_idx.append(self._msoa_idx_for_person(p, sgu_cache))
-        adult_msoa_arr = np.asarray(adult_msoa_idx, dtype=np.int64)
-        valid = adult_msoa_arr >= 0
-        np.add.at(msoa_total, adult_msoa_arr[valid], 1)
-        is_lgb = (orientations == n_homo) | (orientations == n_bi)
-        np.add.at(msoa_lgb, adult_msoa_arr[valid & is_lgb], 1)
-
-        # Couple counts (sequential — couples are O(adults), per-person dict
-        # lookups are still cheap here since this is a one-off diagnostic).
-        seen = set()
-        id_to_person = {p.id: p for p in self.world.population.people}
-        for i, p in enumerate(adults):
-            if p.id in seen:
-                continue
-            cc = p.properties.get('cohabiting_couple') or []
-            if not cc:
-                continue
-            partner = id_to_person.get(cc[0])
-            if partner is None:
-                continue
-            m = adult_msoa_arr[i]
-            if m < 0:
-                continue
-            msoa_couples[m] += 1
-            if p.sex == partner.sex:
-                msoa_same_sex[m] += 1
-            seen.add(p.id)
-            seen.add(partner.id)
-
-        in_run = msoa_total > 0
-        if not in_run.any():
-            return
-
-        # Score by p_homo + 0.5 * p_bi (same as stage 1 uses).
-        score = self._msoa_table[:, n_homo] + 0.5 * self._msoa_table[:, n_bi]
-        in_run_idx = np.flatnonzero(in_run)
-        sorted_local = in_run_idx[np.argsort(score[in_run_idx])]
-
-        n_buckets = min(5, sorted_local.size)
-        size = max(1, sorted_local.size // n_buckets)
-        logger.info("-" * 40)
-        logger.info("STAGE 1+2 — MSOA quintile sweep (sorted by input p_homo + 0.5·p_bi)")
-        logger.info("-" * 40)
-        logger.info(
-            f"  {'quintile':<10}{'msoas':>7}{'adults':>9}{'expected_LGB%':>15}"
-            f"{'empirical_LGB%':>16}{'expected_SS%':>14}{'empirical_SS%':>15}"
-        )
-        for b in range(n_buckets):
-            lo = b * size
-            hi = (b + 1) * size if b < n_buckets - 1 else sorted_local.size
-            bucket = sorted_local[lo:hi]
-            if bucket.size == 0:
-                continue
-            n_adults = int(msoa_total[bucket].sum())
-            n_lgb = int(msoa_lgb[bucket].sum())
-            n_couples = int(msoa_couples[bucket].sum())
-            n_same = int(msoa_same_sex[bucket].sum())
-            avg_lgb = float(np.mean(self._msoa_table[bucket, n_homo] + self._msoa_table[bucket, n_bi]))
-            avg_score = float(np.mean(score[bucket]))
-            emp_lgb = (n_lgb / n_adults * 100) if n_adults else 0.0
-            emp_ss = (n_same / n_couples * 100) if n_couples else 0.0
-            logger.info(
-                f"  Q{b + 1:<9}{int(bucket.size):>7,}{n_adults:>9,}"
-                f"{avg_lgb * 100:>15.2f}{emp_lgb:>16.2f}"
-                f"{avg_score * 100:>14.2f}{emp_ss:>15.2f}"
-            )
-        logger.info(
-            "(empirical_LGB% should rise across quintiles; empirical_SS% should "
-            "track expected_SS%)"
-        )
-        logger.info("-" * 40)

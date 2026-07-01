@@ -1,60 +1,43 @@
 # ============================================================================
-# Romantic/Sexual Relationship Configuration (Simplified)
+# Romantic / Sexual Relationship Configuration
 # ============================================================================
-# This configuration only defines sexual orientations and storage keys.
-# actual matching is handled by pre-existing cohabiting couple status.
+# Assigns a sexual orientation to every adult and stamps a relationship_status.
+# It does not match partners — it recognises the couples household allocation
+# already built (via the cohabiting_couple person property).
 # ============================================================================
 
 name: "romantic_relationships"
 
-# General Constraints
-min_age: 16
-max_age: 120
+# Who gets an orientation assigned (global_filters, same shape as distributors;
+# a person must pass ALL of them). Here: adults 16+.
+eligibility:
+  global_filters:
+    - attribute: "age"
+      type: "numerical"
+      min: 16
+      max: 120
 
-# Data sources (UK / ONS-driven). When present, the distributor uses raked
-# probabilities P(o | sex, age, msoa) ∝ P_nat(o | sex, age) · P_msoa(o) / P_nat_marginal(o)
-# instead of the YAML `probabilities` block below. Worlds that do not have
-# UK MSOA codes (e.g. MedievalYaml) should override this YAML and omit
-# `data_sources` to fall back to the YAML-only path.
+# Orientation source. Declared explicitly: when `data_sources` is present the
+# distributor rakes P(orientation | sex, age, geo_unit) from the two files by
+# IPF, and both files MUST exist (fail-loud, adr/0010). Worlds without area
+# orientation data (e.g. MedievalYaml) OMIT `data_sources` entirely and instead
+# add a `probabilities` + `age_adjustments` block under `sexual_orientations`
+# (the YAML path — see martha-docs/configs_explained/relationships.md).
 data_sources:
-  prevalence_path: "${data_root}/population/sexual_orientation/orientation_prevalence_extended.csv"
-  msoa_marginal_path: "${data_root}/population/sexual_orientation/orientation_by_msoa_normalized.csv"
-  geo_level: "MGU"
+  demographic_distribution:            # P(orientation | sex, age_group)
+    path: "${data_root}/population/sexual_orientation/orientation_prevalence_extended.csv"
+  geo_distribution:                    # P(orientation | geo_unit)
+    path: "${data_root}/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+    geo_level: "MGU"                   # the geography level this distribution is keyed at
 
-# Verification logging. OFF for production runs (the heavy diagnostics walk
-# the entire population multiple times). Flip to true after a code change to
-# verify behavior — outputs national-vs-empirical comparison, MSOA quintile
-# sweep, etc. (see RomanticDistributor._log_verbose_diagnostics).
-diagnostics:
-  verbose: false
-
-# Sexual Orientation Configuration
 sexual_orientations:
   types:
     - heterosexual
     - homosexual
     - bisexual
 
-  probabilities:
-    male:
-      heterosexual: 0.90
-      homosexual: 0.05
-      bisexual: 0.05
-    female:
-      heterosexual: 0.85
-      homosexual: 0.05
-      bisexual: 0.10
-
-  age_adjustments:
-    "16-25":
-      bisexual: 1.3
-    "65-74":
-      homosexual: 0.7
-      bisexual: 0.5
-    "75+":
-      homosexual: 0.7
-      bisexual: 0.5
-
+  # orientation -> own_sex -> allowed partner sexes. Gates a coupled person's
+  # orientation against their partner's sex (used on both the data and YAML paths).
   compatibility:
     heterosexual:
       male: [female]
@@ -66,7 +49,6 @@ sexual_orientations:
       male: [male, female]
       female: [male, female]
 
-# Storage Configuration
 storage:
   orientation_key: "sexual_orientation"
   status_key: "relationship_status"

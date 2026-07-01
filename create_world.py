@@ -313,6 +313,7 @@ def main():
             except Exception as e:
                 logger.error(f"Failed to build relationships from {config_path}: {e}")
                 logger.exception(e)
+                sys.exit(1)
 
     # ========================================
     # ROMANTIC RELATIONSHIPS - Sexual orientation and partnerships
@@ -335,6 +336,7 @@ def main():
         except Exception as e:
             logger.error(f"Failed to distribute romantic relationships: {e}")
             logger.exception(e)
+            sys.exit(1)
 
     logger.info("")
     logger.info("=" * 60)

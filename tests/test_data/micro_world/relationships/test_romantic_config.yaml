@@ -1,7 +1,11 @@
 name: "romantic_relationships"
 
-min_age: 18
-max_age: 120
+eligibility:
+  global_filters:
+    - attribute: "age"
+      type: "numerical"
+      min: 18
+      max: 120
 
 sexual_orientations:
   types: ['heterosexual', 'homosexual', 'bisexual']
