@@ -36,8 +36,7 @@ class VenueChildCreator:
         parent_venue_type,
         child_venue_type,
         group_by_attribute=None,
-        max_capacity=30,
-        min_capacity=1,
+        child_max_size=30,
         child_properties=None,
         distribution_strategy='even',
         balance_by=None,
@@ -55,8 +54,7 @@ class VenueChildCreator:
             parent_venue_type: Type of parent venues to process (e.g., "school")
             child_venue_type: Type of child venues to create (e.g., "classroom")
             group_by_attribute: Attribute to group by (e.g., "age", "sex")
-            max_capacity: Maximum people per child venue
-            min_capacity: Minimum people to create a child venue (default: 1)
+            child_max_size: Maximum people per child venue
             child_properties: Dict of properties to add to each child venue
             distribution_strategy: How to distribute people ('even' or 'fill')
             balance_by: Optional attribute (or list of attributes) to balance evenly across
@@ -84,8 +82,7 @@ class VenueChildCreator:
         self.parent_venue_type = parent_venue_type
         self.child_venue_type = child_venue_type
         self.group_by_attribute = group_by_attribute
-        self.max_capacity = max_capacity
-        self.min_capacity = min_capacity
+        self.child_max_size = child_max_size
         self.child_properties = child_properties or {}
         self.distribution_strategy = distribution_strategy
         self.balance_by = balance_by
@@ -95,6 +92,19 @@ class VenueChildCreator:
         self.replace_parent_activity = replace_parent_activity
         self.remove_from_parent = remove_from_parent
         self.member_filters = member_filters or []
+
+        if distribution_strategy not in ('even', 'fill'):
+            raise ValueError(
+                f"Unknown distribution_strategy '{distribution_strategy}'. "
+                f"Valid values: 'even', 'fill'."
+            )
+        for f in self.member_filters:
+            ftype = f.get('type', 'numerical')
+            if ftype not in ('numerical', 'categorical'):
+                raise ValueError(
+                    f"Unknown member_filter type '{ftype}' for attribute "
+                    f"'{f.get('attribute')}'. Valid types: 'numerical', 'categorical'."
+                )
 
         # Statistics
         self.stats = {
@@ -114,8 +124,7 @@ class VenueChildCreator:
         parent_venue_type: school
         child_venue_type: classroom
         group_by_attribute: age
-        max_capacity: 30
-        min_capacity: 10
+        child_max_size: 30
         child_properties:
           capacity: 30
         distribution_strategy: even
@@ -137,8 +146,7 @@ class VenueChildCreator:
             parent_venue_type=config['parent_venue_type'],
             child_venue_type=config['child_venue_type'],
             group_by_attribute=config.get('group_by_attribute'),
-            max_capacity=config.get('max_capacity', 30),
-            min_capacity=config.get('min_capacity', 1),
+            child_max_size=config.get('child_max_size', 30),
             child_properties=config.get('child_properties', {}),
             distribution_strategy=config.get('distribution_strategy', 'even'),
             balance_by=config.get('balance_by'),
@@ -290,13 +298,6 @@ class VenueChildCreator:
                     if get_person_attribute(p, attr_name) in allowed_values
                 ]
 
-            else:
-                logger.warning(
-                    f"Unknown filter type '{filter_type}' for attribute '{attr_name}'. "
-                    f"Valid types are: 'numerical', 'categorical'. "
-                    f"This filter has been SKIPPED — all {len(filtered)} members pass through."
-                )
-
         return filtered
 
     def _group_members_by_attribute(self, members, attribute_name):
@@ -384,13 +385,8 @@ class VenueChildCreator:
         """
         num_members = len(group_members)
 
-        # Check minimum capacity
-        if num_members < self.min_capacity:
-            logger.debug(f"    Group {group_key}: {num_members} members (below min {self.min_capacity}), skipping")
-            return 0
-
         # Calculate number of child venues needed
-        num_children = math.ceil(num_members / self.max_capacity)
+        num_children = math.ceil(num_members / self.child_max_size)
 
         #logger.info(f"    Group {group_key}: {num_members} members → {num_children} {self.child_venue_type}(s)")
 
@@ -463,10 +459,10 @@ class VenueChildCreator:
                         member_index += 1
 
         elif self.distribution_strategy == 'fill':
-            # Fill each child to max_capacity before moving to next
+            # Fill each child to child_max_size before moving to next
             member_index = 0
             for child_venue in child_venues:
-                for _ in range(self.max_capacity):
+                for _ in range(self.child_max_size):
                     if member_index < len(members):
                         person = members[member_index]
                         self._add_person_to_child(person, child_venue)
@@ -538,8 +534,8 @@ class VenueChildCreator:
                 'parent_venue_name': parent_name,
                 'group_key': group_key,
                 'num_members': len(members),
-                'max_capacity': self.max_capacity,
-                'utilization_pct': f"{(len(members) / self.max_capacity * 100):.1f}" if self.max_capacity > 0 else "0.0",
+                'child_max_size': self.child_max_size,
+                'utilization_pct': f"{(len(members) / self.child_max_size * 100):.1f}" if self.child_max_size > 0 else "0.0",
             }
 
             # Add group attribute if specified
@@ -561,5 +557,5 @@ class VenueChildCreator:
         filter_info = f", filters={len(self.member_filters)}" if self.member_filters else ""
         return (
             f"<VenueChildCreator: {self.parent_venue_type} → {self.child_venue_type}, "
-            f"group_by={self.group_by_attribute}, max_capacity={self.max_capacity}{filter_info}>"
+            f"group_by={self.group_by_attribute}, child_max_size={self.child_max_size}{filter_info}>"
         )

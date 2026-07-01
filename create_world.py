@@ -260,7 +260,8 @@ def main():
                 except Exception as e:
                     logger.error(f"Failed to run child creator {step_config}: {e}")
                     logger.exception(e)
-                    
+                    sys.exit(1)
+
             else:
                 logger.warning(f"Unknown timeline step type: {step_type}")
 

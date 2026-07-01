@@ -9,7 +9,7 @@
 #    - Creates classrooms for each age group
 #    - Redistributes students from school to specific classrooms
 #
-# Example: If a school has 90 students aged 10, and max_capacity is 30,
+# Example: If a school has 90 students aged 10, and child_max_size is 30,
 #          this will create 3 classrooms for age 10 students.
 
 parent_venue_type: school    # Parent venues to process
@@ -19,11 +19,7 @@ child_venue_type: classroom   # Type of child venues to create
 group_by_attribute: age
 
 # Maximum students per classroom
-max_capacity: 45
-
-# Minimum students needed to create a classroom
-# (if a school has only 5 students aged 15, don't create a classroom)
-min_capacity: 1
+child_max_size: 45
 
 # Properties to add to each created classroom
 child_properties:

@@ -187,8 +187,7 @@ class TestInit:
         assert creator.parent_venue_type == "school"
         assert creator.child_venue_type == "classroom"
         assert creator.group_by_attribute is None
-        assert creator.max_capacity == 30
-        assert creator.min_capacity == 1
+        assert creator.child_max_size == 30
         assert creator.child_properties == {}
         assert creator.distribution_strategy == "even"
         assert creator.attribute_mapping == {}
@@ -203,8 +202,7 @@ class TestInit:
             parent_venue_type="company",
             child_venue_type="office",
             group_by_attribute="sector",
-            max_capacity=50,
-            min_capacity=5,
+            child_max_size=50,
             child_properties={"capacity": 50},
             distribution_strategy="fill",
             attribute_mapping={"A": "group_a"},
@@ -214,8 +212,7 @@ class TestInit:
             remove_from_parent=True,
             member_filters=[{"attribute": "age", "type": "numerical", "min": 18}],
         )
-        assert creator.max_capacity == 50
-        assert creator.min_capacity == 5
+        assert creator.child_max_size == 50
         assert creator.distribution_strategy == "fill"
         assert creator.remove_from_parent is True
         assert len(creator.member_filters) == 1
@@ -224,6 +221,12 @@ class TestInit:
         creator = VenueChildCreator("school", "classroom")
         for key in ("parents_processed", "children_created", "people_redistributed", "people_filtered_out"):
             assert creator.stats[key] == 0
+
+    def test_unknown_distribution_strategy_raises(self):
+        """An unknown distribution_strategy must fail loud at construction — not
+        silently create empty children by placing no members."""
+        with pytest.raises(ValueError, match="distribution_strategy"):
+            VenueChildCreator("school", "classroom", distribution_strategy="evne")
 
 
 # =============================================================================
@@ -241,7 +244,7 @@ class TestFromYaml:
         creator = VenueChildCreator.from_yaml(str(yaml_file))
         assert creator.parent_venue_type == "school"
         assert creator.child_venue_type == "classroom"
-        assert creator.max_capacity == 30  # default
+        assert creator.child_max_size == 30  # default
 
     def test_loads_all_optional_fields(self, tmp_path):
         yaml_file = tmp_path / "test.yaml"
@@ -249,8 +252,7 @@ class TestFromYaml:
             "parent_venue_type: university\n"
             "child_venue_type: uni_year\n"
             "group_by_attribute: age\n"
-            "max_capacity: 25\n"
-            "min_capacity: 3\n"
+            "child_max_size: 25\n"
             "child_properties:\n"
             "  capacity: 25\n"
             "distribution_strategy: fill\n"
@@ -269,8 +271,7 @@ class TestFromYaml:
         )
         creator = VenueChildCreator.from_yaml(str(yaml_file))
         assert creator.group_by_attribute == "age"
-        assert creator.max_capacity == 25
-        assert creator.min_capacity == 3
+        assert creator.child_max_size == 25
         assert creator.distribution_strategy == "fill"
         assert creator.attribute_mapping[18] == "18"
         assert creator.attribute_mapping["default"] == "23+"
@@ -488,7 +489,7 @@ class TestCreateChildrenForGroup:
         school = MinimalVenue(name="school_1", venue_type="school")
         venue_manager.add_venue(school)
 
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         people = make_people(90, age=10)
 
         num_created = creator._create_children_for_group(school, 10, people, world)
@@ -500,7 +501,7 @@ class TestCreateChildrenForGroup:
         school = MinimalVenue(name="school_1", venue_type="school")
         venue_manager.add_venue(school)
 
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         people = make_people(5, age=10)
 
         num_created = creator._create_children_for_group(school, 10, people, world)
@@ -510,22 +511,11 @@ class TestCreateChildrenForGroup:
         school = MinimalVenue(name="school_1", venue_type="school")
         venue_manager.add_venue(school)
 
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         people = make_people(31, age=10)
 
         num_created = creator._create_children_for_group(school, 10, people, world)
         assert num_created == 2  # ceil(31/30) = 2
-
-    def test_below_min_capacity_skips(self, world, venue_manager):
-        school = MinimalVenue(name="school_1", venue_type="school")
-        venue_manager.add_venue(school)
-
-        creator = VenueChildCreator("school", "classroom", max_capacity=30, min_capacity=10)
-        people = make_people(5, age=10)
-
-        num_created = creator._create_children_for_group(school, 10, people, world)
-        assert num_created == 0
-        assert len(school.children) == 0
 
     def test_child_properties_include_group_key(self, world, venue_manager):
         school = MinimalVenue(name="school_1", venue_type="school")
@@ -548,7 +538,7 @@ class TestCreateChildrenForGroup:
         school = MinimalVenue(name="school_1", venue_type="school")
         venue_manager.add_venue(school)
 
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         people = make_people(60, age=10)
         creator._create_children_for_group(school, 10, people, world)
 
@@ -564,7 +554,7 @@ class TestCreateChildrenForGroup:
             "school", "classroom",
             group_by_attribute="age",
             child_properties={"capacity": 30},
-            max_capacity=5,
+            child_max_size=5,
         )
         people = make_people(10, age=10)
         creator._create_children_for_group(school, 10, people, world)
@@ -694,7 +684,7 @@ class TestDistributeBalanced:
 class TestDistributeFill:
 
     def test_fill_strategy_fills_first_then_next(self):
-        creator = VenueChildCreator("s", "c", distribution_strategy="fill", max_capacity=10)
+        creator = VenueChildCreator("s", "c", distribution_strategy="fill", child_max_size=10)
         people = make_people(25)
         venues = [MinimalVenue(venue_type="classroom") for _ in range(3)]
 
@@ -704,7 +694,7 @@ class TestDistributeFill:
         assert sizes == [10, 10, 5]
 
     def test_fill_strategy_exact_capacity(self):
-        creator = VenueChildCreator("s", "c", distribution_strategy="fill", max_capacity=10)
+        creator = VenueChildCreator("s", "c", distribution_strategy="fill", child_max_size=10)
         people = make_people(20)
         venues = [MinimalVenue(venue_type="classroom") for _ in range(2)]
 
@@ -837,7 +827,7 @@ class TestProcessParentVenue:
         creator = VenueChildCreator(
             "school", "classroom",
             group_by_attribute="age",
-            max_capacity=30,
+            child_max_size=30,
         )
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
@@ -856,7 +846,7 @@ class TestProcessParentVenue:
         creator = VenueChildCreator(
             "company", "office",
             group_by_attribute=None,
-            max_capacity=50,
+            child_max_size=50,
         )
         company = MinimalVenue(name="company", venue_type="company")
         venue_manager.add_venue(company)
@@ -872,7 +862,7 @@ class TestProcessParentVenue:
         creator = VenueChildCreator(
             "school", "classroom",
             group_by_attribute="age",
-            max_capacity=30,
+            child_max_size=30,
             member_filters=[{"attribute": "age", "type": "numerical", "min": 10}],
         )
         school = MinimalVenue(name="school", venue_type="school")
@@ -920,8 +910,7 @@ class TestCreateChildren:
             parent_venue_type="school",
             child_venue_type="classroom",
             group_by_attribute="age",
-            max_capacity=30,
-            min_capacity=1,
+            child_max_size=30,
             activity_map_key="primary_activity",
             subset_key="student",
             replace_parent_activity=True,
@@ -958,7 +947,7 @@ class TestCreateChildren:
             parent_venue_type="company",
             child_venue_type="office",
             group_by_attribute=None,
-            max_capacity=50,
+            child_max_size=50,
             activity_map_key="primary_activity",
             subset_key="worker",
         )
@@ -979,7 +968,7 @@ class TestCreateChildren:
             parent_venue_type="university",
             child_venue_type="uni_groups_by_year",
             group_by_attribute="age",
-            max_capacity=25,
+            child_max_size=25,
             attribute_mapping={18: "18", 19: "19", 20: "20", "default": "23+"},
             activity_map_key="primary_activity",
             subset_key="student",
@@ -1004,7 +993,7 @@ class TestCreateChildren:
         assert stats["people_redistributed"] == 95
 
     def test_multiple_parent_venues(self, world, venue_manager):
-        creator = VenueChildCreator("school", "classroom", max_capacity=10)
+        creator = VenueChildCreator("school", "classroom", child_max_size=10)
 
         for i in range(5):
             school = MinimalVenue(name=f"school_{i}", venue_type="school")
@@ -1027,7 +1016,7 @@ class TestDistributionStrategies:
         """Even strategy should produce balanced class sizes."""
         creator = VenueChildCreator(
             "school", "classroom",
-            max_capacity=30,
+            child_max_size=30,
             distribution_strategy="even",
         )
         school = MinimalVenue(name="school", venue_type="school")
@@ -1045,7 +1034,7 @@ class TestDistributionStrategies:
         """Fill strategy should fill first venue to max before starting next."""
         creator = VenueChildCreator(
             "school", "classroom",
-            max_capacity=30,
+            child_max_size=30,
             distribution_strategy="fill",
         )
         school = MinimalVenue(name="school", venue_type="school")
@@ -1058,7 +1047,7 @@ class TestDistributionStrategies:
         assert sizes == [30, 20]
 
     def test_even_with_one_student(self, world, venue_manager):
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
         populate_venue(school, make_people(1))
@@ -1075,9 +1064,9 @@ class TestDistributionStrategies:
 
 class TestEdgeCases:
 
-    def test_max_capacity_one(self, world, venue_manager):
+    def test_child_max_size_one(self, world, venue_manager):
         """Each person gets their own child venue."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=1)
+        creator = VenueChildCreator("school", "classroom", child_max_size=1)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
         populate_venue(school, make_people(5))
@@ -1085,35 +1074,15 @@ class TestEdgeCases:
         stats = creator.create_children(world)
         assert stats["children_created"] == 5
 
-    def test_exactly_at_max_capacity(self, world, venue_manager):
-        """Exactly max_capacity people → exactly 1 child venue."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+    def test_exactly_at_child_max_size(self, world, venue_manager):
+        """Exactly child_max_size people → exactly 1 child venue."""
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
         populate_venue(school, make_people(30))
 
         stats = creator.create_children(world)
         assert stats["children_created"] == 1
-
-    def test_exactly_at_min_capacity(self, world, venue_manager):
-        """Exactly min_capacity people → 1 child created (not skipped)."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=30, min_capacity=10)
-        school = MinimalVenue(name="school", venue_type="school")
-        venue_manager.add_venue(school)
-        populate_venue(school, make_people(10))
-
-        stats = creator.create_children(world)
-        assert stats["children_created"] == 1
-
-    def test_one_below_min_capacity_skips(self, world, venue_manager):
-        creator = VenueChildCreator("school", "classroom", max_capacity=30, min_capacity=10)
-        school = MinimalVenue(name="school", venue_type="school")
-        venue_manager.add_venue(school)
-        populate_venue(school, make_people(9))
-
-        stats = creator.create_children(world)
-        assert stats["children_created"] == 0
-        assert stats["people_redistributed"] == 0
 
     def test_child_properties_shallow_copy_safety(self):
         """BUG: __init__ doesn't defensively copy child_properties, so external
@@ -1126,7 +1095,7 @@ class TestEdgeCases:
         assert "extra" in creator.child_properties  # documents the bug
 
     def test_repr(self):
-        creator = VenueChildCreator("school", "classroom", group_by_attribute="age", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", group_by_attribute="age", child_max_size=30)
         r = repr(creator)
         assert "school" in r
         assert "classroom" in r
@@ -1192,7 +1161,7 @@ class TestBugDetection:
     def test_stats_accumulate_across_calls(self, world, venue_manager):
         """Stats are never reset between calls to create_children.
         If create_children is called twice, stats accumulate."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=10)
+        creator = VenueChildCreator("school", "classroom", child_max_size=10)
 
         school1 = MinimalVenue(name="school_1", venue_type="school")
         venue_manager.add_venue(school1)
@@ -1217,21 +1186,13 @@ class TestBugDetection:
 
 class TestFilterMembersEdgeCases:
 
-    def test_unknown_filter_type_logs_warning_and_passes_all(self, caplog):
+    def test_unknown_filter_type_raises(self):
         """An unknown filter_type (e.g. 'regex', a YAML typo like 'numercial') must
-        log a loud WARNING naming the bad type and skip the filter. All members pass
-        through so the simulation doesn't silently produce wrong results without
-        any indication of what happened."""
-        import logging
-        creator = VenueChildCreator("s", "c", member_filters=[
-            {"attribute": "age", "type": "regex", "pattern": r"\d+"}
-        ])
-        people = [MinimalPerson(age=a) for a in [5, 10, 99]]
-        with caplog.at_level(logging.WARNING, logger="venue_child_creator"):
-            result = creator._filter_members(people)
-        assert len(result) == 3  # filter skipped, all pass through
-        assert "regex" in caplog.text
-        assert "SKIPPED" in caplog.text
+        fail loud at construction, naming the bad type — not silently pass everyone."""
+        with pytest.raises(ValueError, match="regex"):
+            VenueChildCreator("s", "c", member_filters=[
+                {"attribute": "age", "type": "regex", "pattern": r"\d+"}
+            ])
 
     def test_filter_missing_type_key_defaults_to_numerical(self):
         """When 'type' key is omitted, get('type', 'numerical') defaults to numerical.
@@ -1281,7 +1242,7 @@ class TestNestedChildPropertiesShallowCopyBug:
         creator = VenueChildCreator(
             "school", "classroom",
             child_properties={"meta": {"level": 1}},  # nested dict
-            max_capacity=5,
+            child_max_size=5,
         )
         people = make_people(10, age=10)
         creator._create_children_for_group(school, 10, people, world)
@@ -1305,7 +1266,7 @@ class TestPersonInMultipleSubsets:
         """BUG: get_all_members() iterates all subsets. A person added to two subsets
         of the same parent appears twice in the members list. They get assigned to two
         different children and are counted twice in people_redistributed stats."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=10)
+        creator = VenueChildCreator("school", "classroom", child_max_size=10)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
 
@@ -1331,7 +1292,7 @@ class TestChildVenueRegistration:
     def test_created_children_are_queryable_by_type(self, world, venue_manager):
         """Child venues created by VenueChildCreator must be registered in the
         venue manager so they can be retrieved later via get_venues_by_type."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
         populate_venue(school, make_people(60))
@@ -1347,7 +1308,7 @@ class TestChildVenueRegistration:
         creator = VenueChildCreator(
             "school", "classroom",
             group_by_attribute="age",
-            max_capacity=30,
+            child_max_size=30,
         )
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
@@ -1360,7 +1321,7 @@ class TestChildVenueRegistration:
 
     def test_parent_venue_type_not_mixed_with_child_type(self, world, venue_manager):
         """Creating classrooms inside schools must not affect the school count."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         for i in range(3):
             school = MinimalVenue(name=f"school_{i}", venue_type="school")
             venue_manager.add_venue(school)
@@ -1387,7 +1348,7 @@ class TestDistributionInvariants:
 
     def test_even_strategy_assigns_all_members(self, world, venue_manager):
         """Even distribution must assign every member to exactly one child venue."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
         people = make_people(91)  # odd number to test remainder handling
@@ -1402,7 +1363,7 @@ class TestDistributionInvariants:
         """Fill distribution must assign every member to exactly one child venue."""
         creator = VenueChildCreator(
             "school", "classroom",
-            max_capacity=30,
+            child_max_size=30,
             distribution_strategy="fill",
         )
         school = MinimalVenue(name="school", venue_type="school")
@@ -1418,7 +1379,7 @@ class TestDistributionInvariants:
     def test_even_strategy_no_child_is_empty_when_members_exceed_venues(self, world, venue_manager):
         """With even distribution, every child venue should receive at least one member
         when there are more members than child venues (guaranteed by ceil division)."""
-        creator = VenueChildCreator("school", "classroom", max_capacity=30)
+        creator = VenueChildCreator("school", "classroom", child_max_size=30)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
         populate_venue(school, make_people(61))  # ceil(61/30) = 3 children, min 20 each
