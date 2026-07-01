@@ -1,6 +1,4 @@
-# ============================================================================
 # Educational Venue Distributor for Durham 1911
-# ============================================================================
 # This file configures how eligible people are assigned to school venues.
 # The allocation flows through 5 phases in order:
 #   1. Special cases (e.g., boarding school students)
@@ -8,7 +6,6 @@
 #   3. Normal allocation (allocate_by_geo_unit using the strategy below)
 #   4. Fallback for anyone still unallocated
 #   5. Exports (CSV reports)
-# ============================================================================
 
 # --- IDENTITY ---
 # These link the distributor to venue objects and person activity maps.

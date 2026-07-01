@@ -23,9 +23,7 @@ from may.attribute_assignment.assignment_config import (
 )
 
 
-# =============================================================================
 # Minimal real objects
-# =============================================================================
 
 class MinimalGeoUnit:
     def __init__(self, name, level="SGU", parent=None):
@@ -143,9 +141,7 @@ class MinimalConfig:
         self.categories = {}
 
 
-# =============================================================================
 # Fixtures
-# =============================================================================
 
 @pytest.fixture(autouse=True)
 def reset_ids():
@@ -158,9 +154,7 @@ def geo_unit():
     return MinimalGeoUnit("E00001234")
 
 
-# =============================================================================
 # _passes_filters() Tests
-# =============================================================================
 
 class TestPassesFilters:
     """
@@ -344,10 +338,9 @@ class TestPassesFilters:
         assert assigner._passes_filters(MinimalPerson(age=30, activities={'study'})) is False
 
     # --- Required attributes ---
-    # required_attributes no longer gates _passes_filters: a missing dependency
-    # is enforced at the point of use (strategy/lookup fails loud → assign_all
-    # guard, adr/0010), not by silently dropping the person. So presence/absence
-    # of a required attribute does not change filtering.
+    # required_attributes does not gate _passes_filters: a missing dependency is
+    # enforced at the point of use (strategy/lookup fails loud → assign_all
+    # guard), so presence/absence of a required attribute does not change filtering.
 
     def test_required_attribute_present_passes(self):
         assigner = self._make_assigner(
@@ -356,8 +349,7 @@ class TestPassesFilters:
         assert assigner._passes_filters(MinimalPerson(properties={'ethnicity': 'W'})) is True
 
     def test_required_attribute_missing_no_longer_filters(self):
-        """A missing required attribute passes filters now — enforcement is
-        downstream, not a silent drop here."""
+        """A missing required attribute passes filters; enforcement is downstream."""
         assigner = self._make_assigner(
             required_attributes={'ethnicity': {'required': True}}
         )
@@ -386,9 +378,7 @@ class TestPassesFilters:
         assert assigner._passes_filters(person3) is False
 
 
-# =============================================================================
 # _get_dependency_aware_order() Tests
-# =============================================================================
 
 class TestGetDependencyAwareOrder:
     """
@@ -500,9 +490,9 @@ class TestGetDependencyAwareOrder:
     def test_cycle_fails_loud(self):
         """
         If roles A and B depend on each other (cycle), the order can't be
-        satisfied — fail loud rather than silently appending in id order
-        (adr/0019). Real cycles are caught at config load; reaching the assigner
-        with one is a backstop that must still raise.
+        satisfied — fail loud rather than silently appending in id order.
+        Real cycles are caught at config load; reaching the assigner with one
+        is a backstop that must still raise.
         """
         roles = {
             "role_a": Role(name="role_a", description="", subsets=["Adults"], role_type="primary"),
@@ -588,9 +578,7 @@ class TestGetDependencyAwareOrder:
         assert result_ids.index(pb.id) < result_ids.index(pc.id)
 
 
-# =============================================================================
 # _assign_other_residences() Tests
-# =============================================================================
 
 class TestAssignOtherResidences:
     """
@@ -678,8 +666,8 @@ class TestAssignOtherResidences:
 
     def test_missing_source_leaves_residents_unassigned(self):
         """A probabilistic rule against an unregistered source produces no
-        distribution, so the strategy fails for that resident (adr/0010) — no
-        value is invented. The resident is left unassigned, not given a guess."""
+        distribution, so the strategy fails for that resident and leaves them
+        unassigned."""
         config = MinimalConfig(
             attribute_name="ethnicity",
             venue_assignment_rules=[
@@ -699,11 +687,7 @@ class TestAssignOtherResidences:
         assert 'ethnicity' not in person.properties
 
     def test_probabilistic_venue_assignment_assigns(self):
-        """
-        A venue rule with a probabilistic strategy assigns from the geo source.
-        No fallbacks (adr/0010) — venue residents are assigned by explicit
-        primary logic, not by a constant-with-fallback dance.
-        """
+        """A venue rule with a probabilistic strategy assigns from the geo source."""
         assigner = self._make_assigner(venue_assignment_rules=[
             {'venue_types': ['care_home'],
              'assignment': {'strategy': 'probabilistic',
@@ -734,9 +718,7 @@ class TestAssignOtherResidences:
         assert assigner.stats['assignments_by_venue_type']['care_home'] == 2
 
 
-# =============================================================================
 # Batch vs Sequential equivalence Tests
-# =============================================================================
 
 class TestBatchVsSequentialEquivalence:
     """
@@ -877,9 +859,7 @@ class TestBatchVsSequentialEquivalence:
         assert assigner.stats['assigned_people'] == 0
 
 
-# =============================================================================
 # Statistics tracking Tests
-# =============================================================================
 
 class TestStatisticsTracking:
     """Verifies stat counters are accurate during assignment."""
@@ -921,18 +901,14 @@ class TestStatisticsTracking:
         assert assigner.stats['assignments_by_strategy']['venue_care_home'] == 1
 
 
-# =============================================================================
 # _get_or_create_strategy cache Tests
-# =============================================================================
 
-# =============================================================================
 # _get_person_residence_venue() Tests
-# =============================================================================
 
 class TestGetPersonResidenceVenue:
     """
-    Tests residence venue resolution from person's activity_map.
-    Regression tests for bug where venue=None on subset caused AttributeError.
+    Tests residence venue resolution from person's activity_map, including
+    when a subset's venue is None.
     """
 
     def _make_assigner(self):
@@ -954,10 +930,8 @@ class TestGetPersonResidenceVenue:
         assert result is None
 
     def test_returns_none_when_subset_venue_is_none(self):
-        """
-        Regression test: subset exists in activity_map but venue=None.
-        Previously crashed with AttributeError: 'NoneType' has no attribute 'id'.
-        """
+        """When a subset exists in activity_map but its venue is None,
+        resolution returns None."""
         assigner = self._make_assigner()
         person = MinimalPerson(residence_venue=None)  # subset exists, venue=None
         result = assigner._get_person_residence_venue(person)
@@ -971,9 +945,7 @@ class TestGetPersonResidenceVenue:
         assert result is None
 
 
-# =============================================================================
 # _get_or_create_strategy cache Tests
-# =============================================================================
 
 class TestStrategyCache:
     """Tests strategy caching behaviour."""
@@ -990,10 +962,9 @@ class TestStrategyCache:
 
     def test_different_config_objects_same_content_create_different_strategies(self):
         """
-        BUG DOCUMENTATION: Strategy cache uses id(assignment_config) as key.
-        Two dicts with identical content but different object ids will create
-        separate strategy instances. This is by design for performance but
-        means inline-constructed fallback configs won't be cached.
+        Strategy cache uses id(assignment_config) as key, so two dicts with
+        identical content but different object ids create separate strategy
+        instances.
         """
         config = MinimalConfig()
         dm = SimpleDataManager()

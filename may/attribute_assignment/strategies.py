@@ -5,11 +5,8 @@ from typing import Dict, List, Any, Optional
 logger = logging.getLogger("may.attribute_assignment.strategies")
 
 
-# ---------------------------------------------------------------------------
-# Config validation — assignment blocks fail loudly on keys the engine
-# doesn't read. (The `context:` key survived a year as dead config because
-# nothing rejected it; this is the guard against the next one.)
-# ---------------------------------------------------------------------------
+# Config validation — assignment blocks accept only the keys the engine reads,
+# failing loudly on any other.
 STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
     'probabilistic': {'strategy', 'data_source'},
     'partnership': {'strategy', 'data_source', 'partner_role', 'marginal_source'},
@@ -26,7 +23,7 @@ STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
 _LOGIC_ENTRY_KEYS = {'when', 'then', 'note'}
 _THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value', 'copy'}
 
-# Strategies whose `logic:` blocks use the declarative when/then schema (adr/0009).
+# Strategies whose `logic:` blocks use the declarative when/then schema.
 _LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
 
 # Tolerance for probability arithmetic (e.g. detecting a genuinely negative
@@ -34,18 +31,18 @@ _LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
 _PROB_TOL = 1e-9
 
 # How `probabilistic_conditions` turns per-person probabilities into a set of
-# conditions. A config must pick one explicitly — there is no default, so the
-# modelling choice is always visible (see ProbabilisticConditionsStrategy).
+# conditions. A config must pick one explicitly, so the modelling choice is
+# always visible (see ProbabilisticConditionsStrategy).
 _CONDITION_SELECTION_METHODS = {'independent_bernoulli', 'gated_conditions'}
 
 
 class _CompiledBlock:
     """
-    A logic block parsed once at strategy-construction time (adr/0009).
+    A logic block parsed once at strategy-construction time.
 
     Holds the predicate/action kinds (from `_classify_when`/`_classify_then`) and,
     for a nested probabilistic `then`, a prebuilt strategy instance — so the
-    per-person `assign` path neither re-classifies nor reconstructs anything.
+    per-person `assign` path reuses them directly.
     """
 
     __slots__ = ('when_kind', 'when', 'then_kind', 'then', 'nested_strategy')
@@ -60,9 +57,9 @@ class _CompiledBlock:
 
 def _classify_when(when: Any) -> str:
     """
-    Validate a declarative `when` predicate and return its kind (adr/0009).
+    Validate a declarative `when` predicate and return its kind.
 
-    Recognized forms (no eval — structured predicates only):
+    Recognized forms (structured predicates only):
       - {unique_count: N}          distinct collected values == N
       - {unique_count_at_least: N} distinct collected values >= N
       - {role: R, attr: A, equals: V}   role R's attribute A == V
@@ -70,7 +67,7 @@ def _classify_when(when: Any) -> str:
 
     Raises:
         ValueError: naming the offending predicate, so a malformed or unknown
-        `when` fails loudly instead of silently evaluating false.
+        `when` fails loudly.
     """
     if not isinstance(when, dict):
         raise ValueError(
@@ -98,7 +95,7 @@ def _classify_when(when: Any) -> str:
 
 def _classify_then(then: Any) -> str:
     """
-    Validate a declarative `then` action and return its kind (adr/0009).
+    Validate a declarative `then` action and return its kind.
 
     Recognized forms:
       - the literal token "values[0]"  → first collected value
@@ -139,8 +136,7 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
 
     Raises:
         ValueError: naming the unknown keys, the strategy, and the allowed
-        set — so a stale key (e.g. `context`) breaks the build at load time
-        instead of silently doing nothing.
+        set — so a stale key (e.g. `context`) breaks the build at load time.
     """
     if not isinstance(config, dict):
         raise ValueError(f"{where}: assignment must be a mapping, got {type(config).__name__}")
@@ -207,8 +203,7 @@ class AssignmentStrategy:
     """
     Base class for assignment strategies.
 
-    Strategies are simplified - they don't evaluate complex conditions,
-    just perform straightforward assignments based on context.
+    Strategies perform straightforward assignments based on context.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -238,7 +233,7 @@ class AssignmentStrategy:
         raise NotImplementedError("Subclasses must implement assign()")
 
     def _fail(self, person, reason: str):
-        """Abort assignment loudly. No fallbacks (adr/0010)."""
+        """Abort assignment loudly. No fallbacks."""
         raise RuntimeError(
             f"Strategy '{self.strategy_type}' could not assign person {person.id}: "
             f"{reason}. No fallbacks (adr/0010) — fix the data/config, or express the "
@@ -247,13 +242,12 @@ class AssignmentStrategy:
 
     def _weighted_draw(self, probs: Dict[str, float], person, *, size=None):
         """
-        Draw value(s) from a {value: weight} distribution (adr/0007).
+        Draw value(s) from a {value: weight} distribution.
 
         The single weighted-draw code path shared by every draw-family strategy:
         clamp negative weights to zero, normalize, then `np.random.choice`. With
         `size=None` returns one value; with `size=n` returns n values (batch).
-        An empty or zero-total distribution fails loudly — no silent None
-        (adr/0010).
+        An empty or zero-total distribution fails loudly — no silent None.
         """
         if not probs:
             self._fail(person, "data source returned no distribution")
@@ -322,15 +316,14 @@ class AssignmentStrategy:
 
 class DrawStrategy(AssignmentStrategy):
     """
-    Weighted single draw from a {value: weight} distribution (adr/0007).
+    Weighted single draw from a {value: weight} distribution.
 
     One strategy for every weighted-draw use. The split: the **data source** owns
     key-resolution and weight computation — it receives (person, household,
     context) and returns the distribution; this **strategy** owns the sampling
-    mechanics (sanitize + draw, via `_weighted_draw`). The former
-    `probabilistic`, `categorical_sampler` and `geographical_unit_sampler`
-    strategies — which differed only in how their source resolved the lookup key
-    — are aliases of this one class.
+    mechanics (sanitize + draw, via `_weighted_draw`). The `probabilistic`,
+    `categorical_sampler` and `geographical_unit_sampler` strategies are aliases
+    of this one class.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -385,8 +378,6 @@ class PartnershipStrategy(AssignmentStrategy):
 
     Given the first person's attribute value, samples the second person's value
     from conditional probability distribution. Used for couples and family secondary adults.
-
-    Replaces complex conditional strategies with role-based subset selection.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -407,14 +398,11 @@ class PartnershipStrategy(AssignmentStrategy):
         Returns:
             Sampled attribute value
         """
-        # Get the first person (primary_adult or primary_elder)
         first_person = self._get_person_by_role(context, self.partner_role)
         if not first_person:
             logger.warning(f"Partner role '{self.partner_role}' not found in context")
-            # Fall back to probabilistic
             return self._marginal_assign(person, household, context)
 
-        # Get first person's attribute value
         attribute_name = context.get('attribute_name')
         first_value = self._get_attribute_value(first_person, attribute_name)
         if first_value is None:
@@ -427,13 +415,11 @@ class PartnershipStrategy(AssignmentStrategy):
 
         geo_unit = household.geographical_unit.name
 
-        # Look up pair probabilities
         probs = self.data_manager.lookup(self.data_source_name, geo_unit, first_value)
         if not probs:
             logger.warning(f"No pair probabilities for {geo_unit}, {first_value}")
             return self._fail(person, "data source returned no distribution")
 
-        # Sample from distribution
         values = list(probs.keys())
         probabilities = list(probs.values())
         sampled = np.random.choice(values, p=probabilities)
@@ -446,13 +432,13 @@ class PartnershipStrategy(AssignmentStrategy):
 class LogicBlockStrategy(AssignmentStrategy):
     """
     Base for the inheritance strategies that drive assignment from declarative
-    `when`/`then` logic blocks (adr/0009).
+    `when`/`then` logic blocks.
 
     A `when` is a structured predicate (see `_classify_when`) evaluated against
-    the collected source values and role context — never an eval'd string. A
-    `then` is a literal, the `values[0]` token, a `{value: ...}` / `{copy: ...}`
-    block, or a nested strategy block (see `_classify_then`). The first block
-    whose `when` matches wins; if none match, assignment fails loudly (adr/0010).
+    the collected source values and role context. A `then` is a literal, the
+    `values[0]` token, a `{value: ...}` / `{copy: ...}` block, or a nested
+    strategy block (see `_classify_then`). The first block whose `when` matches
+    wins; if none match, assignment fails loudly.
     """
 
     def __init__(self, config: Dict[str, Any], data_manager):
@@ -461,10 +447,9 @@ class LogicBlockStrategy(AssignmentStrategy):
         self.logic_blocks = config.get('logic', [])
         # Precompile blocks once per strategy instance (instances are cached and
         # reused across every person — see assigner._get_or_create_strategy), so
-        # the per-call `assign` path does no predicate classification, no expr
-        # compilation, and no nested-strategy construction. This is what the old
-        # eval()+lru_cache existed to approximate; with structured logic we can
-        # do the parsing once up front instead of guarding it per call.
+        # the per-call `assign` path only evaluates the precompiled blocks:
+        # predicate classification, expression compilation, and nested-strategy
+        # construction all happen here, once, up front.
         self._compiled = [self._compile_block(b) for b in self.logic_blocks]
 
     def _compile_block(self, block: Dict[str, Any]) -> '_CompiledBlock':
@@ -490,7 +475,7 @@ class LogicBlockStrategy(AssignmentStrategy):
 
     def _evaluate_when(self, block: '_CompiledBlock', source_values: List[Any],
                        context: Dict[str, Any]) -> bool:
-        """Evaluate a precompiled `when` predicate (adr/0009)."""
+        """Evaluate a precompiled `when` predicate."""
         kind, when = block.when_kind, block.when
         if kind == 'unique_count':
             return len(set(source_values)) == when['unique_count']
@@ -504,7 +489,7 @@ class LogicBlockStrategy(AssignmentStrategy):
 
     def _resolve_then(self, block: '_CompiledBlock', source_values: List[Any], person,
                       household, context: Dict[str, Any], attribute_name: str) -> Any:
-        """Produce the value for a matched precompiled `then` action (adr/0009)."""
+        """Produce the value for a matched precompiled `then` action."""
         kind, then = block.then_kind, block.then
         if kind == 'value':
             return then['value']
@@ -537,7 +522,7 @@ class LogicBlockStrategy(AssignmentStrategy):
 
     def _run_logic(self, source_values: List[Any], person, household,
                    context: Dict[str, Any], attribute_name: str) -> Any:
-        """First block whose `when` matches wins; no match fails loudly (adr/0010)."""
+        """First block whose `when` matches wins; no match fails loudly."""
         for block in self._compiled:
             if self._evaluate_when(block, source_values, context):
                 result = self._resolve_then(
@@ -597,7 +582,7 @@ class LogicBlockStrategy(AssignmentStrategy):
 
         Gets the full distribution, removes excluded values, re-normalizes, and
         samples. If every value is excluded, that is a data/config contradiction —
-        fail loudly rather than silently sampling the excluded value (adr/0010).
+        fail loudly.
 
         Args:
             person: Person being assigned
@@ -616,7 +601,7 @@ class LogicBlockStrategy(AssignmentStrategy):
                 f"Data source '{data_source_name}' is not registered. No fallbacks (adr/0010)."
             )
 
-        # The source resolves its own key (adr/0007) and returns the full distribution.
+        # The source resolves its own key and returns the full distribution.
         probs = source.lookup(person, household, context)
         filtered_probs = {k: v for k, v in probs.items() if k not in excluded_values}
         if not filtered_probs:
@@ -698,8 +683,8 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
     Two `selection_method`s:
 
     - `independent_bernoulli`: each condition is an independent Bernoulli trial
-      on its marginal probability. Ignores any joint count structure in the data.
-    - `gated_conditions`: gated hierarchical sampler (adr/0013) that honors the
+      on its marginal probability, using the marginals only.
+    - `gated_conditions`: gated hierarchical sampler that honors the
       joint count structure — `no_condition` = P(0), `has_comorbidity` = P(>=1),
       `multiple_morbidities` = P(>=2) — then draws which conditions from the
       per-condition marginals. See `_sample_gated_conditions`.
@@ -710,9 +695,9 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         super().__init__(config, data_manager)
         self.strategy_type = "probabilistic_conditions"
         self.conditions = config.get('conditions', [])
-        # No default: a config must declare its selection_method (validated at
-        # load by validate_assignment_config). The dispatch in assign() still
-        # fails loudly if an unknown value reaches it via direct construction.
+        # A config must declare its selection_method (validated at load by
+        # validate_assignment_config); the dispatch in assign() fails loudly if
+        # an unknown value reaches it via direct construction.
         self.selection_method = config.get('selection_method')
 
     def assign(self, person, household, context: Dict[str, Any]) -> List[str]:
@@ -727,20 +712,17 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         Returns:
             List of condition names (e.g., ["cvd", "crd"])
         """
-        # Get data source name
         data_source_name = self.config.get('data_source')
         if not data_source_name:
             self._fail(person, "probabilistic_conditions has no 'data_source'")
 
-        # Look up probabilities using data source
         source = self.data_manager.get_source(data_source_name)
         if not source:
             self._fail(person, f"data source '{data_source_name}' not found")
 
-        # Perform lookup (raises on a miss — no fallbacks, adr/0010)
+        # Perform lookup (raises on a miss — no fallbacks)
         probabilities = source.lookup(person, household, context)
 
-        # Sample conditions based on selection method
         if self.selection_method == 'independent_bernoulli':
             return self._sample_independent_bernoulli(probabilities)
         if self.selection_method == 'gated_conditions':
@@ -766,10 +748,8 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             if not condition_name:
                 continue
 
-            # Get probability for this condition
             probability = probabilities.get(condition_name, 0.0)
 
-            # Bernoulli trial
             if np.random.random() < probability:
                 selected_conditions.append(condition_name)
 
@@ -777,7 +757,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
 
     def _sample_gated_conditions(self, person, probabilities: Dict[str, float]) -> List[str]:
         """
-        Gated hierarchical comorbidity sampler (adr/0013).
+        Gated hierarchical comorbidity sampler.
 
         Honors the joint count structure carried by the data exactly:
           P(0)  = no_condition
@@ -792,7 +772,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
            >=2. The data fixes P(>=2) but not the upper tail, so this is the
            explicit modelling assumption for the tail shape.
 
-        Missing or contradictory data fails loudly — no fallbacks (adr/0010).
+        Missing or contradictory data fails loudly — no fallbacks.
         """
         p_none = self._require_prob(probabilities, 'no_condition', person)
         p_any = self._require_prob(probabilities, 'has_comorbidity', person)
@@ -826,7 +806,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         return self._pick_distinct_conditions(person, names, margins, count)
 
     def _require_prob(self, probabilities: Dict[str, float], key: str, person) -> float:
-        """Read a probability the gated sampler depends on, or fail loudly (adr/0010)."""
+        """Read a probability the gated sampler depends on, or fail loudly."""
         if key not in probabilities:
             self._fail(person, f"gated_conditions requires '{key}' from the data source")
         return float(probabilities[key])
@@ -834,7 +814,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
     def _sample_multi_count(self, person, margins: np.ndarray) -> int:
         """
         Draw a condition count >=2 from the Poisson-binomial of the per-condition
-        marginals, conditioned on >=2 (adr/0013, step 3).
+        marginals, conditioned on >=2.
         """
         # Poisson-binomial PMF over the marginals: convolve each [1-p, p].
         pmf = np.array([1.0])
@@ -897,34 +877,27 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         Returns:
             Origin code string, or None if resolution fails
         """
-        # Get person's origin (residence) geographical unit
         origin_geo_unit = getattr(person, 'geographical_unit', None)
         if not origin_geo_unit:
             return None
 
-        # Get the data source to check its configuration
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
             return None
 
-        # Resolve origin based on data source key configuration
-        # Check if this is an O-D matrix source with key_columns config
         if hasattr(source, '_file_configs') and source._file_configs:
             file_config = source._file_configs[0]
             key_columns = file_config.get('key_columns', {})
 
             if key_columns:
-                # Get first key column config (origin)
                 first_key_config = list(key_columns.values())[0]
 
-                # Check if we need to traverse hierarchy
                 if isinstance(first_key_config, dict):
                     lookup_type = first_key_config.get('type')
                     if lookup_type == 'ancestor_lookup':
                         level = first_key_config.get('level')
                         property_name = first_key_config.get('property', 'name')
 
-                        # Traverse to ancestor level
                         ancestor = origin_geo_unit.get_ancestor_by_level(level)
                         if ancestor:
                             return getattr(ancestor, property_name)
@@ -957,14 +930,12 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         """
         from collections import defaultdict
 
-        # Get data source
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
             logger.warning(f"Data source '{self.data_source_name}' not found")
             return [self._fail(person, "no commuting-flow row for this origin")
                     for person, household, context in zip(people_list, households_list, contexts_list)]
 
-        # Group people by origin_code
         origin_groups = defaultdict(list)
 
         for i, person in enumerate(people_list):
@@ -972,16 +943,12 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             if origin_code:
                 origin_groups[origin_code].append(i)
 
-        # Results array
         results = [None] * len(people_list)
 
-        # Process each origin group
         for origin_code, indices in origin_groups.items():
-            # Look up destinations from O-D matrix
             destinations = source.lookup(origin_code)
             if not destinations:
                 logger.warning(f"No destinations found for origin {origin_code}")
-                # Fill with fallback for this group
                 for idx in indices:
                     person = people_list[idx]
                     household = households_list[idx]
@@ -989,24 +956,21 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
                     results[idx] = self._fail(person, "no commuting-flow row for this origin")
                 continue
 
-            # Prepare sampling arrays
             # destinations is List[(destination, metadata_dict, likelihood)]
             dest_codes = [dest for dest, meta, lik in destinations]
             likelihoods = [lik for dest, meta, lik in destinations]
             metadata_list = [meta for dest, meta, lik in destinations]
 
-            # BATCH SAMPLE: Sample destinations for all people in this origin group at once
             n_samples = len(indices)
             sampled_indices = np.random.choice(len(dest_codes), size=n_samples, p=likelihoods)
 
-            # Build outputs for each person
             for idx, sampled_idx in zip(indices, sampled_indices):
                 sampled_dest = dest_codes[sampled_idx]
                 sampled_metadata = metadata_list[sampled_idx]
                 results[idx] = self._build_output(sampled_dest, sampled_metadata)
 
-            # Mark redistributed assignments (adr/0016). A worker from this origin
-            # was bounced back in-boundary with probability = the origin's
+            # Mark redistributed assignments. A worker from this origin was
+            # bounced back in-boundary with probability = the origin's
             # out-of-boundary mass; a per-person Bernoulli reproduces that fraction.
             flag = getattr(source, '_redistributed_flag', None)
             fraction = getattr(source, '_redistributed_fraction', {}).get(origin_code, 0.0)
@@ -1016,7 +980,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
                     if marked:
                         results[idx] = self._with_redistributed_flag(results[idx], flag)
 
-        # Headcount of out-of-boundary assignments (adr/0015). Under the 'outside'
+        # Headcount of out-of-boundary assignments. Under the 'outside'
         # policy the sentinel is a normal destination value, so report how many
         # people drew it — the per-step exclusion downstream reports the rest.
         outside_value = getattr(source, '_outside_value', None)
@@ -1051,36 +1015,30 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             If single output: returns the assigned value
             If multiple outputs: returns dict with all assigned values
         """
-        # Resolve person's origin to correct geographical level
         origin_code = self._resolve_origin_code(person)
         if not origin_code:
             logger.warning(f"Could not resolve origin code for person {person.id}")
             return self._fail(person, "no commuting-flow row for this origin")
 
-        # Get data source
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
             logger.warning(f"Data source '{self.data_source_name}' not found")
             return self._fail(person, "no commuting-flow row for this origin")
 
-        # Look up destinations from O-D matrix
         destinations = source.lookup(origin_code)
         if not destinations:
             logger.warning(f"No destinations found for origin {origin_code}")
             return self._fail(person, "no commuting-flow row for this origin")
 
-        # Sample from destinations weighted by likelihood
         # destinations is List[(destination, metadata_dict, likelihood)]
         dest_codes = [dest for dest, meta, lik in destinations]
         likelihoods = [lik for dest, meta, lik in destinations]
         metadata_list = [meta for dest, meta, lik in destinations]
 
-        # Sample one destination
         idx = np.random.choice(len(dest_codes), p=likelihoods)
         sampled_dest = dest_codes[idx]
         sampled_metadata = metadata_list[idx]
 
-        # Build output based on configured outputs
         result = self._build_output(sampled_dest, sampled_metadata)
         if not isinstance(result, dict):
             return result
@@ -1089,11 +1047,11 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
 
     def _with_redistributed_flag(self, result, flag: str):
         """
-        Attach the config-named redistributed flag (adr/0016) to a result.
+        Attach the config-named redistributed flag to a result.
 
         Dict results gain the flag key. A scalar (single-output) result is promoted
         to a dict so the flag can ride alongside it. If there is no 'destination'
-        output to anchor that promotion, we fail loud rather than drop the flag.
+        output to anchor that promotion, we fail loud.
         """
         if isinstance(result, dict):
             result[flag] = True
@@ -1158,7 +1116,6 @@ class ConstantStrategy(AssignmentStrategy):
     def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
         """Batch assignment - all receive the same value."""
         if self.value is None:
-            # Match assign() behavior: delegate to per-person fallback
             return [self.assign(p, h, c) for p, h, c in zip(people_list, households_list, contexts_list)]
         return [self.value] * len(people_list)
 
@@ -1171,9 +1128,9 @@ class ConstantStrategy(AssignmentStrategy):
         return self.value
 
 
-# The weighted-draw family collapsed to one implementation (adr/0007). The old
-# strategy names stay as aliases so configs and internal callers (marginal and
-# nested-strategy creation) keep working; all resolve to DrawStrategy.
+# The weighted-draw family is one implementation. These strategy names are
+# aliases so configs and internal callers (marginal and nested-strategy
+# creation) keep working; all resolve to DrawStrategy.
 ProbabilisticStrategy = DrawStrategy
 CategoricalSamplerStrategy = DrawStrategy
 GUSamplerStrategy = DrawStrategy

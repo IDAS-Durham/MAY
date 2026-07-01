@@ -29,9 +29,7 @@ distribution_strategy: even
 
 balance_by: sex
 
-# ========================================
 # ACTIVITY MANAGEMENT
-# ========================================
 # Control how employees' activity_map is updated when moving to offices
 
 # Activity map key: Which activity to set when adding to office

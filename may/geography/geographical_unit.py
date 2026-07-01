@@ -154,9 +154,9 @@ class GeographicalUnit:
               self.parent.name != other.parent.name):
             return False  # Parents differ
 
-        # NOTE: We do NOT compare children, venues, or people collections here.
-        # These should be compared at higher levels (Geography/World level)
-        # to avoid circular comparison issues and performance problems.
+        # Children, venues, and people collections are compared at higher levels
+        # (Geography/World level) to avoid circular comparison issues and
+        # performance problems.
 
         return True
 

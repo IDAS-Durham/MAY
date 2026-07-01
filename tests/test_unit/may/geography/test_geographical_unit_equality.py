@@ -8,10 +8,6 @@ import pytest
 from may.geography import GeographicalUnit
 
 
-# ============================================================================
-# GeographicalUnit Equality Tests
-# ============================================================================
-
 class TestGeographicalUnitEquality:
     """Test GeographicalUnit.__eq__ method."""
 
@@ -216,10 +212,6 @@ class TestGeographicalUnitEquality:
         assert unit1 == unit2
 
 
-# ============================================================================
-# GeographicalUnit Hash Tests
-# ============================================================================
-
 class TestGeographicalUnitHash:
     """Test GeographicalUnit.__hash__ method."""
 
@@ -311,10 +303,6 @@ class TestGeographicalUnitHash:
         assert unit_dict[unit1] == 'second_value'
         assert unit_dict[unit2] == 'second_value'
 
-
-# ============================================================================
-# Integration Tests
-# ============================================================================
 
 class TestGeographicalUnitEqualityIntegration:
     """Integration tests for equality and hashing."""

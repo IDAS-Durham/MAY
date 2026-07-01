@@ -7,9 +7,7 @@ from may.social_networks.builder_functions.filters_and_constraints.filters impor
 from may.social_networks.builder_functions.graph.graph_relationship_builder import _apply_filters_and_rewire
 
 
-# ---------------------------------------------------------------------------
 # helpers
-# ---------------------------------------------------------------------------
 
 def _range_filter(attribute: str, range_val: float) -> ConnectionFilter:
     return ConnectionFilter(attribute=attribute, match='range', range=range_val)
@@ -33,10 +31,6 @@ def _empty_filter_arrays(n_people: int):
     range_values = np.zeros(0, dtype=np.float64)
     return stacked, match_types, attr_indices, range_values
 
-
-# ---------------------------------------------------------------------------
-# tests
-# ---------------------------------------------------------------------------
 
 class TestApplyFiltersAndRewire:
     def test_no_filters_preserves_all_edges(self):
@@ -99,7 +93,6 @@ class TestApplyFiltersAndRewire:
         assert np.array_equal(result_a, result_b)
 
         result_c = run(12)
-        # Different seed may produce different result (not guaranteed but likely for this graph)
-        # We just verify both are valid (satisfy filter)
+        # A different seed may produce a different result; both must still satisfy the filter
         for u, v in result_c:
             assert abs(ages[u] - ages[v]) <= 10.0 + 1e-6

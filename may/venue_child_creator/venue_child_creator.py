@@ -106,7 +106,6 @@ class VenueChildCreator:
                     f"'{f.get('attribute')}'. Valid types: 'numerical', 'categorical'."
                 )
 
-        # Statistics
         self.stats = {
             'parents_processed': 0,
             'children_created': 0,
@@ -158,7 +157,6 @@ class VenueChildCreator:
             member_filters=config.get('member_filters', []),
         )
 
-        # Log configuration summary
         logger.info(f"  Parent type: {instance.parent_venue_type} → Child type: {instance.child_venue_type}")
         if instance.balance_by:
             logger.info(f"  Balancing children by: {instance.balance_by}")
@@ -187,7 +185,6 @@ class VenueChildCreator:
         logger.info(f"Creating {self.child_venue_type}s for {self.parent_venue_type}s")
         logger.info("=" * 60)
 
-        # Get all parent venues
         parent_venues = world.venues.get_venues_by_type(self.parent_venue_type)
 
         if not parent_venues:
@@ -196,11 +193,9 @@ class VenueChildCreator:
 
         logger.info(f"Processing {len(parent_venues)} {self.parent_venue_type}(s)")
 
-        # Process each parent venue
         for parent_venue in parent_venues:
             self._process_parent_venue(parent_venue, world)
 
-        # Log statistics
         logger.info("")
         logger.info("Summary:")
         logger.info(f"  Parents processed: {self.stats['parents_processed']}")
@@ -220,7 +215,6 @@ class VenueChildCreator:
             parent_venue: Parent Venue object
             world: World object
         """
-        # Get all members of the parent venue
         members = parent_venue.get_all_members()
 
         if not members:
@@ -229,7 +223,6 @@ class VenueChildCreator:
 
         #logger.info(f"  {parent_venue.name}: {len(members)} members")
 
-        # Apply member filters if specified
         if self.member_filters:
             original_count = len(members)
             members = self._filter_members(members)
@@ -239,14 +232,11 @@ class VenueChildCreator:
                 logger.debug(f"  {parent_venue.name}: No members after filtering, skipping")
                 return
 
-        # Group members by attribute if specified
         if self.group_by_attribute:
             groups = self._group_members_by_attribute(members, self.group_by_attribute)
         else:
-            # Single group with all members
             groups = {'all': members}
 
-        # Process each group
         total_children_created = 0
         for group_key, group_members in groups.items():
             children_created = self._create_children_for_group(
@@ -317,28 +307,21 @@ class VenueChildCreator:
         groups = defaultdict(list)
 
         for person in members:
-            # Get attribute value from person
             attr_value = get_person_attribute(person, attribute_name)
 
             if attr_value is not None:
-                # Apply attribute mapping if configured
                 if self.attribute_mapping:
-                    # Check if this specific value has a mapping
                     if attr_value in self.attribute_mapping:
                         group_key = self.attribute_mapping[attr_value]
-                    # Check for default mapping
                     elif 'default' in self.attribute_mapping:
                         group_key = self.attribute_mapping['default']
-                    # No mapping, use original value
                     else:
                         group_key = attr_value
                 else:
-                    # No mapping configured, use original value
                     group_key = attr_value
 
                 groups[group_key].append(person)
             else:
-                # Put in 'unknown' group if attribute not found
                 groups['unknown'].append(person)
 
         return dict(groups)
@@ -385,22 +368,18 @@ class VenueChildCreator:
         """
         num_members = len(group_members)
 
-        # Calculate number of child venues needed
         num_children = math.ceil(num_members / self.child_max_size)
 
         #logger.info(f"    Group {group_key}: {num_members} members → {num_children} {self.child_venue_type}(s)")
 
-        # Create child venues
         child_venues = []
         for i in range(num_children):
-            # Prepare properties for this child
             child_props = self.child_properties.copy()
-            child_props['group_key'] = group_key  # Store which group this is for
+            child_props['group_key'] = group_key
 
             if self.group_by_attribute:
                 child_props[self.group_by_attribute] = group_key  # e.g., 'age': 10
 
-            # Create the child venue
             child_venue = world.venues.create_child_venue(
                 parent_venue=parent_venue,
                 child_venue_type=self.child_venue_type,
@@ -408,7 +387,6 @@ class VenueChildCreator:
             )
             child_venues.append(child_venue)
 
-        # Distribute members to child venues
         self._distribute_members_to_children(group_members, child_venues)
 
         self.stats['children_created'] += num_children
@@ -428,9 +406,8 @@ class VenueChildCreator:
         """
         # When balancing by an attribute (e.g. sex), deal each value's members
         # round-robin across the child venues so every venue gets a proportional
-        # mix that mirrors the cohort, rather than contiguous slices of an
-        # arrival-ordered (and therefore sex-clustered) list. A single shared
-        # pointer carried across the strata keeps per-venue totals even too.
+        # mix that mirrors the cohort. A single shared pointer carried across the
+        # strata keeps per-venue totals even too.
         if self.balance_by and len(child_venues) > 1:
             strata = self._stratify_members(members, self.balance_by)
             ptr = 0
@@ -442,16 +419,13 @@ class VenueChildCreator:
             return
 
         if self.distribution_strategy == 'even':
-            # Distribute evenly across all children
             members_per_child = len(members) // len(child_venues)
             remainder = len(members) % len(child_venues)
 
             member_index = 0
             for i, child_venue in enumerate(child_venues):
-                # Calculate how many to add to this child
                 count = members_per_child + (1 if i < remainder else 0)
 
-                # Add members to this child
                 for _ in range(count):
                     if member_index < len(members):
                         person = members[member_index]
@@ -478,22 +452,18 @@ class VenueChildCreator:
             person: Person object
             child_venue: Child Venue object
         """
-        # Determine activity name to use
         activity_name = self.activity_map_key if self.activity_map_key else self.child_venue_type
 
-        # If replacing parent activity, clear the existing activity first
         if self.replace_parent_activity and self.activity_map_key:
             if self.activity_map_key in person.activity_map:
                 person.activity_map[self.activity_map_key] = {}
 
-        # Add person to child venue
         child_venue.add_to_subset(
             person,
             subset_key=self.subset_key,
             activity_name=activity_name
         )
 
-        # Optionally remove from parent venue
         if self.remove_from_parent:
             parent = child_venue.parent
             if parent:
@@ -519,14 +489,11 @@ class VenueChildCreator:
         for child_venue in child_venues:
             members = child_venue.get_all_members()
 
-            # Get parent info
             parent = child_venue.parent
             parent_name = parent.name if parent else "None"
 
-            # Get group key
             group_key = child_venue.properties.get('group_key', 'N/A')
 
-            # Create row
             row = {
                 'child_venue_id': child_venue.id,
                 'child_venue_name': child_venue.name,
@@ -538,13 +505,11 @@ class VenueChildCreator:
                 'utilization_pct': f"{(len(members) / self.child_max_size * 100):.1f}" if self.child_max_size > 0 else "0.0",
             }
 
-            # Add group attribute if specified
             if self.group_by_attribute:
                 row[self.group_by_attribute] = child_venue.properties.get(self.group_by_attribute, 'N/A')
 
             rows.append(row)
 
-        # Create DataFrame and export
         df = pd.DataFrame(rows)
 
         if not df.empty:

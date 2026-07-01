@@ -104,11 +104,10 @@ def _ordered_key_columns(file_config: Dict[str, Any], source_name: str,
     """
     Read the canonical `key_columns` mapping and return its column names in order.
 
-    `key_columns` is always a mapping (adr/0006); a single key is a one-entry
-    mapping. The mapping's values carry per-key resolution config for MultiKey /
-    OD sources; positional sources (geo distribution, diversity, pair) use only
-    the column names, in declaration order. The retired singular `key_column`
-    fails loudly.
+    `key_columns` is always a mapping; a single key is a one-entry mapping. The
+    mapping's values carry per-key resolution config for MultiKey / OD sources;
+    positional sources (geo distribution, diversity, pair) use only the column
+    names, in declaration order. A singular `key_column` fails loudly.
     """
     if 'key_column' in file_config:
         raise ValueError(
@@ -167,7 +166,7 @@ class GeoDistributionSource(DataSource):
         """
         logger.info(f"Loading data for source '{self.name}'...")
 
-        # Process file configuration (should be just one file now)
+        # Process file configuration (should be just one file)
         for file_config in self._file_configs:
             file_path = Path(pr.resolve(file_config['path']))
 
@@ -193,7 +192,7 @@ class GeoDistributionSource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
@@ -250,8 +249,8 @@ class GeoDistributionSource(DataSource):
         """
         Look up the distribution for a person's residence geographical unit.
 
-        Resolves the key itself (adr/0007): the residence venue's geo unit first,
-        then the person's own. The strategy no longer resolves geo units.
+        Resolves the key itself: the residence venue's geo unit first,
+        then the person's own.
         """
         if not self._data_loaded:
             raise RuntimeError(
@@ -316,7 +315,7 @@ class DiversitySource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
@@ -409,7 +408,7 @@ class PairProbabilitySource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookups)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
@@ -541,7 +540,7 @@ class MultiKeyLookupSource(DataSource):
 
                     logger.info(f"  ✓ Loaded {len(self._lookup_dict)} rows from {file_path.name} into dictionary")
                 except Exception as e:
-                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
@@ -677,7 +676,7 @@ class MultiKeyLookupSource(DataSource):
             # Traverse hierarchy
             geo_unit = get_person_attribute(person, attr_name)
             if geo_unit is None and household:
-                # Fall back to the household's geo unit
+                # Use the household's geo unit when the person has none
                 geo_unit = get_nested_value(household, attr_name)
 
             if geo_unit is None:
@@ -710,7 +709,7 @@ class OriginDestinationMatrixSource(DataSource):
         self._lookup: Dict[str, List[Tuple[str, Dict[str, Any], float]]] = {}
         self._file_configs = config.get('files', [])
 
-        # Out-of-boundary destination policy (adr/0015). Required, no default —
+        # Out-of-boundary destination policy. Required, no default —
         # a destination drawn outside the loaded world boundary is routine in
         # region runs and impossible in whole-country runs, so the engine refuses
         # to guess what to do with it.
@@ -746,12 +745,11 @@ class OriginDestinationMatrixSource(DataSource):
                 "'outside' outcome can occur (adr/0015)."
             )
 
-        # Optional marker for redistributed assignments (adr/0016). Names the
-        # person property set true when an assignment was bounced back in-boundary,
-        # so the venue layer can deprioritise it. Config-named — the engine carries
-        # whatever the scenario calls it, never a hardcoded attribute (adr/0001).
-        # Only meaningful under 'redistribute': flag it elsewhere and we refuse
-        # rather than silently ignore it (no silent no-ops).
+        # Optional marker for redistributed assignments. Names the person
+        # property set true when an assignment was bounced back in-boundary, so
+        # the venue layer can deprioritise it. Config-named — the engine carries
+        # whatever the scenario calls it. Only meaningful under 'redistribute':
+        # flagging it elsewhere raises (no silent no-ops).
         self._redistributed_flag = config.get('redistributed_flag')
         if self._redistributed_flag is not None and self._out_of_boundary != 'redistribute':
             raise ValueError(
@@ -813,7 +811,7 @@ class OriginDestinationMatrixSource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} origins from {file_path.name}")
 
                 except Exception as e:
-                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
@@ -821,8 +819,7 @@ class OriginDestinationMatrixSource(DataSource):
                 raise FileNotFoundError(f"data source file not found: {file_path}")
 
         # Apply the out-of-boundary policy AFTER parsing and OUTSIDE the
-        # per-file try/except above — policy violations must fail loud, not be
-        # swallowed into a warning (adr/0010, adr/0015).
+        # per-file try/except above — policy violations must fail loud.
         self._apply_boundary_policy(geo_units)
 
         self._data_loaded = True
@@ -830,7 +827,7 @@ class OriginDestinationMatrixSource(DataSource):
     def _apply_boundary_policy(self, geo_units: Optional[set]):
         """
         Resolve destinations that fall outside the loaded world boundary
-        according to the configured `out_of_boundary` policy (adr/0015).
+        according to the configured `out_of_boundary` policy.
 
         Boundary membership is "destination value is among the loaded geo_units".
         With no geo_units (an unbounded / whole-world run) there is no boundary,
@@ -879,7 +876,7 @@ class OriginDestinationMatrixSource(DataSource):
                     new_lookup[origin] = [(d, m, l / in_total) for (d, m, l) in in_b]
                     # Probability a worker from this origin was bounced back in
                     # (= the out-of-boundary mass that got redistributed). Drives
-                    # the per-person Bernoulli mark in the strategy (adr/0016).
+                    # the per-person Bernoulli mark in the strategy.
                     self._redistributed_fraction[origin] = out_mass
             else:  # 'outside'
                 outside_origins += 1
@@ -1016,8 +1013,8 @@ class GUSamplerSource(DataSource):
         self._lookup: Dict[str, Dict[str, float]] = {}
         self._file_configs = config.get('files', [])
         # Person attribute that supplies the parent GU to sample within — read
-        # from config (key_columns value), NOT hardcoded, so the sampler is
-        # generic over any parent attribute / hierarchy level (adr/0007).
+        # from config (key_columns value), so the sampler is generic over any
+        # parent attribute / hierarchy level.
         self._parent_attribute: Optional[str] = None
 
     def load_data(self, geo_units: Optional[set] = None):
@@ -1031,9 +1028,9 @@ class GUSamplerSource(DataSource):
                 try:
                     df = pd.read_csv(file_path)
 
-                    # Parent-GU lookup key: canonical one-entry key_columns mapping (adr/0006).
+                    # Parent-GU lookup key: canonical one-entry key_columns mapping.
                     # Its value names the person attribute that supplies the parent GU
-                    # (adr/0007) — generic, not a hardcoded 'workplace_location'.
+                    # — generic over any parent attribute.
                     parent_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
                     key_resolution = file_config['key_columns'][parent_column]
                     if not isinstance(key_resolution, dict) or not key_resolution.get('attribute'):
@@ -1060,7 +1057,7 @@ class GUSamplerSource(DataSource):
                         df = df[df[geo_unit_column].isin(geo_units)]
                         logger.info(f"  Filtered CSV from {original_len} to {len(df)} rows based on {len(geo_units)} geographical units")
 
-                    # Handle exclude_rows (supports both old dict and new list format)
+                    # Handle exclude_rows (list format)
                     exclude_rows_config = file_config.get('exclude_rows', [])
                     if isinstance(exclude_rows_config, list):
                         # format: [{column: "col", values: [vals]}]
@@ -1086,7 +1083,7 @@ class GUSamplerSource(DataSource):
                     logger.info(f"  ✓ Loaded {geo_unit_level} distributions for {len(self._lookup)} parent GUs from {file_path.name}")
 
                 except Exception as e:
-                    # Fail loud on a load/parse error (adr/0010, adr/0004).
+                    # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
@@ -1099,8 +1096,8 @@ class GUSamplerSource(DataSource):
         """
         Look up the child-GU distribution for the person's parent GU.
 
-        Resolves the key itself (adr/0007): the parent GU is the person's already
-        assigned `workplace_location`. The strategy no longer resolves it.
+        Resolves the key itself: the parent GU is the person's already
+        assigned `workplace_location`.
         """
         if not self._data_loaded:
             raise RuntimeError(
@@ -1138,8 +1135,7 @@ class DataSourceManager:
         self.sources: Dict[str, DataSource] = {}
         self._initialize_sources()
 
-    # csv_lookup `format` → source class. Chosen explicitly in config; no name
-    # sniffing or shape inference (adr/0005).
+    # csv_lookup `format` → source class. Chosen explicitly in config.
     _CSV_FORMATS = {
         'geo_distribution': GeoDistributionSource,
         'diversity': DiversitySource,

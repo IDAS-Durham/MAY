@@ -12,10 +12,6 @@ from .filters_and_constraints.constraints import parse_constraints
 from .store import store_contacts
 
 
-# ============================================================================
-# NUMBA KERNELS
-# ============================================================================
-
 @nb.njit(cache=True)
 def _process_group_numba(group_people, group_ages, group_subsets,
                          all_connections, current_counts, target_counts,
@@ -156,10 +152,6 @@ def _process_all_groups_numba(group_starts, group_ends, group_people_flat,
         )
 
 
-# ============================================================================
-# SHARED HELPERS
-# ============================================================================
-
 def _groups_to_csr(groups: list, person_id_to_idx: dict):
     """Convert list-of-person-groups to CSR index arrays for Numba."""
     n_groups = len(groups)
@@ -248,10 +240,6 @@ def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
         if contacts:
             store_contacts(person, contacts, storage_key, activity_config)
 
-
-# ============================================================================
-# BUILDER IMPLEMENTATIONS
-# ============================================================================
 
 def build_intra_geo_unit(world, network_config: dict) -> None:
     """

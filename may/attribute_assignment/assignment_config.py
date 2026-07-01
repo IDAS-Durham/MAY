@@ -33,20 +33,16 @@ def _pattern_matches_cached(actual: str, template: str) -> bool:
         actual="2 0 2 0", template=">=1 >=0 2 0" -> True
         actual="0 1 2 0", template=">=1 >=0 2 0" -> False
     """
-    # Handle empty patterns
     if not actual or not template:
         return False
 
-    # Parse actual pattern into counts
     try:
         actual_counts = [int(x) for x in actual.split()]
     except ValueError:
         return False
 
-    # Parse template pattern using CompositionPattern (which is now cached)
     template_pattern = CompositionPattern.from_string(template)
 
-    # Check each category
     if len(actual_counts) != len(template_pattern.requirements):
         return False
 
@@ -172,8 +168,6 @@ class MatchingRule:
         # Get age categories from household properties
         age_categories = household.properties.get('_age_categories', [])
         if not age_categories:
-            # Try to get from config if available
-            # For now, return empty string
             return ''
 
         # Build category name → index mapping
@@ -317,7 +311,7 @@ class StructureAssignmentRules:
 def _extract_role_dependencies(assignment: Dict[str, Any]) -> List[str]:
     """
     Collect every role this assignment references and must therefore be assigned
-    after (adr/0019).
+    after.
 
     A strategy may read another role's already-assigned value three ways:
     `inherit_from` (copy it), `partner_role` (match it), or `exclude` (differ
@@ -403,12 +397,12 @@ class AttributeAssignmentConfig:
         logger.info(f"  Assignment rules: {len(self.assignment_rules)}")
 
     def _parse_attributes(self) -> List[Dict[str, Any]]:
-        """Parse the produced-attribute declarations (adr/0012).
+        """Parse the produced-attribute declarations.
 
         Produced attributes are always a top-level `attributes:` list; each entry
         carries a 'name'. A single-output config declares a one-entry list. Step
         config (assignment_level, residence_venue_types) lives under `step:`.
-        The retired singular `attribute:` block raises a clear error.
+        A top-level singular `attribute:` block raises a clear error.
         """
         if 'attribute' in self.raw_config:
             raise ValueError(
@@ -447,14 +441,14 @@ class AttributeAssignmentConfig:
     def _parse_required_attributes(self) -> Dict[str, Any]:
         """Parse required attributes (dependencies).
 
-        Canonical form is a list of entries, each carrying a 'name' (adr/0006):
+        Canonical form is a list of entries, each carrying a 'name':
 
             required_attributes:
               - name: ethnicity
                 required: true
 
-        Returned as a dict keyed by name for internal lookup. The retired mapping
-        form (`name: {...}`) raises a clear error rather than being accepted.
+        Returned as a dict keyed by name for internal lookup. The mapping form
+        (`name: {...}`) raises a clear error.
         """
         raw_attrs = self.raw_config.get('required_attributes', [])
         if not raw_attrs:
@@ -540,7 +534,7 @@ class AttributeAssignmentConfig:
         return structures
 
     def _parse_data_sources(self) -> Dict[str, DataSourceConfig]:
-        """Parse data sources (wrapped in DataSourceConfig for compatibility with v1)."""
+        """Parse data sources into DataSourceConfig objects."""
         sources = {}
         sources_config = self.raw_config.get('data_sources', {})
 
@@ -575,7 +569,7 @@ class AttributeAssignmentConfig:
                 )
 
                 # Ordering dependencies derived from every cross-role reference
-                # (inherit_from/partner_role/exclude), not just inheritance (adr/0019).
+                # (inherit_from/partner_role/exclude).
                 dependencies = _extract_role_dependencies(assignment_data)
 
                 rules.append(AssignmentRule(
@@ -583,14 +577,14 @@ class AttributeAssignmentConfig:
                     priority=rule_data.get('priority', 999),
                     description=rule_data.get('description', ''),
                     assignment=assignment_data,
-                    dependencies=list(set(dependencies)) # Unique dependencies
+                    dependencies=list(set(dependencies))
                 ))
 
             # Sort rules by priority
             rules.sort(key=lambda r: r.priority)
 
             # Ordering failures fail loud at load: a reference to an undefined role
-            # is a typo, a cycle is genuinely unorderable (adr/0019).
+            # is a typo, a cycle is genuinely unorderable.
             self._validate_role_dependencies(structure_name, rules)
 
             structure_rules[structure_name] = StructureAssignmentRules(
@@ -604,7 +598,7 @@ class AttributeAssignmentConfig:
     def _validate_role_dependencies(self, structure_name: str,
                                     rules: List[AssignmentRule]) -> None:
         """
-        Reject unorderable cross-role references in one structure (adr/0019).
+        Reject unorderable cross-role references in one structure.
 
         Every dependency derived by `_extract_role_dependencies` must name a role
         defined in this structure (else it is a typo), and the role-level
@@ -638,7 +632,7 @@ class AttributeAssignmentConfig:
 
     def _raise_on_dependency_cycle(self, structure_name: str, roles: set,
                                    edges: Dict[str, set]) -> None:
-        """Raise if the role dependency graph has a cycle (adr/0019)."""
+        """Raise if the role dependency graph has a cycle."""
         WHITE, GRAY, BLACK = 0, 1, 2
         color = {role: WHITE for role in roles}
         path: List[str] = []
@@ -765,7 +759,7 @@ class AttributeAssignmentConfig:
                 elif verbose:
                     logger.debug(f"        ✗ Category '{person_category}' not in role subsets {role.subsets}")
             else:
-                # Fallback to internal lookup only if needed
+                # Otherwise use internal lookup
                 if role.matches(person, verbose=verbose):
                     matched = True
 
@@ -884,7 +878,7 @@ class AttributeAssignmentConfig:
 
         result = None
 
-        # Use pre-filtered categories instead of iterating all
+        # Use pre-filtered categories
         numerical_cats = self._categories_by_attr.get(attribute_name + '_numerical', [])
         if numerical_cats and isinstance(value, (int, float)):
             # For numerical, iterate through sorted categories (typically just 4-5)
@@ -901,7 +895,7 @@ class AttributeAssignmentConfig:
                     result = category
                     break
         else:
-            # For categorical or fallback, check all categories for this attribute
+            # For categorical, check all categories for this attribute
             cats = self._categories_by_attr.get(attribute_name, [])
             for category in cats:
                 if category.get('type') == 'categorical':

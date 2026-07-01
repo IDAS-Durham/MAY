@@ -5,7 +5,7 @@ Assigns sexual orientations to all adults (and identifies existing cohabiting
 couples).
 
 The orientation source is declared explicitly by the config, one of two
-mutually-exclusive paths (no silent fallback — adr/0010):
+mutually-exclusive paths:
 
 1. Data-driven (when ``data_sources`` IS set): the two declared files must
    exist or construction fails loud.
@@ -90,7 +90,7 @@ class RomanticDistributor:
         self._prevalence_bands: List[Tuple[int, int]] = []
         # Dense prior table: shape (n_sexes, n_bands, n_orients).
         self._prevalence_table: Optional[np.ndarray] = None
-        self._geo_level: Optional[str] = None  # required from config; no default (adr/0002)
+        self._geo_level: Optional[str] = None  # required from config
         # MSOA marginal table: shape (n_msoas, n_orients), aligned to self._msoa_codes.
         self._msoa_table: Optional[np.ndarray] = None
         self._msoa_codes: List[str] = []
@@ -111,10 +111,6 @@ class RomanticDistributor:
             with open(pr.resolve(config), 'r') as f:
                 return yaml.safe_load(f)
         return config
-
-    # ------------------------------------------------------------------
-    # Data-source loading
-    # ------------------------------------------------------------------
 
     def _load_data_sources(self, ds: Dict):
         demo_src = ds.get('demographic_distribution', {})
@@ -142,7 +138,7 @@ class RomanticDistributor:
             )
         self._geo_level = geo_level
 
-        # ---- National prior ---------------------------------------------------
+        # National prior
         rows: List[Dict] = []
         with open(prev_path) as f:
             for row in csv.DictReader(f):
@@ -181,7 +177,7 @@ class RomanticDistributor:
         prevalence_table = np.where(sums > 0, prevalence_table / sums, 0.0)
         self._prevalence_table = prevalence_table
 
-        # ---- MSOA marginals ---------------------------------------------------
+        # MSOA marginals
         msoa_rows: Dict[str, np.ndarray] = {}
         with open(area_path) as f:
             for row in csv.DictReader(f):
@@ -225,10 +221,6 @@ class RomanticDistributor:
             tail = (ages > self._prevalence_bands[-1][1]) & (out < 0)
             out[tail] = len(self._prevalence_bands) - 1
         return out
-
-    # ------------------------------------------------------------------
-    # Geography indexing (SGU → MSOA cache)
-    # ------------------------------------------------------------------
 
     def _build_sgu_to_msoa_cache(self) -> Dict[str, int]:
         """Map every SGU code to its MSOA index, once.
@@ -278,10 +270,6 @@ class RomanticDistributor:
         if ancestor is None:
             return -1
         return self._msoa_idx_by_code.get(ancestor.name, -1)
-
-    # ------------------------------------------------------------------
-    # IPF
-    # ------------------------------------------------------------------
 
     def _build_cell_table(self,
                           sex_arr: np.ndarray,
@@ -376,10 +364,6 @@ class RomanticDistributor:
         cell_prob = np.where(sums > 0, cell_prob / sums, target_nat[:, :, None, :])
         return cell_prob
 
-    # ------------------------------------------------------------------
-    # Vectorized sampling
-    # ------------------------------------------------------------------
-
     def _sample_orientations_vectorized(self,
                                         arrays: Dict[str, np.ndarray],
                                         sex_arr: np.ndarray,
@@ -412,8 +396,7 @@ class RomanticDistributor:
             * (n_msoas + 1) + (msoa_arr.astype(np.int64) + 1)
         ) * ps_card + (partner_sex_arr.astype(np.int64) + 1)
 
-        # `argsort + diff` gives us groups without ever materializing a Python loop
-        # over individuals.
+        # `argsort + diff` groups via vectorized array ops over the whole key array.
         order = np.argsort(key, kind='stable')
         sorted_key = key[order]
         boundaries = np.concatenate(([0], np.flatnonzero(np.diff(sorted_key)) + 1, [n]))
@@ -475,10 +458,6 @@ class RomanticDistributor:
             orientations[run] = np.random.choice(n_orients, size=n_run, p=probs).astype(np.int8)
 
         return orientations
-
-    # ------------------------------------------------------------------
-    # YAML fallback (per-person, used by Medieval / tests)
-    # ------------------------------------------------------------------
 
     def _yaml_base_probs(self, sex_code: int, age: int) -> np.ndarray:
         orient_config = self.config.get('sexual_orientations', {})
@@ -583,10 +562,6 @@ class RomanticDistributor:
                     return False
         return True
 
-    # ------------------------------------------------------------------
-    # Top-level orchestration
-    # ------------------------------------------------------------------
-
     def distribute_all(self):
         total_start = time.time()
 
@@ -645,10 +620,6 @@ class RomanticDistributor:
 
         total_time = time.time() - total_start
         logger.info(f"Relationship processing complete in {total_time:.2f}s")
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def _build_attribute_arrays(self, adults: List) -> Dict[str, np.ndarray]:
         n = len(adults)

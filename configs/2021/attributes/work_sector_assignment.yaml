@@ -1,6 +1,4 @@
-# ============================================================================
 # Work Sector Attribute Assignment Configuration
-# ============================================================================
 # Assigns work sector (industry) based on:
 # 1. Workplace LGU location (not residence)
 # 2. Person's sex (for demographic realism)
@@ -10,7 +8,6 @@
 #
 # Assignment Level: person
 # Dependencies: workplace_location (LGU), workplace_sgu (SGU)
-# ============================================================================
 
 step:
   assignment_level: "person"
@@ -20,9 +17,7 @@ attributes:
     description: "Assigns industry sector based on workplace LGU and sex"
     data_type: "categorical"
 
-# ============================================================================
 # Filters - Only assign to working-age people (18-65)
-# ============================================================================
 filters:
   age:
     attribute: "age"
@@ -44,9 +39,7 @@ filters:
     description: "Exclude out-of-area workers (no in-world workplace, no sector row)"
     exclude: ["OUTSIDE"]
 
-# ============================================================================
 # Required Attributes (Dependencies)
-# ============================================================================
 required_attributes:
   - name: "workplace_location"
     description: "Workplace LGU must be assigned first"
@@ -55,9 +48,7 @@ required_attributes:
     description: "Workplace SGU must be assigned first"
     required: true
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   # Workplace LGU + Sex stratified industry distribution
   workplace_industry_by_sex:
@@ -99,9 +90,7 @@ data_sources:
           Q: "Human Health and Social Work Activities"
           Other: "Other"
 
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Assign work sector based on workplace LGU + sex"

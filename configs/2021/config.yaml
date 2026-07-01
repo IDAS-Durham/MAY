@@ -1,8 +1,6 @@
 # MAY Configuration File
 
-# ========================================
 # ROOTS — set these for your machine
-# ========================================
 # config_root: /absolute/path/to/configs/2021  # optional; defaults to this file's directory
 data_root: data                                  # set to absolute path for collaboration
 # output_root: /absolute/path/to/output         # optional; defaults to {CWD}/output
@@ -18,7 +16,7 @@ geography:
   #   - ["SGU", "MGU", "LGU", "XLGU"]   # 4 levels
   #   - ["Block", "Tract", "County"]    # Custom names
   # These are generic size labels (Small/Medium/Large/eXtra-Large Geographical
-  # Unit); the engine attaches no country meaning to them (see docs/adr/0002).
+  # Unit); the engine attaches no country meaning to them.
   # In THIS UK build they map to real census units as follows:
   #   SGU  -> Output Area (OA)
   #   MGU  -> Middle-layer Super Output Area (MSOA)
@@ -31,9 +29,7 @@ geography:
   # Load all geographical units (ignores all filters below if true)
   load_all: false
 
-  # ========================================
   # FILTER - Specify which geographical units to load
-  # ========================================
 
   filter:
     # Level to filter on: LGU, MGU, or SGU
@@ -47,9 +43,7 @@ geography:
     # File should have one code per line
     #file: may/filters/example_mgu.txt
 
-# ========================================
 # POPULATION
-# ========================================
 
 population:
   # Path to population data files
@@ -60,9 +54,7 @@ population:
   demographics_female_file: "demographics_female.csv"
 
 
-# ========================================
 # VENUES
-# ========================================
 
 venues:
   # Path to venue files
@@ -74,9 +66,7 @@ venues:
   # Export file for venue allocations (automatically created after allocation)
   export_file: "venue_allocations.csv"
 
-# ========================================
 # HOUSEHOLDS
-# ========================================
 
 households:
   # Path to household data files
@@ -102,9 +92,7 @@ households:
   # Export file for household allocations (automatically created after distribution)
   export_file: "household_allocations.csv"
 
-# ========================================
 # DEBUG OUTPUTS
-# ========================================
 # Auxiliary CSV files written during world creation. They are useful for
 # inspecting small worlds but build large in-memory DataFrames, so for
 # country-scale runs (e.g. England 2021) leave this disabled.
@@ -117,13 +105,9 @@ households:
 debug_outputs:
   enabled: true
 
-# ========================================
 # ATTRIBUTES
-# ========================================
 
-# ========================================
 # TIMELINE - Unified Simulation Events
-# ========================================
 # Defines the exact sequence of simulation events (attribute assignment, venue distribution, etc.)
 # This allows critical ordering, such as assigning schools/universities before workplaces.
 
@@ -131,27 +115,20 @@ timeline:
   enabled: true
   
   steps:
-    # ----------------------------------------
     # 0. Households + residence venues (care homes, boarding schools, dorms).
-    #    Runs the full allocation_strategy.yaml. Placed first so it reproduces
-    #    the previous "households before timeline" ordering; move it later only
+    #    Runs the full allocation_strategy.yaml. Placed first; move it later only
     #    if a residence allocation needs an attribute assigned by a prior step.
-    # ----------------------------------------
     - type: residence_allocation
       config: "configs/2021/households/allocation_strategy.yaml"
 
-    # ----------------------------------------
     # 1. Initial Attributes (Ethnicity, Comorbidities)
-    # ----------------------------------------
     - type: attribute
       config: "${config_root}/attributes/attribute_assignment.yaml"
       
     - type: attribute
       config: "${config_root}/attributes/comorbidity_assignment.yaml"
 
-    # ----------------------------------------
     # 2. Education (Assigns primary_activity = school/university)
-    # ----------------------------------------
     # School distribution
     - type: distributor
       config: "${config_root}/distributors/school_distributor.yaml"
@@ -166,9 +143,7 @@ timeline:
     - type: child_creator
       config: "${config_root}/venue_child_creators/university_uni_years.yaml"
 
-    # ----------------------------------------
     # 3. Employment (Filters out people with primary_activity)
-    # ----------------------------------------
     # Workplace location assignment (LGU + Work Mode)
     - type: attribute
       config: "${config_root}/attributes/workplace_assignment.yaml"
@@ -181,9 +156,7 @@ timeline:
     - type: attribute
       config: "${config_root}/attributes/work_sector_assignment.yaml"
 
-    # ----------------------------------------
     # 4. Specific Workplaces (Hospitals, Care Homes, Schools, etc.)
-    # ----------------------------------------
     # Q sector -> Hospitals
     - type: distributor
       config: "${config_root}/distributors/specific_workplace_hospitals_distributor.yaml"
@@ -196,18 +169,14 @@ timeline:
     - type: distributor
       config: "${config_root}/distributors/specific_workplace_classrooms_distributor.yaml"
       
-    # ----------------------------------------
     # 5. General Employment (Companies)
-    # ----------------------------------------
     - type: distributor
       config: "${config_root}/distributors/company_distributor.yaml"
 
     - type: child_creator
       config: "${config_root}/venue_child_creators/company_offices.yaml"
 
-    #-----------------------------------------
     # 6. Work mode correction
-    #-----------------------------------------
     # Overrides `work_mode` for workers placed in on-site venues
     # (hospital/care_home/classroom) — forces them to Normal regardless of
     # what the area-level O-D matrix in workplace_assignment sampled.
@@ -215,9 +184,7 @@ timeline:
     - type: attribute
       config: "${config_root}/attributes/work_mode_correction.yaml"
 
-    #-----------------------------------------
     # 7. Commute assignment
-    #-----------------------------------------
     # Runs AFTER all workplace distributors so it can gate on the actually-assigned
     # workplace venue (office/classroom/hospital/care_home, worker subset).
     - type: attribute
@@ -237,9 +204,7 @@ timeline:
     - type: distributor
       config: "${config_root}/distributors/route_commute_bus.yaml"
 
-    # ----------------------------------------
     # 8. Other Services
-    # ----------------------------------------
     - type: distributor
       config: "${config_root}/distributors/hospital_distributor.yaml"
 
@@ -251,9 +216,7 @@ timeline:
     - type: distributor
       config: "${config_root}/distributors/care_home_visits_distributor.yaml"
 
-# ========================================
 # RELATIONSHIP PIPELINE - Build agent networks
-# ========================================
 # Build relationship networks between agents for disease modeling.
 # All relationship types are fully configurable via YAML.
 
@@ -270,20 +233,18 @@ relationship_pipeline:
   # - Connections are stored in person.properties (key defined in YAML config)
   # - Add property names to serialization_config.yaml to include in HDF5 export
 
-# ========================================
 # ROMANTIC RELATIONSHIPS - Sexual orientation
-# ========================================
 # Assigns a sexual orientation to every adult and stamps a relationship_status.
 
 romantic_relationships:
-  enabled: true  # Set to false to skip
+  enabled: true
   config: "${config_root}/relationships/romantic_relationships.yaml"
 
   # Notes:
   # - Runs AFTER the timeline and social relationships (order fixed in create_world.py)
   # - Recognizes existing household couples via the cohabiting_couple property that
   #   household allocation writes when a relationship_rules.yaml pair rule is flagged
-  #   creates_romantic_couple. It only READS that couple; it does not match partners.
+  #   creates_romantic_couple. It only READS that couple.
   # - Orientation source is declared explicitly (see romantic_relationships.yaml):
   #   data_sources present -> raked from CSVs (fail loud if missing); absent -> YAML probabilities.
 
@@ -293,9 +254,7 @@ serialization:
   output_dir: "${output_root}/2021"
   filename: "world_state.h5"
 
-# ========================================
 # EXAMPLES
-# ========================================
 
 # Example 1: Load only London LGU and all its children
 # filter:

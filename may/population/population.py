@@ -21,9 +21,9 @@ logger = logging.getLogger("population")
 
 
 class PopulationError(Exception):
-    """Population data is missing, empty, or unloadable — fail loud, no empty
-    world (adr/0010, adr/0004). ``create_world`` is the only place that turns
-    this into a process exit."""
+    """Population data is missing, empty, or unloadable; raising this fails the
+    run loudly. ``create_world`` is the only place that turns this into a
+    process exit."""
 
 
 class PopulationManager:
@@ -58,7 +58,7 @@ class PopulationManager:
         """
         Create a nested defaultdict for demographics storage.
 
-        This is a separate function (not a lambda) to make the object pickle-compatible.
+        Defined as a named function so the object stays pickle-compatible.
         Returns a defaultdict(dict) for storing age -> sex -> count mappings.
         """
         return defaultdict(dict)
@@ -129,7 +129,7 @@ class PopulationManager:
 
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
-        # Note: Using a regular function instead of lambda for pickle compatibility
+        # Named function keeps this pickle-compatible
         self.precise_demographics = defaultdict(self._create_nested_defaultdict)
         total_people = 0
 
@@ -254,9 +254,9 @@ class PopulationManager:
                     properties[target] = val
 
             # Add all other columns not in mapping to properties.
-            # The geographical column drives `geographical_unit`; it must not
-            # also be duplicated as a property (parallel with VenueManager,
-            # which excludes its geo column from the property dict).
+            # The geographical column drives `geographical_unit` and is kept out
+            # of the property dict (parallel with VenueManager, which keeps its
+            # geo column out of properties).
             mapped_csv_cols = set(target_to_csv.values())
             reserved_cols = mapped_csv_cols | {actual_geo_col}
             for col, val in row_dict.items():
@@ -467,7 +467,7 @@ class PopulationManager:
         """
         Load individual-level population data from multiple MGU-level CSV files.
         """
-        # 1. Identify all units at the batch-partition level (levels[1]; adr/0002)
+        # 1. Identify all units at the batch-partition level (levels[1])
         mgu_units = self.geography.get_units_by_level(self.geography.levels[1])
         mgu_names = set(mgu_units.keys())
 

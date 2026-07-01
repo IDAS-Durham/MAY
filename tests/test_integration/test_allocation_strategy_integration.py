@@ -8,9 +8,7 @@ from may.residence.composition_pattern import CompositionPattern
 from may.residence.allocation_strategy import execute_allocation_strategy
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Fixtures
-# ──────────────────────────────────────────────────────────────────────
 
 STRESS_DATA = "tests/test_data/stress_world"
 
@@ -53,9 +51,7 @@ def hd(geography, population_manager, venue_manager):
     return distributor
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Helpers
-# ──────────────────────────────────────────────────────────────────────
 
 def get_households_by_geo_unit(hd, geo_unit_code):
     """Get all households in a specific geo unit."""
@@ -93,9 +89,7 @@ def count_all_people_in_households(hd):
     return sum(h.size() for h in all_hh)
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 1: Stress world data loads correctly
-# ──────────────────────────────────────────────────────────────────────
 
 class TestStressWorldSetup:
     """Verify the stress_world fixture loads as expected."""
@@ -155,9 +149,7 @@ class TestStressWorldSetup:
         assert hd.config['promotion']['max_attempts'] == 4
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 2: Demotion behavior under resource pressure
-# ──────────────────────────────────────────────────────────────────────
 
 class TestDemotionUnderPressure:
     """
@@ -406,9 +398,7 @@ class TestDemotionUnderPressure:
         )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 3: Couple matching (romantic pair creation)
-# ──────────────────────────────────────────────────────────────────────
 
 class TestCoupleMatchingIntegration:
     """
@@ -527,9 +517,7 @@ class TestCoupleMatchingIntegration:
             )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 4: Pattern assumptions
-# ──────────────────────────────────────────────────────────────────────
 
 class TestPatternAssumptions:
     """
@@ -611,9 +599,7 @@ class TestPatternAssumptions:
         )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 5: Excess allocation
-# ──────────────────────────────────────────────────────────────────────
 
 class TestExcessAllocation:
     """
@@ -718,9 +704,7 @@ class TestExcessAllocation:
         )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 6: Overflow allocation (desperation round)
-# ──────────────────────────────────────────────────────────────────────
 
 class TestOverflowAllocation:
     """
@@ -798,9 +782,7 @@ class TestOverflowAllocation:
             )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 7: Promotion
-# ──────────────────────────────────────────────────────────────────────
 
 class TestPromotionAllocation:
     """
@@ -918,9 +900,7 @@ class TestPromotionAllocation:
                 )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 8: Pool management (no double allocation)
-# ──────────────────────────────────────────────────────────────────────
 
 class TestPoolManagement:
     """
@@ -996,9 +976,7 @@ class TestPoolManagement:
         )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Test 9: Full pipeline integration
-# ──────────────────────────────────────────────────────────────────────
 
 class TestFullPipelineIntegration:
     """

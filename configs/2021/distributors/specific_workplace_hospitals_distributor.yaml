@@ -1,6 +1,4 @@
-# ============================================================================
 # Specific Workplace Distributor - Hospitals (Q Sector)
-# ============================================================================
 # This distributor allocates health sector (Q) workers to hospitals.
 # Access via: person.activity_map['primary_activity'] -> hospital venue
 #
@@ -8,11 +6,8 @@
 # - Sector-specific allocation (only Q workers)
 # - Location-based (uses workplace_sgu for geographical matching)
 # - Runs BEFORE company_distributor to capture health sector workers
-# ============================================================================
 
-# ============================================================================
 # BASIC INFO
-# ============================================================================
 distributor_name: "specific_workplace_hospitals_distributor"
 venue_type: "hospital"
 description: "Distribute health sector (Q) workers to hospitals"
@@ -24,9 +19,7 @@ activity_map_key: "primary_activity"
 # Subset to add workers to
 subset_key: "worker"
 
-# ============================================================================
 # ELIGIBILITY: Who can be allocated?
-# ============================================================================
 
 eligibility:
 
@@ -65,9 +58,7 @@ eligibility:
       # Case sensitivity
       case_sensitive: false
 
-# ============================================================================
 # VENUE SELECTION: How to pick eligible venues?
-# ============================================================================
 
 venue_selection:
   # Use geographical hierarchy matching
@@ -88,9 +79,7 @@ venue_selection:
   filter_by_geography: true
   respect_capacity: true
 
-# ============================================================================
 # ALLOCATION STRATEGY: How to assign person to venue?
-# ============================================================================
 
 allocation:
   # Allocation strategy
@@ -100,8 +89,8 @@ allocation:
   capacity_column: "estimated_staff"
 
   capacity_handling:
-    if_missing: "skip"  # Skip hospitals without bed count
-    if_zero: "skip"     # Skip hospitals with 0 beds
+    if_missing: "skip"
+    if_zero: "skip"
 
   track_capacity: true
   when_full: "exclude"  # Remove full hospitals from options
@@ -109,9 +98,7 @@ allocation:
   # Batch processing for performance
   batch_by: "geo_unit"
 
-# ============================================================================
 # EXECUTION SETTINGS
-# ============================================================================
 
 settings:
   # Execution order (higher = earlier)
@@ -125,16 +112,12 @@ settings:
   verbose: true
   log_summary: true
 
-# ============================================================================
 # FALLBACK BEHAVIOR
-# ============================================================================
 
 fallback:
   strategy: "skip"  # Skip if no matching hospitals found
 
-# ============================================================================
 # NOTES
-# ============================================================================
 #
 # ALLOCATION LOGIC:
 #
@@ -159,4 +142,3 @@ fallback:
 #    - They may be allocated to care_homes by the next distributor
 #    - Or go to company_distributor as fallback
 #
-# ============================================================================

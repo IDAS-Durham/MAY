@@ -9,9 +9,7 @@ from may.residence.relationship_rules import RelationshipRule
 from may.population.person import Person
 
 
-# ============================================================
 # Fixtures
-# ============================================================
 
 @pytest.fixture
 def geography():
@@ -79,9 +77,7 @@ def populate_pools(distributor, people, geo_unit_code="SGU_001"):
     return pools
 
 
-# ============================================================
 # Group 1: _attempt_with_demotion — Demotion Loop Tests
-# ============================================================
 
 class TestAttemptWithDemotion:
     """Tests for the demotion loop that wraps allocation."""
@@ -150,8 +146,7 @@ class TestAttemptWithDemotion:
 
         # With only 1 adult, it can't form 2 adults, so demotion kicks in
         # It should either succeed with a demoted pattern or return None
-        # The key test is that it doesn't crash when failed_category_idx is None
-        # (this was the bug we fixed)
+        # The key assertion is that it doesn't crash when failed_category_idx is None
 
     def test_demotion_respects_min_household_size(self, distributor):
         """Demotion would reduce pattern below min_household_size → returns None."""
@@ -166,7 +161,7 @@ class TestAttemptWithDemotion:
         pattern = CompositionPattern.from_string("0 0 2 0")
 
         # Without rule_name → simple allocation. Intelligent demotion from 2 to 1.
-        # Bug we fixed: safety checks must apply to intelligent demotion too.
+        # Safety checks must apply to intelligent demotion too.
         household = distributor._attempt_with_demotion(
             "SGU_001", pattern, max_attempts=5
         )
@@ -243,7 +238,7 @@ class TestAttemptWithDemotion:
         assert household.properties['allocation_pattern'] == '0 0 1 0'
 
     def test_demotion_with_none_category_idx_no_crash(self, distributor):
-        """Bug fix test: when failed_category_idx is None, intelligent demotion is skipped safely."""
+        """When failed_category_idx is None, intelligent demotion is skipped safely."""
         geo = distributor.geography.get_unit("SGU_001")
         # Provide enough people in pools but use a rule that will fail
         # without returning a specific failed_category_idx
@@ -263,9 +258,7 @@ class TestAttemptWithDemotion:
         # It should either succeed via demotion or return None gracefully.
 
 
-# ============================================================
 # Group 2: _allocate_household_with_rules — Rules Integration
-# ============================================================
 
 class TestAllocateHouseholdWithRules:
     """Tests for the full rules-based allocation flow."""
@@ -349,9 +342,7 @@ class TestAllocateHouseholdWithRules:
         assert household.num_members == 1
 
 
-# ============================================================
 # Group 3: distribute_households_round — Round Distribution
-# ============================================================
 
 class TestDistributeHouseholdsRound:
     """Tests for the round distribution orchestration."""
@@ -488,9 +479,7 @@ class TestDistributeHouseholdsRound:
         assert stats['total_people_remaining'] >= 0
 
 
-# ============================================================
 # Group 4: Balanced Distribution
-# ============================================================
 
 class TestBalancedDistribution:
     """Tests for _calculate_balanced_distribution and _allocate_balanced_distribution."""

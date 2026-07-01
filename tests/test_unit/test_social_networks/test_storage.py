@@ -14,9 +14,7 @@ from may.social_networks import (
 from may.social_networks.builder_functions.store import store_contacts
 
 
-# ---------------------------------------------------------------------------
 # Stub builders registered once for this module
-# ---------------------------------------------------------------------------
 
 @register_pool_type("_storage_test_pool")
 def _stub_pool(world, config):
@@ -65,9 +63,7 @@ def _entry(network_type, storage_key, pool_type="_storage_test_pool"):
     }
 
 
-# ---------------------------------------------------------------------------
 # Basic storage
-# ---------------------------------------------------------------------------
 
 def test_storage_key_written_to_person_properties(toy_world):
     SocialNetworkBuilder(toy_world, _make_config(
@@ -93,9 +89,7 @@ def test_connected_persons_appear_in_properties(toy_world):
     assert people[0] in p1_contacts
 
 
-# ---------------------------------------------------------------------------
 # Deduplication within a single key
-# ---------------------------------------------------------------------------
 
 def test_no_duplicates_within_single_key(toy_world):
     SocialNetworkBuilder(toy_world, _make_config(
@@ -109,9 +103,7 @@ def test_no_duplicates_within_single_key(toy_world):
         assert len(contact_ids) == len(set(contact_ids))
 
 
-# ---------------------------------------------------------------------------
 # Duplicates allowed across different keys
-# ---------------------------------------------------------------------------
 
 def test_same_person_can_appear_in_two_different_keys(toy_world):
     SocialNetworkBuilder(toy_world, _make_config(
@@ -137,9 +129,7 @@ def test_two_keys_are_independent(toy_world):
     assert "key_b" not in people[0].properties
 
 
-# ---------------------------------------------------------------------------
 # Shared storage key — multiple networks appended into one set
-# ---------------------------------------------------------------------------
 
 @register_network_type("_connects_second_and_third")
 def _connects_second_and_third(world, network_config):

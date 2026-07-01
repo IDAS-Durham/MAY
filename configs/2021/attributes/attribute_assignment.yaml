@@ -1,15 +1,10 @@
-# ============================================================================
 # Streamlined Attribute Assignment Configuration
-# ============================================================================
 # This configuration uses a simplified, flexible approach:
 # 1. Define ROLES and map them to household subsets (from household_config.yaml)
 # 2. Define HOUSEHOLD STRUCTURES with flexible pattern matching
 # 3. Define ASSIGNMENT RULES based on structure type and role
-# ============================================================================
 
-# ============================================================================
 # Ethnicity Inheritance Rules
-# ============================================================================
 # These rules govern how children inherit ethnicity from parents and
 # how we reverse-infer parent ethnicities from adult children.
 #
@@ -38,13 +33,10 @@
 #   Child is B → Both parents must be B
 #   Child is O → Both parents must be O
 #   Child is M → Parents must be different (one is X, other is Y where X ≠ Y)
-# ============================================================================
 
-# ============================================================================
 # IMPORTANT SCHEMA DEFINITION:
 # The root attribute configuration MUST be defined as a nested dictionary 
 # under the 'attribute:' key. Top-level 'attribute_name' will be ignored.
-# ============================================================================
 step:
   assignment_level: "person_by_residence"
 
@@ -58,16 +50,13 @@ attributes:
     data_type: "categorical"
 
 
-# ============================================================================
 # Role Definitions
-# ============================================================================
 # Define roles and which household subsets (age categories) they apply to
 #
 # IMPORTANT SCHEMA DEFINITION: 
 # Roles MUST be defined globally here at the root level, NOT nested inside 
 # individual `household_structures`. The parser builds a global registry.
 # If nested inside a structure, subset mapping fails.
-# ============================================================================
 
 roles:
   primary_adult:
@@ -102,15 +91,13 @@ roles:
     description: "Children and dependent young adults in families"
     subsets: ["Kids", "Young Adults"]
 
-# ============================================================================
 # Household Structure Definitions
-# ============================================================================
 # Define the three household types with flexible pattern matching
 # Pattern format: "Kids Young_Adults Adults Old_Adults"
 #
 # IMPORTANT SCHEMA DEFINITION:
-# Structure matching strictly requires the `matching_rules: \n - actual: [...]` 
-# format. Legacy flat `patterns: [...]` arrays are not supported and will fail.
+# Structure matching strictly requires the `matching_rules: \n - actual: [...]`
+# format.
 #
 # Operators supported: >=N, <=N, N (exact), >=0 (any)
 #
@@ -196,9 +183,7 @@ household_structures:
           - "0 >=0 >=0 >=0"
         description: "Flexible multi-person households (no kids)"
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 # Define where to load demographic data from
 
 data_sources:
@@ -237,18 +222,13 @@ data_sources:
           M: "prob_M"
           O: "prob_O"
 
-# ============================================================================
 # Assignment Rules by Household Structure
-# ============================================================================
 # Note: To assign a hardcoded value instead of using a probabilistic distribution,
 # you can use `strategy: "constant"` and `value: "your_value"`.
-# ============================================================================
 
 assignment_rules:
 
-  # --------------------------------------------------------------------------
   # FAMILY HOUSEHOLDS (with inheritance)
-  # --------------------------------------------------------------------------
 
   Family:
     description: "Assignment rules for family households"
@@ -341,9 +321,7 @@ assignment_rules:
           strategy: "probabilistic"
           data_source: "geo_distribution"
 
-  # --------------------------------------------------------------------------
   # COUPLE HOUSEHOLDS (no inheritance)
-  # --------------------------------------------------------------------------
 
   Couple:
     description: "Assignment rules for couple households (adult or elderly couples)"
@@ -383,9 +361,7 @@ assignment_rules:
           partner_role: "primary_elder"
           marginal_source: "geo_distribution"
 
-  # --------------------------------------------------------------------------
   # INDEPENDENTS (no inheritance, no partnership)
-  # --------------------------------------------------------------------------
 
   Independents:
     description: "Assignment rules for independent living arrangements"
@@ -405,9 +381,7 @@ assignment_rules:
           strategy: "probabilistic"
           data_source: "geo_distribution"
 
-# ============================================================================
 # Venue Assignment Rules (Non-Household)
-# ============================================================================
 
 venue_assignment_rules:
   - venue_types: ["care_home", "boarding_school", "student_dorms"]

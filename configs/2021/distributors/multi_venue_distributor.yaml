@@ -1,6 +1,4 @@
-# ============================================================================
 # Multi-Venue Distributor Configuration
-# ============================================================================
 # This distributor provides people with multiple venue options across different
 # venue types. It creates a nested structure in activity_map:
 #
@@ -16,11 +14,8 @@
 # - Social venues (cafes, parks, community centers)
 # - Service locations (banks, post offices, libraries)
 # - Any other scenario requiring multiple venue options
-# ============================================================================
 
-# ============================================================================
 # BASIC INFO
-# ============================================================================
 distributor_name: "multi_venue_distributor"
 distributor_type: "multi_venue"  # Tells the loader which class to use
 description: "Provide people with multiple venue options across different types"
@@ -58,11 +53,9 @@ venue_type_config:
         person_attribute: "sex"
         column_template: "pct_{value}"  # {value} replaced with person.sex value
 
-# ============================================================================
 # ELIGIBILITY: Who can be allocated to these venues?
-# ============================================================================
 eligibility:
-  # Don't require unassigned - this is independent of other activities
+  # Independent of other activities - runs regardless of prior assignment
   require_unassigned: false
 
   # Global filters - FULLY CUSTOMIZABLE
@@ -82,9 +75,7 @@ eligibility:
   # Require residence - FULLY CUSTOMIZABLE
   require_residence: true
 
-# ============================================================================
 # VENUE SELECTION: How many venues per type?
-# ============================================================================
 venue_selection:
   # Selection method: count-based (N closest venues)
   consider_by: "count"
@@ -110,9 +101,7 @@ venue_selection:
   filter_by_geography: true
   respect_capacity: false
 
-# ============================================================================
 # ALLOCATION STRATEGY
-# ============================================================================
 allocation:
   # No capacity tracking (optional activities)
   track_capacity: false
@@ -120,9 +109,7 @@ allocation:
   # Batch processing for performance
   batch_by: "geo_unit"
 
-# ============================================================================
 # EXECUTION SETTINGS
-# ============================================================================
 settings:
   # Execution priority
   priority: 1
@@ -137,9 +124,7 @@ settings:
   # Performance
   use_spatial_index: true
 
-# ============================================================================
 # VALIDATION
-# ============================================================================
 validation:
   # Required person attributes
   required_person_attributes:
@@ -152,9 +137,7 @@ validation:
     - "Latitude"
     - "Longitude"
 
-# ============================================================================
 # NOTES
-# ============================================================================
 #
 # PARTICIPATION FILTERING (FULLY FLEXIBLE):
 #
@@ -248,4 +231,3 @@ validation:
 # 3. Ensure CSV file exists with Latitude/Longitude columns
 # 4. The distributor will automatically handle it
 #
-# ============================================================================

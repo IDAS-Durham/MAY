@@ -1,9 +1,7 @@
 # Serialization Configuration for HDF5 Export
 # Specifies which properties and attributes to include in C++ world state
 
-# =============================================
 # POPULATION
-# =============================================
 population:
   # Core attributes (always included)
   # id, age, sex, geographical_unit are ALWAYS serialized
@@ -22,9 +20,7 @@ population:
     - romantic_partners   # {exclusive: [ids], non_exclusive: [ids]} (for legacy/shipped states)
     - relationship_status # {type: "exclusive"|"non_exclusive"|"no_partner", consensual: bool}
 
-# =============================================
 # GEOGRAPHY
-# =============================================
 geography:
   # Core attributes (always included)
   # id, name, level, parent/children relationships are ALWAYS serialized
@@ -35,9 +31,7 @@ geography:
   # Additional properties to include from geographical_unit.properties dict
   properties: []
 
-# =============================================
 # VENUES
-# =============================================
 venues:
   # Global venue settings
   global:
@@ -71,8 +65,7 @@ venues:
 
     care_home:
       properties:
-        # Don't include capacity numbers - use actual resident counts
-        # Don't include slot capacities - can derive from residents
+        # Uses actual resident counts; slot capacities derive from residents.
         []
 
     company:
@@ -123,9 +116,7 @@ venues:
     bus_line:
       properties: []
 
-# =============================================
 # SUBSETS
-# =============================================
 subsets:
   # Core attributes (always included)
   # venue reference, subset_index, subset_name, members are ALWAYS serialized
@@ -133,9 +124,7 @@ subsets:
   # No additional properties currently
   properties: []
 
-# =============================================
 # RELATIONSHIPS
-# =============================================
 relationships:
   # What relationship data to include
 
@@ -148,9 +137,7 @@ relationships:
   # Geography parent-child hierarchy
   include_geography_hierarchy: true
 
-# =============================================
 # OUTPUT SETTINGS
-# =============================================
 output:
   # HDF5 compression
   compression: "gzip"

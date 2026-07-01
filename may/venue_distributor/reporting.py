@@ -49,8 +49,7 @@ class ReportingManager:
             return
         
         # Build venue -> people mapping using the distributor's subset_key
-        # This ensures we only count people assigned by THIS distributor,
-        # not people placed by other distributors (e.g., students vs teachers)
+        # Counts only people assigned by THIS distributor's subset (e.g., students vs teachers)
         subset_key = self.distributor.subset_key
         venue_people = defaultdict(list)
         for venue in venues:
@@ -58,7 +57,7 @@ class ReportingManager:
                 # Only count members from this distributor's subset
                 if subset_key in venue.subsets:
                     venue_people[id(venue)] = list(venue.subsets[subset_key].members)
-                # else: venue has 0 people from this distributor (don't count other subsets)
+                # else: venue has 0 people from this distributor's subset
             else:
                 # No specific subset_key — count all subset members
                 for sk, subset in venue.subsets.items():

@@ -1,7 +1,7 @@
 """Load-time validation that `household` build steps only reference real
 households.csv composition patterns (exact-string match — a typo there would
-otherwise silently build nothing). Excess/overflow/promotion are NOT checked
-(they warn on a miss / match runtime patterns)."""
+otherwise silently build nothing). Excess/overflow/promotion patterns are
+left to runtime, where they warn on a miss / match runtime patterns."""
 
 import pytest
 

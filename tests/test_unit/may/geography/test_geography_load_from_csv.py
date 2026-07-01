@@ -1,9 +1,7 @@
 """
-End-to-end coverage for Geography.load_from_csv that mirrors the production
-flow logged when running create_world.py with a 4-level config and an LGU
-filter (SGU/MGU/LGU/XLGU). The existing test suite only exercised a 3-level,
-unfiltered, no-coordinate path, so none of the filter/coord/multi-level
-branches the real run depends on were verified.
+End-to-end coverage for Geography.load_from_csv over a 4-level config
+(SGU/MGU/LGU/XLGU) with an LGU filter, exercising the filter, coordinate,
+and multi-level branches.
 
 Each test builds its own fixture so failures point at one concrete behavior.
 """
@@ -67,10 +65,6 @@ def four_level_geo_dir(tmp_path):
     return str(geo_dir)
 
 
-# ---------------------------------------------------------------------------
-# Filter pipeline
-# ---------------------------------------------------------------------------
-
 def test_lgu_filter_reduces_hierarchy_and_per_level_counts(four_level_geo_dir):
     """LGU filter selects 2 of 3 LGUs; downstream level counts match exactly."""
     geo = Geography(
@@ -127,10 +121,6 @@ def test_empty_filter_codes_loads_everything(four_level_geo_dir):
     assert len(geo.get_units_by_level("LGU")) == 3
 
 
-# ---------------------------------------------------------------------------
-# Coordinate loading
-# ---------------------------------------------------------------------------
-
 def test_coordinates_assigned_for_levels_with_coord_files(four_level_geo_dir):
     geo = Geography(data_dir=four_level_geo_dir, levels=LEVELS_4)
     geo.load_from_csv()
@@ -159,10 +149,6 @@ def test_missing_coord_file_warns_and_leaves_coordinates_none(
     for unit in geo.get_units_by_level("XLGU").values():
         assert unit.coordinates is None
 
-
-# ---------------------------------------------------------------------------
-# Hierarchy correctness
-# ---------------------------------------------------------------------------
 
 def test_ancestor_chain_spans_all_four_levels(four_level_geo_dir):
     geo = Geography(
@@ -196,12 +182,8 @@ def test_unique_sequential_ids_across_all_levels(four_level_geo_dir):
     assert sorted(ids) == list(range(len(ids)))
 
 
-# ---------------------------------------------------------------------------
-# Data-quality regressions (these covered real bugs surfaced by the audit)
-# ---------------------------------------------------------------------------
-
 def test_blank_or_nan_hierarchy_rows_are_dropped_with_warning(tmp_path, caplog):
-    """A blank cell used to silently create a unit literally named 'nan'."""
+    """A blank/NaN hierarchy cell is dropped with a warning, not turned into a unit named 'nan'."""
     geo_dir = tmp_path / "geography"
     geo_dir.mkdir()
     _write_csv(
@@ -243,31 +225,23 @@ def test_cross_level_name_collision_warns(tmp_path, caplog):
     )
 
 
-# ---------------------------------------------------------------------------
-# Geography object semantics (previously broken)
-# ---------------------------------------------------------------------------
-
 def test_geography_is_hashable(four_level_geo_dir):
-    """__hash__ used to raise TypeError because levels was an unhashable list."""
+    """Geography is hashable even though its levels attribute is a list."""
     geo = Geography(data_dir=four_level_geo_dir, levels=LEVELS_4)
     assert isinstance(hash(geo), int)
     assert {geo} == {geo}
 
 
 def test_geography_equality_against_non_geography_is_false():
-    """__eq__ used to raise AttributeError on non-Geography input."""
+    """Geography compares unequal to non-Geography objects instead of raising."""
     geo = Geography(data_dir="x", levels=["SGU", "MGU"])
     assert (geo == None) is False  # noqa: E711
     assert (geo == "string") is False
     assert (geo == 123) is False
 
 
-# ---------------------------------------------------------------------------
-# setup_geography wiring
-# ---------------------------------------------------------------------------
-
 def test_setup_geography_passes_levels_and_filter_through(four_level_geo_dir):
-    """The 4-level config + LGU filter path was not exercised by any test."""
+    """setup_geography passes the 4-level levels list and LGU filter through to Geography."""
     config = {
         "geography": {
             "data_dir": four_level_geo_dir,
@@ -284,10 +258,6 @@ def test_setup_geography_passes_levels_and_filter_through(four_level_geo_dir):
     assert len(geo.get_units_by_level("LGU")) == 2
     assert len(geo.get_units_by_level("XLGU")) == 1
 
-
-# ---------------------------------------------------------------------------
-# Coord pre-filtering and column validation
-# ---------------------------------------------------------------------------
 
 def test_coord_loading_restricted_to_post_filter_names(tmp_path, caplog):
     """
@@ -320,7 +290,7 @@ def test_coord_loading_restricted_to_post_filter_names(tmp_path, caplog):
 
 
 def test_coord_file_missing_required_columns_raises(tmp_path):
-    """A typo in the coord header used to surface as a mid-load KeyError."""
+    """A coord header with wrong column names raises a clear ValueError."""
     geo_dir = tmp_path / "geography"
     geo_dir.mkdir()
     _write_csv(
@@ -337,11 +307,7 @@ def test_coord_file_missing_required_columns_raises(tmp_path):
         geo.load_from_csv()
 
 
-# ---------------------------------------------------------------------------
-# API surface
-# ---------------------------------------------------------------------------
-
 def test_get_geo_unit_alias_is_removed():
-    """The redundant alias was deleted; only get_unit remains."""
+    """Only get_unit exists; there is no get_geo_unit alias."""
     geo = Geography(data_dir="x", levels=["SGU"])
     assert not hasattr(geo, "get_geo_unit")

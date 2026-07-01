@@ -41,9 +41,8 @@ class BaseDistributor:
         self.stats = {}
         self.allocated_this_run = 0
 
-        # Geographical level configuration. No literal default (adr/0002, adr/0010):
-        # required at the point of use, so distributors that never do geo venue
-        # search (e.g. route) don't have to declare it.
+        # Geographical level configuration. Required at the point of use, so
+        # distributors that skip geo venue search (e.g. route) can leave it unset.
         self.venue_geo_level = self.config.get('venue_selection', {}).get('venue_geo_level')
         self.batch_geo_level = self.config.get('venue_selection', {}).get('batch_geo_level', self.venue_geo_level)
 
@@ -119,7 +118,7 @@ class BaseDistributor:
         return c * 6371
 
     def _require_venue_geo_level(self):
-        """The configured venue geography level, or fail loud (adr/0002, adr/0010)."""
+        """The configured venue geography level, or fail loud."""
         if self.venue_geo_level is None:
             raise ValueError(
                 f"{type(self).__name__}: 'venue_selection.venue_geo_level' is required "

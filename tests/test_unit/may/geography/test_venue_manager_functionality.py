@@ -24,10 +24,6 @@ def loaded_geography():
     return geo
 
 
-# ===========================================================================
-# load_venue_type_from_df — coordinates parsing
-# ===========================================================================
-
 class TestCoordinatesParsing:
 
     def test_lowercase_lat_lon_become_tuple(self, loaded_geography):
@@ -73,10 +69,6 @@ class TestCoordinatesParsing:
         vm.load_venue_type_from_df('cinema', df)
         assert vm.get_venue('Foo').coordinates is None
 
-
-# ===========================================================================
-# load_venue_type_from_df — property column extraction
-# ===========================================================================
 
 class TestPropertyColumns:
 
@@ -124,10 +116,6 @@ class TestPropertyColumns:
         assert v.properties['capacity'] == 500
 
 
-# ===========================================================================
-# load_venue_type_from_df — geographic column resolution
-# ===========================================================================
-
 class TestGeoColumnResolution:
 
     def test_sgu_column_is_resolved(self, loaded_geography):
@@ -154,10 +142,6 @@ class TestGeoColumnResolution:
         with pytest.raises(ValueError, match="Missing required geographical column"):
             vm.load_venue_type_from_df('school', df)
 
-
-# ===========================================================================
-# load_venue_type_from_df — geographic filtering and per-row skip
-# ===========================================================================
 
 class TestGeographicFiltering:
 
@@ -199,10 +183,6 @@ class TestGeographicFiltering:
         )
 
 
-# ===========================================================================
-# load_venue_type_from_df — ID generation
-# ===========================================================================
-
 class TestIDGeneration:
 
     def test_ids_are_sequential_within_a_type(self, loaded_geography):
@@ -225,10 +205,6 @@ class TestIDGeneration:
         assert sorted(v.id for v in vm.get_venues_by_type('school')) == [0, 1]
         assert [v.id for v in vm.get_venues_by_type('hospital')] == [0]
 
-
-# ===========================================================================
-# load_from_yaml_config — sad paths and settings
-# ===========================================================================
 
 class TestYamlConfig:
 
@@ -312,10 +288,6 @@ class TestYamlConfig:
         assert vm.get_venues_by_type('household') == []
 
 
-# ===========================================================================
-# Residence helpers
-# ===========================================================================
-
 class TestResidenceHelpers:
 
     def _vm_with_residence_config(self, geo, tmp_path):
@@ -366,10 +338,6 @@ class TestResidenceHelpers:
         assert {v.name for v in residences} == {'HomeA', 'HomeB'}
         assert all(v.type == 'care_home' for v in residences)
 
-
-# ===========================================================================
-# export_venues_to_csv
-# ===========================================================================
 
 class TestExportVenuesToCsv:
 
@@ -462,10 +430,6 @@ class TestExportVenuesToCsv:
         # Empty manager → empty file (pandas writes an empty DataFrame).
         # The contract is just: no exception, file exists.
 
-
-# ===========================================================================
-# Geographical-unit linkage on add_venue / create_venue
-# ===========================================================================
 
 class TestGeoUnitLinkage:
 

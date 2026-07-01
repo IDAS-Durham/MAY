@@ -13,9 +13,8 @@ class Geography:
         self.units = {}           # All units by name: {name: GeographicalUnit}
         self.units_by_id = {}     # All units by ID: {id: GeographicalUnit}
 
-        # Hierarchy levels (most granular to least granular). Required: code
-        # never assumes label strings (adr/0002) and never falls back to a
-        # default set (adr/0010); callers pass the scenario's configured labels.
+        # Hierarchy levels (most granular to least granular). Required: callers
+        # pass the scenario's configured labels.
         if not levels:
             raise ValueError(
                 "Geography requires 'levels' — the ordered list of level labels "
@@ -29,7 +28,7 @@ class Geography:
 
         # Filters: dict with 'level' and 'names' keys
         # Example: {'level': 'MGU', 'codes': ['E02000173', 'E02000187']}
-        # Note: 'codes' is kept for backward compatibility, but refers to names
+        # Note: the 'codes' key holds names
         self.filters = filters
 
         # ID counter for generating unique IDs
@@ -95,9 +94,9 @@ class Geography:
             logger.info(f"Available columns: {hierarchy_df.columns.tolist()}")
             raise ValueError(f"Missing columns {missing_levels} in {hierarchy_path}")
 
-        # Reject rows that are missing a value at any configured level. A
-        # blank/NaN cell silently produced a ghost unit literally named "nan"
-        # and corrupted the parent chain.
+        # Reject rows that are missing a value at any configured level; a
+        # blank/NaN cell would create a ghost unit named "nan" and corrupt the
+        # parent chain.
         invalid_mask = hierarchy_df[self.levels].isna().any(axis=1) | \
             hierarchy_df[self.levels].apply(
                 lambda col: col.astype(str).str.strip() == "", axis=0
@@ -113,7 +112,7 @@ class Geography:
         # 2. Apply filters if specified
         if self.filters and self.filters.get('codes'):
             filter_level = self.filters['level']
-            filter_names = set(self.filters['codes'])  # 'codes' key for backward compat
+            filter_names = set(self.filters['codes'])  # 'codes' key holds names
 
             if filter_level not in hierarchy_df.columns:
                 logger.error(f"Filter level '{filter_level}' not found in hierarchy columns.")
@@ -131,9 +130,8 @@ class Geography:
             )
 
         # 3. Load coordinates for each level, restricted to names present in
-        # the (post-filter) hierarchy. Reading the entire SGU coord file when
-        # only a small filter is in effect was a real cost on the production
-        # run — the log shows 239,023 SGU coords loaded for a 2,152-SGU world.
+        # the (post-filter) hierarchy, to avoid reading entire coord files when
+        # only a small filter is in effect.
         names_per_level = {
             level: set(hierarchy_df[level].unique()) for level in self.levels
         }
@@ -183,8 +181,8 @@ class Geography:
         logger.info(f"Created {len(self.units_by_id)} total units")
 
         # 5. Build parent-child relationships, vectorized per level pair.
-        # Each (child, parent) pair appears once after drop_duplicates, so we
-        # don't iterate every hierarchy row.
+        # Each (child, parent) pair appears once after drop_duplicates, so this
+        # is one pass per level pair.
         for i in range(len(self.levels) - 1):
             child_level = self.levels[i]
             parent_level = self.levels[i + 1]

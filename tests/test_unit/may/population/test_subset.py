@@ -1,10 +1,7 @@
 """
 Unit tests for Subset (may/population/subset.py).
 
-Subset wraps a set of Person ``members`` belonging to a Venue. Earlier versions
-of this test file expected a separate ``people_present`` collection that no
-longer exists in the implementation; those tests have been rewritten to cover
-the current intended behaviour rather than restoring removed functionality.
+Subset wraps a set of Person ``members`` belonging to a Venue.
 """
 
 import pytest
@@ -39,9 +36,7 @@ def _person(age, sex, geo):
     return Person(age=age, sex=sex, geographical_unit=geo)
 
 
-# ---------------------------------------------------------------------------
 # Initialization
-# ---------------------------------------------------------------------------
 
 class TestSubsetInitialization:
     def test_default_members_is_empty_set(self, mock_venue):
@@ -65,14 +60,12 @@ class TestSubsetInitialization:
         assert Subset(venue=mock_venue, subset_index=0, members=None).members == set()
 
     def test_no_people_present_attribute(self, mock_venue):
-        """The dead 'people_present' attribute was removed; ensure it stays gone."""
+        """Subset exposes no 'people_present' attribute."""
         subset = Subset(venue=mock_venue, subset_index=0)
         assert not hasattr(subset, "people_present")
 
 
-# ---------------------------------------------------------------------------
 # Membership management
-# ---------------------------------------------------------------------------
 
 class TestMembership:
     def test_add_member(self, mock_venue, mock_geo_unit):
@@ -102,9 +95,7 @@ class TestMembership:
             subset.remove_member(_person(25, "male", mock_geo_unit))
 
 
-# ---------------------------------------------------------------------------
 # Properties / dunder methods backed by members
-# ---------------------------------------------------------------------------
 
 class TestSubsetProperties:
     def test_spec_returns_venue_type_and_index(self, mock_venue):
@@ -158,9 +149,7 @@ class TestSubsetProperties:
         assert "Test Venue" in rendered
 
 
-# ---------------------------------------------------------------------------
 # Collation
-# ---------------------------------------------------------------------------
 
 class _BoolPerson:
     """Lightweight stand-in. Person uses __slots__ so we can't add ad-hoc

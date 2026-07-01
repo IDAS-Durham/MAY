@@ -38,8 +38,7 @@ class VenueManager:
         self.venue_configs = {}         # {venue_type: full_config_dict}
 
         # Capacity configurations per venue type — lazily populated by
-        # allocation steps (residence venue_allocator) at runtime. The
-        # venues_config.yaml itself no longer carries capacity rules.
+        # allocation steps (residence venue_allocator) at runtime.
         self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
     def _generate_id(self, venue_type: str) -> int:
@@ -238,9 +237,7 @@ class VenueManager:
         has_coords = lat_col is not None and lon_col is not None
 
         # Detect a 'name' column (case-insensitive) — only treat the column as the venue name
-        # if it actually exists. Without this check, getattr(row, 'name', None) returns None
-        # and downstream code synthesizes a name from row.Index, producing meaningless numeric
-        # "names" that collide across files (e.g. grocery row 12537 vs pub row 12537).
+        # if it actually exists. Otherwise the venue keeps its auto-generated name.
         name_col = next((col for col in venue_df.columns if col.lower() == 'name'), None)
 
         # Get additional property columns
@@ -260,8 +257,7 @@ class VenueManager:
         for row in venue_df.itertuples():
             # Only treat 'name' as a CSV-supplied venue name when the column truly exists
             # AND the value is non-null. Otherwise the venue keeps its auto-generated
-            # `{venue_type}_{id}` name. We never synthesise names from row.Index — that
-            # produced numeric strings that spuriously collide across venue types.
+            # `{venue_type}_{id}` name.
             csv_name = None
             if name_col is not None:
                 raw = getattr(row, name_col, None)
@@ -451,7 +447,7 @@ class VenueManager:
             filter_values = type_config.get('filter_values')
 
             if type_config.get('batch_mode', False):
-                # One file per batch-partition-level (levels[1]; adr/0002) unit,
+                # One file per batch-partition-level (levels[1]) unit,
                 # named by substituting {unit} into the filename. Absent per-unit
                 # files are skipped (partial geographies are routine), but an
                 # enabled batch type matching zero files is a hard error.
@@ -621,7 +617,7 @@ class VenueManager:
                 capacity_column = capacity_config['total_capacity_column']
                 total_capacity = venue.properties.get(capacity_column, 0)
             else:
-                # Fallback to 'capacity' for venues without capacity_config
+                # Use 'capacity' for venues without capacity_config
                 total_capacity = venue.properties.get('capacity', 0)
 
             # Prepare resident details

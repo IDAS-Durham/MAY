@@ -148,7 +148,6 @@ def create_clustered_graph_gnp_random_graph(n_nodes, avg_edges_per_node=4,**kwar
     probability_of_each_edge = float(avg_edge_per_node) / (n_nodes-1)
     return nx.gnp_random_graph(n_nodes, probability_of_each_edge, **kwargs)
 
-###########################################################################
 
 def create_clustered_graph(*args, algorithm: str='watts_strogatz', **kwargs):
     """
@@ -173,9 +172,7 @@ def create_clustered_graph(*args, algorithm: str='watts_strogatz', **kwargs):
         raise ValueError(f"No algorithm given to create the clustered graph")
     return graph_creator(*args, **kwargs)
 
-###########################################################################
-###########################################################################
-    
+
 if __name__ == "__main__":
     nx = _require_networkx()
 

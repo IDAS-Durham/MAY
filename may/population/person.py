@@ -57,7 +57,7 @@ class Person:
             activities (set[str], optional): Set of activity names
             properties (dict, optional): Additional attributes
             activity_map (dict[str, dict[str, list[Subset]]], optional):
-              UNIFIED STRUCTURE: Nested dictionary mapping:
+              Nested dictionary mapping:
                 activity_name -> venue_type -> [subsets]
               Examples:
                 - activity_map['residence']['household'] = [subset]
@@ -73,11 +73,11 @@ class Person:
         self.sex = sex
         self.geographical_unit = geographical_unit
         self.activities = set(activities) if activities is not None else set()
-        # Copy caller-provided dicts so two Persons built with the same kwarg
-        # don't share state. Without this, PopulationManager.generate_population
-        # fans a single properties/activity_map dict into every Person it creates.
+        # Copy caller-provided dicts so each Person built from the same kwarg
+        # gets its own properties/activity_map; PopulationManager.generate_population
+        # reuses one properties/activity_map dict across every Person it creates.
         self.properties = dict(properties) if properties is not None else {}
-        # UNIFIED STRUCTURE: activity_map[activity_name][venue_type] = [subsets]
+        # activity_map[activity_name][venue_type] = [subsets]
         if activity_map is None:
             self.activity_map = {}
         else:
@@ -98,7 +98,7 @@ class Person:
         if activity not in self.activities:
             self.activities.add(activity)
 
-        # Initialize activity_map with empty dict for unified structure
+        # Initialize activity_map entry with empty dict
         # Structure: activity_map[activity_name][venue_type] = [subsets]
         if activity not in self.activity_map:
             self.activity_map[activity] = {}
@@ -156,7 +156,6 @@ class Person:
             
         for subsets in res_map.values():
             if subsets:
-                # Return first venue found
                 return subsets[0].venue
         return None
 
@@ -221,8 +220,8 @@ class Person:
     def __eq__(self, other) -> bool:
         """ Method to determine if two Person objects are basically equal.
 
-        Doesn't check they have the same IDs as if ID assignment is different with all
-        other attributes being equal, I'd still like this to return True / Gavin 21/Jan/26.
+        Treats two Persons with equal attributes but different IDs as equal
+        (ID assignment order is ignored) / Gavin 21/Jan/26.
         """
         if not isinstance(other, Person):
             return NotImplemented

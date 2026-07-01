@@ -35,9 +35,7 @@ def _config(*entries):
     return {"networks": list(entries)}
 
 
-# ---------------------------------------------------------------------------
 # Valid config — no error raised
-# ---------------------------------------------------------------------------
 
 def test_valid_config_does_not_raise():
     SocialNetworkBuilder(None, _config(_valid_entry()))
@@ -47,9 +45,7 @@ def test_empty_networks_list_does_not_raise():
     SocialNetworkBuilder(None, {"networks": []})
 
 
-# ---------------------------------------------------------------------------
 # Unknown network_type
-# ---------------------------------------------------------------------------
 
 def test_unknown_network_type_raises():
     with pytest.raises(ValueError, match="network_type"):
@@ -61,9 +57,7 @@ def test_unknown_network_type_error_names_the_bad_value():
         SocialNetworkBuilder(None, _config(_valid_entry(network_type="no_such_type")))
 
 
-# ---------------------------------------------------------------------------
 # Unknown pool_type
-# ---------------------------------------------------------------------------
 
 def test_unknown_pool_type_raises():
     with pytest.raises(ValueError, match="pool_type"):
@@ -75,9 +69,7 @@ def test_unknown_pool_type_error_names_the_bad_value():
         SocialNetworkBuilder(None, _config(_valid_entry(pool_type="no_such_pool")))
 
 
-# ---------------------------------------------------------------------------
 # Missing required keys
-# ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("missing_key", ["network_type", "pool_type", "storage_key", "mean_count"])
 def test_missing_required_key_raises(missing_key):
@@ -87,9 +79,7 @@ def test_missing_required_key_raises(missing_key):
         SocialNetworkBuilder(None, _config(entry))
 
 
-# ---------------------------------------------------------------------------
 # Error identifies the offending network by name
-# ---------------------------------------------------------------------------
 
 def test_error_includes_network_name():
     entry = _valid_entry(name="my_bad_network", network_type="nonexistent")
@@ -97,9 +87,7 @@ def test_error_includes_network_name():
         SocialNetworkBuilder(None, _config(entry))
 
 
-# ---------------------------------------------------------------------------
 # Second network in list is also validated
-# ---------------------------------------------------------------------------
 
 def test_second_network_with_bad_type_raises():
     good = _valid_entry(name="good", storage_key="good_key")

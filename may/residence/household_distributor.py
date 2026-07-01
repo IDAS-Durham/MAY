@@ -64,7 +64,7 @@ class HouseholdDistributor:
             config_file: Path to YAML configuration file (relative to data_dir)
             rules_file: Path to relationship_rules.yaml. When None (i.e. the
                 world config did not set `households.rules_file`), relationship
-                rules are disabled — no implicit lookup is performed.
+                rules are disabled.
         """
         self.geography = geography
         self.population = population
@@ -93,7 +93,6 @@ class HouseholdDistributor:
         # Create mapping from category name to index for validation rules
         self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.categories)}
 
-        # Household data - now stored in VenueManager
         self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
         # The set of composition-pattern column headers in households.csv — the
         # vocabulary allocation steps may reference. Populated by load_household_data.
@@ -109,7 +108,7 @@ class HouseholdDistributor:
 
         # Initialize relationship rules validator. The path must come from the
         # world config's `households.rules_file`. If unset, the validator is
-        # constructed with an empty path and disables itself (no implicit lookup).
+        # constructed with an empty path and disables itself.
         if rules_file:
             rules_file = pr.resolve(rules_file)
             if os.path.isabs(rules_file) or os.path.exists(rules_file):
@@ -189,12 +188,12 @@ class HouseholdDistributor:
         filepath = os.path.join(self.data_dir, filename)
         logger.info(f"Loading household data from {filepath}")
 
-        # Reset state up-front so a second call doesn't carry stale entries
-        # from a previous load (parallel with load_demographics_from_csv).
+        # Reset state up-front so a second call starts from a clean slate
+        # (parallel with load_demographics_from_csv).
         self.household_counts_by_geo_unit = {}
 
         # Fail loud on missing/empty data — the engine works on complete data
-        # or not at all (adr/0010), matching PopulationError/VenueError.
+        # or not at all, matching PopulationError/VenueError.
         if not os.path.exists(filepath):
             raise HouseholdError(f"Household data file not found: {filepath}")
 
@@ -1094,7 +1093,7 @@ class HouseholdDistributor:
             geo_unit=unit,
             properties={
                 'original_pattern': pattern.original_pattern,  # The original requested pattern
-                'allocation_pattern': pattern.to_string(),  # operative spec it was built under (post-demotion); NOT the realised head-count
+                'allocation_pattern': pattern.to_string(),  # operative spec it was built under (post-demotion)
                 '_age_categories': self.categories
             }
         )
@@ -1331,10 +1330,9 @@ class HouseholdDistributor:
                 matched_patterns.add(pattern)
                 filtered.append(household)
 
-        # Matching is exact-string, not a `>=` evaluation: a requested pattern
-        # that doesn't literally equal any household's stored pattern matches
-        # nothing and is silently dropped from the allocation. Warn so these
-        # dead entries don't go unnoticed.
+        # Matching is exact-string: a requested pattern matches only households
+        # whose stored pattern equals it literally (a typo, stray space, or
+        # wrong operator matches nothing). Warn so these dead entries surface.
         unmatched = target_set - matched_patterns
         if unmatched:
             logger.warning(

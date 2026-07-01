@@ -37,7 +37,7 @@ class AllocationEngine:
         selection_config = self.config.get('venue_selection', {})
         target_count = selection_config.get('count', 5)
 
-        # STRICT LIMITS: Follow baseline behavior. Default to target_count * 4 if no limits provided.
+        # STRICT LIMITS: default to target_count * 4 if no limits provided.
         # This avoid expensive None (all venues) searches.
         search_limits = group_search_limits if group_search_limits is not None else selection_config.get('search_limits', [target_count * 4])
         if not search_limits: search_limits = [target_count * 4]
@@ -251,7 +251,7 @@ class AllocationEngine:
                     geo_name = geo_unit.name if hasattr(geo_unit, 'name') else str(geo_unit)
                     group_allocated = 0
                     
-                    # Pre-compute remaining capacity ONCE (not per person!)
+                    # Pre-compute remaining capacity ONCE for the whole group
                     remaining_caps = np.array([
                         self.distributor._get_remaining_capacity(v) if respect_capacity else 1
                         for v in available_venues

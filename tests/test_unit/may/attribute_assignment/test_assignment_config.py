@@ -21,9 +21,7 @@ from may.attribute_assignment.assignment_config import (
 from may.residence.composition_pattern import CompositionPattern
 
 
-# =============================================================================
 # Minimal real objects (matching the interfaces used by assignment_config)
-# =============================================================================
 
 class MinimalSubset:
     """Mimics the Subset object that person.activity_map references."""
@@ -71,9 +69,7 @@ class MinimalHousehold:
         return self._members
 
 
-# =============================================================================
 # Fixtures
-# =============================================================================
 
 @pytest.fixture(autouse=True)
 def reset_person_ids():
@@ -121,9 +117,7 @@ def make_household_from_members(member_categories, original_pattern=""):
     return h
 
 
-# =============================================================================
 # _pattern_matches_cached Tests
-# =============================================================================
 
 class TestPatternMatchesCached:
     """
@@ -247,9 +241,7 @@ class TestPatternMatchesCached:
         assert _pattern_matches_cached("1 0 1 0", template) is False  # has kids
 
 
-# =============================================================================
 # MatchingRule.matches() Tests
-# =============================================================================
 
 class TestMatchingRule:
     """
@@ -387,9 +379,7 @@ class TestMatchingRule:
         assert rule.matches(h) is False  # '' not in original_patterns
 
 
-# =============================================================================
 # HouseholdStructure.matches() Tests
-# =============================================================================
 
 class TestHouseholdStructure:
     """HouseholdStructure matches if ANY of its MatchingRules match."""
@@ -447,9 +437,7 @@ class TestHouseholdStructure:
         assert structure.matches(h) is False
 
 
-# =============================================================================
 # get_person_role() Tests
-# =============================================================================
 
 class TestGetPersonRole:
     """
@@ -551,22 +539,9 @@ class TestGetPersonRole:
 
     def test_second_adult_without_primary_gets_nothing(self):
         """
-        BUG DETECTION: If no primary_adult was assigned, can a secondary_adult
-        be assigned? The code checks for a primary with overlapping subsets.
-
-        If assigned_roles is empty, secondary should NOT be assigned because
-        its prerequisite (primary for same subset) isn't met.
-
-        But wait — the code iterates roles in YAML order. primary_adult comes
-        first. If the person category matches "Adults" and primary_adult count
-        is 0, it SHOULD return primary_adult, not secondary.
-
-        The scenario where secondary is attempted without primary only happens
-        if primary_adult was already assigned once (count > 0) — then the code
-        skips primary and tries secondary. Secondary checks has_primary which
-        would be True. So the flow is correct.
-
-        Let's test the case where primary was assigned to DIFFERENT subset.
+        A primary assigned to a different subset (primary_elder) does not fill
+        the Adults slot: with primary_adult count 0, the person still gets
+        primary_adult.
         """
         config = self._build_config()
         person = MinimalPerson("Adults")
@@ -716,7 +691,6 @@ class TestGetPersonRole:
             "primary_elder", "secondary_elder",
         ]
 
-    # --- BUG DETECTION: secondary without primary for same subset ---
 
     def test_secondary_adult_not_assigned_if_only_elder_primary_exists(self):
         """
@@ -744,9 +718,7 @@ class TestGetPersonRole:
         assert role == "primary_elder"
 
 
-# =============================================================================
 # get_household_structure() Tests
-# =============================================================================
 
 class TestGetHouseholdStructure:
     """
@@ -847,9 +819,7 @@ class TestGetHouseholdStructure:
         assert h.properties["_cached_household_structure"] is None
 
 
-# =============================================================================
 # Helper: Minimal config object for tests that don't need full YAML loading
-# =============================================================================
 
 class _MinimalConfig:
     """
@@ -868,9 +838,7 @@ class _MinimalConfig:
     get_assignment_rule = AttributeAssignmentConfig.get_assignment_rule
 
 
-# =============================================================================
-# _parse_required_attributes — canonical list form (adr/0006)
-# =============================================================================
+# _parse_required_attributes — canonical list form
 
 class _RawOnly:
     """Carries just raw_config so the unbound parser can run in isolation."""
@@ -886,7 +854,7 @@ class _RawOnly:
 
 
 class TestExtractRoleDependencies:
-    """`_extract_role_dependencies` collects every cross-role reference (adr/0019)."""
+    """`_extract_role_dependencies` collects every cross-role reference."""
 
     def test_inherit_from_roles_list(self):
         assert sorted(_extract_role_dependencies(
@@ -930,7 +898,7 @@ def _rules(rule_dicts):
 
 
 class TestRoleDependencyValidation:
-    """Load-time validation of cross-role references (adr/0019)."""
+    """Load-time validation of cross-role references."""
 
     def test_valid_partnership_and_exclude_load(self):
         cfg = _RawOnly(_rules([
@@ -1023,7 +991,7 @@ class TestParseRequiredAttributes:
         assert _RawOnly({})._parse_required_attributes() == {}
 
     def test_mapping_form_rejected(self):
-        """The retired `name: {...}` mapping form fails loudly (adr/0006)."""
+        """The retired `name: {...}` mapping form fails loudly."""
         obj = _RawOnly({"required_attributes": {"ethnicity": {"required": True}}})
         with pytest.raises(ValueError, match="must be a list"):
             obj._parse_required_attributes()

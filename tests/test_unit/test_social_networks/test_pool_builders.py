@@ -3,9 +3,7 @@ import pytest
 from may.social_networks.builder_functions.filters_and_constraints.filters import build_pool
 
 
-# ---------------------------------------------------------------------------
 # geographic pool
-# ---------------------------------------------------------------------------
 
 def test_geographic_pool_sgu_returns_two_groups(toy_world):
     groups = build_pool(toy_world, pool_type="geographic", pool_config={"level": "SGU"})
@@ -42,9 +40,7 @@ def test_geographic_pool_unknown_level_raises(toy_world):
         build_pool(toy_world, pool_type="geographic", pool_config={"level": "XLGU"})
 
 
-# ---------------------------------------------------------------------------
 # activity pool
-# ---------------------------------------------------------------------------
 
 def test_activity_pool_returns_two_groups(toy_world):
     groups = build_pool(toy_world, pool_type="activity",

@@ -184,7 +184,7 @@ class GraphRelationshipBuilder:
             return {}
         k = self.mean_connections_per_person
 
-        # Ensure k doesn't exceed what's possible for the graph Or below 0
+        # Cap k at the graph maximum (n_people - 1) and reject negative values
         if k > (self.n_people - 1):
             max_k = self.n_people - 1
             logger.warning(f'Average connections {k} exceeds the max possible for the graph n_people-1={max_k}. Reducing to the max possible')
@@ -220,7 +220,7 @@ class GraphRelationshipBuilder:
             G.add_nodes_from(range(self.n_people))
             G.add_edges_from(kept_array.tolist())
 
-        # Convert graph edges to relationships (Person objects, not IDs)
+        # Convert graph edges to relationships (Person objects)
         relationships: dict[int, list[Person]] = {person.id: [] for person in self.people}
 
         for node_u, node_v in G.edges():

@@ -30,9 +30,7 @@ from may.attribute_assignment.data_sources import (
 )
 
 
-# =============================================================================
-# _ordered_key_columns — canonical key_columns mapping (adr/0006)
-# =============================================================================
+# _ordered_key_columns — canonical key_columns mapping
 
 class TestOrderedKeyColumns:
     def test_single_key_mapping(self):
@@ -59,9 +57,7 @@ class TestOrderedKeyColumns:
             _ordered_key_columns({"key_columns": {"geo_unit": None}}, "s", expected=2)
 
 
-# =============================================================================
 # Minimal real objects
-# =============================================================================
 
 class MinimalGeoUnit:
     def __init__(self, name, level="SGU", parent=None):
@@ -126,9 +122,7 @@ def reset_ids():
     MinimalPerson._next_id = 4000
 
 
-# =============================================================================
 # _normalize_probabilities() Tests
-# =============================================================================
 
 class TestNormalizeProbabilities:
     """
@@ -154,7 +148,7 @@ class TestNormalizeProbabilities:
         assert abs(sum(result.values()) - 1.0) < 1e-10
 
     def test_all_zeros_raises(self):
-        """All-zero distribution can't be sampled — no fallbacks (adr/0010)."""
+        """All-zero distribution can't be sampled — no fallbacks."""
         probs = {"W": 0.0, "A": 0.0, "B": 0.0}
         with pytest.raises(ValueError, match="All-zero"):
             self._normalize(probs)
@@ -195,14 +189,14 @@ class TestNormalizeProbabilities:
         assert set(result.keys()) == {"W", "A"}
 
     def test_empty_dict_raises(self):
-        """Empty distribution → raise. No fallbacks (adr/0010)."""
+        """Empty distribution → raise. No fallbacks."""
         with pytest.raises(ValueError, match="Empty probability"):
             self._normalize({})
 
     def test_negative_sum_to_zero_raises(self):
         """
         Negatives clamp to 0; if nothing positive remains the distribution is
-        unsampleable, so raise rather than invent a uniform one (adr/0010).
+        unsampleable, so raise rather than invent a uniform one.
         e.g. {A: -1, B: 0} → clamp → {A: 0, B: 0} → raise.
         """
         probs = {"A": -1.0, "B": 0.0}
@@ -210,7 +204,7 @@ class TestNormalizeProbabilities:
             self._normalize(probs)
 
     def test_all_negative_values_raise(self, caplog):
-        """All values negative → all clamped to 0 → all-zero → raise (adr/0010)."""
+        """All values negative → all clamped to 0 → all-zero → raise."""
         import logging
         probs = {"A": -2.0, "B": -3.0}
         with caplog.at_level(logging.WARNING):
@@ -230,9 +224,7 @@ class TestNormalizeProbabilities:
         assert abs(result["B"] - 1.0) < 1e-10
 
 
-# =============================================================================
 # GeoDistributionSource Tests
-# =============================================================================
 
 class TestGeoDistributionSource:
     """Tests CSV-based geographic distribution lookups."""
@@ -256,7 +248,7 @@ class TestGeoDistributionSource:
         assert result == {"W": 0.8, "A": 0.2}
 
     def test_lookup_prefers_household_geo_over_person(self):
-        """Residence venue geo wins over the person's own (adr/0007 resolution)."""
+        """Residence venue geo wins over the person's own."""
         source = self._make_source_with_data(
             {"E00001": {"W": 1.0}, "E00002": {"A": 1.0}}
         )
@@ -265,14 +257,14 @@ class TestGeoDistributionSource:
         assert source.lookup(person, household, None) == {"W": 1.0}
 
     def test_lookup_no_geo_unit_raises(self):
-        """No residence geo anywhere → hard error, no silent miss (adr/0010)."""
+        """No residence geo anywhere → hard error, no silent miss."""
         source = self._make_source_with_data({"E00001": {"W": 1.0}})
         person = MinimalPerson(geographical_unit=None)
         with pytest.raises(KeyError, match="no residence geographical_unit"):
             source.lookup(person, None, None)
 
     def test_lookup_missing_geo_unit_raises(self):
-        """No fallbacks (adr/0010): a missing geo unit is a hard error."""
+        """No fallbacks: a missing geo unit is a hard error."""
         source = self._make_source_with_data(
             {"E00001": {"W": 0.8, "A": 0.2}},
         )
@@ -288,7 +280,7 @@ class TestGeoDistributionSource:
 
     def test_missing_file_fails_loud_at_load(self):
         """A missing data file aborts at load, not a silent empty source that
-        explodes later at lookup (adr/0010, adr/0004)."""
+        explodes later at lookup."""
         source = GeoDistributionSource("test_geo", {
             "files": [{"path": "/no/such/file.csv", "key_columns": {"geo_unit": None}}]
         })
@@ -335,9 +327,7 @@ class TestGeoDistributionSource:
         assert abs(result["E00001"]["A"] - 0.2) < 1e-10
 
 
-# =============================================================================
 # PairProbabilitySource Tests
-# =============================================================================
 
 class TestPairProbabilitySource:
     """Tests conditional pair probability lookups."""
@@ -362,7 +352,7 @@ class TestPairProbabilitySource:
         assert result["W"] == 0.9
 
     def test_lookup_missing_first_value_raises(self):
-        """No fallbacks (adr/0010): a missing (geo, first-value) pair is an error."""
+        """No fallbacks: a missing (geo, first-value) pair is an error."""
         source = self._make_source_with_data({
             "E00001": {"W": {"W": 0.9, "A": 0.1}}
         })
@@ -382,9 +372,7 @@ class TestPairProbabilitySource:
             source.lookup("E00001", "W")
 
 
-# =============================================================================
 # OriginDestinationMatrixSource Tests
-# =============================================================================
 
 class TestOriginDestinationMatrixSource:
     """Tests O-D matrix loading and lookup."""
@@ -502,9 +490,7 @@ class TestOriginDestinationMatrixSource:
         assert result["A"] == []
 
 
-# =============================================================================
 # GUSamplerSource Tests
-# =============================================================================
 
 class TestGUSamplerSource:
     """Tests geographical unit sampler loading and lookup."""
@@ -534,7 +520,7 @@ class TestGUSamplerSource:
             source.lookup(self._person_in("MISSING"), None, None)
 
     def test_lookup_no_parent_attribute_value_raises(self):
-        """Person missing the configured parent attribute → hard error (adr/0010)."""
+        """Person missing the configured parent attribute → hard error."""
         source = self._make_source_with_data({"ParentGU_A": {"SGU_1": 1.0}})
         with pytest.raises(KeyError, match="workplace_location"):
             source.lookup(MinimalPerson(properties={}), None, None)
@@ -568,9 +554,7 @@ class TestGUSamplerSource:
         assert len(result) == 2
 
 
-# =============================================================================
 # MultiKeyLookupSource Tests
-# =============================================================================
 
 class TestMultiKeyLookupSource:
     """Tests multi-key CSV lookups with different resolution types."""
@@ -610,7 +594,7 @@ class TestMultiKeyLookupSource:
         assert "crd" in result
 
     def test_direct_lookup_miss_raises(self):
-        """No fallbacks (adr/0010): a key not present in the data is an error."""
+        """No fallbacks: a key not present in the data is an error."""
         source = self._make_source(
             lookup_dict={("M", 30): {"cvd": 0.05}},
             key_columns_config={
@@ -633,7 +617,7 @@ class TestMultiKeyLookupSource:
             source.lookup(MinimalPerson())
 
     def test_missing_key_attribute_raises(self):
-        """If the person lacks an attribute the key needs, raise (adr/0010)."""
+        """If the person lacks an attribute the key needs, raise."""
         source = self._make_source(
             lookup_dict={("M", "W"): {"cvd": 0.05}},
             key_columns_config={
@@ -705,7 +689,7 @@ class TestMultiKeyLookupSource:
         assert "industry_a" in result
 
     def test_ancestor_lookup_missing_geo_unit_raises(self):
-        """No geo unit to resolve the key → raise (adr/0010)."""
+        """No geo unit to resolve the key → raise."""
         source = self._make_source(
             lookup_dict={("Manchester",): {"industry_a": 1.0}},
             key_columns_config={
@@ -771,9 +755,7 @@ class TestMultiKeyLookupSource:
         assert "cvd" in source.lookup(person)
 
 
-# =============================================================================
 # DataSourceManager._initialize_sources() Tests
-# =============================================================================
 
 class TestDataSourceManagerRouting:
     """
@@ -823,7 +805,7 @@ class TestDataSourceManagerRouting:
         config = self._make_config({
             "commuting_flows": ("csv_lookup", {
                 "format": "origin_destination_matrix",
-                # Required since adr/0015 — no default, silence is never interpreted.
+                # out_of_boundary must be explicit — no default, silence is never interpreted.
                 "out_of_boundary": "error",
                 "files": [{"path": "/fake/path.csv", "key_columns": {"origin": "origin_col"}}],
             })
@@ -915,9 +897,7 @@ class TestDataSourceManagerRouting:
             manager.lookup("nonexistent", "key")
 
 
-# =============================================================================
 # DiversitySource Tests
-# =============================================================================
 
 class TestDiversitySource:
 
@@ -938,7 +918,7 @@ class TestDiversitySource:
         assert abs(sum(result.values()) - 1.0) < 1e-10
 
     def test_lookup_missing_raises(self):
-        """No fallbacks (adr/0010): a missing geo unit is a hard error."""
+        """No fallbacks: a missing geo unit is a hard error."""
         source = self._make_source_with_data({})
         with pytest.raises(KeyError, match="no diversity row"):
             source.lookup("MISSING")

@@ -133,10 +133,6 @@ def test_venues_are_venues(venues):
         assert isinstance(name, str)
 
 
-# ============================================================================
-# Venue Property Tests
-# ============================================================================
-
 def test_venue_has_correct_properties(venues):
     """Test that venues have correct basic properties"""
     hospital = venues.get_venue('St Mary\'s Hospital')
@@ -207,10 +203,6 @@ def test_venue_subsets_default_empty_dict(geo):
     assert venue.subsets == {}
 
 
-# ============================================================================
-# Venue Equality and Representation Tests
-# ============================================================================
-
 def test_venue_repr(venues):
     """Test venue string representation"""
     hospital = venues.get_venue('St Mary\'s Hospital')
@@ -242,10 +234,6 @@ def test_venue_num_members_empty(venues):
     # No subsets added yet, should be 0
     assert hospital.num_members == 0
 
-
-# ============================================================================
-# VenueManager Lookup Tests
-# ============================================================================
 
 def test_get_venue_by_name(venues):
     """Test retrieving venues by name"""
@@ -302,7 +290,7 @@ def test_get_all_venues(venues):
     all_venues = venues.get_all_venues()
 
     assert isinstance(all_venues, dict)
-    assert len(all_venues) == 18  # 3+4+3+2+4+2 = 18 total venues
+    assert len(all_venues) == 18
     assert 'St Mary\'s Hospital' in all_venues
 
 
@@ -328,10 +316,6 @@ def test_get_venue_types(venues):
     assert 'university' in types
     assert len(types) == 6
 
-
-# ============================================================================
-# VenueManager Add Venue Tests
-# ============================================================================
 
 def test_add_venue_updates_all_dicts(geo):
     """Test that add_venue properly updates all internal data structures"""
@@ -360,10 +344,6 @@ def test_add_venue_updates_all_dicts(geo):
     assert 'hospital' in manager.venues_by_type
     assert venue in manager.venues_by_type['hospital']
 
-
-# ============================================================================
-# VenueManager Extend Tests
-# ============================================================================
 
 def test_extend_combines_venue_managers(geo):
     """Test that extend properly combines two VenueManagers"""
@@ -400,10 +380,6 @@ def test_extend_combines_venue_managers(geo):
     assert len(manager1.venues_by_type['hospital']) == 2
 
 
-# ============================================================================
-# VenueManager Representation Tests
-# ============================================================================
-
 def test_venue_manager_repr(venues):
     """Test VenueManager string representation"""
     repr_str = repr(venues)
@@ -412,10 +388,6 @@ def test_venue_manager_repr(venues):
     assert '18 venues' in repr_str
     assert '6 types' in repr_str
 
-
-# ============================================================================
-# Venue get_capacity_for_attributes Tests
-# ============================================================================
 
 def test_get_capacity_for_attributes_no_config(venues):
     """Test get_capacity_for_attributes returns 0 when no capacity config"""
@@ -489,10 +461,6 @@ def test_get_capacity_for_attributes_no_match(geo):
     # Wrong sex
     assert venue.get_capacity_for_attributes(capacity_config, age=75, sex='female') == 0
 
-
-# ============================================================================
-# VenueManager Capacity Config Tests
-# ============================================================================
 
 def test_get_capacity_config(venues):
     """Test retrieving capacity config for venue type"""

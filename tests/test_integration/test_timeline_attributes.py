@@ -69,9 +69,9 @@ def test_timeline_routing_and_geo_preload(fully_formed_world, test_dir, caplog):
 
     # The mock config's household_structures don't cover every micro_world
     # household (young-adult-only, elderly-only, …), so some people can't be
-    # classified. Under adr/0010 that incomplete config must fail loud, not
-    # return a half-assigned attribute. The wrapper still routes by
-    # assignment_level and preloads geo_units before the guard fires.
+    # classified. That incomplete config must fail loud rather than return a
+    # half-assigned attribute. The wrapper still routes by assignment_level and
+    # preloads geo_units before the guard fires.
     with pytest.raises(AttributeAssignmentError, match="unassigned"):
         fully_formed_world.assign_attributes(config_path)
 

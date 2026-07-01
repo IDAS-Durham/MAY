@@ -1,4 +1,4 @@
-"""Phase 6: activity_peers builder end-to-end."""
+"""activity_peers builder end-to-end."""
 import pytest
 
 from may.social_networks import SocialNetworkBuilder

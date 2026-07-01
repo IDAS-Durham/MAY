@@ -39,10 +39,7 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
     # Attribute-aware allocation is gated purely on whether this step's
     # capacity_config supplies per-slot column_mappings. The presence of the
-    # buckets IS the switch — there are no separate allocation_mode /
-    # use_attribute_capacities flags. They were redundant: the engine always
-    # fell back to simple when column_mappings were absent regardless of the
-    # flags, so the buckets were already the real source of truth.
+    # buckets is the switch.
     capacity_config = allocation_config.get('capacity_config') or {}
     column_mappings = capacity_config.get('attribute_capacities', {}).get('column_mappings')
 
@@ -56,7 +53,7 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
             household_distributor=household_distributor
         )
 
-    # Otherwise, use simple allocation (original behavior)
+    # Otherwise, use simple allocation
     # Get all venues of this type
     venue_list = venues.get_venues_by_type(venue_type)
     if not venue_list:
@@ -180,7 +177,7 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
                 venue.properties['residents'] = []
             venue.properties['residents'].extend(venue_residents)
 
-            # Get subset_key from config (default to None for backwards compatibility)
+            # Get subset_key from config (default to None)
             subset_key = allocation_config.get('subset_key', None)
 
             # Add people to venue's subset system so they're counted properly
@@ -414,7 +411,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     logger.info(f"  Using attribute-aware allocation for {venue_type}")
 
     # Read capacity config from this allocation step. Each step owns its own
-    # capacity rules — venues_config.yaml no longer carries them.
+    # capacity rules.
     capacity_config = allocation_config.get('capacity_config') or {}
     if not capacity_config:
         logger.warning(
@@ -614,7 +611,7 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                     venue.properties[slot_key] = []
                 venue.properties[slot_key].extend(venue_residents)
 
-                # Get subset_key from config (default to None for backwards compatibility)
+                # Get subset_key from config (default to None)
                 subset_key = allocation_config.get('subset_key', None)
 
                 # Add people to venue's subset system so they're counted properly

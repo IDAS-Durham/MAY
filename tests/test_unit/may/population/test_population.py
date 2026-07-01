@@ -47,9 +47,7 @@ def reset_person_counter():
     Person.reset_counter()
 
 
-# ============================================================================
 # Initialization Tests
-# ============================================================================
 
 class TestPopulationManagerInitialization:
     """Test PopulationManager initialization."""
@@ -83,9 +81,7 @@ class TestPopulationManagerInitialization:
         assert len(pop_manager) == 0
 
 
-# ============================================================================
 # Demographics Loading Tests
-# ============================================================================
 
 class TestDemographicsLoading:
     """Test demographics loading functionality."""
@@ -100,8 +96,8 @@ class TestDemographicsLoading:
         assert isinstance(test_key, dict)
 
     def test_load_demographics_file_not_found(self, mock_geography):
-        """Missing demographics files fail loud (adr/0010) rather than leaving
-        an empty manager that silently builds a zero-person world."""
+        """Missing demographics files fail loud rather than leaving an empty
+        manager that silently builds a zero-person world."""
         pop_manager = PopulationManager(geography=mock_geography, data_dir="/nonexistent/path")
 
         with pytest.raises(PopulationError, match="not found"):
@@ -149,15 +145,13 @@ class TestDemographicsLoading:
             assert pop_manager.precise_demographics['E00000001'][25]['female'] == 11
 
 
-# ============================================================================
 # Population Generation Tests
-# ============================================================================
 
 class TestPopulationGeneration:
     """Test population generation functionality."""
 
     def test_generate_population_without_demographics(self, mock_geography):
-        """Generation with nothing loaded fails loud (adr/0010), not an empty
+        """Generation with nothing loaded fails loud, not an empty
         population."""
         pop_manager = PopulationManager(geography=mock_geography, data_dir="data/population")
 
@@ -248,9 +242,7 @@ class TestPopulationGeneration:
         assert all(p.geographical_unit == unit for p in pop_manager.people)
 
 
-# ============================================================================
 # Query Methods Tests
-# ============================================================================
 
 class TestQueryMethods:
     """Test methods for querying the population."""
@@ -360,9 +352,7 @@ class TestQueryMethods:
         assert len(people) == 0
 
 
-# ============================================================================
 # Statistics Tests
-# ============================================================================
 
 class TestStatistics:
     """Test population statistics methods."""
@@ -423,9 +413,7 @@ class TestStatistics:
         assert stats['activity_counts']['school'] == 1
 
 
-# ============================================================================
 # Integration Tests
-# ============================================================================
 
 class TestPopulationManagerIntegration:
     """Integration tests for PopulationManager."""
@@ -463,7 +451,6 @@ class TestPopulationManagerIntegration:
             # Verify total population
             # Male: age 0: 2+1=3, age 25: 3+2=5, age 65: 1+2=3, total = 11
             # Female: age 0: 1+2=3, age 25: 2+3=5, age 65: 2+1=3, total = 11
-            # Total = 22
             assert len(pop_manager) == 22
 
             # Verify age distribution
@@ -497,9 +484,7 @@ class TestPopulationManagerIntegration:
         assert len(pop_manager) == 8
 
 
-# ============================================================================
 # Edge Cases Tests
-# ============================================================================
 
 class TestPopulationManagerEdgeCases:
     """Test edge cases and boundary conditions."""

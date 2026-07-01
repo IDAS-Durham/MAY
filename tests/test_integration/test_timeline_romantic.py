@@ -117,9 +117,7 @@ def test_passes_filters_semantics():
     assert rd2._passes_filters(MockPerson(5, 5, "male")) is True
 
 
-# ---------------------------------------------------------------------------
 # Data-source path: per-MSOA raking should make LGB share track local marginals
-# ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -175,9 +173,7 @@ def test_romantic_distributor_handles_75plus_via_extrapolation():
         )
 
 
-# ---------------------------------------------------------------------------
 # Stage 1: per-MSOA same-sex couple probability lookup
-# ---------------------------------------------------------------------------
 
 
 def test_relationship_rules_resolves_same_category_per_area(tmp_path):

@@ -1,6 +1,4 @@
-# ============================================================================
 # Comorbidities Attribute Assignment Configuration
-# ============================================================================
 # This configuration assigns health comorbidities to individuals based on
 # demographic characteristics: sex, age, ethnicity, and region.
 #
@@ -10,7 +8,6 @@
 #
 # Dependencies: ethnicity
 # - Requires ethnicity to be assigned first
-# ============================================================================
 
 step:
   assignment_level: "person"
@@ -20,18 +17,14 @@ attributes:
     description: "Assigns health comorbidities based on person demographics"
     data_type: "list"
 
-# ============================================================================
 # Required Attributes (Dependencies)
-# ============================================================================
 # Attributes that must be assigned before this one
 required_attributes:
   - name: "ethnicity"
     description: "Ethnicity attribute must be assigned first"
     required: true
 
-# ============================================================================
 # Age Band Categories
-# ============================================================================
 # Define age bands that match the comorbidities CSV structure
 # Similar to household_config.yaml categories
 categories:
@@ -89,9 +82,7 @@ categories:
       min: 75
       max:
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   comorbidity_probabilities:
     type: "csv_lookup"
@@ -134,9 +125,7 @@ data_sources:
           neuro: "has_had_neuro_diagnosis_count_midpoint_rounded"
 
 
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Assign comorbidities to all people based on demographics"
@@ -150,7 +139,7 @@ assignment_rules:
           data_source: "comorbidity_probabilities"
           # Gated hierarchical sampler: honors the joint count structure
           # (no_condition / has_comorbidity / multiple_morbidities) rather than
-          # treating each condition as an independent Bernoulli trial (adr/0013).
+          # treating each condition as an independent Bernoulli trial.
           selection_method: "gated_conditions"
 
           # Conditions drawn (weighted by their per-condition marginals)
@@ -172,9 +161,7 @@ assignment_rules:
             - name: "neuro"
               label: "Neurological Condition"
 
-# ============================================================================
 # Settings
-# ============================================================================
 settings:
   logging:
     show_attribute_distribution: false  # Hide detailed comorbidity distribution output

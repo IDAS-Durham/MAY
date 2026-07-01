@@ -19,9 +19,7 @@ from may.geography import Geography, GeographicalUnit
 from may.residence.relationship_rules import RelationshipRulesValidator
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 def _make_two_level_geo():
     """SGU children under MGU parents, with parent links wired so
@@ -57,9 +55,7 @@ def _write_yaml(tmp_path, body):
     return str(path)
 
 
-# ===========================================================================
 # _load_config — the "Loaded N relationship rules" log line
-# ===========================================================================
 
 class TestLoadConfig:
 
@@ -140,9 +136,9 @@ rules:
         assert v.get_rule_by_name('R') is None
 
     def test_legacy_patterns_field_is_ignored(self, tmp_path):
-        """Older configs may still carry a per-rule `patterns:` list. It is
-        vestigial — rules resolve by name only — so the loader must ignore it
-        and never expose it on the RelationshipRule."""
+        """A per-rule `patterns:` list in the config is ignored: rules resolve
+        by name only, so the loader must not expose `patterns` on the
+        RelationshipRule."""
         path = _write_yaml(tmp_path, """
 enabled: true
 rules:
@@ -154,10 +150,8 @@ rules:
         assert not hasattr(rule, 'patterns')
 
 
-# ===========================================================================
 # _load_same_category_source — the "Loaded same_category_source[sex]: ..."
 # log line. Source is a per-area CSV producing P(same-category pair).
-# ===========================================================================
 
 class TestLoadSameCategorySource:
 
@@ -207,7 +201,7 @@ same_category_source:
     def test_invalid_geo_level_fails_loud(self, two_level_geo, tmp_path):
         """A geo_level that isn't a configured geography level must raise —
         an unmatched level otherwise silently degrades to the scalar fallback
-        for every person (adr/0002)."""
+        for every person."""
         csv = tmp_path / "src.csv"
         csv.write_text("geo_unit,a\nM_a,0.5\n")
         rules_path = _write_yaml(tmp_path, self._config_for_source(
@@ -327,9 +321,7 @@ same_category_sources:
         assert v._same_category_sources['religion']['by_code']['M_b'] == pytest.approx(0.9)
 
 
-# ===========================================================================
 # _resolve_same_category_prob — fallback semantics
-# ===========================================================================
 
 class TestResolveSameCategoryProb:
 
@@ -388,8 +380,8 @@ same_category_source:
         assert p == 0.05
 
     def test_no_geography_object_returns_default(self, tmp_path):
-        """If the validator was constructed without a Geography (e.g. legacy
-        code paths), every lookup must return the scalar default — not crash."""
+        """If the validator was constructed without a Geography, every lookup
+        must return the scalar default — not crash."""
         csv = tmp_path / "src.csv"
         csv.write_text("geo_unit,a\nM_a,0.42\n")
         rules_path = _write_yaml(tmp_path, f"""

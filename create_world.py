@@ -170,9 +170,7 @@ def main():
     world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
     logger.info(world)
 
-    # ========================================
     # TIMELINE - Unified Event Processing
-    # ========================================
     # This replaces the separate "attributes" and "venue_pipeline" sections if "timeline" is present.
     
     timeline_config = config.get("timeline", {})
@@ -275,10 +273,8 @@ def main():
             )
 
     else:
-        # The legacy no-timeline path (implicit pre-timeline households +
-        # the `attributes` / `venue_pipeline` fallback blocks) has been
-        # removed. Every scenario now drives all events through the timeline,
-        # including an explicit `residence_allocation` step for households.
+        # Every scenario drives all events through the timeline, including an
+        # explicit `residence_allocation` step for households.
         raise ValueError(
             "No enabled timeline with steps found. The legacy "
             "attributes/venue_pipeline path has been removed — every config "
@@ -287,9 +283,7 @@ def main():
             "households are enabled."
         )
 
-    # ========================================
     # RELATIONSHIP PIPELINE - Build agent networks
-    # ========================================
     relationship_config = config.get("relationship_pipeline", {})
 
     if relationship_config.get("enabled", False):
@@ -315,9 +309,7 @@ def main():
                 logger.exception(e)
                 sys.exit(1)
 
-    # ========================================
     # ROMANTIC RELATIONSHIPS - Sexual orientation and partnerships
-    # ========================================
     romantic_config = config.get("romantic_relationships", {})
 
     if romantic_config.get("enabled", False):

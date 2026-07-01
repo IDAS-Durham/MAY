@@ -127,17 +127,17 @@ class VenueMatcher:
                                    location: Tuple[float, float], search_limits: List[int], 
                                    person_attrs: Optional[Dict] = None) -> List:
         """
-        Filter venues for a person. Restores 'strict' behavior from baseline.
+        Filter venues for a person.
         """
-        # Tier 1: Try the initial pool (Fast path - matches old strict behavior)
+        # Tier 1: Try the initial pool (fast path)
         eligible = self.filter_venues_by_person(person, initial_pool, person_attrs=person_attrs)
         if eligible:
             return eligible
-            
+
         # Expansion Tiers: Only triggered if explicitly configured and initial failed
-        # Performance Trade-off: We prefer skipping people over massive spatial searches.
+        # Performance trade-off: skip people when the initial pool fails, keeping searches bounded.
         if self.config.get('venue_selection', {}).get('consider_by') == 'count':
-            # Strict mode: If only one search limit or no limits, don't expand
+            # Strict mode: expand only when multiple search limits are configured
             if len(search_limits) <= 1:
                 return []
 
@@ -147,8 +147,7 @@ class VenueMatcher:
                     continue
                 
                 # RESTRAIN EXPANSION: Max 100 venues for performance
-                # The old code queried max 50-100. Checking 10,000 is too slow.
-                limit = min(search_count, 100) 
+                limit = min(search_count, 100)
                 
                 if self.verbose:
                     logger.debug(f"Expanding search for person {person.id} to k={limit}")

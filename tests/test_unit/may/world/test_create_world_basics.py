@@ -88,7 +88,7 @@ def test_main_cli_arg_parsing(mock_setup_geography):
 
 
 def test_unknown_population_type_rejected():
-    """A typo'd population.type must fail loud, not silently run matrix (adr/0005)."""
+    """A typo'd population.type must fail loud, not silently run matrix."""
     config = {"population": {"type": "explict"}}
     with pytest.raises(PopulationError, match="Unknown population.type"):
         setup_population(config, MagicMock())

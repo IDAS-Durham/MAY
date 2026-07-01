@@ -43,9 +43,7 @@ distribution_strategy: even
 
 balance_by: sex
 
-# ========================================
 # ACTIVITY MANAGEMENT
-# ========================================
 # Control how students' activity_map is updated when moving to uni_year venues
 
 # Activity map key: Which activity to set when adding to uni_year

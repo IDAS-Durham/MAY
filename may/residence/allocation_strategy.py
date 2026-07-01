@@ -445,9 +445,9 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         'eligibility': step_config.get('eligibility', {}),
         'strategy': step_config.get('strategy', 'random'),
         'max_allocations': step_config.get('max_allocations'),
-        # Capacity rules for this step — owned by the step, not the venue type.
-        # The presence of capacity_config.attribute_capacities.column_mappings
-        # is what selects attribute-aware vs. simple allocation downstream.
+        # Capacity rules owned by this allocation step. The presence of
+        # capacity_config.attribute_capacities.column_mappings selects
+        # attribute-aware vs. simple allocation downstream.
         'capacity_config': step_config.get('capacity_config', {}),
         # Subset configuration
         'subset_key': step_config.get('subset_key')

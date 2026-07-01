@@ -124,11 +124,10 @@ class WorldSerializer:
         geo_group = f.create_group('geography')
         geo_settings = self.config.get_geography_settings()
 
-        # Get all units. Use units_by_id (keyed by unique ID) rather than
-        # get_all_units() (keyed by name): a single name can occur at multiple
-        # levels (e.g. SGU "DURHAM" parish under MGU "DURHAM" county) and the
-        # name-keyed dict silently drops the second one, which loses entire
-        # hierarchy levels from the export.
+        # Get all units keyed by unique ID (units_by_id): a single name can
+        # occur at multiple levels (e.g. SGU "DURHAM" parish under MGU
+        # "DURHAM" county), so keying by ID captures every unit and all
+        # hierarchy levels in the export.
         units_list = sorted(world.geography.units_by_id.values(), key=lambda u: u.id)
 
         if not units_list:
@@ -210,9 +209,6 @@ class WorldSerializer:
 
         logger.info(f"  Serializing {num_people:,} people...")
 
-        # ============================================================
-        # SORT BY GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
-        # ============================================================
         # Sort people by their geographical unit ID using numpy argsort for speed
         geo_unit_ids_raw = np.array([p.geographical_unit.id if p.geographical_unit else -1 for p in people], dtype=np.int32)
         sort_idx = np.argsort(geo_unit_ids_raw, kind='stable')
@@ -226,16 +222,10 @@ class WorldSerializer:
 
         logger.info(f"    ✓ Sorted {num_people:,} people by geo_unit_id")
 
-        # ============================================================
-        # CREATE PARTITION INDEX
-        # ============================================================
         logger.info(f"    Building partition index...")
         self._write_partition_index(pop_group, geo_unit_ids_sorted)
         logger.info(f"    ✓ Wrote partition index")
 
-        # ============================================================
-        # WRITE CORE ATTRIBUTES IN CHUNKS
-        # ============================================================
         logger.info(f"    Writing core attributes in chunks...")
         
         chunk_size = 100000
@@ -643,17 +633,12 @@ class WorldSerializer:
 
         num_venues = len(all_venues)
 
-        # ============================================================
-        # SORT BY GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
-        # ============================================================
         # Sort venues by their geographical unit ID using numpy argsort
         geo_unit_ids_raw = np.array([v.geographical_unit.id if v.geographical_unit else -1 for v in all_venues], dtype=np.int32)
         sort_idx = np.argsort(geo_unit_ids_raw, kind='stable')
         all_venues_sorted = [all_venues[i] for i in sort_idx]
 
         logger.info(f"    ✓ Sorted {num_venues:,} venues by geo_unit_id")
-
-        # Assign sequential global IDs here.
 
         # Assign global IDs (0, 1, 2, ..., N-1) to SORTED venues
         global_ids = np.arange(num_venues, dtype=np.int32)
@@ -731,9 +716,6 @@ class WorldSerializer:
             )
             self._create_dataset(venues_group, 'is_residence', is_residence)
 
-        # ============================================================
-        # CREATE PARTITION INDEX FOR VENUES
-        # ============================================================
         logger.info(f"    Building venue partition index...")
         self._write_venue_partition_index(venues_group, all_venues_sorted)
         logger.info(f"    ✓ Wrote venue partition index")
@@ -790,9 +772,6 @@ class WorldSerializer:
 
         num_subsets = len(all_subsets)
 
-        # ============================================================
-        # SORT BY VENUE'S GEO_UNIT_ID FOR EFFICIENT PARTITIONED LOADING
-        # ============================================================
         # Sort subsets by their venue's geographical unit ID using numpy argsort
         geo_unit_ids_raw = np.array([s.venue.geographical_unit.id if s.venue.geographical_unit else -1 for s in all_subsets], dtype=np.int32)
         sort_idx = np.argsort(geo_unit_ids_raw, kind='stable')
@@ -801,7 +780,7 @@ class WorldSerializer:
         logger.info(f"    ✓ Sorted {num_subsets:,} subsets by venue's geo_unit_id")
 
         # Core attributes
-        # IMPORTANT: Use global venue IDs (not type-scoped IDs)
+        # IMPORTANT: Use global venue IDs
         venue_ids = np.array([self._venue_to_global_id[id(s.venue)] for s in all_subsets_sorted], dtype=np.int32)
         subset_indices = np.array([s.subset_index for s in all_subsets_sorted], dtype=np.int32)
         # Move subset names to metadata
@@ -816,9 +795,6 @@ class WorldSerializer:
         # Member counts (useful for C++)
         member_counts = np.array([len(s.members) for s in all_subsets_sorted], dtype=np.int32)
 
-        # ============================================================
-        # CREATE PARTITION INDEX FOR SUBSET METADATA
-        # ============================================================
         logger.info(f"    Building subset metadata partition index...")
         self._write_subset_metadata_partition_index(subsets_group, all_subsets_sorted)
         logger.info(f"    ✓ Wrote subset metadata partition index")
@@ -875,9 +851,6 @@ class WorldSerializer:
             if (i // chunk_size) % 5 == 0:
                 logger.info(f"      Processed {end:,}/{num_subsets:,} subsets...")
 
-        # ============================================================
-        # CREATE PARTITION INDEX FOR SUBSET MEMBERSHIPS
-        # ============================================================
         logger.info(f"    Building subset members partition index...")
         # Get offsets back for partition index
         offsets_full = offsets_ds[:]
@@ -896,12 +869,9 @@ class WorldSerializer:
             people_sorted = getattr(self, '_people_sorted', world.population.people)
             self._write_activity_map(rel_group, world, people_sorted)
 
-        # Generic per-membership numeric metadata side-table (Design B). Rows
-        # only for subsets whose Subset.member_metadata dict is populated (e.g.
-        # transport-line legs carrying (t_board_min, t_alight_min)). Leaving
-        # the 4-col activity_data untouched lets old JUNE builds load new
-        # files, and new JUNE builds load old files where this dataset is
-        # absent.
+        # Generic per-membership numeric metadata side-table. Rows only for
+        # subsets whose Subset.member_metadata dict is populated (e.g.
+        # transport-line legs carrying (t_board_min, t_alight_min)).
         self._write_membership_metadata(rel_group, world)
 
     def _write_activity_map(self, rel_group, world, people_sorted):
@@ -998,9 +968,6 @@ class WorldSerializer:
             if (i // chunk_size) % 5 == 0:
                 logger.info(f"      Processed {end:,}/{num_people:,} people...")
 
-        # ============================================================
-        # CREATE PARTITION INDEX FOR ACTIVITY MAPS
-        # ============================================================
         logger.info(f"  Building activity mapping partition index...")
 
         offsets_full = offsets_ds[:] 
@@ -1027,11 +994,11 @@ class WorldSerializer:
         unless different memberships in the same export carry disjoint
         metadata schemas).
 
-        Two passes over the venues, filling preallocated numpy arrays — no
-        Python per-row lists, so memory stays flat at 60M-scale ridership
-        (the arrays are 4 bytes per row per column). Any value above 2**24
-        is logged loudly: float32 cannot represent larger integers exactly,
-        so e.g. venue ids in big worlds would silently corrupt.
+        Two passes over the venues fill preallocated numpy arrays (4 bytes
+        per row per column), so memory stays flat at 60M-scale ridership. Any
+        value above 2**24 is logged loudly: float32 represents integers
+        exactly only up to that point, so e.g. venue ids in big worlds could
+        corrupt.
         """
         venue_to_global_id = self._venue_to_global_id
 
@@ -1175,7 +1142,7 @@ class WorldSerializer:
         compression = self.compression_settings['compression']
         compression_level = self.compression_settings['compression_level']
 
-        # Determine chunks for HDF5 (not our processing chunks)
+        # Determine HDF5 storage chunks, separate from our processing chunk_size
         # Choosing a chunk size that is a multiple of typical access patterns
         if shape and len(shape) > 0 and shape[0] > 0:
             h5_chunks = (min(shape[0], 100000),) + shape[1:]

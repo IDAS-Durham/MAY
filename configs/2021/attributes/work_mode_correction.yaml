@@ -1,6 +1,4 @@
-# ============================================================================
 # Work Mode Correction Configuration
-# ============================================================================
 # OVERRIDES `work_mode` for workers whose actually-assigned workplace venue
 # requires on-site presence (hospital, care_home, classroom). These workers
 # may have been tagged From_Home or Hybrid in `workplace_assignment.yaml` —
@@ -14,7 +12,6 @@
 #
 # Assignment Level: person
 # Dependencies: work_mode (workplace_assignment), workplace venue (distributors)
-# ============================================================================
 #
 # Why this works as a second assignment of `work_mode`:
 # The person-level assignment path in may/attribute_assignment/assigner.py
@@ -23,7 +20,6 @@
 # not skip already-assigned attributes. So a second attribute step with
 # `attribute.name: work_mode` overwrites cleanly.
 #
-# ============================================================================
 
 step:
   assignment_level: "person"
@@ -33,9 +29,7 @@ attributes:
     description: "Force Normal for workers in on-site venues (hospital/care_home/classroom)"
     data_type: "categorical"
 
-# ============================================================================
 # Filters
-# ============================================================================
 # Working age + must be a *worker* in one of the on-site venue types. The
 # activity_venue filter inspects the person's primary_activity venue and the
 # subset they were added to. The four workplace distributors all add workers
@@ -60,17 +54,13 @@ filters:
     venue_types: ["hospital", "care_home", "classroom"]
     subset_names: ["worker"]
 
-# ============================================================================
 # Required Attributes (Dependencies)
-# ============================================================================
 required_attributes:
   - name: "work_mode"
     description: "work_mode must already be assigned by workplace_assignment"
     required: true
 
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Force work_mode = Normal for on-site venue workers"

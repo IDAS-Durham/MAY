@@ -11,9 +11,7 @@ from may.venue_child_creator.venue_child_creator import VenueChildCreator
 from may.population.subset import Subset
 
 
-# =============================================================================
 # Minimal real objects — just the interface VenueChildCreator needs
-# =============================================================================
 
 class MinimalPerson:
     """Minimal Person with attributes VenueChildCreator accesses."""
@@ -141,9 +139,7 @@ class MinimalWorld:
         self.venues = venue_manager or MinimalVenueManager()
 
 
-# =============================================================================
 # Fixtures
-# =============================================================================
 
 @pytest.fixture(autouse=True)
 def reset_person_counter():
@@ -173,9 +169,7 @@ def populate_venue(venue, people, subset_key="student", activity_name="primary_a
         venue.add_to_subset(person, subset_key=subset_key, activity_name=activity_name)
 
 
-# =============================================================================
 # Tests: __init__ and defaults
-# =============================================================================
 
 class TestInit:
 
@@ -229,9 +223,7 @@ class TestInit:
             VenueChildCreator("school", "classroom", distribution_strategy="evne")
 
 
-# =============================================================================
 # Tests: from_yaml
-# =============================================================================
 
 class TestFromYaml:
 
@@ -280,9 +272,7 @@ class TestFromYaml:
         assert len(creator.member_filters) == 1
 
 
-# =============================================================================
 # Tests: _filter_members
-# =============================================================================
 
 class TestFilterMembers:
 
@@ -374,9 +364,7 @@ class TestFilterMembers:
         assert len(result) == 0
 
 
-# =============================================================================
 # Tests: _group_members_by_attribute
-# =============================================================================
 
 class TestGroupMembersByAttribute:
 
@@ -441,9 +429,7 @@ class TestGroupMembersByAttribute:
         assert len(groups["B"]) == 1
 
 
-# =============================================================================
 # Tests: attribute access via shared utility (used by _group_members_by_attribute)
-# =============================================================================
 
 class TestGetAttributeValue:
 
@@ -479,9 +465,7 @@ class TestGetAttributeValue:
         assert get_person_attribute(person, "properties.nonexistent") is None
 
 
-# =============================================================================
 # Tests: _create_children_for_group
-# =============================================================================
 
 class TestCreateChildrenForGroup:
 
@@ -564,9 +548,7 @@ class TestCreateChildrenForGroup:
         assert "extra" not in school.children[1].properties
 
 
-# =============================================================================
 # Tests: _distribute_members_to_children (even strategy)
-# =============================================================================
 
 class TestDistributeEven:
 
@@ -602,9 +584,7 @@ class TestDistributeEven:
         assert total == 15
 
 
-# =============================================================================
 # Tests: _distribute_members_to_children (balance_by)
-# =============================================================================
 
 class TestDistributeBalanced:
 
@@ -677,9 +657,7 @@ class TestDistributeBalanced:
         assert (f1, m1) == (0, 30)
 
 
-# =============================================================================
 # Tests: _distribute_members_to_children (fill strategy)
-# =============================================================================
 
 class TestDistributeFill:
 
@@ -704,9 +682,7 @@ class TestDistributeFill:
         assert sizes == [10, 10]
 
 
-# =============================================================================
 # Tests: _add_person_to_child
-# =============================================================================
 
 class TestAddPersonToChild:
 
@@ -810,9 +786,7 @@ class TestAddPersonToChild:
         assert person in child.subsets["student"].members
 
 
-# =============================================================================
 # Tests: _process_parent_venue
-# =============================================================================
 
 class TestProcessParentVenue:
 
@@ -892,9 +866,7 @@ class TestProcessParentVenue:
         assert creator.stats["people_filtered_out"] == 10
 
 
-# =============================================================================
 # Tests: create_children (full pipeline)
-# =============================================================================
 
 class TestCreateChildren:
 
@@ -1006,9 +978,7 @@ class TestCreateChildren:
         assert stats["people_redistributed"] == 100
 
 
-# =============================================================================
 # Tests: even vs fill distribution correctness
-# =============================================================================
 
 class TestDistributionStrategies:
 
@@ -1058,9 +1028,7 @@ class TestDistributionStrategies:
         assert total == 1
 
 
-# =============================================================================
 # Tests: edge cases
-# =============================================================================
 
 class TestEdgeCases:
 
@@ -1085,14 +1053,12 @@ class TestEdgeCases:
         assert stats["children_created"] == 1
 
     def test_child_properties_shallow_copy_safety(self):
-        """BUG: __init__ doesn't defensively copy child_properties, so external
-        mutations to the original dict bleed into the creator.
-        This test documents the current (buggy) behavior."""
+        """External mutations to the original child_properties dict bleed into
+        the creator because __init__ does not defensively copy it."""
         props = {"capacity": 30}
         creator = VenueChildCreator("s", "c", child_properties=props)
         props["extra"] = True
-        # BUG: mutation bleeds through because __init__ doesn't copy
-        assert "extra" in creator.child_properties  # documents the bug
+        assert "extra" in creator.child_properties
 
     def test_repr(self):
         creator = VenueChildCreator("school", "classroom", group_by_attribute="age", child_max_size=30)
@@ -1106,15 +1072,11 @@ class TestEdgeCases:
         assert "filters=1" in repr(creator)
 
 
-# =============================================================================
-# BUG DETECTION TESTS
-# =============================================================================
-
 class TestBugDetection:
     """Tests that expose potential bugs or inconsistencies in the implementation."""
 
     def test_filter_members_supports_dot_notation(self):
-        """_filter_members now uses get_person_attribute which supports
+        """_filter_members uses get_person_attribute, which supports
         dot-notation paths like 'properties.ethnicity'."""
         creator = VenueChildCreator("s", "c", member_filters=[
             {"attribute": "properties.ethnicity", "type": "categorical", "values": ["A"]}
@@ -1122,7 +1084,7 @@ class TestBugDetection:
         person = MinimalPerson(properties={"ethnicity": "A"})
         result = creator._filter_members([person])
 
-        assert len(result) == 1  # Dot notation now works correctly
+        assert len(result) == 1
 
     def test_replace_parent_activity_only_works_with_activity_map_key(self):
         """replace_parent_activity only takes effect when activity_map_key is set.
@@ -1156,7 +1118,7 @@ class TestBugDetection:
         original["injected"] = True
 
         # The creator's child_properties IS the same dict object
-        assert creator.child_properties is original  # BUG: no defensive copy in __init__
+        assert creator.child_properties is original
 
     def test_stats_accumulate_across_calls(self, world, venue_manager):
         """Stats are never reset between calls to create_children.
@@ -1180,9 +1142,7 @@ class TestBugDetection:
         assert creator.stats["parents_processed"] == 3  # 1 + 2 (both schools processed)
 
 
-# =============================================================================
 # Tests: filter edge cases and silent failure modes
-# =============================================================================
 
 class TestFilterMembersEdgeCases:
 
@@ -1226,16 +1186,14 @@ class TestFilterMembersEdgeCases:
         assert ages == [18, 65]
 
 
-# =============================================================================
 # Tests: child_properties mutation safety
-# =============================================================================
 
 class TestNestedChildPropertiesShallowCopyBug:
 
     def test_nested_child_properties_shared_across_children(self, world, venue_manager):
-        """BUG: _create_children_for_group uses child_properties.copy() which is
-        a SHALLOW copy. Nested dict values (e.g. {'meta': {'level': 1}}) are shared
-        across all created children. Mutating a nested dict on one child affects all."""
+        """_create_children_for_group uses a shallow child_properties.copy(), so
+        nested dict values (e.g. {'meta': {'level': 1}}) are shared across all
+        created children: mutating a nested dict on one child affects all."""
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
 
@@ -1252,20 +1210,18 @@ class TestNestedChildPropertiesShallowCopyBug:
         # Mutate nested dict on child_a
         child_a.properties["meta"]["level"] = 99
 
-        # BUG: child_b.properties["meta"] IS the same dict object
-        assert child_b.properties["meta"]["level"] == 99  # documents the shallow-copy bug
+        # child_b.properties["meta"] IS the same dict object
+        assert child_b.properties["meta"]["level"] == 99
 
 
-# =============================================================================
 # Tests: person appears in multiple parent subsets
-# =============================================================================
 
 class TestPersonInMultipleSubsets:
 
     def test_person_in_two_parent_subsets_counted_twice(self, world, venue_manager):
-        """BUG: get_all_members() iterates all subsets. A person added to two subsets
-        of the same parent appears twice in the members list. They get assigned to two
-        different children and are counted twice in people_redistributed stats."""
+        """get_all_members() iterates all subsets, so a person added to two subsets
+        of the same parent appears twice in the members list: they get assigned to
+        two different children and counted twice in people_redistributed stats."""
         creator = VenueChildCreator("school", "classroom", child_max_size=10)
         school = MinimalVenue(name="school", venue_type="school")
         venue_manager.add_venue(school)
@@ -1280,12 +1236,10 @@ class TestPersonInMultipleSubsets:
         creator.create_children(world)
 
         # The duplicate causes people_redistributed to count the same person twice
-        assert creator.stats["people_redistributed"] == 2  # documents the double-count bug
+        assert creator.stats["people_redistributed"] == 2
 
 
-# =============================================================================
 # Tests: child venue registration in venue manager
-# =============================================================================
 
 class TestChildVenueRegistration:
 
@@ -1333,9 +1287,7 @@ class TestChildVenueRegistration:
         assert len(venue_manager.get_venues_by_type("classroom")) == 3
 
 
-# =============================================================================
 # Tests: distribution invariants (no members lost)
-# =============================================================================
 
 class TestDistributionInvariants:
 
@@ -1391,9 +1343,7 @@ class TestDistributionInvariants:
             assert count > 0, f"Child {child.name} has 0 members"
 
 
-# =============================================================================
 # Tests: from_yaml error handling
-# =============================================================================
 
 class TestFromYamlErrorHandling:
 
@@ -1419,9 +1369,7 @@ class TestFromYamlErrorHandling:
             VenueChildCreator.from_yaml(str(yaml_file))
 
 
-# =============================================================================
 # Tests: attribute_mapping type-mismatch
-# =============================================================================
 
 class TestAttributeMappingTypeMismatch:
 

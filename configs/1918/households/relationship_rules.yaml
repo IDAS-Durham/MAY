@@ -21,17 +21,12 @@
 
 enabled: true
 
-# ============================================================================
 # PER-AREA "SAME-CATEGORY" PROBABILITY SOURCES (optional)
-# ============================================================================
 # No 1918 source data available. Left empty so the scalar
 # `same_category_probability_fallback` on each rule is authoritative.
-# ============================================================================
 same_category_sources: []
 
-# =============================================
 # SELECTION STRATEGY
-# =============================================
 selection_strategy:
   max_attempts: 10
   use_best_candidate: true
@@ -45,14 +40,10 @@ selection_strategy:
     log_backtracks: true
     avoid_duplicates: true
 
-# =============================================
 # STATISTICS
-# =============================================
 track_statistics: true
 
-# =============================================
 # PATTERN-BASED RELATIONSHIP RULES
-# =============================================
 
 rules:
   # Rule 1: Families with 2 adults and kids
@@ -351,9 +342,7 @@ rules:
           std: 7
           tolerance: 10
 
-# =============================================
 # CONSTRAINT TYPES
-# =============================================
 #
 # 1. numerical_attribute_difference
 #    Validates: (role_1[attribute] - role_2[attribute]) is within [min_difference, max_difference]

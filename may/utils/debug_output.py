@@ -120,7 +120,7 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
     all_venues = world.venues.get_all_venues().values()
 
     for venue in all_venues:
-        # Check all subsets. Households use dynamic categories (Kids, Adults, etc) rather than a single 'resident' key.
+        # Check all subsets. Households use dynamic categories (Kids, Adults, etc).
         for subset in venue.subsets.values():
             members = subset.members
             
@@ -346,8 +346,8 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
     emit("  Total legs written by mode:")
     for mode in sorted(leg_count_by_mode.keys()):
         emit(f"    {mode:<6}: {leg_count_by_mode[mode]:,}")
-    # Assertions (D12): people whose final commute_mode is walk MUST have no
-    # commute venue.
+    # Assertions (D12): a person whose final commute_mode is walk must end
+    # with an empty commute venue.
     if walk_with_venue:
         emit(f"  ⚠ walk-mode people with a commute venue: {walk_with_venue}  (expected: 0)")
     else:
@@ -416,7 +416,7 @@ def export_people(world, output_file="people.csv"):
             'geographical_unit': person.geographical_unit.name if person.geographical_unit else None,
         }
 
-        # Get the large-unit (levels[2]) name, if the hierarchy has a third level (adr/0002)
+        # Get the large-unit (levels[2]) name, if the hierarchy has a third level
         levels = world.geography.levels
         lgu_level = levels[2] if len(levels) > 2 else None
         lgu_name = None
@@ -448,7 +448,7 @@ def export_people(world, output_file="people.csv"):
         # Get activity assignments (company, school, university, etc.)
         # Iterate through activity_map to find non-residence activities
         for activity_name, subsets in person.activity_map.items():
-            # Skip residence activity (all residence types now use 'residence' activity name)
+            # Skip residence activity (all residence types use the 'residence' activity name)
             if activity_name == 'residence':
                 continue
 

@@ -1,6 +1,4 @@
-# ============================================================================
 # Commute Mode Assignment Configuration
-# ============================================================================
 # Assigns method of travel to work from UK Census 2021 TS061, sampled on the
 # person's residence OA (= SGU). Residence-side mode mix (D2). Excludes the
 # "Work mainly at or from home" column and renormalizes over the remaining 10
@@ -8,7 +6,6 @@
 #
 # Assignment Level: person
 # Dependencies: work_mode (from workplace_assignment), residence geographical_unit
-# ============================================================================
 
 step:
   assignment_level: "person"
@@ -18,9 +15,7 @@ attributes:
     description: "Method of travel to work (TS061), residence-side"
     data_type: "categorical"
 
-# ============================================================================
 # Filters
-# ============================================================================
 # Assign commute_mode only to people who ACTUALLY got a physical workplace
 # venue assigned (this config runs after the workplace distributors). All four
 # workplace distributors place workers in the "worker" subset, so the gate is:
@@ -53,17 +48,13 @@ filters:
     venue_types: ["office", "classroom", "hospital", "care_home"]
     subset_names: ["worker"]
 
-# ============================================================================
 # Required Attributes (Dependencies)
-# ============================================================================
 required_attributes:
   - name: "work_mode"
     description: "Work mode must be assigned first (workplace_assignment)"
     required: true
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   travel_to_work_mode:
     type: "csv_lookup"
@@ -100,9 +91,7 @@ data_sources:
           walk: "On foot"
           other: "Other method of travel to work"
 
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Sample one travel-to-work mode from residence-OA distribution"

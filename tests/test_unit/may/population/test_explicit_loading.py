@@ -49,7 +49,7 @@ def test_load_explicit_from_csv(mock_geography):
         assert p2.properties['Extra'] == 'B'
 
 def test_load_explicit_missing_file(mock_geography):
-    """A missing explicit population file fails loud (adr/0010)."""
+    """A missing explicit population file fails loud."""
     pop_manager = PopulationManager(geography=mock_geography, data_dir='/tmp')
     with pytest.raises(PopulationError, match="not found"):
         pop_manager.load_explicit_from_csv('nonexistent.csv', {})

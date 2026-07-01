@@ -111,7 +111,7 @@ def test_categorical_from_keys_override_on_existing_member(validator):
     *added* (here a Child), but `max_difference_by_categorical_attribute` is
     conceptually about the *parent's* sex. `categorical_from` pins the override
     onto the existing role so the father/mother age cap is honored correctly,
-    per-member (other_people is no longer collapsed to a bare min/max)."""
+    per-member."""
     child = MockPerson(10, age=10, sex='female')           # candidate (added)
     male_parent = [MockPerson(1, age=58, sex='male')]      # existing member
     female_parent = [MockPerson(2, age=58, sex='female')]  # existing member
@@ -145,10 +145,10 @@ def test_categorical_from_keys_override_on_existing_member(validator):
 
 
 def test_categorical_from_absent_keeps_candidate_keying(validator):
-    """Without `categorical_from`, the override still keys on the *candidate* —
-    unchanged behavior. This pins the documented excess-path foot-gun: adding a
-    female Child mis-keys the father/mother cap onto the child's sex, so the
-    male parent's 50y allowance is (wrongly) ignored and the base 45 applies."""
+    """Without `categorical_from`, the override keys on the *candidate*.
+    This pins the excess-path foot-gun: adding a female Child mis-keys the
+    father/mother cap onto the child's sex, so the male parent's 50y allowance
+    is (wrongly) ignored and the base 45 applies."""
     child = MockPerson(10, age=10, sex='female')
     male_parent = [MockPerson(1, age=58, sex='male')]
     constraint = {
@@ -161,7 +161,7 @@ def test_categorical_from_absent_keeps_candidate_keying(validator):
             'attribute': 'sex',
             'values': {'male': 50},
         },
-        # no categorical_from -> candidate-keyed (legacy behavior)
+        # no categorical_from -> candidate-keyed
     }
     ok, _ = validator.validate_numerical_attribute_difference_constraint(
         child, male_parent, constraint, is_role_1=False
@@ -339,16 +339,11 @@ def test_validate_composition(validator):
         {"household_size": True, "max": 4}
     ])[0] is False
 
-# =========================================================
-# Tests added after self-audit — filling gaps
-# =========================================================
+# Multiple-children and candidate-selection edge cases
 
 def test_validate_numerical_attr_diff_multiple_children(validator):
-    """
-    Test with MULTIPLE children — the code checks against MAX child age for
-    min_difference and MIN child age for max_difference. This is a subtle
-    and critical detail that needs explicit verification.
-    """
+    """With multiple children, the check uses the MAX child age for
+    min_difference and the MIN child age for max_difference."""
     parent = MockPerson(1, age=45, sex='male')
     children = [
         MockPerson(2, age=5, sex='female'),   # youngest

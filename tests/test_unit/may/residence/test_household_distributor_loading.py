@@ -7,9 +7,9 @@ exercised by these production log lines:
     Filtered to N geo_units with M household types
     Loaded household data for N geographical units
 
-Existing residence tests focus on allocation/backtracking. This file pins
-the contract of the loader itself: filtering, zero-count exclusion, sad
-paths (missing file, empty geography), and the re-load reset contract.
+These pin the contract of the loader itself: filtering, zero-count
+exclusion, sad paths (missing file, empty geography), and the re-load
+reset contract.
 """
 
 import logging
@@ -23,9 +23,7 @@ from may.population.population import PopulationManager
 from may.residence.household_distributor import HouseholdDistributor, HouseholdError
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 def _make_geo(sgus):
     """Make a single-level geography with the given SGU names."""
@@ -64,9 +62,7 @@ def _write_households_csv(path, header_cols, rows):
     path.write_text('\n'.join(lines) + '\n')
 
 
-# ===========================================================================
 # Happy path: filtering, zero-count exclusion, count of geo_units logged
-# ===========================================================================
 
 class TestLoadHouseholdDataHappyPath:
 
@@ -110,16 +106,14 @@ class TestLoadHouseholdDataHappyPath:
         assert 'SGU_002' not in hd.household_counts_by_geo_unit
 
 
-# ===========================================================================
 # Sad paths
-# ===========================================================================
 
 class TestLoadHouseholdDataSadPaths:
 
     def test_missing_file_raises(self, tmp_path):
         """A missing households CSV must fail loud (HouseholdError), like
         PopulationError/VenueError — the engine works on complete data or not
-        at all (adr/0010). Once a residence_allocation step is in the timeline,
+        at all. Once a residence_allocation step is in the timeline,
         missing household data is a misconfiguration, not a tolerable no-op."""
         geo = _make_geo(['SGU_001'])
         hd = _make_distributor(geo, str(tmp_path))
@@ -153,9 +147,7 @@ class TestLoadHouseholdDataSadPaths:
             hd.load_household_data("households.csv")
 
 
-# ===========================================================================
 # Re-load contract: a second call replaces, never accumulates
-# ===========================================================================
 
 class TestLoadHouseholdDataReload:
 

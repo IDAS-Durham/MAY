@@ -1,6 +1,4 @@
-# ============================================================================
 # Workplace SGU Assignment Configuration
-# ============================================================================
 # Assigns specific SGU within the workplace LGU based on employment distribution.
 # This provides fine-grained spatial workplace location.
 #
@@ -9,7 +7,6 @@
 # - More workers → higher probability of working in that SGU
 #
 # Dependencies: workplace_location (LGU name must be assigned first)
-# ============================================================================
 
 step:
   assignment_level: "person"
@@ -19,9 +16,7 @@ attributes:
     description: "Assigns specific SGU within workplace LGU"
     data_type: "categorical"
 
-# ============================================================================
 # Filters - Only assign to working-age people (18-65)
-# ============================================================================
 filters:
   age:
     attribute: "age"
@@ -36,7 +31,7 @@ filters:
   activities:
     exclude: ["primary_activity"]
 
-  # Skip workers whose workplace is outside the loaded world (adr/0015). They
+  # Skip workers whose workplace is outside the loaded world. They
   # carry the out-of-boundary sentinel from workplace_assignment and have no
   # in-world LGU to sample an SGU within. Must match `outside_value` there.
   out_of_boundary:
@@ -45,17 +40,13 @@ filters:
     description: "Exclude out-of-area workers (no in-world workplace SGU)"
     exclude: ["OUTSIDE"]
 
-# ============================================================================
 # Required Attributes (Dependencies)
-# ============================================================================
 required_attributes:
   - name: "workplace_location"
     description: "Workplace LGU must be assigned first"
     required: true
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   sgu_employment_distribution:
     type: "csv_lookup"
@@ -84,9 +75,7 @@ data_sources:
           - column: "SGU"
             values: ["ALL"]  # Exclude aggregate rows
 
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Sample SGU within workplace LGU weighted by employment"
@@ -99,16 +88,12 @@ assignment_rules:
           strategy: "geographical_unit_sampler"  # Generic strategy for sampling any GU level
           data_source: "sgu_employment_distribution"
 
-# ============================================================================
 # Settings
-# ============================================================================
 settings:
   logging:
     show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
 
-# ============================================================================
 # Notes
-# ============================================================================
 # This assignment distributes workers within a workplace LGU to specific SGUs
 # based on employment density. SGUs with more jobs have higher probability.
 #

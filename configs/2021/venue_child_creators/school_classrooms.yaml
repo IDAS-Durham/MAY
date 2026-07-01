@@ -36,12 +36,9 @@ distribution_strategy: even
 # Setting balance_by deals each value round-robin across the age group's
 # classrooms, so every classroom mirrors the cohort's gender mix. Single-sex
 # schools stay single-sex automatically (only one value present).
-# Remove this key to restore the old arrival-order slicing.
 balance_by: sex
 
-# ========================================
 # ACTIVITY MANAGEMENT
-# ========================================
 # Control how students' activity_map is updated when moving to classrooms
 
 # Activity map key: Which activity to set when adding to classroom

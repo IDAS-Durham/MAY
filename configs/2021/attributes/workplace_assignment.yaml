@@ -1,6 +1,4 @@
-# ============================================================================
 # Workplace Location Assignment Configuration
-# ============================================================================
 # Assigns geographical workplace location and work mode to workers based on
 # commuting flow patterns.
 #
@@ -9,7 +7,6 @@
 # - Based on origin-destination commuting likelihood matrices (LGU to LGU)
 #
 # Dependencies: None (this runs FIRST for workers, before sector assignment)
-# ============================================================================
 
 step:
   assignment_level: "person"
@@ -24,11 +21,9 @@ attributes:
     description: "Work mode: From_Home, Hybrid, or Normal commute"
     data_type: "categorical"
 
-# ============================================================================
 # Filters - Only assign to working-age people (18-65)
 # NOTE: We assign workplace to all working-age adults (potential workforce)
 #       The actual 'work' activity should be assigned separately based on employment rates
-# ============================================================================
 filters:
   age:
     attribute: "age"
@@ -42,18 +37,16 @@ filters:
   activities:
     exclude: ["primary_activity"]
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   commuting_flows:
     type: "csv_lookup"
     format: "origin_destination_matrix"
     description: "Commuting likelihood from residence to workplace (LGU to LGU)"
 
-    # Out-of-boundary destination policy (adr/0015). REQUIRED — no default.
+    # Out-of-boundary destination policy. REQUIRED — no default.
     # A region run (e.g. Manchester-only) draws workplace LGUs outside the loaded
-    # world; this says what to do with them. Whole-country runs never trigger it.
+    # world; this says what to do with them. It applies only to sub-national region runs.
     #   error        -> fail loud if any drawn destination is out of boundary
     #   redistribute -> keep workers in-boundary: drop out-of-boundary destinations
     #                   and renormalise each origin onto its in-boundary ones
@@ -67,7 +60,7 @@ data_sources:
     outside_value: "OUTSIDE"
     # Optional (redistribute only): person property flagging a worker who was
     # bounced back in-boundary, so the venue layer can deprioritise them when
-    # workplace capacity is scarce (adr/0016). Scenario-named, not hardcoded.
+    # workplace capacity is scarce. Scenario-named, not hardcoded.
     redistributed_flag: "workplace_redistributed"
 
     files:
@@ -98,17 +91,10 @@ data_sources:
           - "888888888"  # Offshore Installation
           - "999999999"  # Outside UK
 
-# NOTE: there is deliberately NO fallback here. The old config declared a
-# "local_work" fallback chain (a constant-type data source with expression
-# values, plus `fallback: "local_work"` on the source and a rule-level
-# constant fallback pointing at it) — none of which the engine ever
-# implemented: constant sources are skipped at load, and the rule fallback
-# silently assigned None. A person whose origin LGU is missing from the
-# matrix now fails the build loudly instead.
+# NOTE: there is deliberately NO fallback here. A person whose origin LGU is
+# missing from the matrix fails the build loudly.
 
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Assign workplace location and work mode based on commuting flows"
@@ -127,18 +113,14 @@ assignment_rules:
             workplace_location: "destination"
             work_mode: "work_mode"
 
-# ============================================================================
 # Settings
-# ============================================================================
 settings:
   logging:
     show_attribute_distribution: false  # Disable detailed distribution (too many SGUs)
 
 
 
-# ============================================================================
 # Notes
-# ============================================================================
 # The commuting flow data includes:
 # - Origin SGU (person's residence)
 # - Destination SGU (workplace location)

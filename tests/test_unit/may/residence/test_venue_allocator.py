@@ -37,9 +37,7 @@ from may.residence.venue_allocator import (
 STRESS_DATA = "tests/test_data/stress_world"
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Fixtures
-# ──────────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
@@ -79,9 +77,7 @@ def hd(geography, population_manager, venue_manager):
     return distributor
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Helpers
-# ──────────────────────────────────────────────────────────────────────
 
 
 def all_people(hd):
@@ -102,9 +98,7 @@ def mark_allocated(hd, person_ids):
         hd.allocated_people.add(pid)
 
 
-# ──────────────────────────────────────────────────────────────────────
 # _get_eligible_people
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestGetEligiblePeople:
@@ -185,9 +179,7 @@ class TestGetEligiblePeople:
         assert eligible == []
 
 
-# ──────────────────────────────────────────────────────────────────────
 # _apply_strategy
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestApplyStrategy:
@@ -227,9 +219,7 @@ class TestApplyStrategy:
         assert {p.id for p in result} == {p.id for p in people}
 
 
-# ──────────────────────────────────────────────────────────────────────
 # _check_attribute_constraints
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestCheckAttributeConstraints:
@@ -307,9 +297,7 @@ class TestCheckAttributeConstraints:
         assert _check_attribute_constraints(p, school, {}) is True
 
 
-# ──────────────────────────────────────────────────────────────────────
 # _allocate_to_venue_type — simple mode
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestSimpleAllocation:
@@ -453,9 +441,7 @@ class TestSimpleAllocation:
         assert "capacity_pct" in stats
 
 
-# ──────────────────────────────────────────────────────────────────────
 # _allocate_with_attributes — attribute-aware mode (care_home)
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestAttributeAwareAllocation:
@@ -606,15 +592,12 @@ class TestAttributeAwareAllocation:
         assert stats["allocated"] == 0
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Mode gate — _allocate_to_venue_type routes by presence of column_mappings
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestAllocationModeGate:
     """The single switch: a step is attribute-aware iff its capacity_config
-    supplies attribute_capacities.column_mappings. The legacy allocation_mode /
-    use_attribute_capacities flags are gone and never consulted."""
+    supplies attribute_capacities.column_mappings. No mode flag is consulted."""
 
     def test_column_mappings_present_routes_to_attribute_aware(self, hd):
         """capacity_config with column_mappings → attribute-aware path
@@ -659,9 +642,7 @@ class TestAllocationModeGate:
         assert "allocation_by_attribute" not in stats
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Attribute constraints — boarding_school
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestBoardingSchoolAttributeConstraints:
@@ -751,9 +732,7 @@ class TestBoardingSchoolAttributeConstraints:
                 )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Side-effects: venue membership
-# ──────────────────────────────────────────────────────────────────────
 
 
 class TestVenueMembershipSideEffects:

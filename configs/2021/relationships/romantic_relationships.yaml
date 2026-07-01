@@ -1,10 +1,7 @@
-# ============================================================================
 # Romantic / Sexual Relationship Configuration
-# ============================================================================
 # Assigns a sexual orientation to every adult and stamps a relationship_status.
-# It does not match partners — it recognises the couples household allocation
-# already built (via the cohabiting_couple person property).
-# ============================================================================
+# It recognises the couples household allocation already built (via the
+# cohabiting_couple person property).
 
 name: "romantic_relationships"
 
@@ -19,10 +16,10 @@ eligibility:
 
 # Orientation source. Declared explicitly: when `data_sources` is present the
 # distributor rakes P(orientation | sex, age, geo_unit) from the two files by
-# IPF, and both files MUST exist (fail-loud, adr/0010). Worlds without area
+# IPF, and both files MUST exist (fail-loud). Worlds without area
 # orientation data (e.g. MedievalYaml) OMIT `data_sources` entirely and instead
 # add a `probabilities` + `age_adjustments` block under `sexual_orientations`
-# (the YAML path — see martha-docs/configs_explained/relationships.md).
+# (the YAML path).
 data_sources:
   demographic_distribution:            # P(orientation | sex, age_group)
     path: "${data_root}/population/sexual_orientation/orientation_prevalence_extended.csv"

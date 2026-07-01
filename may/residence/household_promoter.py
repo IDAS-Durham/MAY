@@ -162,7 +162,7 @@ class HouseholdPromoter:
             self.distributor._prepare_person_pools(refresh=True)
 
         # The presence of a household_promotion step is the switch — promotion
-        # runs where the strategy invokes it (no separate global enable flag).
+        # runs where the strategy invokes it.
         promotion_config = self.distributor.config.get('promotion', {})
 
         # Get priority order
@@ -273,8 +273,7 @@ class HouseholdPromoter:
                     if not available_people:
                         continue
 
-                    # Create a temporary list of IDs from the pool (we use current state of dict)
-                    # We can't use deque for complex dictionary removals, so we just take from the front
+                    # Take IDs from the front of the pool dict (insertion order preserved)
                     added_to_this = 0
                     
                     # Determine how many we can add

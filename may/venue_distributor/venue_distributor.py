@@ -219,13 +219,12 @@ class VenueDistributor(BaseDistributor):
             vt = self.venue_type
             deprioritize_flag = self.config.get('allocation', {}).get('deprioritize_flag')
             if deprioritize_flag:
-                # adr/0016: allocate people WITHOUT the flag (e.g. native workers)
-                # first so they claim capacity; people WITH it (e.g. redistributed
+                # Allocate people WITHOUT the flag (e.g. native workers) first
+                # so they claim capacity; people WITH it (e.g. redistributed
                 # workers bounced back in-boundary) take only the remaining slack.
                 # Capacity is tracked on the venues, so the second pass sees what the
                 # first consumed. Flagged people left unallocated are an explicit
-                # overflow category (kept as-is, counted — not silently dropped, not
-                # rewritten to a sentinel).
+                # overflow category: kept as-is and counted.
                 native = [p for p in remaining if not p.properties.get(deprioritize_flag)]
                 flagged = [p for p in remaining if p.properties.get(deprioritize_flag)]
                 native_unallocated = self._allocate_normal(native, venues) if native else []
@@ -246,9 +245,9 @@ class VenueDistributor(BaseDistributor):
             else:
                 # No deprioritisation: single normal pass. The honest eligible-vs-
                 # allocated tally (incl. anything placed in the priority phase above)
-                # is reported by reporting.log_allocation_summary — we don't log the
-                # phase-3 remainder here, which would understate placement for
-                # priority-allocation distributors (e.g. university).
+                # is reported by reporting.log_allocation_summary. Logging the
+                # phase-3 remainder here would understate placement for priority-
+                # allocation distributors (e.g. university), so the summary handles it.
                 normal_unallocated = self._allocate_normal(remaining, venues)
                 unallocated_total.extend(normal_unallocated)
 

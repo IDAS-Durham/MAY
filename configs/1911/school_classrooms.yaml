@@ -30,9 +30,7 @@ child_properties:
 #   'fill'  - Fill first classroom to max before moving to next
 distribution_strategy: even
 
-# ========================================
 # ACTIVITY MANAGEMENT
-# ========================================
 # Control how students' activity_map is updated when moving to classrooms
 
 # Activity map key: Which activity to set when adding to classroom

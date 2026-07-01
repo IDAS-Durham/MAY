@@ -14,7 +14,7 @@ logger = logging.getLogger("may.attribute_assignment.assigner")
 class AttributeAssignmentError(Exception):
     """Raised when assignment can't complete on the given data/config. Mirrors
     PopulationError/VenueError/HouseholdError: every eligible person is assigned
-    on complete data, or the build fails loud (adr/0010). A person left unassigned
+    on complete data, or the build fails loud. A person left unassigned
     — strategy failure, unclassifiable residence, no matching role, no value —
     aborts the run."""
 
@@ -38,7 +38,7 @@ def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] 
     data_manager = DataSourceManager(config)
 
     # Surface a data-source load failure as AttributeAssignmentError so
-    # create_world exits cleanly (adr/0010).
+    # create_world exits cleanly.
     try:
         if geo_units:
             logger.info(f"Preloading data for {len(geo_units)} geographical units...")
@@ -84,8 +84,8 @@ class AttributeAssigner:
         # Pre-compute filter configuration
         self._has_filters = hasattr(config, 'filters') and config.filters
         self._optimized_filters = []
-        # Filters that inspect the person's activity_map (assigned venues/subsets)
-        # rather than a scalar attribute. Populated below.
+        # Filters that inspect the person's activity_map (assigned venues/subsets).
+        # Populated below.
         self._activity_venue_filters = []
         if self._has_filters:
             for name, cfg in config.filters.items():
@@ -107,7 +107,7 @@ class AttributeAssigner:
                 # (categorical: {values: [...]}) or flat (values: [...]) form.
                 cat_values = cfg.get('categorical', {}).get('values', cfg.get('values'))
                 # Categorical "exclude" values: reject people whose value is in
-                # this list (e.g. the out-of-boundary sentinel — adr/0015).
+                # this list (e.g. the out-of-boundary sentinel).
                 cat_exclude = cfg.get('categorical', {}).get('exclude', cfg.get('exclude'))
                 self._optimized_filters.append({
                     'attr': attr,
@@ -139,7 +139,7 @@ class AttributeAssigner:
             'filtered_people': 0,  # People filtered out by age/activity filters
             'assigned_people': 0,  # People successfully assigned
             # People dropped by a categorical 'exclude' filter, keyed by attribute
-            # (e.g. the out-of-boundary sentinel — adr/0015).
+            # (e.g. the out-of-boundary sentinel).
             'value_excluded': defaultdict(int),
         }
 
@@ -193,7 +193,7 @@ class AttributeAssigner:
         self._report_statistics()
 
         # Fail loud if anyone who should have been assigned wasn't; the
-        # per-person cause was logged above (adr/0010).
+        # per-person cause was logged above.
         if self.stats['unassigned_people'] > 0:
             raise AttributeAssignmentError(
                 f"{self.stats['unassigned_people']} person(s) left unassigned for "
@@ -490,7 +490,7 @@ class AttributeAssigner:
         households = [self._get_person_residence_venue(p) for p in eligible_people]
         contexts = [{'attribute_name': self.attribute_name} for _ in eligible_people]
 
-        # A batch fails as a whole; surface it as AttributeAssignmentError (adr/0010).
+        # A batch fails as a whole; surface it as AttributeAssignmentError.
         logger.info(f"  Running batch assignment...")
         try:
             results = strategy.assign_batch(eligible_people, households, contexts)
@@ -557,7 +557,7 @@ class AttributeAssigner:
                 logger.debug(f"    Geo Unit: {person.geographical_unit.name if person.geographical_unit else 'None'}")
                 logger.debug(f"    Existing attributes: {list(person.properties.keys())}")
 
-            # Pass strategy directly instead of looking it up again
+            # Reuse the pre-created strategy
             household = self._get_person_residence_venue(person)
             context = {'attribute_name': self.attribute_name, 'debug': is_sample}
 
@@ -821,9 +821,8 @@ class AttributeAssigner:
                     queue.append(neighbor)
 
         # 4. Every member must be orderable. Cross-role cycles are rejected at
-        #    config load (adr/0019), so unprocessed people here mean the derived
-        #    per-person graph is inconsistent — fail loud rather than silently
-        #    assigning the leftovers in id order.
+        #    config load, so unprocessed people here mean the derived per-person
+        #    graph is inconsistent — fail loud.
         if processed_count < len(members):
             processed_ids = {p.id for p in result}
             unordered = [p.id for p in base_sorted if p.id not in processed_ids]
