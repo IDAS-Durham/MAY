@@ -1,5 +1,5 @@
 """
-Unit tests for Subset (may/population/subset.py).
+Unit tests for Subset.
 
 Subset wraps a set of Person ``members`` belonging to a Venue.
 """

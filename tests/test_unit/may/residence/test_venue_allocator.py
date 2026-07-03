@@ -1,5 +1,5 @@
 """
-Tests for may/residence/venue_allocator.py
+Tests for the venue allocator.
 
 Covers:
   - _get_eligible_people   — eligibility filtering

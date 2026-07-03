@@ -1,5 +1,5 @@
 """
-Unit tests for PopulationManager class (population.py)
+Unit tests for PopulationManager class
 
 Tests the PopulationManager class that handles population generation and management.
 """

@@ -1,5 +1,5 @@
 """
-Unit tests for assigner.py — orchestration logic.
+Unit tests for the attribute assigner orchestration logic.
 
 Covers:
 - _passes_filters(): age, sex, numerical, activity include/exclude, required attributes

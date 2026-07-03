@@ -1,5 +1,5 @@
 """
-Unit tests for assignment_config.py:
+Unit tests for assignment config parsing:
 - _pattern_matches_cached: operator matching (exact, >=, <=)
 - MatchingRule.matches(): actual-only, original-only, both, edge cases
 - HouseholdStructure.matches(): first-match-wins

@@ -1,5 +1,5 @@
 """
-Unit tests for data_sources.py — data loading and lookup logic.
+Unit tests for data loading and lookup logic.
 
 Covers:
 - _normalize_probabilities(): all-zeros, already-normalized, negative values

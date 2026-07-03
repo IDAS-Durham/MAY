@@ -1,5 +1,5 @@
 """
-Unit tests for Person class (person.py)
+Unit tests for Person class
 
 Tests the Person class that represents individual agents in the simulation.
 """
