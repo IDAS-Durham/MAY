@@ -1,6 +1,0 @@
-# NZ 1918 Venues — placeholder.
-#
-# No venue data files exist yet for the NZ 1918 case. This config defines
-# no venue types so the venue loader is a no-op. Add types here once raw
-# venue data is available.
-venue_types: {}
