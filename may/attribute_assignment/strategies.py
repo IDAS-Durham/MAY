@@ -236,7 +236,7 @@ class AssignmentStrategy:
         """Abort assignment loudly. No fallbacks."""
         raise RuntimeError(
             f"Strategy '{self.strategy_type}' could not assign person {person.id}: "
-            f"{reason}. No fallbacks (adr/0010) — fix the data/config, or express the "
+            f"{reason}. No fallbacks. Fix the data/config, or express the "
             "alternative as explicit primary logic."
         )
 
@@ -335,7 +335,7 @@ class DrawStrategy(AssignmentStrategy):
         if not source:
             raise KeyError(
                 f"Data source '{self.data_source_name}' is not registered. "
-                "No fallbacks (adr/0010)."
+                "No fallbacks."
             )
         return source
 
@@ -598,7 +598,7 @@ class LogicBlockStrategy(AssignmentStrategy):
         source = self.data_manager.get_source(data_source_name)
         if not source:
             raise KeyError(
-                f"Data source '{data_source_name}' is not registered. No fallbacks (adr/0010)."
+                f"Data source '{data_source_name}' is not registered. No fallbacks."
             )
 
         # The source resolves its own key and returns the full distribution.
@@ -1063,7 +1063,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         if dest_attr is None:
             raise ValueError(
                 f"Strategy '{self.strategy_type}': cannot attach redistributed flag "
-                f"'{flag}' — no output is wired to 'destination' (adr/0016)."
+                f"'{flag}'. No output is wired to 'destination'."
             )
         return {dest_attr: result, flag: True}
 

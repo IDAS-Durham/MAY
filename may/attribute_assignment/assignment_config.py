@@ -406,7 +406,7 @@ class AttributeAssignmentConfig:
         """
         if 'attribute' in self.raw_config:
             raise ValueError(
-                "top-level 'attribute:' block is retired (adr/0012) — declare the "
+                "top-level 'attribute:' block is retired. Declare the "
                 "produced attribute(s) as an 'attributes:' list and step config "
                 "under 'step:'."
             )
@@ -414,7 +414,7 @@ class AttributeAssignmentConfig:
         if not raw or not isinstance(raw, list):
             raise ValueError(
                 "config needs an 'attributes:' list declaring the produced "
-                "attribute(s) (adr/0012), e.g. `attributes:\\n  - name: ethnicity`."
+                "attribute(s), e.g. `attributes:\\n  - name: ethnicity`."
             )
         for entry in raw:
             if not isinstance(entry, dict) or 'name' not in entry:
@@ -457,7 +457,7 @@ class AttributeAssignmentConfig:
         if not isinstance(raw_attrs, list):
             raise ValueError(
                 f"required_attributes must be a list of entries each with a "
-                f"'name' (adr/0006), got {type(raw_attrs).__name__}. Convert the "
+                f"'name', got {type(raw_attrs).__name__}. Convert the "
                 f"mapping form `name:\\n  ...` to `- name: name\\n  ...`."
             )
 
@@ -622,7 +622,7 @@ class AttributeAssignmentConfig:
                         f"rule for role {rule.role!r} references undefined role "
                         f"{dep!r}. A cross-role reference "
                         f"(inherit_from/partner_role/exclude) must name a role "
-                        f"defined in this structure (adr/0019)."
+                        f"defined in this structure."
                     )
                 for role in roles:
                     if role is not None and role != dep:
@@ -647,7 +647,7 @@ class AttributeAssignmentConfig:
                         f"{self.config_path.name}: assignment_rules."
                         f"{structure_name}: cross-role references form a cycle "
                         f"({' -> '.join(cycle)}); no assignment order can satisfy "
-                        f"them (adr/0019)."
+                        f"them."
                     )
                 if color[dep] == WHITE:
                     visit(dep)

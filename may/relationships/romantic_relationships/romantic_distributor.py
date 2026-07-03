@@ -120,13 +120,13 @@ class RomanticDistributor:
         if not prev_path or not os.path.exists(prev_path):
             raise ValueError(
                 f"{self.name}: data_sources declared but demographic_distribution.path "
-                f"missing or not found: {prev_path} (adr/0010). Omit data_sources to "
+                f"missing or not found: {prev_path}. Omit data_sources to "
                 f"use the YAML probabilities path instead."
             )
         if not area_path or not os.path.exists(area_path):
             raise ValueError(
                 f"{self.name}: data_sources declared but geo_distribution.path missing "
-                f"or not found: {area_path} (adr/0010). Omit data_sources to use the "
+                f"or not found: {area_path}. Omit data_sources to use the "
                 f"YAML probabilities path instead."
             )
 
@@ -134,7 +134,7 @@ class RomanticDistributor:
         if not geo_level:
             raise ValueError(
                 f"{self.name}: data_sources.geo_distribution needs 'geo_level' (the "
-                f"geography level the distribution is keyed at); no default (adr/0002)."
+                f"geography level the distribution is keyed at); no default."
             )
         self._geo_level = geo_level
 

@@ -122,7 +122,7 @@ class BaseDistributor:
         if self.venue_geo_level is None:
             raise ValueError(
                 f"{type(self).__name__}: 'venue_selection.venue_geo_level' is required "
-                f"for geo-based venue allocation; there is no default (adr/0002, adr/0010)."
+                f"for geo-based venue allocation; there is no default."
             )
         return self.venue_geo_level
 

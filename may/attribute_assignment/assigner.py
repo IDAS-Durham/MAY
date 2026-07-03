@@ -201,7 +201,7 @@ class AttributeAssigner:
                 f"above for the per-person cause (missing data, unclassifiable "
                 f"residence, no matching role, or a strategy returning no value). "
                 f"The engine assigns every eligible person on complete data or fails "
-                f"loud (adr/0010)."
+                f"loud."
             )
 
         return self.stats
@@ -829,7 +829,7 @@ class AttributeAssigner:
             raise RuntimeError(
                 f"Assignment ordering for structure {structure!r} left people "
                 f"{unordered} unordered — a cross-role dependency cycle escaped "
-                f"load-time validation (adr/0019)."
+                f"load-time validation."
             )
 
         return result

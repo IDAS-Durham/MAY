@@ -18,8 +18,7 @@ class Geography:
         if not levels:
             raise ValueError(
                 "Geography requires 'levels' — the ordered list of level labels "
-                "(smallest to largest) from geography config. There is no default "
-                "(adr/0002, adr/0010)."
+                "(smallest to largest) from geography config. There is no default."
             )
         self.levels = levels
 

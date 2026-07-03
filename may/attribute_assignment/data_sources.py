@@ -67,8 +67,8 @@ class DataSource:
         """
         if not probs:
             raise ValueError(
-                f"Empty probability distribution in source '{self.name}'. No fallbacks "
-                "(adr/0010) — fix the data/config."
+                f"Empty probability distribution in source '{self.name}'. No fallbacks. "
+                "Fix the data/config."
             )
 
         # Clamp negative values to 0 — negative probabilities are invalid
@@ -95,7 +95,7 @@ class DataSource:
         else:
             raise ValueError(
                 f"All-zero probability distribution in source '{self.name}' "
-                f"({len(probs)} keys). No fallbacks (adr/0010) — fix the data."
+                f"({len(probs)} keys). No fallbacks. Fix the data."
             )
 
 
@@ -111,7 +111,7 @@ def _ordered_key_columns(file_config: Dict[str, Any], source_name: str,
     """
     if 'key_column' in file_config:
         raise ValueError(
-            f"source '{source_name}': 'key_column' is retired (adr/0006) — use "
+            f"source '{source_name}': 'key_column' is retired. Use "
             "'key_columns' (a mapping; a single key is a one-entry mapping)."
         )
     key_columns = file_config.get('key_columns')
@@ -123,7 +123,7 @@ def _ordered_key_columns(file_config: Dict[str, Any], source_name: str,
     if not isinstance(key_columns, dict):
         raise ValueError(
             f"source '{source_name}': 'key_columns' must be a mapping, got "
-            f"{type(key_columns).__name__} (adr/0006). A list is the retired form."
+            f"{type(key_columns).__name__}. A list is the retired form."
         )
     columns = list(key_columns)
     if expected is not None and len(columns) != expected:
@@ -254,8 +254,8 @@ class GeoDistributionSource(DataSource):
         """
         if not self._data_loaded:
             raise RuntimeError(
-                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010) — "
-                "fix the source/data so it loads."
+                f"Data not loaded for source '{self.name}'. No fallbacks. "
+                "Fix the source/data so it loads."
             )
 
         geo_unit = None
@@ -266,15 +266,15 @@ class GeoDistributionSource(DataSource):
         if not geo_unit:
             raise KeyError(
                 f"Source '{self.name}': no residence geographical_unit for person "
-                f"{person.id} (no venue geo and no person-level geo). No fallbacks (adr/0010)."
+                f"{person.id} (no venue geo and no person-level geo). No fallbacks."
             )
 
         if geo_unit in self._lookup:
             return self._lookup[geo_unit]
 
         raise KeyError(
-            f"Source '{self.name}' has no row for geo unit '{geo_unit}'. No fallbacks "
-            "(adr/0010) — the data must cover every keyed unit, or it's a real gap."
+            f"Source '{self.name}' has no row for geo unit '{geo_unit}'. No fallbacks. "
+            "The data must cover every keyed unit, or it's a real gap."
         )
 
 
@@ -343,7 +343,7 @@ class DiversitySource(DataSource):
             if total <= 0:
                 raise ValueError(
                     f"Source '{self.name}': zero-total diversity counts for geo unit "
-                    f"'{geo_unit}'. No fallbacks (adr/0010) — fix the data."
+                    f"'{geo_unit}'. No fallbacks. Fix the data."
                 )
             probs = {k: v / total for k, v in counts.items()}
 
@@ -355,7 +355,7 @@ class DiversitySource(DataSource):
         """Look up diversity probabilities for a geographical unit."""
         if not self._data_loaded:
             raise RuntimeError(
-                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+                f"Data not loaded for source '{self.name}'. No fallbacks."
             )
 
         if geo_unit in self._lookup:
@@ -363,7 +363,7 @@ class DiversitySource(DataSource):
 
         raise KeyError(
             f"Source '{self.name}' has no diversity row for geo unit '{geo_unit}'. "
-            "No fallbacks (adr/0010)."
+            "No fallbacks."
         )
 
 
@@ -457,7 +457,7 @@ class PairProbabilitySource(DataSource):
         """
         if not self._data_loaded:
             raise RuntimeError(
-                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+                f"Data not loaded for source '{self.name}'. No fallbacks."
             )
 
         # Look up geographical unit
@@ -468,7 +468,7 @@ class PairProbabilitySource(DataSource):
 
         raise KeyError(
             f"Source '{self.name}' has no pair row for (geo='{geo_unit}', "
-            f"first='{first_value}'). No fallbacks (adr/0010) — the pair data must cover "
+            f"first='{first_value}'). No fallbacks. The pair data must cover "
             "every (unit, first-value) combination the model produces."
         )
 
@@ -567,7 +567,7 @@ class MultiKeyLookupSource(DataSource):
 
         if not self._lookup_dict:
             raise RuntimeError(
-                f"Source '{self.name}' has no data loaded. No fallbacks (adr/0010)."
+                f"Source '{self.name}' has no data loaded. No fallbacks."
             )
 
         # Build key tuple directly (faster than building intermediate dict)
@@ -577,8 +577,8 @@ class MultiKeyLookupSource(DataSource):
             if value is None:
                 raise KeyError(
                     f"Source '{self.name}': could not resolve key column "
-                    f"'{csv_col_name}' for person {person.id}. No fallbacks (adr/0010) — "
-                    "the person is missing an attribute the key needs, or the key config "
+                    f"'{csv_col_name}' for person {person.id}. No fallbacks. "
+                    "The person is missing an attribute the key needs, or the key config "
                     "is wrong."
                 )
             key_values.append(value)
@@ -598,8 +598,8 @@ class MultiKeyLookupSource(DataSource):
 
         if result is None:
             raise KeyError(
-                f"Source '{self.name}' has no row for key {lookup_key}. No fallbacks "
-                "(adr/0010) — the data must cover every demographic combination the "
+                f"Source '{self.name}' has no row for key {lookup_key}. No fallbacks. "
+                "The data must cover every demographic combination the "
                 "model produces, or this is a real gap."
             )
 
@@ -718,12 +718,12 @@ class OriginDestinationMatrixSource(DataSource):
             raise ValueError(
                 f"O-D source '{self.name}' must declare 'out_of_boundary' "
                 "(error | redistribute | outside). It is required, with no "
-                "default — silence is never interpreted (adr/0015)."
+                "default. Silence is never interpreted."
             )
         if self._out_of_boundary not in ('error', 'redistribute', 'outside'):
             raise ValueError(
                 f"O-D source '{self.name}': out_of_boundary='{self._out_of_boundary}' "
-                "is not one of error | redistribute | outside (adr/0015)."
+                "is not one of error | redistribute | outside."
             )
         self._outside_value = config.get('outside_value')
         self._on_empty = config.get('on_empty')
@@ -732,7 +732,7 @@ class OriginDestinationMatrixSource(DataSource):
                 raise ValueError(
                     f"O-D source '{self.name}': out_of_boundary='redistribute' "
                     "requires 'on_empty' (error | outside) for origins whose entire "
-                    "distribution is out-of-boundary (adr/0015)."
+                    "distribution is out-of-boundary."
                 )
         # The sentinel value is required whenever the 'outside' outcome can occur.
         outside_can_occur = (
@@ -742,7 +742,7 @@ class OriginDestinationMatrixSource(DataSource):
         if outside_can_occur and not self._outside_value:
             raise ValueError(
                 f"O-D source '{self.name}': 'outside_value' is required when the "
-                "'outside' outcome can occur (adr/0015)."
+                "'outside' outcome can occur."
             )
 
         # Optional marker for redistributed assignments. Names the person
@@ -754,7 +754,7 @@ class OriginDestinationMatrixSource(DataSource):
         if self._redistributed_flag is not None and self._out_of_boundary != 'redistribute':
             raise ValueError(
                 f"O-D source '{self.name}': 'redistributed_flag' is only valid under "
-                f"out_of_boundary='redistribute', not '{self._out_of_boundary}' (adr/0016)."
+                f"out_of_boundary='redistribute', not '{self._out_of_boundary}'."
             )
         # Per-origin fraction of flow that was bounced back in-boundary, populated
         # by the redistribute branch of _apply_boundary_policy. Empty otherwise.
@@ -889,7 +889,7 @@ class OriginDestinationMatrixSource(DataSource):
                 f"O-D source '{self.name}': out_of_boundary='error' but "
                 f"{len(error_offenders)} origin(s) have out-of-boundary destinations "
                 f"(e.g. {sample}). Set out_of_boundary to 'redistribute' or 'outside', "
-                "or load those destinations into the world (adr/0010, adr/0015)."
+                "or load those destinations into the world."
             )
 
         if self._out_of_boundary == 'redistribute':
@@ -903,7 +903,7 @@ class OriginDestinationMatrixSource(DataSource):
                         f"O-D source '{self.name}': {len(empty_origins)} origin(s) have "
                         f"no in-boundary destination and on_empty='error' "
                         f"(e.g. {empty_origins[:15]}). Switch on_empty to 'outside', or "
-                        "shrink/extend the world (adr/0015)."
+                        "shrink/extend the world."
                     )
                 for origin in empty_origins:
                     sentinel_meta = {k: self._outside_value for k in meta_keys}
@@ -989,12 +989,12 @@ class OriginDestinationMatrixSource(DataSource):
         """
         if not self._data_loaded:
             raise RuntimeError(
-                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+                f"Data not loaded for source '{self.name}'. No fallbacks."
             )
         if origin not in self._lookup:
             raise KeyError(
                 f"Source '{self.name}' has no destinations for origin '{origin}'. "
-                "No fallbacks (adr/0010) — the O-D matrix must cover every origin."
+                "No fallbacks. The O-D matrix must cover every origin."
             )
         return self._lookup[origin]
 
@@ -1101,18 +1101,18 @@ class GUSamplerSource(DataSource):
         """
         if not self._data_loaded:
             raise RuntimeError(
-                f"Data not loaded for source '{self.name}'. No fallbacks (adr/0010)."
+                f"Data not loaded for source '{self.name}'. No fallbacks."
             )
         parent_gu_name = get_person_attribute(person, self._parent_attribute)
         if not parent_gu_name:
             raise KeyError(
                 f"Source '{self.name}': person {person.id} has no '{self._parent_attribute}' "
-                "to sample a child GU within. No fallbacks (adr/0010)."
+                "to sample a child GU within. No fallbacks."
             )
         if parent_gu_name not in self._lookup:
             raise KeyError(
                 f"Source '{self.name}' has no child-GU distribution for parent "
-                f"'{parent_gu_name}'. No fallbacks (adr/0010)."
+                f"'{parent_gu_name}'. No fallbacks."
             )
         return self._lookup[parent_gu_name]
 
@@ -1203,7 +1203,7 @@ class DataSourceManager:
         source = self.get_source(source_name)
         if not source:
             raise KeyError(
-                f"Data source '{source_name}' is not registered. No fallbacks "
-                "(adr/0010) — fix the source name in the config."
+                f"Data source '{source_name}' is not registered. No fallbacks. "
+                "Fix the source name in the config."
             )
         return source.lookup(*args, **kwargs)

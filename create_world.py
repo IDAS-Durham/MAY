@@ -52,8 +52,8 @@ VALID_POPULATION_TYPES = {"matrix", "explicit", "explicit_batch"}
 
 
 def setup_population(config, geo):
-    """Build the PopulationManager, failing loud on bad config or missing data
-    (adr/0010, adr/0004, adr/0005). ``data_dir`` is resolved once and used by
+    """Build the PopulationManager, failing loud on bad config or missing data.
+    ``data_dir`` is resolved once and used by
     every mode; ``type`` is validated against the closed set rather than
     silently dispatching to matrix. Raises PopulationError on any miss."""
     pop_config = config.get("population", {})

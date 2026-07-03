@@ -13,9 +13,6 @@ To add a new pool type:
     def build_my_pool(world, pool_config: dict):
         # Return a list of groups (each group is a list of Person objects)
         ...
-
-Design mirrors may/residence/models.py (Category) and
-may/residence/relationship_rules.py (_get_attribute_getter pattern).
 """
 
 import numpy as np
@@ -125,7 +122,7 @@ def _build_activity_pool(world, pool_config: dict) -> list[list]:
 @dataclass
 class PoolFilter:
     """
-    Absolute single-person filter. Mirrors Category in may/residence/models.py.
+    Absolute single-person filter.
 
     Numerical: person passes if min_value <= attr_value <= max_value.
     Categorical: person passes if attr_value in allowed_values.

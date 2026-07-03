@@ -31,7 +31,7 @@ standard_distributor:
   venue_selection:
     strategy: "closest"
     locate_person_by: "geographical_unit.coordinates"
-    venue_geo_level: "SGU"  # the level this mock population is keyed at (adr/0002)
+    venue_geo_level: "SGU"  # the level this mock population is keyed at
 
   # Fallback to nearest alternative if full
   allocation:
@@ -82,4 +82,4 @@ resident_linked_distributor:
   relationship_venue_property: "residence"
 
   venue_selection:
-    venue_geo_level: "SGU"  # the level this mock population is keyed at (adr/0002)
+    venue_geo_level: "SGU"  # the level this mock population is keyed at

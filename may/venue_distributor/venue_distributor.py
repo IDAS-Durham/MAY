@@ -233,7 +233,7 @@ class VenueDistributor(BaseDistributor):
                 # type — capacity full OR no eligible venue (e.g. no matching sector
                 # nearby). For a workplace distributor that is effectively unemployment.
                 logger.info(
-                    f"  [capacity priority, adr/0016] '{vt}': "
+                    f"  [capacity priority] '{vt}': "
                     f"{len(native) - len(native_unallocated):,}/{len(native):,} non-flagged placed "
                     f"({len(native_unallocated):,} unplaced — no in-boundary {vt}: "
                     f"capacity full or no eligible venue); "

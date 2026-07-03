@@ -19,7 +19,6 @@ venues:
     include_is_residence: true
 
   # Per-type property configuration
-  # We include the 10 categories defined in households_config.yaml
   types:
     household:
       properties: ["BTCode", "HID"]
