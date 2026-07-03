@@ -111,10 +111,6 @@ class WorldSerializer:
         if 'creation_timestamp' in metadata_fields:
             f.attrs['creation_timestamp'] = datetime.now().isoformat()
 
-        if 'random_seed' in metadata_fields:
-            # Try to get seed from world if available
-            f.attrs['random_seed'] = 0  # Default
-
         # Version info
         f.attrs['serialization_version'] = '1.0'
         f.attrs['MAY_version'] = '0.1.0'

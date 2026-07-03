@@ -17,8 +17,7 @@ population:
     # Romantic relationships (serialized as JSON strings for dicts)
     - sexual_orientation  # "heterosexual", "homosexual", "bisexual"
     - cohabiting_couple   # [partner_id] (stable/permanent)
-    - romantic_partners   # {exclusive: [ids], non_exclusive: [ids]} (for legacy/shipped states)
-    - relationship_status # {type: "exclusive"|"non_exclusive"|"no_partner", consensual: bool}
+    - relationship_status # {type: "exclusive"|"no_partner", consensual: bool}
 
 # GEOGRAPHY
 geography:
@@ -117,25 +116,14 @@ venues:
       properties: []
 
 # SUBSETS
-subsets:
-  # Core attributes (always included)
-  # venue reference, subset_index, subset_name, members are ALWAYS serialized
-
-  # No additional properties currently
-  properties: []
+# Core attributes are ALWAYS serialized (venue reference, subset_index,
+# subset_name, members). There is no per-subset property configuration.
 
 # RELATIONSHIPS
 relationships:
-  # What relationship data to include
-
-  # Person → Venue relationships via activity_map
+  # Person → Venue relationships via activity_map. Venue and geography
+  # parent-child hierarchies are always serialized.
   include_activity_map: true
-
-  # Venue parent-child hierarchy
-  include_venue_hierarchy: true
-
-  # Geography parent-child hierarchy
-  include_geography_hierarchy: true
 
 # OUTPUT SETTINGS
 output:
@@ -146,11 +134,7 @@ output:
   # Whether to include metadata
   include_metadata: true
 
-  # Metadata to include
+  # Metadata to include. num_people / num_venues / num_geo_units and the
+  # version stamps are always written when include_metadata is true.
   metadata:
-    - random_seed
     - creation_timestamp
-    - config_files_used
-    - num_people
-    - num_venues
-    - num_geo_units

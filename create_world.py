@@ -343,18 +343,25 @@ def main():
     if serial_config.get("enabled", True):
         logger.info("")
         logger.info("Exporting world to HDF5...")
-        output_dir = pr.resolve(serial_config.get("output_dir", "."))
-        filename = args.filename or serial_config.get("filename", "world_state.h5")
+        try:
+            config_file = serial_config.get("config_file")
+            if not config_file:
+                raise ValueError(
+                    "serialization.enabled is true but serialization.config_file "
+                    "is missing — a serialization schema is required."
+                )
+            output_dir = pr.resolve(serial_config.get("output_dir", "."))
+            filename = args.filename or serial_config.get("filename", "world_state.h5")
 
-        if output_dir != ".":
-            os.makedirs(output_dir, exist_ok=True)
+            if output_dir != ".":
+                os.makedirs(output_dir, exist_ok=True)
 
-        export_path = os.path.join(output_dir, filename)
-        config_file = pr.resolve(serial_config.get("config_file")) if serial_config.get("config_file") else None
-        if config_file:
-            world.export_to_hdf5(export_path, config_file=config_file)
-        else:
-            world.export_to_hdf5(export_path)
+            export_path = os.path.join(output_dir, filename)
+            world.export_to_hdf5(export_path, config_file=pr.resolve(config_file))
+        except Exception as e:
+            logger.error(f"Failed to serialize world to HDF5: {e}")
+            logger.exception(e)
+            sys.exit(1)
 
     return world
 
