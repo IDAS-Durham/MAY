@@ -195,15 +195,18 @@ class TestIDGeneration:
         ids = sorted(v.id for v in vm.get_venues_by_type('school'))
         assert ids == [0, 1, 2]
 
-    def test_ids_are_independent_across_types(self, loaded_geography):
+    def test_ids_are_globally_unique_across_types(self, loaded_geography):
         vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
         df_sch = pd.DataFrame({'name': ['A', 'B'], 'geo_unit': ['SGU_001'] * 2})
         df_hosp = pd.DataFrame({'name': ['H'], 'geo_unit': ['SGU_001']})
         vm.load_venue_type_from_df('school', df_sch)
         vm.load_venue_type_from_df('hospital', df_hosp)
-        # Each type starts at 0 — they are NOT a global counter.
-        assert sorted(v.id for v in vm.get_venues_by_type('school')) == [0, 1]
-        assert [v.id for v in vm.get_venues_by_type('hospital')] == [0]
+        # IDs come from a single global counter, so they never collide across types.
+        school_ids = {v.id for v in vm.get_venues_by_type('school')}
+        hospital_ids = {v.id for v in vm.get_venues_by_type('hospital')}
+        assert len(school_ids) == 2
+        assert len(hospital_ids) == 1
+        assert school_ids.isdisjoint(hospital_ids)
 
 
 class TestYamlConfig:
@@ -457,3 +460,57 @@ class TestGeoUnitLinkage:
         mgu = loaded_geography.get_unit('MGU_01')
         unit_venues = getattr(mgu, 'venues', None) or getattr(mgu, '_venues', [])
         assert venue in unit_venues
+
+
+# ===========================================================================
+# remove_venue
+# ===========================================================================
+
+class TestRemoveVenue:
+
+    def test_remove_venue_deregisters_from_all_lookups(self, loaded_geography):
+        vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
+        sgu = loaded_geography.get_unit('SGU_001')
+        venue = vm.create_venue('hospital', sgu)
+        venue_id = venue.id
+        venue_name = venue.name
+
+        vm.remove_venue(venue)
+
+        assert vm.get_venue(venue_name) is None
+        assert vm.get_venue_by_type_and_id('hospital', venue_id) is None
+        assert vm.get_venue_by_type_and_name('hospital', venue_name) is None
+        assert venue not in vm.get_venues_by_type('hospital')
+        assert venue not in vm.get_all_venues_list()
+        assert venue not in sgu.venues
+
+    def test_remove_venue_raises_if_venue_has_children(self, loaded_geography):
+        vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
+        sgu = loaded_geography.get_unit('SGU_001')
+        school = vm.create_venue('school', sgu)
+        vm.create_child_venue(school, 'classroom')
+
+        with pytest.raises(ValueError):
+            vm.remove_venue(school)
+
+    def test_remove_venue_raises_if_venue_has_subsets(self, loaded_geography):
+        from may.population import Person
+
+        vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
+        sgu = loaded_geography.get_unit('SGU_001')
+        household = vm.create_venue('household', sgu)
+        resident = Person(age=40, sex='male', geographical_unit=sgu)
+        household.add_to_subset(resident, subset_key='residents', activity_name='residence', activity_type='household')
+
+        with pytest.raises(ValueError):
+            vm.remove_venue(household)
+
+    def test_remove_venue_detaches_from_parent_children(self, loaded_geography):
+        vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
+        sgu = loaded_geography.get_unit('SGU_001')
+        school = vm.create_venue('school', sgu)
+        classroom = vm.create_child_venue(school, 'classroom')
+
+        vm.remove_venue(classroom)
+
+        assert classroom not in school.children

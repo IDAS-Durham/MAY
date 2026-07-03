@@ -198,9 +198,10 @@ class SocialContactVisitDistributor:
 
                 # Add contact's residence to this person's visit activity
                 for subset in residence_subsets:
-                    # Avoid duplicates (check by venue ID)
+                    # Avoid duplicates (check by subset identity, not venue
+                    # ID, so distinct subsets at the same venue both record)
                     already_added = any(
-                        s.venue.id == subset.venue.id
+                        s is subset
                         for s in person.activity_map[self.activity_map_key][self.activity_type]
                     )
                     if not already_added:

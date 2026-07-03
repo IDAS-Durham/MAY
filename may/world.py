@@ -117,7 +117,7 @@ class World:
         pop_str = f"{len(self.population.get_all_people()):,} people" if self.population else "no population"
 
         if self.venues:
-            total_venues = len(self.venues.get_all_venues())
+            total_venues = sum(len(d) for d in self.venues.venues_by_type_and_id.values())
             households = self.get_households()
             household_str = f"{len(households)} households"
             other_venues = total_venues - len(households)
@@ -150,7 +150,7 @@ class World:
 
         if self.venues:
             stats['venues'] = {
-                'total_venues': len(self.venues.get_all_venues()),
+                'total_venues': sum(len(d) for d in self.venues.venues_by_type_and_id.values()),
                 'venue_types': len(self.venues.get_venue_types())
             }
 
@@ -324,13 +324,16 @@ def setup_households(geo, population, venues, config, strategy_file=None):
     logger.info("Households are stored in VenueManager:")
     logger.info("  1. venues.get_venues_by_type('household')  -> List of all household Venues")
     logger.info("  2. venues.get_venue_by_type_and_id('household', id)  -> Specific household by ID")
-    logger.info("  3. venues.venues['household_0']  -> Specific household by name")
     logger.info("")
 
     # Show a few example households
     if all_households:
         logger.info("Example Households (5 random):")
-        for household in sample(all_households, min(5, len(all_households))):
+        n = len(all_households)
+        sampled_indices = set(sample(range(n), min(5, n)))
+        for i, household in enumerate(all_households):
+            if i not in sampled_indices:
+                continue
             age_categories = household.properties.get('_age_categories', [])
             composition = household.get_composition(age_categories)
             members = household.get_all_members()

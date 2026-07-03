@@ -334,7 +334,7 @@ def main():
     logger.info("=" * 60)
     logger.info("World creation complete!")
     logger.info(f"Geography: {len(world.geography.get_all_units())} units")
-    logger.info(f"Venues: {len(world.venues.get_all_venues())} venues across {len(venues.get_venue_types())} types")
+    logger.info(f"Venues: {sum(len(d) for d in world.venues.venues_by_type_and_id.values())} venues across {len(venues.get_venue_types())} types")
     logger.info(f"Population: {len(world.population.get_all_people()):,} people")
     logger.info("=" * 60)
 

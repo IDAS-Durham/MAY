@@ -46,6 +46,8 @@ class VenueChildCreator:
         replace_parent_activity=True,
         remove_from_parent=False,
         member_filters=None,
+        exclude_subset_keys=None,
+        include_subset_keys=None,
     ):
         """
         Initialize VenueChildCreator.
@@ -78,7 +80,17 @@ class VenueChildCreator:
             member_filters: Optional list of filters to apply to members before processing.
                            Only members passing all filters will be assigned to child venues.
                            Example: [{"attribute": "age", "type": "numerical", "min": 12}]
+            exclude_subset_keys: Optional iterable of parent subset_key values to skip when
+                                reading parent members (e.g. "guest"). Mutually exclusive
+                                with include_subset_keys.
+            include_subset_keys: Optional iterable of parent subset_key values to restrict
+                                to when reading parent members. Mutually exclusive with
+                                exclude_subset_keys.
         """
+        if exclude_subset_keys is not None and include_subset_keys is not None:
+            raise ValueError(
+                "VenueChildCreator: exclude_subset_keys and include_subset_keys are mutually exclusive"
+            )
         self.parent_venue_type = parent_venue_type
         self.child_venue_type = child_venue_type
         self.group_by_attribute = group_by_attribute
@@ -92,6 +104,8 @@ class VenueChildCreator:
         self.replace_parent_activity = replace_parent_activity
         self.remove_from_parent = remove_from_parent
         self.member_filters = member_filters or []
+        self.exclude_subset_keys = exclude_subset_keys
+        self.include_subset_keys = include_subset_keys
 
         if distribution_strategy not in ('even', 'fill'):
             raise ValueError(
@@ -155,6 +169,8 @@ class VenueChildCreator:
             replace_parent_activity=config.get('replace_parent_activity', True),
             remove_from_parent=config.get('remove_from_parent', False),
             member_filters=config.get('member_filters', []),
+            exclude_subset_keys=config.get('exclude_subset_keys'),
+            include_subset_keys=config.get('include_subset_keys'),
         )
 
         logger.info(f"  Parent type: {instance.parent_venue_type} → Child type: {instance.child_venue_type}")
@@ -215,7 +231,10 @@ class VenueChildCreator:
             parent_venue: Parent Venue object
             world: World object
         """
-        members = parent_venue.get_all_members()
+        members = parent_venue.get_all_members(
+            exclude_subset_keys=self.exclude_subset_keys,
+            include_subset_keys=self.include_subset_keys,
+        )
 
         if not members:
             logger.debug(f"  {parent_venue.name}: No members, skipping")

@@ -78,6 +78,11 @@ pytest tests/test_units/may/population/         # specific module
 
 Note: `pytest` is not in `requirements.txt`. Install separately if you want to run the suite.
 
+## Viewing the world
+There are two codes that can be used for viewing the world.
+[MAY-viewer](https://github.com/mtcorread/MAY-viewer)
+[MAY-world-visualiser](https://github.com/gavdoubleu/may_world_visualiser)
+
 ## Requirements
 
 Python 3.13+ and the packages pinned in `requirements.txt` (`numpy`, `pandas`, `scipy`, `numba`, `h5py`, `PyYAML`).

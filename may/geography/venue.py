@@ -16,9 +16,9 @@ class Venue:
     Generic design that works for any geography, past or present.
 
     Attributes:
-      id (id):
-        Unique numeric ID for the venue. Generated using id(),
-        so will essentially be the memory location of the Venue instance.
+      id (int):
+        Globally unique integer ID, assigned once at construction via a
+        class-level counter. Immutable after creation.
       name (str):
         A string giving the name of the venue, e.g. "St Mary's Hospital".
       type :
@@ -32,7 +32,7 @@ class Venue:
     """
 
     __slots__ = [
-        'id',
+        '_id',
         'name',
         'type',
         'geographical_unit',
@@ -42,6 +42,22 @@ class Venue:
         'parent',      # Parent venue (e.g., School for a Classroom)
         'children',    # List of child venues (e.g., Classrooms for a School)
     ]
+
+    _next_venue_id: int = 0
+
+    @classmethod
+    def _allocate_id(cls) -> int:
+        allocated = cls._next_venue_id
+        cls._next_venue_id += 1
+        return allocated
+
+    @classmethod
+    def reset_id_counter(cls) -> None:
+        cls._next_venue_id = 0
+
+    @property
+    def id(self) -> int:
+        return self._id
 
     def __init__(self,
                  name: str,
@@ -53,7 +69,7 @@ class Venue:
                  parent=None,
                  children=None,
                  ):
-        self.id = id(self)              # Unique numeric ID (generated)
+        self._id = Venue._allocate_id()
         self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
         self.type = venue_type          # Type of venue (e.g., "hospital", "school")
         self.geographical_unit = geographical_unit  # Reference to GeographicalUnit
@@ -220,23 +236,85 @@ class Venue:
         if venue_type_key not in person.activity_map[activity_name]:
             person.activity_map[activity_name][venue_type_key] = []
 
-        # Add subset to person's activity_map (check by venue ID to avoid duplicates)
+        # Add subset to person's activity_map (check by subset identity, not
+        # venue ID, so multiple distinct subsets at the same venue can both
+        # be recorded - e.g. one per feast at a venue hosting several fairs)
         subset_already_added = any(
-            s.venue.id == self.id
+            s is subset
             for s in person.activity_map[activity_name][venue_type_key]
         )
         if not subset_already_added:
             person.activity_map[activity_name][venue_type_key].append(subset)
 
-    def get_all_members(self):
+    def migrate_subsets_to(self, new_venue):
+        """
+        Move every Subset from this venue to new_venue, keeping members'
+        activity_map entries consistent with the new venue's type.
+
+        Reassigns each migrated Subset's subset_index to a fresh value
+        scoped to new_venue (the old index may already be taken there,
+        and (venue_id, subset_index) must stay unique for serialisation).
+
+        Args:
+            new_venue: Venue to move this venue's subsets into.
+
+        Raises:
+            ValueError: if new_venue already has a subset under one of
+                this venue's subset_keys.
+        """
+        for subset_key in self.subsets:
+            if subset_key in new_venue.subsets:
+                raise ValueError(
+                    f"Cannot migrate subset '{subset_key}' from {self} to "
+                    f"{new_venue}: new_venue already has a subset under that key."
+                )
+
+        for subset_key, subset in self.subsets.items():
+            subset.subset_index = len(new_venue.subsets)
+            subset.venue = new_venue
+            new_venue.subsets[subset_key] = subset
+
+            for person in subset.members:
+                for activity_name, venue_type_map in person.activity_map.items():
+                    if not isinstance(venue_type_map, dict):
+                        continue
+                    found_key = None
+                    for venue_type_key, subsets_list in venue_type_map.items():
+                        if any(s is subset for s in subsets_list):
+                            found_key = venue_type_key
+                            break
+                    if found_key is None:
+                        continue
+                    venue_type_map[found_key].remove(subset)
+                    if not venue_type_map[found_key]:
+                        del venue_type_map[found_key]
+                    target_key = new_venue.type if found_key == self.type else found_key
+                    venue_type_map.setdefault(target_key, []).append(subset)
+
+        self.subsets.clear()
+
+    def get_all_members(self, exclude_subset_keys=None, include_subset_keys=None):
         """
         Get all members from all subsets.
+
+        Args:
+            exclude_subset_keys: Optional iterable of subset_key values to skip.
+            include_subset_keys: Optional iterable of subset_key values to restrict to.
+                                  Mutually exclusive with exclude_subset_keys.
 
         Returns:
             List of Person objects
         """
+        if exclude_subset_keys is not None and include_subset_keys is not None:
+            raise ValueError(
+                "get_all_members: exclude_subset_keys and include_subset_keys are mutually exclusive"
+            )
         members = []
-        for subset in self.subsets.values():
+        for subset_key, subset in self.subsets.items():
+            if exclude_subset_keys is not None and subset_key in exclude_subset_keys:
+                continue
+            if include_subset_keys is not None and subset_key not in include_subset_keys:
+                continue
             members.extend(list(subset.members))
         return members
 

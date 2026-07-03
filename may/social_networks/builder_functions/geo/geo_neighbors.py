@@ -100,7 +100,8 @@ def _extract_coordinates(geo_units: list['GeographicalUnit']) -> [npt.NDArray, l
     Extract coordinates from geographical units as a numpy array.
 
     Args:
-        geo_units (list[GeographicalUnit]): List of geographical units with coordinates.
+        geo_units (list[GeographicalUnit]): List of geographical units with coordinates,
+            stored as (latitude, longitude) per GeographicalUnit's docstring.
 
     Returns:
         np.ndarray: Array of shape (n, 2) with (longitude, latitude) pairs,
@@ -110,14 +111,14 @@ def _extract_coordinates(geo_units: list['GeographicalUnit']) -> [npt.NDArray, l
 
     if not units_with_coords:
         return None, None
-    
+
     if len(units_with_coords) < 2:
         logger.warning("Need at least 2 units with coordinates")
         return None, None
 
-    # Extract coordinates as (lon, lat) - note: libpysal expects (x, y) = (lon, lat)
+    # unit.coordinates is (lat, lon); libpysal/cKDTree expect (x, y) = (lon, lat), so swap.
     coordinates = np.array([
-        [*getattr(unit, 'coordinates', None)]  # (lon, lat)
+        unit.coordinates[::-1]  # (lat, lon) -> (lon, lat)
         for unit in units_with_coords
     ])
 
