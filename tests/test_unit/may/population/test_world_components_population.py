@@ -5,7 +5,7 @@ from may.population.person import Person
 
 @pytest.fixture
 def loaded_geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography")
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 
@@ -77,8 +77,7 @@ def test_population_manager_matrix_load(loaded_geography):
     # Total expected based on CSVs:
     # Male: SGU_001 (1), SGU_002 (3), SGU_004 (1) = 5
     # Female: SGU_001 (1), SGU_002 (3), SGU_003 (1) = 5
-    # Total = 10
-    
+
     assert len(pm.people) == 10
     
     stats = pm.get_statistics()

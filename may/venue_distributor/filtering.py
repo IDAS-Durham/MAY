@@ -40,10 +40,9 @@ class FilteringManager:
                 )
                 survivors = self.distributor.population_arrays['people'][filtered_indices].tolist()
 
-                # Exclusions can't be vectorized (they depend on residence.properties,
-                # e.g. household original_pattern), so apply them scalar-ly to the
-                # already-filtered survivors. Skipping this was silently ignoring
-                # eligibility.exclude rules for any run with >1000 eligible people.
+                # Exclusions depend on residence.properties (e.g. household
+                # original_pattern), so apply them scalar-ly to the
+                # already-filtered survivors.
                 pre_processed_exclude = getattr(self.distributor, '_pre_processed_exclude', {})
                 if pre_processed_exclude:
                     survivors = [

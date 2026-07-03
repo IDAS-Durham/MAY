@@ -1,5 +1,5 @@
 """
-Phase 5 tracer bullet: intra_geo_unit end-to-end through the full pipeline.
+intra_geo_unit end-to-end through the full pipeline.
 YAML → pool → build → store.
 """
 import pytest

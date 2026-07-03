@@ -122,7 +122,7 @@ class HouseholdPromoter:
             self._households_by_pattern = {}
             all_households = self.distributor.venue_manager.get_venues_by_type("household")
             for hh in all_households:
-                pattern = hh.properties.get('actual_pattern', '')
+                pattern = hh.properties.get('allocation_pattern', '')
                 if pattern not in self._households_by_pattern:
                     self._households_by_pattern[pattern] = []
                 self._households_by_pattern[pattern].append(hh)
@@ -161,15 +161,9 @@ class HouseholdPromoter:
         if refresh_pools:
             self.distributor._prepare_person_pools(refresh=True)
 
-        # Get promotion config
+        # The presence of a household_promotion step is the switch — promotion
+        # runs where the strategy invokes it.
         promotion_config = self.distributor.config.get('promotion', {})
-        if not promotion_config.get('enabled', False):
-            logger.warning("Promotion is disabled in config")
-            return {
-                'round_name': round_label,
-                'people_added': 0,
-                'households_promoted': 0
-            }
 
         # Get priority order
         priority_config = promotion_config.get('priority', {})
@@ -222,7 +216,7 @@ class HouseholdPromoter:
                         break
 
                     # Check if this household can accommodate this category
-                    pattern_str = household.properties.get('actual_pattern', '')
+                    pattern_str = household.properties.get('allocation_pattern', '')
                     pattern = CompositionPattern.from_string(pattern_str)
 
                     # Try promotion if needed
@@ -266,7 +260,7 @@ class HouseholdPromoter:
 
                     # Update household pattern if promoted
                     if promoted and household.id not in promoted_households:
-                        household.properties['actual_pattern'] = current_pattern.to_string()
+                        household.properties['allocation_pattern'] = current_pattern.to_string()
                         households_promoted_count += 1
                         promoted_households.add(household.id)
                         logger.debug(f"    Promoted household {household.id}: {pattern_str} -> {current_pattern.to_string()}")
@@ -279,8 +273,7 @@ class HouseholdPromoter:
                     if not available_people:
                         continue
 
-                    # Create a temporary list of IDs from the pool (we use current state of dict)
-                    # We can't use deque for complex dictionary removals, so we just take from the front
+                    # Take IDs from the front of the pool dict (insertion order preserved)
                     added_to_this = 0
                     
                     # Determine how many we can add
@@ -459,7 +452,7 @@ class HouseholdPromoter:
 
                     # Promote household if this is the first person we're adding
                     if added_to_this_household == 0 and household.id not in promoted_households:
-                        household.properties['actual_pattern'] = target_pattern_str
+                        household.properties['allocation_pattern'] = target_pattern_str
                         households_promoted_count += 1
                         promoted_households.add(household.id)
                         logger.debug(f"  Promoted household {household.id}: {source_pattern} → {target_pattern_str}")

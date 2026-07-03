@@ -71,7 +71,7 @@ venue_selection:
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to companies near their WORK location, not home
   # Note: workplace_sgu is the SGU code, stored in person.properties
-  person_location_attribute: "properties.workplace_sgu"
+  locate_person_by: "properties.workplace_sgu"
 
   # Batch at SGU level (workplace) for better performance
   # Even though companies are at MGU level, we batch people by their specific workplace SGU
@@ -90,8 +90,8 @@ allocation:
   capacity_column: "employee_count"
 
   capacity_handling:
-    if_missing: "skip"  # Skip companies without employee_count
-    if_zero: "skip"     # Skip companies with 0 employees
+    if_missing: "skip"
+    if_zero: "skip"
 
   track_capacity: true
   when_full: "exclude"  # Remove full companies from options

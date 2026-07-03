@@ -1,6 +1,4 @@
-# ============================================================================
 # Commute Mode Assignment Configuration
-# ============================================================================
 # Assigns method of travel to work from UK Census 2021 TS061, sampled on the
 # person's residence OA (= SGU). Residence-side mode mix (D2). Excludes the
 # "Work mainly at or from home" column and renormalizes over the remaining 10
@@ -8,17 +6,16 @@
 #
 # Assignment Level: person
 # Dependencies: work_mode (from workplace_assignment), residence geographical_unit
-# ============================================================================
 
-attribute:
-  name: "commute_mode"
-  description: "Method of travel to work (TS061), residence-side"
-  data_type: "categorical"
+step:
   assignment_level: "person"
 
-# ============================================================================
+attributes:
+  - name: "commute_mode"
+    description: "Method of travel to work (TS061), residence-side"
+    data_type: "categorical"
+
 # Filters
-# ============================================================================
 # Assign commute_mode only to people who ACTUALLY got a physical workplace
 # venue assigned (this config runs after the workplace distributors). All four
 # workplace distributors place workers in the "worker" subset, so the gate is:
@@ -51,21 +48,17 @@ filters:
     venue_types: ["office", "classroom", "hospital", "care_home"]
     subset_names: ["worker"]
 
-# ============================================================================
 # Required Attributes (Dependencies)
-# ============================================================================
 required_attributes:
   - name: "work_mode"
     description: "Work mode must be assigned first (workplace_assignment)"
     required: true
-    error_if_missing: true
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   travel_to_work_mode:
     type: "csv_lookup"
+    format: "multi_key"
     description: "TS061 method-of-travel-to-work counts by residence OA (SGU)"
 
     files:
@@ -98,22 +91,7 @@ data_sources:
           walk: "On foot"
           other: "Other method of travel to work"
 
-    # National TS061 shares (WFH-excluded), used when an OA is missing.
-    fallback:
-      tube: 0.04
-      train: 0.05
-      bus: 0.07
-      taxi: 0.01
-      motorcycle: 0.01
-      car_solo: 0.58
-      car_passenger: 0.05
-      bike: 0.03
-      walk: 0.15
-      other: 0.01
-
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Sample one travel-to-work mode from residence-OA distribution"

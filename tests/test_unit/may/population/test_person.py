@@ -1,5 +1,5 @@
 """
-Unit tests for Person class (person.py)
+Unit tests for Person class
 
 Tests the Person class that represents individual agents in the simulation.
 """
@@ -127,10 +127,8 @@ class TestPersonInitDoesNotAliasCallerState:
         assert p1.properties is not shared
 
     def test_activity_map_kwarg_is_assigned(self, mock_geo_unit):
-        """Passing activity_map=<dict> used to leave self.activity_map unset
-        (only the `is None` branch assigned), and __slots__ blocks the usual
-        attribute-default fallback — so the very first read raised
-        AttributeError."""
+        """Passing activity_map=<dict> assigns the slot, so the first read
+        returns the provided mapping instead of raising AttributeError."""
         am = {'residence': {'household': []}}
         p = Person(
             age=1, sex='male', geographical_unit=mock_geo_unit, activity_map=am

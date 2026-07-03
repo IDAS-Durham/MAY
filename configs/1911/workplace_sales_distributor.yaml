@@ -9,7 +9,7 @@ settings:
   use_spatial_index: false      # Not needed with consider_by: "geo_unit"
 
 venue_selection:
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
   venue_geo_level: "MGU"        # Search ALL venues in the MGU
   batch_geo_level: "SGU"        # Batch workers by SGU (fast, uses SGU centroid for distance)
   consider_by: "geo_unit"       # O(1) dict lookup — no spatial index needed

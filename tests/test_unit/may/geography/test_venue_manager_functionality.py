@@ -14,19 +14,15 @@ import pandas as pd
 import pytest
 
 from may.geography import Geography
-from may.geography.venue_manager import VenueManager
+from may.geography.venue_manager import VenueManager, VenueError
 
 
 @pytest.fixture
 def loaded_geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography")
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 
-
-# ===========================================================================
-# load_venue_type_from_df — coordinates parsing
-# ===========================================================================
 
 class TestCoordinatesParsing:
 
@@ -74,10 +70,6 @@ class TestCoordinatesParsing:
         assert vm.get_venue('Foo').coordinates is None
 
 
-# ===========================================================================
-# load_venue_type_from_df — property column extraction
-# ===========================================================================
-
 class TestPropertyColumns:
 
     def test_extra_columns_become_venue_properties(self, loaded_geography):
@@ -124,10 +116,6 @@ class TestPropertyColumns:
         assert v.properties['capacity'] == 500
 
 
-# ===========================================================================
-# load_venue_type_from_df — geographic column resolution
-# ===========================================================================
-
 class TestGeoColumnResolution:
 
     def test_sgu_column_is_resolved(self, loaded_geography):
@@ -154,10 +142,6 @@ class TestGeoColumnResolution:
         with pytest.raises(ValueError, match="Missing required geographical column"):
             vm.load_venue_type_from_df('school', df)
 
-
-# ===========================================================================
-# load_venue_type_from_df — geographic filtering and per-row skip
-# ===========================================================================
 
 class TestGeographicFiltering:
 
@@ -199,10 +183,6 @@ class TestGeographicFiltering:
         )
 
 
-# ===========================================================================
-# load_venue_type_from_df — ID generation
-# ===========================================================================
-
 class TestIDGeneration:
 
     def test_ids_are_sequential_within_a_type(self, loaded_geography):
@@ -229,34 +209,36 @@ class TestIDGeneration:
         assert school_ids.isdisjoint(hospital_ids)
 
 
-# ===========================================================================
-# load_from_yaml_config — sad paths and settings
-# ===========================================================================
-
 class TestYamlConfig:
 
     def test_missing_config_file_raises(self, loaded_geography, tmp_path):
         vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(VenueError):
             vm.load_from_yaml_config(str(tmp_path / "does_not_exist.yaml"))
 
-    def test_empty_config_file_is_no_op(self, loaded_geography, tmp_path, caplog):
+    def test_empty_config_file_fails_loud(self, loaded_geography, tmp_path):
         config = tmp_path / "empty.yaml"
         config.write_text("")
         vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
-        with caplog.at_level(logging.WARNING, logger='venuemanager'):
+        with pytest.raises(VenueError):
             vm.load_from_yaml_config(str(config))
-        assert vm.get_all_venues_list() == []
-        assert any('Empty configuration' in r.message for r in caplog.records)
 
-    def test_config_without_venue_types_warns(self, loaded_geography, tmp_path, caplog):
+    def test_config_without_venue_types_key_fails_loud(self, loaded_geography, tmp_path):
         config = tmp_path / "no_types.yaml"
         config.write_text("settings:\n  filter_by_geography: true\n")
         vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
-        with caplog.at_level(logging.WARNING, logger='venuemanager'):
+        with pytest.raises(VenueError):
             vm.load_from_yaml_config(str(config))
+
+    def test_explicit_empty_venue_types_is_valid_no_op(self, loaded_geography, tmp_path):
+        """An explicit `venue_types: {}` is a legitimate 'this world has no
+        venues' declaration (e.g. a scenario with no venue data yet) — it must
+        NOT raise, unlike a missing venue_types key or empty file."""
+        config = tmp_path / "no_venues.yaml"
+        config.write_text("venue_types: {}\n")
+        vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
+        vm.load_from_yaml_config(str(config))
         assert vm.get_all_venues_list() == []
-        assert any('No venue types defined' in r.message for r in caplog.records)
 
     def test_settings_filter_by_geography_is_honoured(self, loaded_geography, tmp_path):
         """Yaml `settings.filter_by_geography: false` must override the
@@ -309,55 +291,6 @@ class TestYamlConfig:
         assert vm.get_venues_by_type('household') == []
 
 
-# ===========================================================================
-# load_from_csv — auto-discovery
-# ===========================================================================
-
-class TestAutoDiscovery:
-
-    def test_auto_discovers_files_and_singularises_types(self, loaded_geography, tmp_path):
-        """Files in data_dir are picked up automatically; their type names
-        are inferred by trimming a trailing 's' or 'ies' → 'y'."""
-        venues_dir = tmp_path / "venues"
-        venues_dir.mkdir()
-        (venues_dir / "hospitals.csv").write_text(
-            "name,geo_unit\nGen,SGU_001\n"
-        )
-        (venues_dir / "companies.csv").write_text(
-            "name,geo_unit\nAcme,SGU_001\n"
-        )
-        # Underscore-prefixed files are ignored by contract.
-        (venues_dir / "_skip.csv").write_text(
-            "name,geo_unit\nIgnore,SGU_001\n"
-        )
-        vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
-        vm.load_from_csv()
-        assert sorted(vm.get_venue_types()) == ['company', 'hospital']
-        assert vm.get_venue('Gen').type == 'hospital'
-        assert vm.get_venue('Acme').type == 'company'
-
-    def test_missing_data_dir_warns_and_returns(self, loaded_geography, tmp_path, caplog):
-        missing = tmp_path / "does_not_exist"
-        vm = VenueManager(geography=loaded_geography, data_dir=str(missing))
-        with caplog.at_level(logging.WARNING, logger='venuemanager'):
-            vm.load_from_csv()
-        assert vm.get_all_venues_list() == []
-        assert any('Venue directory not found' in r.message for r in caplog.records)
-
-    def test_empty_data_dir_warns_and_returns(self, loaded_geography, tmp_path, caplog):
-        venues_dir = tmp_path / "empty"
-        venues_dir.mkdir()
-        vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
-        with caplog.at_level(logging.WARNING, logger='venuemanager'):
-            vm.load_from_csv()
-        assert vm.get_all_venues_list() == []
-        assert any('No venue CSV files found' in r.message for r in caplog.records)
-
-
-# ===========================================================================
-# Residence helpers
-# ===========================================================================
-
 class TestResidenceHelpers:
 
     def _vm_with_residence_config(self, geo, tmp_path):
@@ -408,10 +341,6 @@ class TestResidenceHelpers:
         assert {v.name for v in residences} == {'HomeA', 'HomeB'}
         assert all(v.type == 'care_home' for v in residences)
 
-
-# ===========================================================================
-# export_venues_to_csv
-# ===========================================================================
 
 class TestExportVenuesToCsv:
 
@@ -504,10 +433,6 @@ class TestExportVenuesToCsv:
         # Empty manager → empty file (pandas writes an empty DataFrame).
         # The contract is just: no exception, file exists.
 
-
-# ===========================================================================
-# Geographical-unit linkage on add_venue / create_venue
-# ===========================================================================
 
 class TestGeoUnitLinkage:
 

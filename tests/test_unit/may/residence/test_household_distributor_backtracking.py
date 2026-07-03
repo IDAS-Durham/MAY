@@ -12,7 +12,7 @@ import numpy as np
 
 @pytest.fixture
 def geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography")
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 

@@ -8,9 +8,7 @@ from may.social_networks.builder_functions.filters_and_constraints.filters impor
 )
 
 
-# ---------------------------------------------------------------------------
 # helpers
-# ---------------------------------------------------------------------------
 
 def _range_filter(attribute: str, range_val: float) -> ConnectionFilter:
     return ConnectionFilter(attribute=attribute, match='range', range=range_val)
@@ -28,9 +26,7 @@ def _local_attr_arrays_same(values: list) -> dict:
     return {'group': np.array(values, dtype=object)}
 
 
-# ---------------------------------------------------------------------------
 # encode_connection_filters_for_numba
-# ---------------------------------------------------------------------------
 
 class TestEncodeConnectionFilters:
     def test_range_filter_encoded_correctly(self):
@@ -74,9 +70,7 @@ class TestEncodeConnectionFilters:
             assert stacked[i, col] == pytest.approx(v, abs=1e-4)
 
 
-# ---------------------------------------------------------------------------
 # _check_connection_filters_numba
-# ---------------------------------------------------------------------------
 
 class TestCheckConnectionFiltersNumba:
     def _encode_range(self, values, range_val):

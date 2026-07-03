@@ -6,9 +6,7 @@ from may.social_networks.builder_functions.numba_random import _build_connection
 from may.social_networks import SocialNetworkBuilder
 
 
-# ============================================================================
 # _build_connection_counts unit tests
-# ============================================================================
 
 def test_flat_distribution():
     config = {"mean_count": 3}
@@ -52,12 +50,10 @@ def test_count_capped_at_127():
     assert (counts == 127).all()
 
 
-# ============================================================================
 # End-to-end: degree_variants flows through the builder
-# ============================================================================
 
 def test_degree_variants_end_to_end(toy_world):
-    """Super-connectors config doesn't break the builder and mean count rises."""
+    """Super-connectors config builds successfully and raises the mean count."""
     config = {
         "networks": [{
             "name": "work",

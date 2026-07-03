@@ -1,6 +1,4 @@
-# ============================================================================
 # Specific Workplace Distributor - Classrooms (P Sector)
-# ============================================================================
 # This distributor allocates education sector (P) workers to classrooms.
 # Access via: person.activity_map['primary_activity'] -> classroom venue
 #
@@ -9,11 +7,8 @@
 # - Location-based (uses workplace_sgu for geographical matching)
 # - Fixed capacity: 1 teacher per classroom
 # - Runs AFTER other education allocations
-# ============================================================================
 
-# ============================================================================
 # BASIC INFO
-# ============================================================================
 distributor_name: "specific_workplace_classrooms_distributor"
 venue_type: "classroom"
 description: "Distribute education sector (P) workers to classrooms (1 per classroom)"
@@ -25,9 +20,7 @@ activity_map_key: "primary_activity"
 # Subset to add workers to
 subset_key: "worker"
 
-# ============================================================================
 # ELIGIBILITY: Who can be allocated?
-# ============================================================================
 
 eligibility:
 
@@ -66,9 +59,7 @@ eligibility:
       # Case sensitivity
       case_sensitive: false
 
-# ============================================================================
 # VENUE SELECTION: How to pick eligible venues?
-# ============================================================================
 
 venue_selection:
   # Use geographical hierarchy matching
@@ -80,7 +71,7 @@ venue_selection:
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to classrooms near their WORK location, not home
-  person_location_attribute: "properties.workplace_sgu"
+  locate_person_by: "properties.workplace_sgu"
 
   # Batch at SGU level (workplace) for better performance
   batch_geo_level: "SGU"
@@ -89,9 +80,7 @@ venue_selection:
   filter_by_geography: true
   respect_capacity: true
 
-# ============================================================================
 # ALLOCATION STRATEGY: How to assign person to venue?
-# ============================================================================
 
 allocation:
   # Allocation strategy
@@ -106,9 +95,7 @@ allocation:
   # Batch processing for performance
   batch_by: "geo_unit"
 
-# ============================================================================
 # EXECUTION SETTINGS
-# ============================================================================
 
 settings:
   # Execution order (higher = earlier)
@@ -122,16 +109,12 @@ settings:
   verbose: true
   log_summary: true
 
-# ============================================================================
 # FALLBACK BEHAVIOR
-# ============================================================================
 
 fallback:
   strategy: "skip"  # Skip if no matching classrooms found
 
-# ============================================================================
 # NOTES
-# ============================================================================
 #
 # ALLOCATION LOGIC:
 #
@@ -161,4 +144,3 @@ fallback:
 # - Classrooms inherit geo_unit from parent school
 # - Access via person.activity_map['primary_activity']
 #
-# ============================================================================

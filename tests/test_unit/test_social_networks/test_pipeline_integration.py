@@ -1,5 +1,5 @@
 """
-Phase 7: two networks, different storage keys, built in one pipeline call.
+Two networks, different storage keys, built in one pipeline call.
 Verifies sequencing, independence, and no shared state between networks.
 """
 import pytest
@@ -57,7 +57,7 @@ def test_both_networks_have_connections(toy_world):
 
 
 def test_ordering_respected_first_network_built_first(toy_world):
-    """Second network does not overwrite first network's key."""
+    """Each network keeps its own storage key when built in sequence."""
     config = {
         "networks": [
             {

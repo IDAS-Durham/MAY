@@ -1,19 +1,17 @@
 """
-Phase 8: local_social_network, spatial_social_network, bounded_distance builders.
+local_social_network, spatial_social_network, bounded_distance builders.
 
 local_social_network is tested end-to-end (no coordinates needed).
-spatial_social_network and bounded_distance require geo coordinates —
+spatial_social_network and bounded_distance require geo coordinates and are
 tested only for registration; their underlying algorithms are covered
-by existing create_networks tests.
+by the create_networks tests.
 """
 import pytest
 
 from may.social_networks import network_type_builders, SocialNetworkBuilder
 
 
-# ---------------------------------------------------------------------------
 # Registration
-# ---------------------------------------------------------------------------
 
 def test_local_social_network_registered():
     assert "local_social_network" in network_type_builders
@@ -27,9 +25,7 @@ def test_bounded_distance_registered():
     assert "bounded_distance" in network_type_builders
 
 
-# ---------------------------------------------------------------------------
 # local_social_network end-to-end
-# ---------------------------------------------------------------------------
 
 def _local_config(storage_key="contacts_local", mean_count=2):
     return {

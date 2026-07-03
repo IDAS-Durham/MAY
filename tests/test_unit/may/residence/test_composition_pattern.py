@@ -275,10 +275,10 @@ def test_single_category():
     assert cp.requirements == [("gte", 5)]
     assert cp.to_string() == ">=5"
 
-# 11. Tests added after audit — filling gaps
+# 11. Operator and demotion edge cases
 
 def test_demote_lte_operator_is_skipped(priority_order):
-    """lte operators should NOT be demotable by demote_once — only gte and exact are."""
+    """demote_once demotes only gte and exact operators, never lte."""
     cp = CompositionPattern(
         original_pattern="test",
         requirements=[("lte", 3), ("exact", 0), ("exact", 0), ("exact", 0)]
@@ -336,9 +336,9 @@ def test_demotion_validation_rejects_kids_without_adults(validation_rules, cat_m
         results.append((current.to_string(), is_valid))
         current = current.demote_once(priority_order)
     
-    # After kids demotes to 0, we no longer trigger the rule
-    # But the critical step is "0 >=0 1 0" -> "0 >=0 0 0" which is fine.
-    # The interesting step is if we had "1 0 0 0" — let's test that directly.
+    # Once kids demote to 0, the supervision rule stops being triggered.
+    # The step "0 >=0 1 0" -> "0 >=0 0 0" stays valid; the problematic case is
+    # a pattern like "1 0 0 0", tested directly below.
     bad_pattern = CompositionPattern(
         original_pattern="test", requirements=[("exact", 1), ("exact", 0), ("exact", 0), ("exact", 0)]
     )
@@ -371,7 +371,7 @@ def test_original_pattern_immutable_after_demotion(priority_order):
     assert cp1.requirements != original_reqs
 
 def test_promote_lte_is_not_promoted(promotion_priority):
-    """lte operators should NOT be promoted — only exact operators are."""
+    """promote_once promotes only exact operators, never lte."""
     cp = CompositionPattern(
         original_pattern="test",
         requirements=[("gte", 0), ("lte", 3), ("gte", 2), ("gte", 0)]

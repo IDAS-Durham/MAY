@@ -92,9 +92,32 @@ def test_romantic_distributor_exhaustion(mock_romantic_world):
     assert 'sexual_orientation' in people[8].properties
 
 
-# ---------------------------------------------------------------------------
+def test_passes_filters_semantics():
+    """eligibility.global_filters: numerical min/max, categorical, missing-attr fails."""
+    from may.relationships.romantic_relationships.romantic_distributor import RomanticDistributor
+
+    cfg = {
+        "name": "t",
+        "eligibility": {"global_filters": [
+            {"attribute": "age", "type": "numerical", "min": 16, "max": 120},
+            {"attribute": "sex", "type": "categorical", "values": ["male", "female"]},
+        ]},
+        "sexual_orientations": {"types": ["heterosexual"]},
+    }
+    rd = RomanticDistributor(MockWorld(MockPopulation([])), cfg)
+
+    assert rd._passes_filters(MockPerson(1, 30, "male")) is True
+    assert rd._passes_filters(MockPerson(2, 15, "male")) is False        # below min
+    assert rd._passes_filters(MockPerson(3, 30, "nonbinary")) is False   # not in values
+    assert rd._passes_filters(MockPerson(4, None, "male")) is False      # missing age → fails
+
+    # No filters → everyone eligible.
+    rd2 = RomanticDistributor(MockWorld(MockPopulation([])),
+                              {"name": "t", "sexual_orientations": {"types": ["heterosexual"]}})
+    assert rd2._passes_filters(MockPerson(5, 5, "male")) is True
+
+
 # Data-source path: per-MSOA raking should make LGB share track local marginals
-# ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -126,11 +149,11 @@ def test_romantic_distributor_handles_75plus_via_extrapolation():
     cfg = yaml.safe_load(
         (REPO_ROOT / "configs/2021/relationships/romantic_relationships.yaml").read_text()
     )
-    cfg["data_sources"]["prevalence_path"] = str(
-        REPO_ROOT / cfg["data_sources"]["prevalence_path"]
+    cfg["data_sources"]["demographic_distribution"]["path"] = str(
+        REPO_ROOT / "data/population/sexual_orientation/orientation_prevalence_extended.csv"
     )
-    cfg["data_sources"]["msoa_marginal_path"] = str(
-        REPO_ROOT / cfg["data_sources"]["msoa_marginal_path"]
+    cfg["data_sources"]["geo_distribution"]["path"] = str(
+        REPO_ROOT / "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
     )
 
     people = [
@@ -150,9 +173,7 @@ def test_romantic_distributor_handles_75plus_via_extrapolation():
         )
 
 
-# ---------------------------------------------------------------------------
 # Stage 1: per-MSOA same-sex couple probability lookup
-# ---------------------------------------------------------------------------
 
 
 def test_relationship_rules_resolves_same_category_per_area(tmp_path):

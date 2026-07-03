@@ -1,9 +1,7 @@
 # Serialization Configuration for HDF5 Export
 # Specifies which properties and attributes to include in C++ world state
 
-# =============================================
 # POPULATION
-# =============================================
 population:
   # Core attributes (always included)
   # id, age, sex, geographical_unit are ALWAYS serialized
@@ -19,12 +17,9 @@ population:
     # Romantic relationships (serialized as JSON strings for dicts)
     - sexual_orientation  # "heterosexual", "homosexual", "bisexual"
     - cohabiting_couple   # [partner_id] (stable/permanent)
-    - romantic_partners   # {exclusive: [ids], non_exclusive: [ids]} (for legacy/shipped states)
-    - relationship_status # {type: "exclusive"|"non_exclusive"|"no_partner", consensual: bool}
+    - relationship_status # {type: "exclusive"|"no_partner", consensual: bool}
 
-# =============================================
 # GEOGRAPHY
-# =============================================
 geography:
   # Core attributes (always included)
   # id, name, level, parent/children relationships are ALWAYS serialized
@@ -35,9 +30,7 @@ geography:
   # Additional properties to include from geographical_unit.properties dict
   properties: []
 
-# =============================================
 # VENUES
-# =============================================
 venues:
   # Global venue settings
   global:
@@ -71,8 +64,7 @@ venues:
 
     care_home:
       properties:
-        # Don't include capacity numbers - use actual resident counts
-        # Don't include slot capacities - can derive from residents
+        # Uses actual resident counts; slot capacities derive from residents.
         []
 
     company:
@@ -123,34 +115,17 @@ venues:
     bus_line:
       properties: []
 
-# =============================================
 # SUBSETS
-# =============================================
-subsets:
-  # Core attributes (always included)
-  # venue reference, subset_index, subset_name, members are ALWAYS serialized
+# Core attributes are ALWAYS serialized (venue reference, subset_index,
+# subset_name, members). There is no per-subset property configuration.
 
-  # No additional properties currently
-  properties: []
-
-# =============================================
 # RELATIONSHIPS
-# =============================================
 relationships:
-  # What relationship data to include
-
-  # Person → Venue relationships via activity_map
+  # Person → Venue relationships via activity_map. Venue and geography
+  # parent-child hierarchies are always serialized.
   include_activity_map: true
 
-  # Venue parent-child hierarchy
-  include_venue_hierarchy: true
-
-  # Geography parent-child hierarchy
-  include_geography_hierarchy: true
-
-# =============================================
 # OUTPUT SETTINGS
-# =============================================
 output:
   # HDF5 compression
   compression: "gzip"
@@ -159,11 +134,7 @@ output:
   # Whether to include metadata
   include_metadata: true
 
-  # Metadata to include
+  # Metadata to include. num_people / num_venues / num_geo_units and the
+  # version stamps are always written when include_metadata is true.
   metadata:
-    - random_seed
     - creation_timestamp
-    - config_files_used
-    - num_people
-    - num_venues
-    - num_geo_units

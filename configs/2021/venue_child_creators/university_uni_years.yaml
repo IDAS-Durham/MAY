@@ -30,11 +30,7 @@ attribute_mapping:
 
 # Maximum students per uni_year venue
 # If a year has more students than this, multiple uni_year venues will be created
-max_capacity: 25
-
-# Minimum students needed to create a uni_year venue
-# If a university has only 3 students aged 21, don't create a separate venue
-min_capacity: 1
+child_max_size: 25
 
 # Properties to add to each created uni_year venue
 child_properties:
@@ -47,9 +43,7 @@ distribution_strategy: even
 
 balance_by: sex
 
-# ========================================
 # ACTIVITY MANAGEMENT
-# ========================================
 # Control how students' activity_map is updated when moving to uni_year venues
 
 # Activity map key: Which activity to set when adding to uni_year

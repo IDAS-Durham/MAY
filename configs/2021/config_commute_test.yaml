@@ -17,6 +17,8 @@
 # (world_state.h5, london_xlgu.h5, world_msm_hubs.h5) so this run will not
 # overwrite them.
 
+data_root: data
+
 geography:
   data_dir: "data/geography"
   levels: ["SGU", "MGU", "LGU", "XLGU"]
@@ -39,27 +41,21 @@ geography:
       - "County Durham"
       - "Darlington"
 
-# ========================================
 # POPULATION
-# ========================================
 
 population:
   data_dir: "data/population"
   demographics_male_file: "demographics_male.csv"
   demographics_female_file: "demographics_female.csv"
 
-# ========================================
 # VENUES
-# ========================================
 
 venues:
   data_dir: "data/venues"
   config_file: "configs/2021/venues/venues_config.yaml"
   export_file: "venue_allocations.csv"
 
-# ========================================
 # HOUSEHOLDS
-# ========================================
 
 households:
   data_dir: "data/households"
@@ -69,16 +65,12 @@ households:
   # The allocation strategy lives on the timeline's residence_allocation step.
   export_file: "household_allocations.csv"
 
-# ========================================
 # DEBUG OUTPUTS — keep ON for commute verification
-# ========================================
 
 debug_outputs:
   enabled: true
 
-# ========================================
 # TIMELINE — identical to configs/2021/config.yaml
-# ========================================
 
 timeline:
   enabled: true
@@ -150,9 +142,7 @@ timeline:
     - type: distributor
       config: "configs/2021/distributors/care_home_visits_distributor.yaml"
 
-# ========================================
 # RELATIONSHIPS
-# ========================================
 
 relationship_pipeline:
   enabled: true
@@ -163,12 +153,10 @@ romantic_relationships:
   enabled: true
   config: "configs/2021/relationships/romantic_relationships.yaml"
 
-# ========================================
 # SERIALIZATION — distinct filename so existing worlds are not overwritten
-# ========================================
 
 serialization:
   enabled: true
   config_file: "configs/2021/serialization_config.yaml"
   output_dir: "output/2021"
-  filename: "commute_test_world.h5"
+  filename: "commute_test_world_v3.h5"

@@ -5,7 +5,7 @@ from may.geography import Geography
 from may.population.population import PopulationManager
 from may.geography.venue_manager import VenueManager
 from may.residence.household_distributor import HouseholdDistributor
-from may.attribute_assignment.assigner import assign_attributes, AttributeAssigner
+from may.attribute_assignment.assigner import assign_attributes, AttributeAssigner, AttributeAssignmentError
 from may.attribute_assignment.assignment_config import AttributeAssignmentConfig
 from may.attribute_assignment.data_sources import DataSourceManager
 
@@ -15,7 +15,7 @@ def test_dir():
 
 @pytest.fixture
 def geography(test_dir):
-    geo = Geography(data_dir=os.path.join(test_dir, "geography"))
+    geo = Geography(data_dir=os.path.join(test_dir, "geography"), levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 
@@ -66,17 +66,17 @@ def test_timeline_routing_and_geo_preload(fully_formed_world, test_dir, caplog):
     
     # Grab the attributes mock file we built
     config_path = os.path.join(test_dir, "attributes", "test_attribute_config.yaml")
-    
-    # 1. Pipeline Routing Execution Wrapper
-    stats = fully_formed_world.assign_attributes(config_path)
-    
-    assert "geography" in stats or "total_people" in stats
-    
-    # Verify the timeline correctly updated Person.properties 
-    # (Checking the first person has an attribute created from the strategy)
-    sample_person = fully_formed_world.people[0]
-    # The config name is 'test_attribute'
-    # We might have missing bounds, but let's check basic execution
+
+    # The mock config's household_structures don't cover every micro_world
+    # household (young-adult-only, elderly-only, …), so some people can't be
+    # classified. That incomplete config must fail loud rather than return a
+    # half-assigned attribute. The wrapper still routes by assignment_level and
+    # preloads geo_units before the guard fires.
+    with pytest.raises(AttributeAssignmentError, match="unassigned"):
+        fully_formed_world.assign_attributes(config_path)
+
+    # Routing reached the assigner: the classifiable people DID get assigned
+    # before the end-of-run guard aborted (proves execution, not just the raise).
     assigned_count = sum(1 for p in fully_formed_world.people if "test_attribute" in p.properties)
     assert assigned_count > 0
 

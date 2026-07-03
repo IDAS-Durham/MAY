@@ -4,7 +4,6 @@ Data source loaders for attribute assignment system.
 This module handles loading demographic data from CSV files with:
 - Regional routing (England/Wales, Scotland, Northern Ireland)
 - Caching for performance
-- Fallback probabilities when data not found
 - Normalization of probability distributions
 """
 
@@ -13,6 +12,7 @@ import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 from may.utils import path_resolver as pr
+from may.utils.attribute_access import get_person_attribute, get_nested_value
 
 logger = logging.getLogger("may.attribute_assignment.data_sources")
 
@@ -66,8 +66,10 @@ class DataSource:
             Normalized probabilities that sum to 1.0
         """
         if not probs:
-            logger.warning(f"Empty probability distribution in source '{self.name}'")
-            return {}
+            raise ValueError(
+                f"Empty probability distribution in source '{self.name}'. No fallbacks. "
+                "Fix the data/config."
+            )
 
         # Clamp negative values to 0 — negative probabilities are invalid
         has_negatives = False
@@ -91,13 +93,45 @@ class DataSource:
         elif total > 0:
             return {k: v / total for k, v in probs.items()}
         else:
-            # All zeros — return uniform distribution
-            n = len(probs)
-            logger.warning(
+            raise ValueError(
                 f"All-zero probability distribution in source '{self.name}' "
-                f"({n} keys) — falling back to uniform"
+                f"({len(probs)} keys). No fallbacks. Fix the data."
             )
-            return {k: 1.0 / n for k in probs.keys()}
+
+
+def _ordered_key_columns(file_config: Dict[str, Any], source_name: str,
+                         *, expected: Optional[int] = None) -> List[str]:
+    """
+    Read the canonical `key_columns` mapping and return its column names in order.
+
+    `key_columns` is always a mapping; a single key is a one-entry mapping. The
+    mapping's values carry per-key resolution config for MultiKey / OD sources;
+    positional sources (geo distribution, diversity, pair) use only the column
+    names, in declaration order. A singular `key_column` fails loudly.
+    """
+    if 'key_column' in file_config:
+        raise ValueError(
+            f"source '{source_name}': 'key_column' is retired. Use "
+            "'key_columns' (a mapping; a single key is a one-entry mapping)."
+        )
+    key_columns = file_config.get('key_columns')
+    if not key_columns:
+        raise ValueError(
+            f"source '{source_name}' needs 'key_columns' (a mapping of CSV key "
+            "column name to optional resolution)."
+        )
+    if not isinstance(key_columns, dict):
+        raise ValueError(
+            f"source '{source_name}': 'key_columns' must be a mapping, got "
+            f"{type(key_columns).__name__}. A list is the retired form."
+        )
+    columns = list(key_columns)
+    if expected is not None and len(columns) != expected:
+        raise ValueError(
+            f"source '{source_name}': expected {expected} key column(s), got "
+            f"{len(columns)}: {columns}."
+        )
+    return columns
 
 
 class GeoDistributionSource(DataSource):
@@ -122,7 +156,6 @@ class GeoDistributionSource(DataSource):
 
         # Parse file configurations
         self._file_configs = config.get('files', [])
-        self._fallback = config.get('fallback', {})
 
     def load_data(self, geo_units: Optional[set] = None):
         """
@@ -133,7 +166,7 @@ class GeoDistributionSource(DataSource):
         """
         logger.info(f"Loading data for source '{self.name}'...")
 
-        # Process file configuration (should be just one file now)
+        # Process file configuration (should be just one file)
         for file_config in self._file_configs:
             file_path = Path(pr.resolve(file_config['path']))
 
@@ -143,7 +176,7 @@ class GeoDistributionSource(DataSource):
                     df = pd.read_csv(file_path)
 
                     # Filter to needed areas
-                    key_column = file_config.get('key_column', 'geo_unit')
+                    key_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
                     if geo_units and key_column in df.columns:
                         df = df[df[key_column].isin(geo_units)]
 
@@ -159,9 +192,12 @@ class GeoDistributionSource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error.
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -209,26 +245,37 @@ class GeoDistributionSource(DataSource):
 
         return lookup
 
-    def lookup(self, geo_unit: str) -> Dict[str, float]:
+    def lookup(self, person, household=None, context=None) -> Dict[str, float]:
         """
-        Look up probability distribution for a geographical unit.
+        Look up the distribution for a person's residence geographical unit.
 
-        Args:
-            geo_unit: Geographical unit code (e.g., "E00000001")
-
-        Returns:
-            Dictionary of probabilities
+        Resolves the key itself: the residence venue's geo unit first,
+        then the person's own.
         """
         if not self._data_loaded:
-            logger.warning(f"Data not loaded for source '{self.name}', using fallback")
-            return self._normalize_probabilities(self._fallback)
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks. "
+                "Fix the source/data so it loads."
+            )
 
-        # Look up geographical unit
+        geo_unit = None
+        if household is not None and getattr(household, 'geographical_unit', None):
+            geo_unit = household.geographical_unit.name
+        if not geo_unit and getattr(person, 'geographical_unit', None):
+            geo_unit = person.geographical_unit.name
+        if not geo_unit:
+            raise KeyError(
+                f"Source '{self.name}': no residence geographical_unit for person "
+                f"{person.id} (no venue geo and no person-level geo). No fallbacks."
+            )
+
         if geo_unit in self._lookup:
             return self._lookup[geo_unit]
 
-        # Not found - use fallback
-        return self._normalize_probabilities(self._fallback)
+        raise KeyError(
+            f"Source '{self.name}' has no row for geo unit '{geo_unit}'. No fallbacks. "
+            "The data must cover every keyed unit, or it's a real gap."
+        )
 
 
 class DiversitySource(DataSource):
@@ -246,7 +293,6 @@ class DiversitySource(DataSource):
         super().__init__(name, config)
         self._lookup: Dict[str, Dict[str, float]] = {}
         self._file_configs = config.get('files', [])
-        self._fallback = config.get('fallback', {})
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load diversity data from CSV file."""
@@ -258,7 +304,7 @@ class DiversitySource(DataSource):
             if file_path.exists():
                 try:
                     df = pd.read_csv(file_path)
-                    key_column = file_config.get('key_column', 'geo_unit')
+                    key_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
 
                     if geo_units and key_column in df.columns:
                         df = df[df[key_column].isin(geo_units)]
@@ -269,9 +315,12 @@ class DiversitySource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error.
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -291,12 +340,12 @@ class DiversitySource(DataSource):
 
             # Normalize to probabilities
             total = sum(counts.values())
-            if total > 0:
-                probs = {k: v / total for k, v in counts.items()}
-            else:
-                # Uniform if no data
-                n = len(counts)
-                probs = {k: 1.0 / n for k in counts.keys()}
+            if total <= 0:
+                raise ValueError(
+                    f"Source '{self.name}': zero-total diversity counts for geo unit "
+                    f"'{geo_unit}'. No fallbacks. Fix the data."
+                )
+            probs = {k: v / total for k, v in counts.items()}
 
             lookup[geo_unit] = self._normalize_probabilities(probs)
 
@@ -305,14 +354,17 @@ class DiversitySource(DataSource):
     def lookup(self, geo_unit: str) -> Dict[str, float]:
         """Look up diversity probabilities for a geographical unit."""
         if not self._data_loaded:
-            return self._normalize_probabilities(self._fallback)
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks."
+            )
 
-        # Look up geographical unit
         if geo_unit in self._lookup:
             return self._lookup[geo_unit]
 
-        # Not found - use fallback
-        return self._normalize_probabilities(self._fallback)
+        raise KeyError(
+            f"Source '{self.name}' has no diversity row for geo unit '{geo_unit}'. "
+            "No fallbacks."
+        )
 
 
 class PairProbabilitySource(DataSource):
@@ -329,7 +381,6 @@ class PairProbabilitySource(DataSource):
         # Nested lookup: geo_unit -> first_ethnicity -> partner_ethnicity -> probability
         self._lookups: Dict[str, Dict[str, Dict[str, float]]] = {}
         self._file_configs = config.get('files', [])
-        self._fallback_type = config.get('fallback', 'uniform')
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load pair probability data."""
@@ -347,7 +398,7 @@ class PairProbabilitySource(DataSource):
                     df = pd.read_csv(file_path)
 
                     # Filter to needed areas if specified
-                    key_columns = file_config.get('key_columns', ['geo_unit', 'first_ethnicity'])
+                    key_columns = _ordered_key_columns(file_config, self.name, expected=2)
                     if geo_units and key_columns[0] in df.columns:
                         df = df[df[key_columns[0]].isin(geo_units)]
 
@@ -357,9 +408,12 @@ class PairProbabilitySource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookups)} geographical units from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error.
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -402,7 +456,9 @@ class PairProbabilitySource(DataSource):
             Probability distribution for second person's attribute value
         """
         if not self._data_loaded:
-            return self._get_fallback()
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks."
+            )
 
         # Look up geographical unit
         if geo_unit in self._lookups:
@@ -410,18 +466,11 @@ class PairProbabilitySource(DataSource):
             if first_value in self._lookups[geo_unit]:
                 return self._lookups[geo_unit][first_value]
 
-        return self._get_fallback()
-
-    def _get_fallback(self) -> Dict[str, float]:
-        """Get fallback pair probabilities."""
-        if self._fallback_type == 'uniform':
-            # Equal probability for all values
-            values = ['W', 'A', 'B', 'M', 'O']
-            prob = 1.0 / len(values)
-            return {val: prob for val in values}
-        else:
-            # Default uniform
-            return {'W': 0.2, 'A': 0.2, 'B': 0.2, 'M': 0.2, 'O': 0.2}
+        raise KeyError(
+            f"Source '{self.name}' has no pair row for (geo='{geo_unit}', "
+            f"first='{first_value}'). No fallbacks. The pair data must cover "
+            "every (unit, first-value) combination the model produces."
+        )
 
 
 class MultiKeyLookupSource(DataSource):
@@ -444,7 +493,6 @@ class MultiKeyLookupSource(DataSource):
         super().__init__(name, config)
         self.assignment_config = assignment_config
         self._file_configs = config.get('files', [])
-        self._fallback = config.get('fallback', {})
         self._lookup_dict = {}  # Dict mapping tuple keys to value dicts
         self._key_columns = []
         self._value_columns = {}
@@ -492,9 +540,12 @@ class MultiKeyLookupSource(DataSource):
 
                     logger.info(f"  ✓ Loaded {len(self._lookup_dict)} rows from {file_path.name} into dictionary")
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error.
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
@@ -515,19 +566,21 @@ class MultiKeyLookupSource(DataSource):
         debug = context and context.get('debug', False)
 
         if not self._lookup_dict:
-            if debug:
-                logger.debug(f"    [LOOKUP] No lookup dict available, using fallback")
-            return self._fallback
+            raise RuntimeError(
+                f"Source '{self.name}' has no data loaded. No fallbacks."
+            )
 
         # Build key tuple directly (faster than building intermediate dict)
         key_values = []
         for csv_col_name, col_config in self._key_columns_config.items():
             value = self._resolve_key_value_cached(col_config, person, household, context)
             if value is None:
-                # Can't build complete key, use fallback
-                if debug:
-                    logger.debug(f"    [LOOKUP] Failed to resolve '{csv_col_name}', using fallback")
-                return self._fallback
+                raise KeyError(
+                    f"Source '{self.name}': could not resolve key column "
+                    f"'{csv_col_name}' for person {person.id}. No fallbacks. "
+                    "The person is missing an attribute the key needs, or the key config "
+                    "is wrong."
+                )
             key_values.append(value)
 
         # Direct dictionary lookup with tuple key
@@ -544,12 +597,11 @@ class MultiKeyLookupSource(DataSource):
         result = self._lookup_dict.get(lookup_key)
 
         if result is None:
-            # No match found, use fallback
-            if debug:
-                logger.debug(f"    [LOOKUP] Key not found in data, using fallback")
-            # Cache the fallback too
-            self._lookup_cache[lookup_key] = self._fallback
-            return self._fallback
+            raise KeyError(
+                f"Source '{self.name}' has no row for key {lookup_key}. No fallbacks. "
+                "The data must cover every demographic combination the "
+                "model produces, or this is a real gap."
+            )
 
         if debug:
             logger.debug(f"    [LOOKUP] ✓ Found data: {list(result.keys())[:3]}...")
@@ -612,34 +664,20 @@ class MultiKeyLookupSource(DataSource):
         col_type = col_config.get('type', 'direct')
 
         if col_type == 'direct':
-            # Direct attribute lookup
-            value = person.properties.get(attr_name)
-            if value is None:
-                value = getattr(person, attr_name, None)
-
-            # Check if this is a required attribute with mapping
-            if attr_name in self.assignment_config.required_attributes:
-                mapping = self.assignment_config.required_attributes[attr_name].get('mapping', {})
-                value = mapping.get(value, value)
-
-            return value
+            return get_person_attribute(person, attr_name)
 
         elif col_type == 'category_lookup':
             # Get attribute value, find matching category
-            value = getattr(person, attr_name, None)
-            if value is None:
-                value = person.properties.get(attr_name)
-
+            value = get_person_attribute(person, attr_name)
             category = self.assignment_config.get_category_for_value(value, attr_name)
             return category.get('csv_value') if category else None
 
         elif col_type == 'ancestor_lookup':
             # Traverse hierarchy
-            geo_unit = getattr(person, attr_name, None)
-            if geo_unit is None:
-                # Try household's geo unit
-                if household:
-                    geo_unit = getattr(household, attr_name, None)
+            geo_unit = get_person_attribute(person, attr_name)
+            if geo_unit is None and household:
+                # Use the household's geo unit when the person has none
+                geo_unit = get_nested_value(household, attr_name)
 
             if geo_unit is None:
                 return None
@@ -651,15 +689,7 @@ class MultiKeyLookupSource(DataSource):
                 return None
 
             property_name = col_config.get('property', 'name')
-            value = getattr(ancestor, property_name)
-
-            # Apply mapping if specified
-            mapping_name = col_config.get('mapping')
-            if mapping_name:
-                mapping = getattr(self.assignment_config, mapping_name, {})
-                value = mapping.get(value, value)
-
-            return value
+            return getattr(ancestor, property_name)
 
         return None
 
@@ -678,6 +708,57 @@ class OriginDestinationMatrixSource(DataSource):
         # Lookup: origin_code -> [(destination, metadata_dict, likelihood), ...]
         self._lookup: Dict[str, List[Tuple[str, Dict[str, Any], float]]] = {}
         self._file_configs = config.get('files', [])
+
+        # Out-of-boundary destination policy. Required, no default —
+        # a destination drawn outside the loaded world boundary is routine in
+        # region runs and impossible in whole-country runs, so the engine refuses
+        # to guess what to do with it.
+        self._out_of_boundary = config.get('out_of_boundary')
+        if self._out_of_boundary is None:
+            raise ValueError(
+                f"O-D source '{self.name}' must declare 'out_of_boundary' "
+                "(error | redistribute | outside). It is required, with no "
+                "default. Silence is never interpreted."
+            )
+        if self._out_of_boundary not in ('error', 'redistribute', 'outside'):
+            raise ValueError(
+                f"O-D source '{self.name}': out_of_boundary='{self._out_of_boundary}' "
+                "is not one of error | redistribute | outside."
+            )
+        self._outside_value = config.get('outside_value')
+        self._on_empty = config.get('on_empty')
+        if self._out_of_boundary == 'redistribute':
+            if self._on_empty not in ('error', 'outside'):
+                raise ValueError(
+                    f"O-D source '{self.name}': out_of_boundary='redistribute' "
+                    "requires 'on_empty' (error | outside) for origins whose entire "
+                    "distribution is out-of-boundary."
+                )
+        # The sentinel value is required whenever the 'outside' outcome can occur.
+        outside_can_occur = (
+            self._out_of_boundary == 'outside'
+            or (self._out_of_boundary == 'redistribute' and self._on_empty == 'outside')
+        )
+        if outside_can_occur and not self._outside_value:
+            raise ValueError(
+                f"O-D source '{self.name}': 'outside_value' is required when the "
+                "'outside' outcome can occur."
+            )
+
+        # Optional marker for redistributed assignments. Names the person
+        # property set true when an assignment was bounced back in-boundary, so
+        # the venue layer can deprioritise it. Config-named — the engine carries
+        # whatever the scenario calls it. Only meaningful under 'redistribute':
+        # flagging it elsewhere raises (no silent no-ops).
+        self._redistributed_flag = config.get('redistributed_flag')
+        if self._redistributed_flag is not None and self._out_of_boundary != 'redistribute':
+            raise ValueError(
+                f"O-D source '{self.name}': 'redistributed_flag' is only valid under "
+                f"out_of_boundary='redistribute', not '{self._out_of_boundary}'."
+            )
+        # Per-origin fraction of flow that was bounced back in-boundary, populated
+        # by the redistribute branch of _apply_boundary_policy. Empty otherwise.
+        self._redistributed_fraction: Dict[str, float] = {}
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load origin-destination flow data from CSV."""
@@ -698,11 +779,12 @@ class OriginDestinationMatrixSource(DataSource):
                     exclude_destinations = file_config.get('exclude_destinations', [])
 
                     # Origin column is the first key in key_columns
-                    # e.g., if key_columns has 'LGU_origin_code', use that
-                    if key_columns_config:
-                        origin_column = list(key_columns_config.keys())[0]
-                    else:
-                        origin_column = 'LGU_origin_code'
+                    if not key_columns_config:
+                        raise ValueError(
+                            f"O-D source '{self.name}' has no 'key_columns'; cannot "
+                            "determine the origin column."
+                        )
+                    origin_column = list(key_columns_config.keys())[0]
 
                     # Filter to only relevant geographical units
                     # Only filter if geo_units values actually match origin column values
@@ -729,11 +811,116 @@ class OriginDestinationMatrixSource(DataSource):
                     logger.info(f"  ✓ Loaded {len(self._lookup)} origins from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error.
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
+
+        # Apply the out-of-boundary policy AFTER parsing and OUTSIDE the
+        # per-file try/except above — policy violations must fail loud.
+        self._apply_boundary_policy(geo_units)
 
         self._data_loaded = True
+
+    def _apply_boundary_policy(self, geo_units: Optional[set]):
+        """
+        Resolve destinations that fall outside the loaded world boundary
+        according to the configured `out_of_boundary` policy.
+
+        Boundary membership is "destination value is among the loaded geo_units".
+        With no geo_units (an unbounded / whole-world run) there is no boundary,
+        so the policy is a no-op.
+        """
+        if not geo_units:
+            return
+
+        # Metadata keys carried per destination (e.g. work_mode) — the sentinel
+        # destination must carry the same keys so output wiring still resolves.
+        meta_keys = []
+        for fc in self._file_configs:
+            for k in fc.get('metadata_columns', {}).keys():
+                if k not in meta_keys:
+                    meta_keys.append(k)
+
+        new_lookup: Dict[str, List[Tuple[str, Dict[str, Any], float]]] = {}
+        error_offenders: Dict[str, List[str]] = {}
+        empty_origins: List[str] = []
+        origins_with_out = 0
+        dropped_options = 0
+        out_mass_total = 0.0
+        outside_origins = 0
+
+        for origin, dests in self._lookup.items():
+            in_b = [(d, m, l) for (d, m, l) in dests if d in geo_units]
+            out_b = [(d, m, l) for (d, m, l) in dests if d not in geo_units]
+            if not out_b:
+                new_lookup[origin] = dests
+                continue
+
+            origins_with_out += 1
+            out_mass = sum(l for _, _, l in out_b)
+            out_mass_total += out_mass
+
+            if self._out_of_boundary == 'error':
+                error_offenders[origin] = [d for d, _, _ in out_b]
+                new_lookup[origin] = dests
+            elif self._out_of_boundary == 'redistribute':
+                dropped_options += len(out_b)
+                in_total = sum(l for _, _, l in in_b)
+                if in_total <= 0:
+                    empty_origins.append(origin)
+                    new_lookup[origin] = []  # resolved by on_empty below
+                else:
+                    new_lookup[origin] = [(d, m, l / in_total) for (d, m, l) in in_b]
+                    # Probability a worker from this origin was bounced back in
+                    # (= the out-of-boundary mass that got redistributed). Drives
+                    # the per-person Bernoulli mark in the strategy.
+                    self._redistributed_fraction[origin] = out_mass
+            else:  # 'outside'
+                outside_origins += 1
+                sentinel_meta = {k: self._outside_value for k in meta_keys}
+                new_lookup[origin] = in_b + [(self._outside_value, sentinel_meta, out_mass)]
+
+        if self._out_of_boundary == 'error' and error_offenders:
+            sample = sorted({d for ds in error_offenders.values() for d in ds})[:15]
+            raise ValueError(
+                f"O-D source '{self.name}': out_of_boundary='error' but "
+                f"{len(error_offenders)} origin(s) have out-of-boundary destinations "
+                f"(e.g. {sample}). Set out_of_boundary to 'redistribute' or 'outside', "
+                "or load those destinations into the world."
+            )
+
+        if self._out_of_boundary == 'redistribute':
+            if empty_origins:
+                logger.warning(
+                    f"  [out_of_boundary] {len(empty_origins)} origin(s) have NO "
+                    f"in-boundary destination (e.g. {empty_origins[:15]})."
+                )
+                if self._on_empty == 'error':
+                    raise ValueError(
+                        f"O-D source '{self.name}': {len(empty_origins)} origin(s) have "
+                        f"no in-boundary destination and on_empty='error' "
+                        f"(e.g. {empty_origins[:15]}). Switch on_empty to 'outside', or "
+                        "shrink/extend the world."
+                    )
+                for origin in empty_origins:
+                    sentinel_meta = {k: self._outside_value for k in meta_keys}
+                    new_lookup[origin] = [(self._outside_value, sentinel_meta, 1.0)]
+            mean_pct = 100.0 * out_mass_total / origins_with_out if origins_with_out else 0.0
+            logger.info(
+                f"  [out_of_boundary=redistribute] dropped {dropped_options} out-of-boundary "
+                f"destination option(s) across {origins_with_out} origin(s); mean "
+                f"{mean_pct:.1f}% of flow redistributed inward per affected origin."
+            )
+        elif self._out_of_boundary == 'outside':
+            logger.info(
+                f"  [out_of_boundary=outside] {outside_origins} origin(s) route "
+                f"out-of-boundary flow to sentinel '{self._outside_value}'."
+            )
+
+        self._lookup = new_lookup
 
     def _parse_od_dataframe(self, df: pd.DataFrame,
                            origin_column: str,
@@ -801,10 +988,15 @@ class OriginDestinationMatrixSource(DataSource):
             List of (destination, metadata, likelihood) tuples
         """
         if not self._data_loaded:
-            logger.warning(f"Data not loaded for source '{self.name}'")
-            return []
-
-        return self._lookup.get(origin, [])
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks."
+            )
+        if origin not in self._lookup:
+            raise KeyError(
+                f"Source '{self.name}' has no destinations for origin '{origin}'. "
+                "No fallbacks. The O-D matrix must cover every origin."
+            )
+        return self._lookup[origin]
 
 class GUSamplerSource(DataSource):
     """
@@ -820,6 +1012,10 @@ class GUSamplerSource(DataSource):
         # Lookup: parent_gu_name -> {child_gu_code: weight}
         self._lookup: Dict[str, Dict[str, float]] = {}
         self._file_configs = config.get('files', [])
+        # Person attribute that supplies the parent GU to sample within — read
+        # from config (key_columns value), so the sampler is generic over any
+        # parent attribute / hierarchy level.
+        self._parent_attribute: Optional[str] = None
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load GU distribution by parent GU."""
@@ -832,15 +1028,28 @@ class GUSamplerSource(DataSource):
                 try:
                     df = pd.read_csv(file_path)
 
-                    lgu_column = file_config.get('key_column', 'LGU')
+                    # Parent-GU lookup key: canonical one-entry key_columns mapping.
+                    # Its value names the person attribute that supplies the parent GU
+                    # — generic over any parent attribute.
+                    parent_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
+                    key_resolution = file_config['key_columns'][parent_column]
+                    if not isinstance(key_resolution, dict) or not key_resolution.get('attribute'):
+                        raise ValueError(
+                            f"GU sampler source '{self.name}': key column '{parent_column}' "
+                            "must map to a resolution with an 'attribute' naming the person "
+                            "attribute that holds the parent GU, e.g. "
+                            f"{{{parent_column}: {{attribute: workplace_location}}}}."
+                        )
+                    self._parent_attribute = key_resolution['attribute']
                     weight_column = file_config.get('weight_column', 'Total')
 
-                    # Handle geographical_unit_column
+                    # The sampled child-GU output column (distinct from the lookup
+                    # key above), format: {name: ..., level: ...}. `level` is the
+                    # user-facing label, used only for logging.
                     geo_unit_config = file_config.get('geographical_unit_column')
                     if geo_unit_config:
-                        # format: {name: "SGU", level: "SGU"}
                         geo_unit_column = geo_unit_config.get('name')
-                        geo_unit_level = geo_unit_config.get('level', 'SGU')
+                        geo_unit_level = geo_unit_config.get('level')
 
                     # Filter to only relevant geographical units
                     if geo_units and geo_unit_column and geo_unit_column in df.columns:
@@ -848,7 +1057,7 @@ class GUSamplerSource(DataSource):
                         df = df[df[geo_unit_column].isin(geo_units)]
                         logger.info(f"  Filtered CSV from {original_len} to {len(df)} rows based on {len(geo_units)} geographical units")
 
-                    # Handle exclude_rows (supports both old dict and new list format)
+                    # Handle exclude_rows (list format)
                     exclude_rows_config = file_config.get('exclude_rows', [])
                     if isinstance(exclude_rows_config, list):
                         # format: [{column: "col", values: [vals]}]
@@ -859,7 +1068,7 @@ class GUSamplerSource(DataSource):
                                 df = df[~df[col].isin(exclude_values)]
 
                     # Group by parent GU and build child GU distribution
-                    for parent_name, group in df.groupby(lgu_column):
+                    for parent_name, group in df.groupby(parent_column):
                         geo_dist = {}
                         for _, row in group.iterrows():
                             geo_code = row[geo_unit_column]
@@ -874,26 +1083,38 @@ class GUSamplerSource(DataSource):
                     logger.info(f"  ✓ Loaded {geo_unit_level} distributions for {len(self._lookup)} parent GUs from {file_path.name}")
 
                 except Exception as e:
-                    logger.warning(f"  ✗ Error loading {file_path}: {e}")
+                    # Fail loud on a load/parse error.
+                    raise RuntimeError(
+                        f"failed to load data source file {file_path}: {e}"
+                    ) from e
             else:
-                logger.warning(f"  ✗ File not found: {file_path}")
+                raise FileNotFoundError(f"data source file not found: {file_path}")
 
         self._data_loaded = True
 
-    def lookup(self, parent_gu_name: str) -> Dict[str, float]:
+    def lookup(self, person, household=None, context=None) -> Dict[str, float]:
         """
-        Look up GU probability distribution for a parent GU.
+        Look up the child-GU distribution for the person's parent GU.
 
-        Args:
-            parent_gu_name: Parent GU name (e.g., "Nuneaton and Bedworth")
-
-        Returns:
-            Dictionary mapping child GU codes to probabilities
+        Resolves the key itself: the parent GU is the person's already
+        assigned `workplace_location`.
         """
         if not self._data_loaded:
-            return {}
-
-        return self._lookup.get(parent_gu_name, {})
+            raise RuntimeError(
+                f"Data not loaded for source '{self.name}'. No fallbacks."
+            )
+        parent_gu_name = get_person_attribute(person, self._parent_attribute)
+        if not parent_gu_name:
+            raise KeyError(
+                f"Source '{self.name}': person {person.id} has no '{self._parent_attribute}' "
+                "to sample a child GU within. No fallbacks."
+            )
+        if parent_gu_name not in self._lookup:
+            raise KeyError(
+                f"Source '{self.name}' has no child-GU distribution for parent "
+                f"'{parent_gu_name}'. No fallbacks."
+            )
+        return self._lookup[parent_gu_name]
 
 
 class DataSourceManager:
@@ -914,54 +1135,43 @@ class DataSourceManager:
         self.sources: Dict[str, DataSource] = {}
         self._initialize_sources()
 
+    # csv_lookup `format` → source class. Chosen explicitly in config.
+    _CSV_FORMATS = {
+        'geo_distribution': GeoDistributionSource,
+        'diversity': DiversitySource,
+        'pair': PairProbabilitySource,
+        'multi_key': MultiKeyLookupSource,
+        'origin_destination_matrix': OriginDestinationMatrixSource,
+        'gu_sampler': GUSamplerSource,
+    }
+
     def _initialize_sources(self):
-        """Initialize data sources from config."""
+        """Initialize data sources from config (explicit type/format dispatch)."""
         for source_name, source_config in self.config.data_sources.items():
             source_type = source_config.type
 
-            if source_type == 'csv_lookup':
-                # Check if this is a multi-key lookup (has key_columns in file config)
-                file_config = source_config.config.get('files', [{}])[0]
-                key_columns = file_config.get('key_columns')
-
-                # Check for O-D matrix format
-                output_format = file_config.get('output_format')
-                if output_format == 'origin_destination_matrix':
-                    self.sources[source_name] = OriginDestinationMatrixSource(
-                        source_name, source_config.config
-                    )
-                elif isinstance(key_columns, dict) and any(
-                    isinstance(v, dict) for v in key_columns.values()
-                ):
-                    # Multi-key lookup (values are dicts with 'attribute', 'type', etc.)
-                    self.sources[source_name] = MultiKeyLookupSource(
-                        source_name, source_config.config, self.config
-                    )
-                elif 'diversity' in source_name.lower():
-                    self.sources[source_name] = DiversitySource(
-                        source_name, source_config.config
-                    )
-                elif 'pair' in source_name.lower():
-                    self.sources[source_name] = PairProbabilitySource(
-                        source_name, source_config.config
-                    )
-                elif ('sgu' in source_name.lower() and 'sampler' in source_name.lower()) or \
-                     (file_config.get('geographical_unit_column') and file_config.get('weight_column')) or \
-                     (file_config.get('sgu_column') and file_config.get('weight_column')):
-                    # Geographical unit sampler: has geographical_unit_column (or sgu_column) and weight_column for distribution
-                    self.sources[source_name] = GUSamplerSource(
-                        source_name, source_config.config
-                    )
-                else:
-                    # Default to geo distribution
-                    self.sources[source_name] = GeoDistributionSource(
-                        source_name, source_config.config
-                    )
-            elif source_type == 'constant':
-                # Constant source (for fallbacks) - skip for now
+            if source_type == 'constant':
                 logger.debug(f"Skipping constant source: {source_name}")
+                continue
+            if source_type != 'csv_lookup':
+                raise ValueError(
+                    f"Data source '{source_name}': unknown type '{source_type}' "
+                    "(expected 'csv_lookup')."
+                )
+
+            fmt = source_config.config.get('format')
+            cls = self._CSV_FORMATS.get(fmt)
+            if cls is None:
+                raise ValueError(
+                    f"Data source '{source_name}' needs an explicit 'format' "
+                    f"(one of {sorted(self._CSV_FORMATS)}), got {fmt!r}."
+                )
+
+            # MultiKeyLookupSource needs the assignment config for key/category resolution.
+            if cls is MultiKeyLookupSource:
+                self.sources[source_name] = cls(source_name, source_config.config, self.config)
             else:
-                logger.warning(f"Unknown data source type: {source_type}")
+                self.sources[source_name] = cls(source_name, source_config.config)
 
     def load_all(self, geo_units: Optional[set] = None):
         """
@@ -991,8 +1201,9 @@ class DataSourceManager:
             Probability distribution
         """
         source = self.get_source(source_name)
-        if source:
-            return source.lookup(*args, **kwargs)
-        else:
-            logger.warning(f"Data source '{source_name}' not found")
-            return {}
+        if not source:
+            raise KeyError(
+                f"Data source '{source_name}' is not registered. No fallbacks. "
+                "Fix the source name in the config."
+            )
+        return source.lookup(*args, **kwargs)

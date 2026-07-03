@@ -30,13 +30,11 @@ def print_world_examples(world):
     logger.info("EXAMPLES")
     logger.info("=" * 60)
 
-    # Example 1: Show geographical hierarchy
     logger.info("")
     logger.info("1. Geographical Hierarchy:")
     all_units = geo.get_all_units_list()
     if all_units:
-        # Get an example SGU
-        sgu_units = [u for u in all_units if u.level == "SGU"]
+        sgu_units = [u for u in all_units if u.level == geo.levels[0]]
         if sgu_units:
             example_sgu = sgu_units[0]
             logger.info(f"   SGU Example: {example_sgu}")
@@ -46,8 +44,7 @@ def print_world_examples(world):
                 if example_sgu.parent.parent:
                     logger.info(f"   - Parent LGU: {example_sgu.parent.parent.name}")
 
-        # Get an example MGU with venues
-        mgu_with_venues = [u for u in all_units if u.level == "MGU" and len(u.venues) > 0]
+        mgu_with_venues = [u for u in all_units if u.level == geo.levels[1] and len(u.venues) > 0]
         if mgu_with_venues:
             example_mgu = mgu_with_venues[0]
             logger.info("")
@@ -55,7 +52,6 @@ def print_world_examples(world):
             logger.info(f"   - Has {len(example_mgu.children)} SGU children")
             logger.info(f"   - Has {len(example_mgu.venues)} venues")
 
-    # Example 2: Show venues
     logger.info("")
     logger.info("2. Venue Examples:")
     try:
@@ -69,18 +65,15 @@ def print_world_examples(world):
                 if example_venue.coordinates:
                     logger.info(f"   - Coordinates: {example_venue.coordinates}")
                 if example_venue.properties:
-                    # Show first 2 properties
                     props = list(example_venue.properties.items())
                     for key, value in props:
                         logger.info(f"   - {key}: {value}")
-                # Show membership
                 if example_venue.subsets:
                     for key, value in example_venue.subsets.items():
                         logger.info(f"   - Number of assigned {key} =  {value.num_members}")
     except:
         logger.info("Failed: Could not print venue examples")
 
-    # Example 3: Show how to query
     logger.info("")
     logger.info("3. Population Examples:")
     try:
@@ -97,7 +90,6 @@ def print_world_examples(world):
             for activity, count in sorted(stats['activity_counts'].items()):
                 logger.info(f"     - {activity}: {count:,}")
 
-            # Show example people
             logger.info("")
             logger.info("   Example people:")
             for person in random.choices(population.get_all_people(), k=5):
@@ -153,7 +145,7 @@ def print_world_examples(world):
 
         logger.info("")
         logger.info("   # Get venues in a specific area")
-        mgu_with_venues = [u for u in all_units if u.level == "MGU" and len(u.venues) > 0]
+        mgu_with_venues = [u for u in all_units if u.level == geo.levels[1] and len(u.venues) > 0]
         if mgu_with_venues:
             unit_venues = mgu_with_venues[0].venues
             logger.info(f"   geo.get_unit('{mgu_with_venues[0].name}').venues -> {len(unit_venues)} venues")

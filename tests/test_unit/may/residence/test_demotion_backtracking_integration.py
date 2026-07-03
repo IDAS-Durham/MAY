@@ -9,13 +9,11 @@ from may.residence.relationship_rules import RelationshipRule
 from may.population.person import Person
 
 
-# ============================================================
 # Fixtures
-# ============================================================
 
 @pytest.fixture
 def geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography")
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 
@@ -79,9 +77,7 @@ def populate_pools(distributor, people, geo_unit_code="SGU_001"):
     return pools
 
 
-# ============================================================
 # Group 1: _attempt_with_demotion — Demotion Loop Tests
-# ============================================================
 
 class TestAttemptWithDemotion:
     """Tests for the demotion loop that wraps allocation."""
@@ -125,7 +121,7 @@ class TestAttemptWithDemotion:
         # Should have been demoted to 1 kid + 2 adults = 3 people
         assert household.num_members <= 3
         # Check the actual pattern was demoted
-        actual = household.properties.get('actual_pattern')
+        actual = household.properties.get('allocation_pattern')
         assert actual != ">=2 >=0 2 0"  # Pattern was modified
 
     def test_demotion_uses_fallback_priority_when_no_category_idx(self, distributor):
@@ -150,8 +146,7 @@ class TestAttemptWithDemotion:
 
         # With only 1 adult, it can't form 2 adults, so demotion kicks in
         # It should either succeed with a demoted pattern or return None
-        # The key test is that it doesn't crash when failed_category_idx is None
-        # (this was the bug we fixed)
+        # The key assertion is that it doesn't crash when failed_category_idx is None
 
     def test_demotion_respects_min_household_size(self, distributor):
         """Demotion would reduce pattern below min_household_size → returns None."""
@@ -166,7 +161,7 @@ class TestAttemptWithDemotion:
         pattern = CompositionPattern.from_string("0 0 2 0")
 
         # Without rule_name → simple allocation. Intelligent demotion from 2 to 1.
-        # Bug we fixed: safety checks must apply to intelligent demotion too.
+        # Safety checks must apply to intelligent demotion too.
         household = distributor._attempt_with_demotion(
             "SGU_001", pattern, max_attempts=5
         )
@@ -240,10 +235,10 @@ class TestAttemptWithDemotion:
         assert household is not None
         assert household.num_members == 1
         # The actual pattern should show the demotion
-        assert household.properties['actual_pattern'] == '0 0 1 0'
+        assert household.properties['allocation_pattern'] == '0 0 1 0'
 
     def test_demotion_with_none_category_idx_no_crash(self, distributor):
-        """Bug fix test: when failed_category_idx is None, intelligent demotion is skipped safely."""
+        """When failed_category_idx is None, intelligent demotion is skipped safely."""
         geo = distributor.geography.get_unit("SGU_001")
         # Provide enough people in pools but use a rule that will fail
         # without returning a specific failed_category_idx
@@ -263,9 +258,7 @@ class TestAttemptWithDemotion:
         # It should either succeed via demotion or return None gracefully.
 
 
-# ============================================================
 # Group 2: _allocate_household_with_rules — Rules Integration
-# ============================================================
 
 class TestAllocateHouseholdWithRules:
     """Tests for the full rules-based allocation flow."""
@@ -290,7 +283,7 @@ class TestAllocateHouseholdWithRules:
         assert failed_idx is None
         assert household.num_members == 3
         assert household.properties['original_pattern'] == "1 >=0 2 0"
-        assert household.properties['actual_pattern'] == "1 >=0 2 0"
+        assert household.properties['allocation_pattern'] == "1 >=0 2 0"
 
     def test_allocate_with_rules_removes_from_pools(self, distributor):
         """Selected people are removed from pools and added to allocated_people."""
@@ -349,9 +342,7 @@ class TestAllocateHouseholdWithRules:
         assert household.num_members == 1
 
 
-# ============================================================
 # Group 3: distribute_households_round — Round Distribution
-# ============================================================
 
 class TestDistributeHouseholdsRound:
     """Tests for the round distribution orchestration."""
@@ -488,9 +479,7 @@ class TestDistributeHouseholdsRound:
         assert stats['total_people_remaining'] >= 0
 
 
-# ============================================================
 # Group 4: Balanced Distribution
-# ============================================================
 
 class TestBalancedDistribution:
     """Tests for _calculate_balanced_distribution and _allocate_balanced_distribution."""

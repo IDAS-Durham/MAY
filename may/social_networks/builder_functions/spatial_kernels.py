@@ -24,10 +24,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("create networks")
 
 
-# ============================================================================
-# SHARED UTILITIES
-# ============================================================================
-
 def _build_people_csr(units):
     """
     Flatten people from a list of geo_units into a contiguous array with per-unit
@@ -112,10 +108,6 @@ def _store_contacts_from_matrix(all_people, all_connections, storage_key,
     avg_deg = total_connections / N if N > 0 else 0.0
     logger.info(f"Stored {storage_key!r}: {total_connections:,} connections, avg ~{avg_deg:.1f} per person")
 
-
-# ============================================================================
-# LOCAL WATTS-STROGATZ SOCIAL NETWORK — NUMBA-ACCELERATED
-# ============================================================================
 
 @nb.njit(parallel=True, cache=True)
 def _local_ws_build_lattice(
@@ -265,9 +257,8 @@ def _allocate_random_bounded_distance_contacts(
     """
     Allocates contacts randomly to people within a specified radius.
 
-    Faster than _build_bounded_distance_social_network — no graph constructed.
-    Simply gathers all people from within the set radius and sets random contacts.
-    No filters applied.
+    Gathers all people within the set radius and assigns random contacts directly.
+    Faster than the graph-based _build_bounded_distance_social_network.
     """
     if storage_key is None:
         storage_key = f'social_contacts_radius_{radius_km}'
@@ -337,10 +328,6 @@ def _build_bounded_distance_social_network(
             **kwargs,
         )
 
-
-# ============================================================================
-# SPATIAL WATTS-STROGATZ SOCIAL NETWORK — NUMBA-ACCELERATED
-# ============================================================================
 
 @nb.njit(parallel=True, cache=True)
 def _spatial_ws_build_lattice(
@@ -483,7 +470,6 @@ def _build_spatial_social_network(
     logger.info(f"Building spatial social network: {U} geo_units, "
                 f"annulus [{min_radius_km}, {max_radius_km}] km, k={mean_connections_per_person}")
 
-    # ---- Build neighbor CSR (sorted by haversine distance) -------------------------
     max_deg = _km_to_degrees_adjusted(max_radius_km, coordinates) * 1.2
     tree = cKDTree(coordinates)
 
@@ -519,7 +505,6 @@ def _build_spatial_social_network(
     avg_nb = np.mean([len(n) for n in all_neighbors])
     logger.info(f"  Neighbour units per geo_unit: avg {avg_nb:.1f}")
 
-    # ---- Collect people and build people-per-unit CSR -------------------------
     all_people, unit_starts_arr, unit_ends_arr, unit_people_flat, person_unit = \
         _build_people_csr(units_with_coords)
 
@@ -530,7 +515,6 @@ def _build_spatial_social_network(
     N = len(all_people)
     logger.info(f"  {N:,} people across {U} geo_units")
 
-    # ---- Phase 1: Build spatial lattice -------------------------------------------
     k = mean_connections_per_person
     lattice_k = max(1, k // 2)
     all_connections = np.full((N, lattice_k), -1, dtype=np.int32)
@@ -540,7 +524,6 @@ def _build_spatial_social_network(
         person_unit, all_connections, np.int32(lattice_k),
     )
 
-    # ---- Phase 2: Rewire ----------------------------------------------------------
     rewire_prob = np.float64(1.0 - clustering_level)
     if rewire_prob > 0.0:
         _spatial_ws_rewire(
@@ -550,5 +533,4 @@ def _build_spatial_social_network(
             person_unit, rewire_prob,
         )
 
-    # ---- Symmetrize and store (vectorised) ------------------------------------
     _store_contacts_from_matrix(all_people, all_connections, storage_key, activity_config)

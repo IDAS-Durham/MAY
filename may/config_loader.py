@@ -4,7 +4,6 @@ Configuration and command-line argument handling for MAY.
 
 import os
 import logging
-import argparse
 import yaml
 from may.geography import Geography
 from may.utils import path_resolver as pr
@@ -33,141 +32,25 @@ def load_config(config_path="config.yaml"):
     return config
 
 
-def parse_arguments():
+def build_filters(config):
     """
-    Parse command-line arguments.
+    Build the geographical filter from config.
 
-    Returns:
-        Parsed arguments
-    """
-    parser = argparse.ArgumentParser(
-        description="MAY - Geographical Simulation",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Load all units using config.yaml
-  python create_world.py
-
-  # Load all units (override config)
-  python create_world.py --load-all
-
-  # Filter by LGU
-  python create_world.py --lgu London
-
-  # Filter by MGU codes (comma-separated)
-  python create_world.py --mgu E02000173,E02000187
-
-  # Filter by MGU from file
-  python create_world.py --mgu-file filters/my_mgus.txt
-
-  # Filter by SGU codes
-  python create_world.py --sgu E00004320,E00004321
-
-  # Use custom config file
-  python create_world.py --config my_config.yaml
-        """
-    )
-
-    parser.add_argument(
-        '--config',
-        type=str,
-        default='config.yaml',
-        help='Path to configuration file (default: config.yaml)'
-    )
-
-    parser.add_argument(
-        '--load-all',
-        action='store_true',
-        help='Load all geographical units (ignores all filters)'
-    )
-
-    # LGU filters
-    parser.add_argument(
-        '--lgu',
-        type=str,
-        help='Filter by LGU codes (comma-separated)'
-    )
-    parser.add_argument(
-        '--lgu-file',
-        type=str,
-        help='Filter by LGU codes from file'
-    )
-
-    # MGU filters
-    parser.add_argument(
-        '--mgu',
-        type=str,
-        help='Filter by MGU codes (comma-separated)'
-    )
-    parser.add_argument(
-        '--mgu-file',
-        type=str,
-        help='Filter by MGU codes from file'
-    )
-
-    # SGU filters
-    parser.add_argument(
-        '--sgu',
-        type=str,
-        help='Filter by SGU codes (comma-separated)'
-    )
-    parser.add_argument(
-        '--sgu-file',
-        type=str,
-        help='Filter by SGU codes from file'
-    )
-
-    return parser.parse_known_args()
-
-
-def build_filters(args, config):
-    """
-    Build filter dictionary from arguments and config.
-    Command-line arguments take precedence over config file.
+    A run either loads all units or filters to one level's codes, both declared
+    under `geography:` in the config. Levels are referenced by their config label
+    (no hardcoded SGU/MGU/LGU), so any level naming works.
 
     Args:
-        args: Parsed command-line arguments
         config: Configuration dictionary
 
     Returns:
         Filter dictionary with 'level' and 'codes' keys, or None if no filter
     """
-    # Check if --load-all is specified
-    if args.load_all:
-        return None
-
-    # Check command-line arguments first (highest priority)
-    if args.lgu or args.lgu_file:
-        codes = []
-        if args.lgu_file:
-            codes = list(Geography.load_codes_from_file(args.lgu_file))
-        elif args.lgu:
-            codes = [c.strip() for c in args.lgu.split(',')]
-        return {'level': 'LGU', 'codes': codes}
-
-    if args.mgu or args.mgu_file:
-        codes = []
-        if args.mgu_file:
-            codes = list(Geography.load_codes_from_file(args.mgu_file))
-        elif args.mgu:
-            codes = [c.strip() for c in args.mgu.split(',')]
-        return {'level': 'MGU', 'codes': codes}
-
-    if args.sgu or args.sgu_file:
-        codes = []
-        if args.sgu_file:
-            codes = list(Geography.load_codes_from_file(args.sgu_file))
-        elif args.sgu:
-            codes = [c.strip() for c in args.sgu.split(',')]
-        return {'level': 'SGU', 'codes': codes}
-
-    # Check config file (lower priority)
     geo_config = config.get('geography', {})
 
     if geo_config.get('load_all', False):
         return None
 
-    # Check filter in config
     filter_config = geo_config.get('filter', {})
     if not filter_config or not filter_config.get('level'):
         return None
@@ -189,28 +72,21 @@ def build_filters(args, config):
     return None
 
 
-def setup_geography(args=None, config=None):
+def setup_geography(config=None):
     """
-    Setup geography based on arguments and config.
-    Convenience function that handles all the configuration loading.
+    Set up geography from config.
 
     Args:
-        args: Parsed arguments (if None, will parse from command line)
-        config: Configuration dict (if None, will load from file)
+        config: Configuration dict (if None, loads the default config file)
 
     Returns:
         Tuple of (Geography object, filters dict)
     """
-    # Parse arguments if not provided
-    if args is None:
-        args, unknown_args = parse_arguments()
-        
-    # Load configuration if not provided
     if config is None:
-        config = load_config(args.config)
+        config = load_config()
 
-    # Build filters from args and config
-    filters = build_filters(args, config)
+    # Build filters from config
+    filters = build_filters(config)
 
     if filters:
         logger.info(f"Using filter: {filters['level']} with {len(filters['codes'])} codes")
@@ -220,7 +96,7 @@ def setup_geography(args=None, config=None):
     # Get data directory and levels from config
     geo_config = config.get('geography', {})
     data_dir = pr.resolve(geo_config.get('data_dir', 'data/geography'))
-    levels = geo_config.get('levels', None)  # None = use Geography default
+    levels = geo_config.get('levels')  # required; Geography fails loud if absent
 
     # Create Geography object
     geo = Geography(data_dir=data_dir, filters=filters, levels=levels)

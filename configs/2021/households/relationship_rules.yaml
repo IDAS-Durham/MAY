@@ -5,9 +5,7 @@
 
 enabled: true
 
-# ============================================================================
 # PER-AREA "SAME-CATEGORY" PROBABILITY SOURCES (optional)
-# ============================================================================
 # Each pair_matching rule below carries a scalar `same_category_probability_fallback`.
 # Anything declared here overrides that scalar PER AREA when a candidate's
 # geography is found in the source CSV. If no source is configured for a given
@@ -28,7 +26,6 @@ enabled: true
 #                          P = Σ ( CSV[column] * weight )
 #                      with the result clamped to [0, 1]. Use whatever columns
 #                      and weights are appropriate for your domain.
-# ============================================================================
 same_category_sources:
   # Per-MSOA P(same-sex couple) from the ONS 2021 sexual-orientation marginals.
   # Modeling assumption: homosexuals always pair same-sex; bisexuals pair
@@ -44,9 +41,7 @@ same_category_sources:
       - column: "bisexual"
         weight: 0.5
 
-# =============================================
 # SELECTION STRATEGY
-# =============================================
 selection_strategy:
   max_attempts: 10
   use_best_candidate: true
@@ -61,14 +56,10 @@ selection_strategy:
     log_backtracks: true        # Log backtracking attempts
     avoid_duplicates: true      # Don't retry same first-role person/people
 
-# =============================================
 # STATISTICS
-# =============================================
 track_statistics: true
 
-# =============================================
 # PATTERN-BASED RELATIONSHIP RULES
-# =============================================
 
 rules:
   # Rule 1: Families with 2 adults and kids
@@ -394,9 +385,7 @@ rules:
           std: 7            # Standard deviation
           tolerance: 10     # Search window: ±10 years around sampled target
 
-# =============================================
 # CONSTRAINT TYPES
-# =============================================
 #
 # 1. numerical_attribute_difference
 #    Validates: (role_1[attribute] - role_2[attribute]) is within [min_difference, max_difference]
@@ -427,8 +416,7 @@ rules:
 #          - same_category_probability_fallback: Probability of matching categories (0.0-1.0).
 #              Used as the fallback when a top-level `same_category_source` is configured
 #              but the candidate's geography is missing from it. When no source is
-#              configured at all, this is the authoritative probability. Older configs
-#              may still use the legacy name `same_category_probability`.
+#              configured at all, this is the authoritative probability.
 #      - numerical_attribute: (optional) Constraints on a numerical attribute
 #          - attribute: Name of numerical attribute (e.g., "age", "income", "education_years")
 #          - mean_difference: Target mean difference

@@ -2,10 +2,9 @@
 Contract tests for PopulationManager loaders and generators.
 
 These cover the public load_* / generate_* surface of population.py — the
-methods the create_world flow exercises end-to-end every run. The existing
-test_population.py covers happy paths well; this file pins down the sad
-paths, the cross-method side effects, and the kwarg-aliasing regression
-guard for the Person constructor fix.
+methods the create_world flow exercises end-to-end every run. They pin down
+the sad paths, the cross-method side effects, and the kwarg-independence
+guard for the Person constructor.
 
 Each test pins one contract; classes group related contracts so the file
 reads as a spec.
@@ -18,12 +17,10 @@ import pandas as pd
 import pytest
 
 from may.geography import Geography, GeographicalUnit
-from may.population import Person, PopulationManager
+from may.population import Person, PopulationManager, PopulationError
 
 
-# ---------------------------------------------------------------------------
 # Fixtures
-# ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
 def reset_person_counter():
@@ -35,8 +32,7 @@ def reset_person_counter():
 def _make_geo(level_units):
     """Build a Geography hand-stitched from {level: [unit_names]} so tests
     don't need a CSV fixture for the smaller cases."""
-    geo = Geography()
-    geo.levels = list(level_units.keys())
+    geo = Geography(levels=list(level_units.keys()))
     geo.units = {}
     geo.units_by_level = {lvl: {} for lvl in geo.levels}
     next_id = 0
@@ -71,10 +67,8 @@ def two_level_geo():
     return geo
 
 
-# ===========================================================================
 # load_demographics_from_csv — sad paths and side effects the production
-# log relies on but the existing tests don't pin down
-# ===========================================================================
+# log relies on
 
 class TestLoadDemographicsFromCsv:
 
@@ -127,29 +121,24 @@ class TestLoadDemographicsFromCsv:
         assert 0 not in sgu_data
         assert sgu_data[1]['male'] == 4
 
-    def test_geography_with_no_smallest_level_units_warns_and_returns(
-        self, tmp_path, caplog
-    ):
+    def test_geography_with_no_smallest_level_units_raises(self, tmp_path):
         """If the geography hierarchy was wiped or never loaded, demographics
-        loading must short-circuit with a warning, not crash."""
+        loading must fail loud, not short-circuit to an empty world."""
         empty = _make_geo({'SGU': []})
         df = pd.DataFrame({'geo_unit': ['SGU_001'], '0': [1]})
         data_dir = self._write_demographics_pair(tmp_path, df, df)
         pm = PopulationManager(geography=empty, data_dir=data_dir)
-        with caplog.at_level(logging.WARNING, logger='population'):
+        with pytest.raises(PopulationError, match="No SGU units"):
             pm.load_demographics_from_csv()
         assert pm.precise_demographics == {}
-        assert any('No SGU units' in r.message for r in caplog.records)
 
-    def test_missing_files_does_not_corrupt_state(self, sgu_geo, tmp_path, caplog):
-        """A missing demographics file is logged as an error and the manager
-        is left empty — generate_population then refuses to run, rather than
-        producing a phantom population."""
+    def test_missing_files_raises(self, sgu_geo, tmp_path):
+        """A missing demographics file fails loud — the run must not
+        continue toward a phantom (empty) population."""
         pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
-        with caplog.at_level(logging.ERROR, logger='population'):
+        with pytest.raises(PopulationError, match="not found"):
             pm.load_demographics_from_csv()
         assert pm.precise_demographics == {}
-        assert any('not found' in r.message.lower() for r in caplog.records)
 
     def test_second_load_replaces_first(self, sgu_geo, tmp_path):
         """Calling load_demographics_from_csv twice must not double-count the
@@ -166,9 +155,7 @@ class TestLoadDemographicsFromCsv:
         assert pm.precise_demographics['SGU_002'][5]['male'] == 7
 
 
-# ===========================================================================
 # load_explicit_from_df — sad paths and column-mapping semantics
-# ===========================================================================
 
 class TestLoadExplicitFromDf:
 
@@ -256,9 +243,9 @@ class TestLoadExplicitFromDf:
     def test_literal_geo_column_does_not_leak_into_properties(self, sgu_geo):
         """The geographical column drives `geographical_unit` and must not
         also appear in `properties` — even when the caller didn't add a
-        'geo_unit' entry to the column mapping. Prior behaviour duplicated
-        the SGU name as a property, which then silently re-shadowed any
-        downstream property lookup that expected only domain attributes."""
+        'geo_unit' entry to the column mapping. Duplicating the SGU name as a
+        property would re-shadow downstream lookups that expect only domain
+        attributes."""
         df = pd.DataFrame({
             'Age': [25],
             'Sex': ['M'],
@@ -323,9 +310,7 @@ class TestLoadExplicitFromDf:
         assert pm.people[0] in sgu.people
 
 
-# ===========================================================================
-# load_batch_explicit_from_csv — previously untested
-# ===========================================================================
+# load_batch_explicit_from_csv
 
 class TestLoadBatchExplicitFromCsv:
 
@@ -385,16 +370,12 @@ class TestLoadBatchExplicitFromCsv:
         assert len(pm.people_by_id) == 2
 
 
-# ===========================================================================
-# generate_population — kwarg aliasing regression (Person fix)
-# ===========================================================================
+# generate_population — kwarg independence
 
 class TestGeneratePopulationKwargIndependence:
-    """Person.__init__ used to alias the caller's properties / activity_map
-    dicts, so generate_population fanned a single dict reference into every
-    Person it created. The Person fix copies on init; pin that contract
-    here from the PopulationManager side too — this is the path that
-    triggered the bug in production."""
+    """generate_population must give each Person its own properties /
+    activity_map dict rather than a single shared reference, so mutating one
+    Person's dict never leaks into another."""
 
     def _two_people_pm(self, sgu_geo):
         pm = PopulationManager(geography=sgu_geo, data_dir='/tmp')
@@ -414,9 +395,9 @@ class TestGeneratePopulationKwargIndependence:
         assert pm.people[0].properties is not pm.people[1].properties
 
     def test_activity_map_kwarg_does_not_raise_on_access(self, sgu_geo):
-        """Before the fix, generate_population(activity_map={...}) produced
-        Person objects that raised AttributeError on the very first read of
-        .activity_map (the slot was never assigned)."""
+        """generate_population(activity_map={...}) produces Person objects
+        whose .activity_map is assigned and readable, each an independent
+        copy of the provided mapping."""
         pm = self._two_people_pm(sgu_geo)
         pm.generate_population(activity_map={'residence': {'household': []}})
 
@@ -427,9 +408,7 @@ class TestGeneratePopulationKwargIndependence:
         assert 'leisure' not in pm.people[1].activity_map
 
 
-# ===========================================================================
 # generate_population — observable side effects on geography
-# ===========================================================================
 
 class TestGeneratePopulationGeoLinkage:
 
@@ -461,8 +440,7 @@ class TestGeneratePopulationGeoLinkage:
 
         # Second call: the counter is reset and a new batch of 0..N IDs is
         # produced. The manager's own people list still appends, which
-        # creates real ID collisions in people_by_id — verify the contract
-        # we have, not one we'd like to have.
+        # creates real ID collisions in people_by_id.
         pm.generate_population()
         new_ids = [p.id for p in pm.people[len(first_ids):]]
         assert new_ids[0] == 0  # counter was reset

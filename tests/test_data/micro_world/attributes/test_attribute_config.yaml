@@ -1,14 +1,15 @@
 ---
 # Test configuration for 'test_attribute' testing pipeline
-attribute:
-  name: "test_attribute"
-description: "Test attribute assignment config"
-assignment_level: "person_by_residence"
+step:
+  assignment_level: "person_by_residence"
+  residence_venue_types: ["household"]
 
-residence_venue_types: ["household"]
+attributes:
+  - name: "test_attribute"
+    description: "Test attribute assignment config"
 
 required_attributes:
-  age:
+  - name: age
     required: true
 
 # Add a simple filter to exclude infants for testing
@@ -94,11 +95,8 @@ assignment_rules:
           inherit_from:
             roles: ["Parent"]
           logic:
-            - when: "True"
+            - when: {unique_count: 1}
               then: "values[0]"
-          fallback:
-            strategy: "constant"
-            value: "parent_val"
 
 # Non-Household communals
 venue_assignment_rules:

@@ -1,6 +1,4 @@
-# ============================================================================
 # Specific Workplace Distributor - Care Homes (Q Sector)
-# ============================================================================
 # This distributor allocates health sector (Q) workers to care homes.
 # Access via: person.activity_map['primary_activity'] -> care_home venue
 #
@@ -9,11 +7,8 @@
 # - Location-based (uses workplace_sgu for geographical matching)
 # - Runs AFTER hospitals distributor (catches Q workers not assigned to hospitals)
 # - Runs BEFORE company_distributor to capture health sector workers
-# ============================================================================
 
-# ============================================================================
 # BASIC INFO
-# ============================================================================
 distributor_name: "specific_workplace_care_homes_distributor"
 venue_type: "care_home"
 description: "Distribute health sector (Q) workers to care homes"
@@ -25,9 +20,7 @@ activity_map_key: "primary_activity"
 # Subset to add workers to
 subset_key: "worker"
 
-# ============================================================================
 # ELIGIBILITY: Who can be allocated?
-# ============================================================================
 
 eligibility:
 
@@ -66,9 +59,7 @@ eligibility:
       # Case sensitivity
       case_sensitive: false
 
-# ============================================================================
 # VENUE SELECTION: How to pick eligible venues?
-# ============================================================================
 
 venue_selection:
   # Use geographical hierarchy matching
@@ -80,7 +71,7 @@ venue_selection:
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to care homes near their WORK location, not home
-  person_location_attribute: "properties.workplace_sgu"
+  locate_person_by: "properties.workplace_sgu"
 
   # Batch at SGU level (workplace) for better performance
   batch_geo_level: "SGU"
@@ -89,9 +80,7 @@ venue_selection:
   filter_by_geography: true
   respect_capacity: true
 
-# ============================================================================
 # ALLOCATION STRATEGY: How to assign person to venue?
-# ============================================================================
 
 allocation:
   # Allocation strategy
@@ -101,8 +90,8 @@ allocation:
   capacity_column: "number_staff"
 
   capacity_handling:
-    if_missing: "skip"  # Skip care homes without staff count
-    if_zero: "skip"     # Skip care homes with 0 staff
+    if_missing: "skip"
+    if_zero: "skip"
 
   track_capacity: true
   when_full: "exclude"  # Remove full care homes from options
@@ -110,9 +99,7 @@ allocation:
   # Batch processing for performance
   batch_by: "geo_unit"
 
-# ============================================================================
 # EXECUTION SETTINGS
-# ============================================================================
 
 settings:
   # Execution order (higher = earlier)
@@ -126,16 +113,12 @@ settings:
   verbose: true
   log_summary: true
 
-# ============================================================================
 # FALLBACK BEHAVIOR
-# ============================================================================
 
 fallback:
   strategy: "skip"  # Skip if no matching care homes found
 
-# ============================================================================
 # NOTES
-# ============================================================================
 #
 # ALLOCATION LOGIC:
 #
@@ -166,4 +149,3 @@ fallback:
 # - Any remaining Q workers (not assigned to hospitals) get allocated to care homes
 # - Any still remaining go to company_distributor
 #
-# ============================================================================

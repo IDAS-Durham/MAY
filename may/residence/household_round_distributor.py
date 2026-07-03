@@ -228,9 +228,7 @@ class HouseholdRoundDistributor:
 
                     if household:
                         # Get the actual pattern that was used (may have been demoted)
-                        actual_pattern_used = household.properties.get('actual_pattern')
-
-                        # DEBUG: Log what we're comparing
+                        actual_pattern_used = household.properties.get('allocation_pattern')
 
                         # Check if we used demotion
                         # Compare the actual pattern used vs the initial pattern requested (assumption)

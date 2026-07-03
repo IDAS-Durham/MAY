@@ -1,5 +1,5 @@
 """
-Phase 9: constraints — typed edge constraints enforced during network building.
+Typed edge constraints enforced during network building.
 
 Toy world ages:
   SGU_1: p0=10, p1=10, p2=60
@@ -38,9 +38,7 @@ def _config_with_age_constraint(max_diff, network_type="intra_geo_unit",
     }
 
 
-# ---------------------------------------------------------------------------
 # parse_constraints
-# ---------------------------------------------------------------------------
 
 def test_parse_constraints_numerical_attribute_difference():
     constraints = [{"type": "numerical_attribute_difference", "attribute": "age", "max_difference": 10}]
@@ -61,9 +59,7 @@ def test_parse_constraints_unknown_type_raises():
         parse_constraints([{"type": "unknown_type", "attribute": "age"}])
 
 
-# ---------------------------------------------------------------------------
 # intra_geo_unit with age constraint
-# ---------------------------------------------------------------------------
 
 def test_age_constraint_enforced_intra_geo_unit(toy_world):
     SocialNetworkBuilder(toy_world, _config_with_age_constraint(max_diff=5)).build_all()
@@ -104,9 +100,7 @@ def test_no_constraint_same_as_no_age_filter(toy_world):
     assert people[2].id in p0_contact_ids
 
 
-# ---------------------------------------------------------------------------
 # activity_peers with age constraint
-# ---------------------------------------------------------------------------
 
 def test_age_constraint_enforced_activity_peers(toy_world):
     config = _config_with_age_constraint(

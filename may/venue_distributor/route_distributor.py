@@ -11,11 +11,11 @@ Commute is one instance of this distributor; future use-cases (school buses,
 freight routes, ferries) plug in by writing a new YAML config — no code change.
 
 Besides the config-mapped leg columns, every leg membership carries five
-structural fields: ``leg_idx`` (the journey sequence — leg timings are
-line-relative and cannot recover it), ``origin_unit_id`` / ``dest_unit_id``
+structural fields: ``leg_idx`` (the journey sequence, stored explicitly
+because leg timings are line-relative), ``origin_unit_id`` / ``dest_unit_id``
 (the journey endpoints the router itself derived, as geo unit ids) and
 ``board_unit_id`` / ``alight_unit_id`` (this leg's stops). They are routing
-facts, not domain choices — what "origin" means is still whatever
+facts the router derives — what "origin" means is still whatever
 origin_source/destination_source the config defined.
 """
 
@@ -61,7 +61,7 @@ class RouteDistributor(BaseDistributor):
         self.class_map = c.get("class_map", {})
 
         # on_miss: { set: { property_name: value } } — overwrite a person
-        # property when the routing table has no entry for their key. Per D12.
+        # property when the routing table has no entry for their key.
         self.on_miss = c.get("on_miss", {}) or {}
         self.on_miss_set = self.on_miss.get("set", {}) or {}
 
@@ -228,9 +228,10 @@ class RouteDistributor(BaseDistributor):
         # Attach the line venue to the rider's residence MGU. This MGU is
         # guaranteed loaded (the rider lives there) and gives the venue a
         # stable, deterministic location for HDF5 partitioning.
+        mgu_level = world.geography.levels[1]  # batch-partition level
         geo_unit = getattr(person, "geographical_unit", None)
-        if geo_unit is not None and geo_unit.level != "MGU":
-            geo_unit = geo_unit.get_ancestor_by_level("MGU")
+        if geo_unit is not None and geo_unit.level != mgu_level:
+            geo_unit = geo_unit.get_ancestor_by_level(mgu_level)
         if geo_unit is None:
             return None
         # No per-venue properties: line_id is recorded as venue.name below
@@ -243,8 +244,8 @@ class RouteDistributor(BaseDistributor):
             properties={},
         )
         # Give the venue a stable, human-readable name (matching line_id) so
-        # debug dumps and any future external joins work cleanly. We don't
-        # re-key venue_manager's name dicts — lookup goes through our own cache.
+        # debug dumps and any future external joins work cleanly. Lookup goes
+        # through our own cache.
         venue.name = line_id
         self._line_to_venue[line_id] = venue
         return venue
@@ -310,11 +311,11 @@ class RouteDistributor(BaseDistributor):
                 continue
 
             # The journey's endpoints as geo unit ids. The keys were derived to
-            # route this person; persisting them (rather than discarding them
-            # here) is what lets consumers reconstruct origin→destination
-            # without re-deriving the source attributes — which stay config-
-            # defined, so these fields carry whatever semantics the world's
-            # distributor configs chose (home→work today, work→cinema tomorrow).
+            # route this person; persisting them lets consumers reconstruct
+            # origin→destination straight from the stored ids. The source
+            # attributes stay config-defined, so these fields carry whatever
+            # semantics the world's distributor configs chose (home→work today,
+            # work→cinema tomorrow).
             origin_unit_id = self._unit_id_for(world, origin)
             dest_unit_id = self._unit_id_for(world, dest)
 
@@ -334,7 +335,7 @@ class RouteDistributor(BaseDistributor):
                     activity_type=self.leg_venue_type,
                 )
                 subset = venue.subsets[self.leg_subset_key]
-                # Per-leg numeric metadata (D11). Keyed by person.id; if a
+                # Per-leg numeric metadata. Keyed by person.id; if a
                 # person has two legs on the same line (rare), the second
                 # overwrites — warn and count it. Alongside the config-mapped
                 # columns, every leg row carries the structural routing fields:
@@ -343,8 +344,8 @@ class RouteDistributor(BaseDistributor):
                 if person.id in subset.member_metadata:
                     self._stats["metadata_overwrites"] += 1
                 row = {field: leg[col] for field, col in self.leg_metadata.items()}
-                # The route table's journey sequence. Persisted because leg
-                # timings cannot recover it: t_board/t_alight are line-relative
+                # The route table's journey sequence. Persisted because it is
+                # the only source of ordering: t_board/t_alight are line-relative
                 # offsets, so sorting by them misorders interchange journeys.
                 row["leg_idx"] = int(leg["leg_idx"])
                 row["origin_unit_id"] = origin_unit_id

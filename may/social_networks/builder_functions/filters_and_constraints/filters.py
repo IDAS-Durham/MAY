@@ -13,9 +13,6 @@ To add a new pool type:
     def build_my_pool(world, pool_config: dict):
         # Return a list of groups (each group is a list of Person objects)
         ...
-
-Design mirrors may/residence/models.py (Category) and
-may/residence/relationship_rules.py (_get_attribute_getter pattern).
 """
 
 import numpy as np
@@ -29,10 +26,6 @@ from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("social_network_filters")
 
-
-# ============================================================================
-# POOL TYPE REGISTRY
-# ============================================================================
 
 PoolTypeBuilder = Callable[[Any, dict], list]
 
@@ -66,10 +59,6 @@ def build_pool(world, pool_type: str, pool_config: dict) -> list[list]:
         )
     return pool_type_builders[pool_type](world, pool_config)
 
-
-# ============================================================================
-# BUILT-IN POOL TYPE BUILDERS
-# ============================================================================
 
 def _navigate_to_level(unit, target_level: str):
     """Walk up the geographic hierarchy until unit.level matches target_level."""
@@ -130,14 +119,10 @@ def _build_activity_pool(world, pool_config: dict) -> list[list]:
     return list(groups.values())
 
 
-# ============================================================================
-# DATACLASSES
-# ============================================================================
-
 @dataclass
 class PoolFilter:
     """
-    Absolute single-person filter. Mirrors Category in may/residence/models.py.
+    Absolute single-person filter.
 
     Numerical: person passes if min_value <= attr_value <= max_value.
     Categorical: person passes if attr_value in allowed_values.
@@ -175,10 +160,6 @@ class ConnectionFilter:
     range: Optional[int]    # for 'range' only
 
 
-# ============================================================================
-# PARSING
-# ============================================================================
-
 def parse_pool_filter(d: dict) -> PoolFilter:
     filter_type = d.get('type', 'numerical')
     allowed = d.get('allowed_values')
@@ -198,12 +179,6 @@ def parse_connection_filter(d: dict) -> ConnectionFilter:
         range=d.get('range'),
     )
 
-
-
-
-# ============================================================================
-# ATTRIBUTE ARRAY BUILDING
-# ============================================================================
 
 def build_attribute_arrays(
     people,
@@ -241,10 +216,6 @@ def build_attribute_arrays(
             result[f.attribute] = (arr, encoding)
     return result
 
-
-# ============================================================================
-# NUMBA POOL FILTERING
-# ============================================================================
 
 @nb.njit(cache=True)
 def _apply_numerical_filter_numba(
@@ -330,10 +301,6 @@ def apply_pool_filters(
     return current
 
 
-# ============================================================================
-# CONNECTION FILTER CHECKING (Python-level, per edge in GraphRelationshipBuilder)
-# ============================================================================
-
 def build_local_attribute_arrays(
     people,
     connection_filters: list,
@@ -380,10 +347,6 @@ def check_connection_filters(
                 return False
     return True
 
-
-# ============================================================================
-# NUMBA-COMPATIBLE CONNECTION FILTER ENCODING
-# ============================================================================
 
 def encode_connection_filters_for_numba(
     connection_filters: list,

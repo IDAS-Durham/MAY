@@ -28,7 +28,7 @@ class PropertyMatchingDistributor(BaseDistributor):
         else:
             self.target_venue_types = list(target_type)
             
-        # Required configuration (no fallbacks)
+        # Required configuration; fail loud on missing keys
         required_keys = ['mapping_key', 'venue_property', 'activity_name']
         missing_keys = [key for key in required_keys if key not in self.config]
         if missing_keys:
@@ -154,7 +154,7 @@ class PropertyMatchingDistributor(BaseDistributor):
         Priority:
         1. 'subset_categories' in venue properties (Dynamic, attribute-based)
         2. 'subset_key' in venue properties (Static override)
-        3. self.subset_key from distributor config (Static default / Backward compat)
+        3. self.subset_key from distributor config (Static default)
         """
         
         # 1. Check for dynamic categories (e.g., age-based for households)
@@ -186,13 +186,11 @@ class PropertyMatchingDistributor(BaseDistributor):
                         # Categorical check (if needed in future)
                         # elif cat.get('type') == 'categorical': ...
             
-            # If categories exist but no match found, fallback or return None?
-            # For now, fallback to static key if available, else None
             pass
 
         # 2. Check venue-specific static key
         if 'subset_key' in venue.properties:
             return venue.properties['subset_key']
 
-        # 3. Fallback to distributor config (backward compatibility)
+        # 3. Distributor config default
         return self.subset_key

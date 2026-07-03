@@ -4,8 +4,7 @@ Data models for household allocation.
 This module contains the core dataclasses used throughout the household
 allocation system.
 
-Note: Households are now represented as Venue objects with type="household".
-The Household class has been removed in favor of the generic Venue system.
+Households are represented as Venue objects with type="household".
 """
 
 from typing import Optional, List, Any
@@ -74,5 +73,4 @@ class Category:
             return f"{self.name}({self.attribute}:{self.allowed_values})"
 
 
-# Backwards compatibility alias (deprecated)
 AgeCategory = Category

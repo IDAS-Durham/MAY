@@ -154,9 +154,6 @@ demotion:
 # while maintaining geographical constraints.
 
 promotion:
-  # Enable automatic promotion to accommodate leftover people
-  enabled: true
-
   # Maximum number of promotion attempts per household
   max_attempts: 4
 

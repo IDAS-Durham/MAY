@@ -13,19 +13,17 @@ def execute_serialization_block(world_mock, config, args, logger_mock):
     if serial_config.get("enabled", True):
         logger_mock.info("")
         logger_mock.info("Exporting world to HDF5...")
+        config_file = serial_config.get("config_file")
+        if not config_file:
+            raise ValueError("serialization.config_file is required")
         output_dir = serial_config.get("output_dir", ".")
         filename = serial_config.get("filename", args.filename)
-        
+
         if output_dir != ".":
             os.makedirs(output_dir, exist_ok=True)
-            
+
         export_path = os.path.join(output_dir, filename)
-        config_file = serial_config.get("config_file")
-        
-        if config_file:
-            world_mock.export_to_hdf5(export_path, config_file=config_file)
-        else:
-            world_mock.export_to_hdf5(export_path)
+        world_mock.export_to_hdf5(export_path, config_file=config_file)
 
 
 class TestCreateWorldSerializationRouting:
@@ -54,15 +52,14 @@ class TestCreateWorldSerializationRouting:
         # Verify export was never called
         world_mock.export_to_hdf5.assert_not_called()
 
-    def test_serialization_default_fallbacks(self, world_mock, args_mock, logger_mock):
-        """Verify empty configs trigger the 'default_cli_world.h5' gracefully without custom args."""
-        config = {} # Missing or empty serialization block
-        
-        execute_serialization_block(world_mock, config, args_mock, logger_mock)
-        
-        # Verify it defaulted to enabled=True, output_dir=".", used args.filename, and didn't pass custom config
-        expected_path = os.path.join(".", args_mock.filename)
-        world_mock.export_to_hdf5.assert_called_once_with(expected_path)
+    def test_serialization_missing_config_file_fails_loud(self, world_mock, args_mock, logger_mock):
+        """Verify an enabled export with no config_file is rejected (no scenario-generic default)."""
+        config = {} # Missing or empty serialization block -> enabled defaults True, no config_file
+
+        with pytest.raises(ValueError):
+            execute_serialization_block(world_mock, config, args_mock, logger_mock)
+
+        world_mock.export_to_hdf5.assert_not_called()
 
     @patch('os.makedirs')
     def test_serialization_custom_output_directory_generation(self, mock_makedirs, world_mock, args_mock, logger_mock):
@@ -71,15 +68,16 @@ class TestCreateWorldSerializationRouting:
         config = {
             "serialization": {
                 "enabled": True,
-                "output_dir": custom_dir
+                "output_dir": custom_dir,
+                "config_file": "serializer.yaml"
             }
         }
-        
+
         execute_serialization_block(world_mock, config, args_mock, logger_mock)
-        
+
         mock_makedirs.assert_called_once_with(custom_dir, exist_ok=True)
         expected_path = os.path.join(custom_dir, args_mock.filename)
-        world_mock.export_to_hdf5.assert_called_once_with(expected_path)
+        world_mock.export_to_hdf5.assert_called_once_with(expected_path, config_file="serializer.yaml")
 
     def test_serialization_custom_filename_priority(self, world_mock, args_mock, logger_mock):
         """Verify YAML filename completely overrides the CLI fallback."""
@@ -87,14 +85,15 @@ class TestCreateWorldSerializationRouting:
         config = {
             "serialization": {
                 "enabled": True,
-                "filename": custom_name
+                "filename": custom_name,
+                "config_file": "serializer.yaml"
             }
         }
-        
+
         execute_serialization_block(world_mock, config, args_mock, logger_mock)
-        
+
         expected_path = os.path.join(".", custom_name)
-        world_mock.export_to_hdf5.assert_called_once_with(expected_path)
+        world_mock.export_to_hdf5.assert_called_once_with(expected_path, config_file="serializer.yaml")
 
     def test_serialization_custom_config_link(self, world_mock, args_mock, logger_mock):
         """Verify the custom serializer config gets intercepted and passed as a kwarg."""
@@ -169,8 +168,9 @@ class TestWorldHDF5PayloadIntegrity:
         """Run the actual exporting script on a mocked world component and read the real .h5 response!"""
         
         # 1. Trigger realistic serialization using the internal method natively.
-        # We rely on defaults: `config_file="yaml/serialization_config.yaml"`
-        stats = minimal_world.export_to_hdf5(test_export_path)
+        stats = minimal_world.export_to_hdf5(
+            test_export_path, config_file="configs/2021/serialization_config.yaml"
+        )
 
         # Confirm the statistics return trace matches the minimal_world injection size
         assert stats['num_people'] == 10

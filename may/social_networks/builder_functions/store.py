@@ -2,7 +2,7 @@
 Shared storage function for all network builder functions.
 
 All builders must use store_contacts to write to person.properties and
-person.activity_map. See network_builder_function_requirements.md.
+person.activity_map.
 """
 
 

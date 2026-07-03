@@ -1,6 +1,4 @@
-# ============================================================================
 # Comorbidities Attribute Assignment Configuration
-# ============================================================================
 # This configuration assigns health comorbidities to individuals based on
 # demographic characteristics: sex, age, ethnicity, and region.
 #
@@ -10,50 +8,23 @@
 #
 # Dependencies: ethnicity
 # - Requires ethnicity to be assigned first
-# ============================================================================
 
-attribute:
-  name: "comorbidities"
-  description: "Assigns health comorbidities based on person demographics"
-  data_type: "list"
+step:
   assignment_level: "person"
 
-# ============================================================================
+attributes:
+  - name: "comorbidities"
+    description: "Assigns health comorbidities based on person demographics"
+    data_type: "list"
+
 # Required Attributes (Dependencies)
-# ============================================================================
 # Attributes that must be assigned before this one
 required_attributes:
   - name: "ethnicity"
     description: "Ethnicity attribute must be assigned first"
     required: true
-    error_if_missing: true
 
-    # Map internal ethnicity codes to CSV ethnicity codes
-    mapping:
-      W: "W"
-      A: "A"
-      B: "B"
-      M: "M"
-      O: "CO"  # Internal "O" maps to CSV "CO" (Other)
-
-# ============================================================================
-# Region Mapping
-# ============================================================================
-# Map GU names to CSV names
-region_mapping:
-  "East of England": "East"
-  "East Midlands": "East Midlands"
-  "London": "London"
-  "North East": "North East"
-  "North West": "North West"
-  "South East": "South East"
-  "South West": "South West"
-  "West Midlands": "West Midlands"
-  "Yorkshire and The Humber": "Yorkshire and The Humber"
-
-# ============================================================================
 # Age Band Categories
-# ============================================================================
 # Define age bands that match the comorbidities CSV structure
 # Similar to household_config.yaml categories
 categories:
@@ -111,12 +82,11 @@ categories:
       min: 75
       max:
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   comorbidity_probabilities:
     type: "csv_lookup"
+    format: "multi_key"
     description: "Comorbidity probabilities stratified by demographics"
 
     files:
@@ -139,7 +109,6 @@ data_sources:
             type: "ancestor_lookup"
             level: "XLGU"
             property: "name"
-            mapping: "region_mapping"  # Apply region name mapping
 
         # Value columns: condition probabilities
         value_columns:
@@ -155,22 +124,8 @@ data_sources:
           immunosuppression: "has_had_immunosuppression_diagnosis_count_midpoint_rounded"
           neuro: "has_had_neuro_diagnosis_count_midpoint_rounded"
 
-    fallback:
-      no_condition: 0.95
-      has_comorbidity: 0.05
-      multiple_morbidities: 0.01
-      cvd: 0.01
-      crd: 0.01
-      ckd: 0.005
-      cld: 0.005
-      severe_obesity: 0.01
-      cancer: 0.005
-      immunosuppression: 0.002
-      neuro: 0.005
 
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Assign comorbidities to all people based on demographics"
@@ -182,9 +137,12 @@ assignment_rules:
         assignment:
           strategy: "probabilistic_conditions"
           data_source: "comorbidity_probabilities"
-          selection_method: "independent_bernoulli"
+          # Gated hierarchical sampler: honors the joint count structure
+          # (no_condition / has_comorbidity / multiple_morbidities) rather than
+          # treating each condition as an independent Bernoulli trial.
+          selection_method: "gated_conditions"
 
-          # Conditions to consider (sampled independently)
+          # Conditions drawn (weighted by their per-condition marginals)
           conditions:
             - name: "cvd"
               label: "Cardiovascular Disease"
@@ -203,9 +161,7 @@ assignment_rules:
             - name: "neuro"
               label: "Neurological Condition"
 
-# ============================================================================
 # Settings
-# ============================================================================
 settings:
   logging:
     show_attribute_distribution: false  # Hide detailed comorbidity distribution output

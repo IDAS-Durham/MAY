@@ -30,9 +30,7 @@ from may.attribute_assignment.strategies import (
 )
 
 
-# =============================================================================
 # Minimal real objects
-# =============================================================================
 
 class MinimalGeoUnit:
     def __init__(self, name, level="SGU", parent=None):
@@ -108,12 +106,24 @@ class ODMatrixSource:
 
 
 class GUSamplerSource:
-    """Source that returns {gu_code: probability} dicts."""
-    def __init__(self, lookup_data=None):
+    """
+    Like the real GUSamplerSource: resolves the parent GU from a configured
+    person attribute, then returns {gu_code: probability}; raises on a
+    miss.
+    """
+    def __init__(self, lookup_data=None, parent_attribute="workplace_location"):
         self._lookup_data = lookup_data or {}
+        self._parent_attribute = parent_attribute
 
-    def lookup(self, parent_gu):
-        return self._lookup_data.get(parent_gu, {})
+    def lookup(self, person, household=None, context=None):
+        parent_gu = person.properties.get(self._parent_attribute)
+        if not parent_gu:
+            raise KeyError(
+                f"person has no '{self._parent_attribute}' to sample within"
+            )
+        if parent_gu not in self._lookup_data:
+            raise KeyError(f"no child-GU distribution for parent '{parent_gu}'")
+        return self._lookup_data[parent_gu]
 
 
 class SimpleDataManager:
@@ -130,9 +140,7 @@ class SimpleDataManager:
         return {}
 
 
-# =============================================================================
 # Fixtures
-# =============================================================================
 
 @pytest.fixture(autouse=True)
 def reset_person_ids():
@@ -144,9 +152,7 @@ def geo_unit():
     return MinimalGeoUnit("E00001234")
 
 
-# =============================================================================
 # ProbabilisticConditionsStrategy Tests
-# =============================================================================
 
 class TestProbabilisticConditionsStrategy:
     """
@@ -226,25 +232,25 @@ class TestProbabilisticConditionsStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
         assert result == []
 
-    def test_missing_data_source_returns_empty(self):
-        """Data source not registered → empty list."""
+    def test_missing_data_source_raises(self):
+        """Data source not registered → raise. No fallbacks."""
         conditions = [{"name": "cvd"}]
         dm = SimpleDataManager(sources={})  # no source
         strategy = ProbabilisticConditionsStrategy(
             self._make_strategy(conditions), dm
         )
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
-        assert result == []
+        with pytest.raises(RuntimeError, match="not found"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
 
-    def test_no_data_source_name_returns_empty(self):
+    def test_no_data_source_name_raises(self):
         conditions = [{"name": "cvd"}]
         config = {"strategy": "probabilistic_conditions", "conditions": conditions}
         dm = SimpleDataManager()
         strategy = ProbabilisticConditionsStrategy(config, dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
-        assert result == []
+        with pytest.raises(RuntimeError, match="no 'data_source'"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
 
     def test_data_source_returns_empty_dict_returns_empty(self):
         """Data source returns {} for this person → empty list."""
@@ -258,8 +264,8 @@ class TestProbabilisticConditionsStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
         assert result == []
 
-    def test_unknown_selection_method_returns_empty(self):
-        """Unknown selection method → empty list."""
+    def test_unknown_selection_method_raises(self):
+        """Unknown selection method → raise. No fallbacks."""
         conditions = [{"name": "cvd"}]
         source = MultiKeySource(return_value={"cvd": 1.0})
         dm = SimpleDataManager(sources={"comorbidity_probs": source})
@@ -267,8 +273,8 @@ class TestProbabilisticConditionsStrategy:
             self._make_strategy(conditions, selection_method="not_real"), dm
         )
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
-        assert result == []
+        with pytest.raises(RuntimeError, match="unknown selection_method"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
 
     def test_condition_without_name_key_is_skipped(self):
         """Condition dict missing 'name' → skipped silently."""
@@ -282,19 +288,11 @@ class TestProbabilisticConditionsStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
         assert result == ["cvd", "crd"]
 
-    # ---- BUG DETECTION ----
 
     def test_return_type_is_list_not_single_value(self):
         """
-        ProbabilisticConditionsStrategy.assign() returns a List[str].
-        This is important because the assigner's _assign_household (line 659) does:
-            person.properties[self.attribute_name] = value
-        which stores the entire list — this is correct for comorbidities.
-        But the attribute_distribution counter (line 664) does:
-            self.stats['attribute_distribution'][value] += 1
-        A list is NOT hashable and would crash as a dict key.
-
-        BUG: _assign_household doesn't handle list return values.
+        ProbabilisticConditionsStrategy.assign() returns a list of condition
+        names, which is not hashable and so cannot be used as a dict key.
         """
         conditions = [{"name": "cvd"}]
         source = MultiKeySource(return_value={"cvd": 1.0})
@@ -315,18 +313,8 @@ class TestProbabilisticConditionsStrategy:
 
     def test_empty_list_is_truthy_but_evaluates_as_falsy(self):
         """
-        BUG: assign() returns [] when no conditions fire.
-        In _assign_household line 657: `if value is not None:`
-        An empty list passes this check ([] is not None → True).
-        So an empty list is stored as person.properties[attr] = [].
-        This is technically correct but worth documenting.
-
-        However, in _assign_all_people_batch line 442:
-        `if value is not None:` also passes for [].
-        Then line 452: person.properties[self.attribute_name] = value
-        stores [] which is fine.
-        But line 453: self.stats['attribute_distribution'][str(value)] += 1
-        would count str([]) = "[]" as a distribution key. Acceptable but odd.
+        When no conditions fire, assign() returns [], which is not None and so
+        is stored as the attribute value rather than treated as unassigned.
         """
         conditions = [{"name": "cvd"}]
         source = MultiKeySource(return_value={"cvd": 0.0})
@@ -340,9 +328,126 @@ class TestProbabilisticConditionsStrategy:
         assert result is not None  # [] is not None — passes the None check
 
 
-# =============================================================================
+# Gated hierarchical comorbidity sampler
+
+class TestGatedConditionsSampler:
+    """
+    selection_method: gated_conditions
+
+    Honors the joint count structure (no_condition / has_comorbidity /
+    multiple_morbidities) as the count tier, then draws which conditions from the
+    per-condition marginals. Contradictory or missing data fails loud.
+    """
+
+    CONDITIONS = [{"name": "cvd"}, {"name": "crd"}, {"name": "ckd"}, {"name": "cld"}]
+
+    def _make(self, return_value, conditions=None):
+        config = {
+            "strategy": "probabilistic_conditions",
+            "data_source": "comorbidity_probs",
+            "selection_method": "gated_conditions",
+            "conditions": self.CONDITIONS if conditions is None else conditions,
+        }
+        dm = SimpleDataManager(sources={"comorbidity_probs": MultiKeySource(return_value)})
+        return ProbabilisticConditionsStrategy(config, dm)
+
+    def _assign(self, strategy):
+        return strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
+
+    def test_p_none_one_always_empty(self):
+        """no_condition = 1 → person always has zero conditions."""
+        strategy = self._make({
+            "no_condition": 1.0, "has_comorbidity": 0.0, "multiple_morbidities": 0.0,
+            "cvd": 0.5, "crd": 0.5, "ckd": 0.5, "cld": 0.5,
+        })
+        np.random.seed(0)
+        for _ in range(50):
+            assert self._assign(strategy) == []
+
+    def test_exactly_one_tier_returns_single_condition(self):
+        """has_comorbidity = 1, multiple = 0 → exactly one condition every time."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 0.0,
+            "cvd": 0.5, "crd": 0.5, "ckd": 0.0, "cld": 0.0,
+        })
+        np.random.seed(0)
+        for _ in range(50):
+            result = self._assign(strategy)
+            assert len(result) == 1
+            assert result[0] in {"cvd", "crd"}  # only positive-margin conditions
+
+    def test_multi_tier_returns_distinct_conditions(self):
+        """multiple = 1 → at least two distinct conditions, never a duplicate."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 1.0,
+            "cvd": 0.4, "crd": 0.4, "ckd": 0.4, "cld": 0.4,
+        })
+        np.random.seed(1)
+        for _ in range(50):
+            result = self._assign(strategy)
+            assert len(result) >= 2
+            assert len(set(result)) == len(result)  # distinct
+            assert set(result) <= {"cvd", "crd", "ckd", "cld"}
+
+    def test_zero_margin_condition_never_selected(self):
+        """A condition with marginal 0 is never drawn even when conditions fire."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 0.0,
+            "cvd": 1.0, "crd": 0.0, "ckd": 0.0, "cld": 0.0,
+        })
+        np.random.seed(0)
+        for _ in range(30):
+            assert self._assign(strategy) == ["cvd"]
+
+    def test_count_tier_distribution_is_honored(self):
+        """Over many draws, the fraction with zero conditions ≈ no_condition."""
+        strategy = self._make({
+            "no_condition": 0.7, "has_comorbidity": 0.3, "multiple_morbidities": 0.1,
+            "cvd": 0.15, "crd": 0.1, "ckd": 0.05, "cld": 0.05,
+        })
+        np.random.seed(42)
+        n = 5000
+        empties = sum(1 for _ in range(n) if self._assign(strategy) == [])
+        assert abs(empties / n - 0.7) < 0.03
+
+    def test_missing_joint_column_raises(self):
+        """gated_conditions needs the joint columns — missing one fails loud."""
+        strategy = self._make({"has_comorbidity": 0.3, "multiple_morbidities": 0.1, "cvd": 0.2})
+        with pytest.raises(RuntimeError, match="requires 'no_condition'"):
+            self._assign(strategy)
+
+    def test_has_comorbidity_less_than_multiple_raises(self):
+        """P(>=1) < P(>=2) is contradictory → fail loud."""
+        strategy = self._make({
+            "no_condition": 0.5, "has_comorbidity": 0.1, "multiple_morbidities": 0.4,
+            "cvd": 0.2, "crd": 0.2, "ckd": 0.2, "cld": 0.2,
+        })
+        with pytest.raises(RuntimeError, match="has_comorbidity.*multiple_morbidities"):
+            self._assign(strategy)
+
+    def test_multi_tier_with_too_few_positive_conditions_raises(self):
+        """Data says >=2 but only one condition has positive marginal → fail loud."""
+        strategy = self._make({
+            "no_condition": 0.0, "has_comorbidity": 1.0, "multiple_morbidities": 1.0,
+            "cvd": 1.0, "crd": 0.0, "ckd": 0.0, "cld": 0.0,
+        })
+        with pytest.raises(RuntimeError, match="cannot produce two or more|cannot draw"):
+            self._assign(strategy)
+
+    def test_independent_bernoulli_still_available(self):
+        """The independent_bernoulli selection method is available."""
+        config = {
+            "strategy": "probabilistic_conditions",
+            "data_source": "comorbidity_probs",
+            "selection_method": "independent_bernoulli",
+            "conditions": [{"name": "cvd"}],
+        }
+        dm = SimpleDataManager(sources={"comorbidity_probs": MultiKeySource({"cvd": 1.0})})
+        strategy = ProbabilisticConditionsStrategy(config, dm)
+        assert self._assign(strategy) == ["cvd"]
+
+
 # CommutingLikelihoodStrategy Tests
-# =============================================================================
 
 class TestCommutingLikelihoodStrategy:
     """
@@ -357,15 +462,12 @@ class TestCommutingLikelihoodStrategy:
     def _make_od_source(self, data):
         return ODMatrixSource(lookup_data=data)
 
-    def _make_strategy(self, outputs, data_source_name="commuting_flows", fallback=None):
-        config = {
+    def _make_strategy(self, outputs, data_source_name="commuting_flows"):
+        return {
             "strategy": "commuting_likelihood",
             "data_source": data_source_name,
             "outputs": outputs,
         }
-        if fallback:
-            config["fallback"] = fallback
-        return config
 
     # --- Single output ---
 
@@ -436,85 +538,52 @@ class TestCommutingLikelihoodStrategy:
 
     # --- Origin resolution ---
 
-    def test_no_geographical_unit_triggers_fallback(self):
-        """Person with no geo unit → fallback."""
+    def test_no_geographical_unit_raises(self):
+        """Person with no geo unit → no origin to look up → raise."""
         source = self._make_od_source({"ORIGIN_A": [("DEST_1", {}, 1.0)]})
-        geo_source = SimpleGeoSource(fallback={"W": 1.0})
-        dm = SimpleDataManager(sources={
-            "commuting_flows": source,
-            "geo_distribution": geo_source,
-        })
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+        dm = SimpleDataManager(sources={"commuting_flows": source})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=None)
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        # Should hit fallback because _resolve_origin_code returns None
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
-    def test_missing_data_source_triggers_fallback(self):
-        """Data source not registered → fallback."""
-        dm = SimpleDataManager(sources={"geo_distribution": SimpleGeoSource(fallback={"W": 1.0})})
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+    def test_missing_data_source_raises(self):
+        """Data source not registered → raise."""
+        dm = SimpleDataManager(sources={})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("ORIGIN_A"))
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
-    def test_empty_destinations_triggers_fallback(self):
-        """Origin exists but has no destinations → fallback."""
+    def test_empty_destinations_raises(self):
+        """Origin exists but has no destinations → raise."""
         source = self._make_od_source({"ORIGIN_A": []})
-        geo_source = SimpleGeoSource(fallback={"W": 1.0})
-        dm = SimpleDataManager(sources={
-            "commuting_flows": source,
-            "geo_distribution": geo_source,
-        })
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+        dm = SimpleDataManager(sources={"commuting_flows": source})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("ORIGIN_A"))
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
-    def test_unknown_origin_triggers_fallback(self):
-        """Origin code not in O-D matrix → fallback."""
+    def test_unknown_origin_raises(self):
+        """Origin code not in O-D matrix → raise."""
         source = self._make_od_source({"ORIGIN_A": [("DEST_1", {}, 1.0)]})
-        geo_source = SimpleGeoSource(fallback={"W": 1.0})
-        dm = SimpleDataManager(sources={
-            "commuting_flows": source,
-            "geo_distribution": geo_source,
-        })
-        config = self._make_strategy(
-            outputs={"loc": "destination"},
-            fallback={"strategy": "constant", "value": "FB"},
-        )
+        dm = SimpleDataManager(sources={"commuting_flows": source})
+        config = self._make_strategy(outputs={"loc": "destination"})
         strategy = CommutingLikelihoodStrategy(config, dm)
 
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("UNKNOWN"))
         geo = MinimalGeoUnit("E00001234")
-        context = {"attribute_name": "loc"}
-        result = strategy.assign(person, MinimalVenue(geographical_unit=geo), context)
-        assert result == "FB"
-        assert context.get("fallback_reason") == "COMMUTING_DATA_MISSING"
+        with pytest.raises(RuntimeError, match="no commuting-flow row"):
+            strategy.assign(person, MinimalVenue(geographical_unit=geo), {"attribute_name": "loc"})
 
     # --- Batch mode ---
 
@@ -559,7 +628,6 @@ class TestCommutingLikelihoodStrategy:
         assert results[0] == "DEST_1"
         assert results[1] is None  # no origin → skipped
 
-    # ---- BUG DETECTION ----
 
     def test_metadata_key_missing_raises_valueerror(self):
         """
@@ -579,10 +647,7 @@ class TestCommutingLikelihoodStrategy:
             strategy.assign(person, MinimalVenue(), {"attribute_name": "result"})
 
     def test_multi_output_missing_metadata_key_raises_valueerror(self):
-        """
-        Missing metadata key in multi-output mode also raises ValueError.
-        Both single and multi output are now consistent.
-        """
+        """Missing metadata key in multi-output mode also raises ValueError."""
         source = self._make_od_source({
             "ORIGIN_A": [("DEST_1", {"mode": "car"}, 1.0)]
         })
@@ -614,18 +679,16 @@ class TestCommutingLikelihoodStrategy:
         assert result == {}
 
 
-# =============================================================================
 # GUSamplerStrategy Tests
-# =============================================================================
 
 class TestGUSamplerStrategy:
     """
-    Intended behaviour (strategies.py lines 918-1062):
+    Intended behaviour:
     - Gets workplace_location from person.properties
-    - Looks up GU distribution for that parent GU from data source
-    - If no data for workplace GU, falls back to person's home LGU
+    - Looks up GU distribution for that parent GU from data source (raises on a miss)
     - Samples one GU weighted by distribution
-    - Batch mode groups by (workplace_parent_gu, home_parent_gu)
+    - Batch mode groups by workplace_parent_gu
+    No fallbacks: missing workplace_location or missing data is a hard error.
     """
 
     def _make_strategy(self, data_source_name="gu_sampler"):
@@ -663,78 +726,35 @@ class TestGUSamplerStrategy:
             result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
             assert result == "SGU_ONLY"
 
-    # --- Fallback to home parent GU ---
+    # --- Missing data / prerequisites → raise ---
 
-    def test_falls_back_to_home_lgu_when_workplace_missing(self):
-        """If workplace GU has no data, tries person's home LGU."""
-        lgu = MinimalGeoUnit("Birmingham", level="LGU")
-        sgu = MinimalGeoUnit("SGU_123", level="SGU", parent=lgu)
-
-        source = GUSamplerSource(lookup_data={
-            "Birmingham": {"SGU_HOME": 1.0}
-            # "UnknownWorkplace" not in data
-        })
-        dm = SimpleDataManager(sources={"gu_sampler": source})
-        strategy = GUSamplerStrategy(self._make_strategy(), dm)
-
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "UnknownWorkplace"}
-        )
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result == "SGU_HOME"
-
-    def test_no_data_anywhere_returns_none(self):
-        """Neither workplace nor home GU has data → None."""
-        lgu = MinimalGeoUnit("Nowhere", level="LGU")
-        sgu = MinimalGeoUnit("SGU_X", level="SGU", parent=lgu)
-
+    def test_missing_workplace_data_raises(self):
+        """Workplace GU not in the source → raise (no home fallback)."""
         source = GUSamplerSource(lookup_data={})  # empty
         dm = SimpleDataManager(sources={"gu_sampler": source})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "Unknown"}
-        )
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
+        person = MinimalPerson(properties={"workplace_location": "Unknown"})
+        with pytest.raises(KeyError, match="no child-GU distribution"):
+            strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
 
-    # --- Missing prerequisites ---
-
-    def test_no_workplace_location_returns_none(self):
-        """Person without workplace_location property → None."""
+    def test_no_workplace_location_raises(self):
+        """Person without workplace_location → raise."""
         source = GUSamplerSource(lookup_data={"X": {"SGU_1": 1.0}})
         dm = SimpleDataManager(sources={"gu_sampler": source})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
         person = MinimalPerson(properties={})  # no workplace_location
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
+        with pytest.raises(KeyError, match="workplace_location"):
+            strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
 
-    def test_no_data_source_returns_none(self):
+    def test_no_data_source_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
         person = MinimalPerson(properties={"workplace_location": "Manchester"})
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
-
-    def test_no_lgu_ancestor_falls_through(self):
-        """Person's geo unit has no LGU ancestor → can't fall back."""
-        # SGU with no parent
-        sgu = MinimalGeoUnit("SGU_ORPHAN", level="SGU", parent=None)
-
-        source = GUSamplerSource(lookup_data={})  # no data for "UnknownWorkplace"
-        dm = SimpleDataManager(sources={"gu_sampler": source})
-        strategy = GUSamplerStrategy(self._make_strategy(), dm)
-
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "UnknownWorkplace"}
-        )
-        result = strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
-        assert result is None
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign(person, MinimalVenue(), {"attribute_name": "workplace_sgu"})
 
     # --- Batch mode ---
 
@@ -759,8 +779,8 @@ class TestGUSamplerStrategy:
         assert results[1] == "SGU_2"
         assert results[2] == "SGU_1"
 
-    def test_batch_person_without_workplace_gets_none(self):
-        """Person without workplace_location in batch → stays None."""
+    def test_batch_person_without_workplace_raises(self):
+        """Person without workplace_location in batch → raise."""
         source = GUSamplerSource(lookup_data={"Manchester": {"SGU_1": 1.0}})
         dm = SimpleDataManager(sources={"gu_sampler": source})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
@@ -768,55 +788,25 @@ class TestGUSamplerStrategy:
         p1 = MinimalPerson(properties={"workplace_location": "Manchester"})
         p2 = MinimalPerson(properties={})  # no workplace
 
-        results = strategy.assign_batch(
-            [p1, p2],
-            [MinimalVenue()] * 2,
-            [{"attribute_name": "sgu"}] * 2,
-        )
-        assert results[0] == "SGU_1"
-        assert results[1] is None
+        with pytest.raises(KeyError, match="workplace_location"):
+            strategy.assign_batch(
+                [p1, p2],
+                [MinimalVenue()] * 2,
+                [{"attribute_name": "sgu"}] * 2,
+            )
 
-    # ---- BUG DETECTION ----
-
-    def test_batch_fallback_to_home_gu(self):
-        """
-        Batch mode also has the workplace→home fallback logic.
-        Verify it works identically to sequential mode.
-        """
-        lgu = MinimalGeoUnit("Birmingham", level="LGU")
-        sgu = MinimalGeoUnit("SGU_123", level="SGU", parent=lgu)
-
-        source = GUSamplerSource(lookup_data={
-            "Birmingham": {"SGU_HOME": 1.0}
-        })
-        dm = SimpleDataManager(sources={"gu_sampler": source})
-        strategy = GUSamplerStrategy(self._make_strategy(), dm)
-
-        person = MinimalPerson(
-            geographical_unit=sgu,
-            properties={"workplace_location": "UnknownWorkplace"}
-        )
-        results = strategy.assign_batch(
-            [person],
-            [MinimalVenue()],
-            [{"attribute_name": "sgu"}],
-        )
-        assert results[0] == "SGU_HOME"
-
-    def test_no_data_source_batch_returns_all_none(self):
+    def test_no_data_source_batch_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = GUSamplerStrategy(self._make_strategy(), dm)
 
         p1 = MinimalPerson(properties={"workplace_location": "Manchester"})
-        results = strategy.assign_batch(
-            [p1], [MinimalVenue()], [{"attribute_name": "sgu"}]
-        )
-        assert results == [None]
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign_batch(
+                [p1], [MinimalVenue()], [{"attribute_name": "sgu"}]
+            )
 
 
-# =============================================================================
 # CategoricalSamplerStrategy Tests
-# =============================================================================
 
 class TestCategoricalSamplerStrategy:
     """
@@ -869,31 +859,31 @@ class TestCategoricalSamplerStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
         assert result in {"A", "B"}
 
-    def test_zero_total_returns_none(self):
-        """All probabilities 0 → total=0 → None."""
+    def test_zero_total_raises(self):
+        """All probabilities 0 → total=0 → fail loud."""
         source = MultiKeySource(return_value={"A": 0.0, "B": 0.0})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="zero total weight"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
 
     # --- Missing data ---
 
-    def test_missing_data_source_returns_none(self):
+    def test_missing_data_source_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
-        assert result is None
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
 
-    def test_empty_probabilities_returns_none(self):
+    def test_empty_probabilities_raises(self):
         source = MultiKeySource(return_value={})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
-        assert result is None
+        with pytest.raises(RuntimeError, match="no distribution"):
+            strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
 
     # --- Batch mode ---
 
@@ -910,17 +900,17 @@ class TestCategoricalSamplerStrategy:
         )
         assert results == ["only_one"] * 5
 
-    def test_batch_empty_data_source_returns_all_none(self):
+    def test_batch_missing_data_source_raises(self):
         dm = SimpleDataManager(sources={})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
         people = [MinimalPerson() for _ in range(3)]
-        results = strategy.assign_batch(
-            people,
-            [MinimalVenue()] * 3,
-            [{"attribute_name": "sector"}] * 3,
-        )
-        assert results == [None, None, None]
+        with pytest.raises(KeyError, match="not registered"):
+            strategy.assign_batch(
+                people,
+                [MinimalVenue()] * 3,
+                [{"attribute_name": "sector"}] * 3,
+            )
 
     def test_batch_groups_identical_distributions(self):
         """People with same distribution should be grouped and batch-sampled."""
@@ -936,21 +926,20 @@ class TestCategoricalSamplerStrategy:
         )
         assert all(r == "X" for r in results)
 
-    def test_batch_zero_total_skipped(self):
-        """Batch: people with all-zero probabilities get None."""
+    def test_batch_zero_total_raises(self):
+        """Batch: an all-zero distribution is a data error → fail loud."""
         source = MultiKeySource(return_value={"A": 0.0, "B": 0.0})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
         people = [MinimalPerson() for _ in range(3)]
-        results = strategy.assign_batch(
-            people,
-            [MinimalVenue()] * 3,
-            [{"attribute_name": "sector"}] * 3,
-        )
-        assert results == [None, None, None]
+        with pytest.raises(RuntimeError, match="zero total weight"):
+            strategy.assign_batch(
+                people,
+                [MinimalVenue()] * 3,
+                [{"attribute_name": "sector"}] * 3,
+            )
 
-    # ---- BUG DETECTION ----
 
     def test_negative_probabilities_clamped_to_zero(self):
         """
@@ -969,34 +958,15 @@ class TestCategoricalSamplerStrategy:
         Probabilities are always normalized, even if they're close to 1.0.
         This avoids numpy tolerance issues.
         """
-        # Sum = 0.995 — previously would NOT be re-normalized (1% tolerance)
+        # Sum = 0.995 — normalized despite being close to 1.0
         source = MultiKeySource(return_value={"A": 0.5, "B": 0.495})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
 
-        # Should always work now
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
         assert result in {"A", "B"}
 
-    def test_no_fallback_mechanism(self):
-        """
-        Unlike ProbabilisticStrategy/PartnershipStrategy which call self._fallback(),
-        CategoricalSamplerStrategy returns None directly when data is missing.
-        This means no fallback_reason is recorded in context and no geo_distribution
-        fallback is attempted.
-        """
-        dm = SimpleDataManager(sources={})
-        strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
-
-        context = {"attribute_name": "sector"}
-        result = strategy.assign(MinimalPerson(), MinimalVenue(), context)
-        assert result is None
-        assert "fallback_reason" not in context  # no fallback mechanism
-
-
-# =============================================================================
 # StrategyFactory — Complete Registration Tests
-# =============================================================================
 
 class TestStrategyFactoryComplete:
     """All 9 strategy types must be registered and instantiable."""
@@ -1014,8 +984,14 @@ class TestStrategyFactoryComplete:
             ("categorical_sampler", CategoricalSamplerStrategy),
             ("constant", ConstantStrategy),
         ]
+        # Minimal extra keys for strategies that require more than just 'strategy'
+        # to pass load-time validation.
+        required_extra = {
+            "probabilistic_conditions": {"selection_method": "independent_bernoulli"},
+        }
         for strategy_type, expected_class in all_types:
-            instance = StrategyFactory.create_strategy({"strategy": strategy_type}, dm)
+            config = {"strategy": strategy_type, **required_extra.get(strategy_type, {})}
+            instance = StrategyFactory.create_strategy(config, dm)
             assert isinstance(instance, expected_class), (
                 f"Expected {expected_class.__name__} for '{strategy_type}', "
                 f"got {type(instance).__name__}"
@@ -1026,43 +1002,34 @@ class TestStrategyFactoryComplete:
         assert len(StrategyFactory._strategy_map) == 9
 
 
-# =============================================================================
-# ConstantStrategy batch — Bug Detection
-# =============================================================================
+# ConstantStrategy batch consistency
 
 class TestConstantStrategyBatchConsistency:
     """
-    ConstantStrategy.assign_batch() now delegates to assign() when value is None,
-    matching the sequential fallback behavior.
+    ConstantStrategy.assign_batch() delegates to assign() when value is None,
+    matching the sequential behaviour.
     """
 
-    def test_batch_with_no_value_triggers_fallback_like_assign(self):
+    def test_batch_with_no_value_raises_like_assign(self):
         """
-        Both assign() and assign_batch() should trigger the configured
-        fallback when value is None.
+        Both assign() and assign_batch() raise when there's no value.
+        No fallbacks.
         """
-        config = {
-            "strategy": "constant",  # no 'value' key → self.value = None
-            "fallback": {"strategy": "constant", "value": "W"},
-        }
+        config = {"strategy": "constant"}  # no 'value' key → self.value = None
         strategy = ConstantStrategy(config, SimpleDataManager())
 
         geo = MinimalGeoUnit("E00001234")
 
-        # Sequential: triggers fallback
         ctx_seq = {"attribute_name": "attr"}
-        result_seq = strategy.assign(
-            MinimalPerson(geographical_unit=geo),
-            MinimalVenue(geographical_unit=geo),
-            ctx_seq,
-        )
-        assert result_seq == "W"
-        assert ctx_seq.get("fallback_reason") == "NO_CONSTANT_VALUE"
+        with pytest.raises(RuntimeError, match="constant strategy has no 'value'"):
+            strategy.assign(
+                MinimalPerson(geographical_unit=geo),
+                MinimalVenue(geographical_unit=geo),
+                ctx_seq,
+            )
 
-        # Batch: now also triggers fallback (consistent with assign)
         people = [MinimalPerson(geographical_unit=geo) for _ in range(3)]
         venues = [MinimalVenue(geographical_unit=geo) for _ in range(3)]
         contexts = [{"attribute_name": "attr"} for _ in range(3)]
-        results_batch = strategy.assign_batch(people, venues, contexts)
-        assert results_batch == ["W", "W", "W"]
-        assert all(ctx.get("fallback_reason") == "NO_CONSTANT_VALUE" for ctx in contexts)
+        with pytest.raises(RuntimeError, match="constant strategy has no 'value'"):
+            strategy.assign_batch(people, venues, contexts)

@@ -2,6 +2,7 @@ venue_types:
   household:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["C"]
     is_residence: true
@@ -34,6 +35,7 @@ venue_types:
   pub:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["P"]
     is_residence: false
@@ -41,6 +43,7 @@ venue_types:
   school:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["S"]
     is_residence: false
@@ -48,6 +51,7 @@ venue_types:
   church:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["CH"]
     is_residence: false
@@ -55,6 +59,7 @@ venue_types:
   army_building:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["E"]
     is_residence: false
@@ -62,6 +67,7 @@ venue_types:
   medical:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["H"]
     is_residence: false
@@ -69,6 +75,7 @@ venue_types:
   prison:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["N"]
     is_residence: true
@@ -80,30 +87,35 @@ venue_types:
   workplace_sales:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["2"]
 
   workplace_service:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["3"]
 
   workplace_production:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["5"]
 
   workplace_education:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["12"]
 
   workplace_mine:
     enabled: true
     batch_mode: true
+    filename: "{unit}_loc.csv"
     filter_column: "BTCode"
     filter_values: ["50"]
 

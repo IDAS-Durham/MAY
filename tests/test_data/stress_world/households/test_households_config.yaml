@@ -54,7 +54,6 @@ demotion:
         value: 1
 
 promotion:
-  enabled: true
   max_attempts: 4
   priority:
     Young Adults: 1

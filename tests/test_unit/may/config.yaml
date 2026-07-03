@@ -7,9 +7,7 @@ geography:
   # Load all geographical units (ignores all filters below if true)
   load_all: false
 
-  # ========================================
   # FILTER - Specify which geographical units to load
-  # ========================================
 
   filter:
     # Level to filter on: LGU, MGU, or SGU
@@ -23,9 +21,7 @@ geography:
     # File should have one code per line
     file: may/filters/example_mgu.txt
 
-# ========================================
 # POPULATION
-# ========================================
 
 population:
   # Path to population data files
@@ -36,9 +32,7 @@ population:
   demographics_female_file: "demographics_female.csv"
 
 
-# ========================================
 # VENUES
-# ========================================
 
 venues:
   # Path to venue files
@@ -50,9 +44,7 @@ venues:
   # Export file for venue allocations (automatically created after allocation)
   export_file: "venue_allocations.csv"
 
-# ========================================
 # HOUSEHOLDS
-# ========================================
 
 households:
   # Path to household data files
@@ -64,9 +56,7 @@ households:
   # Configuration file for age categories and demotion rules
   config_file: "yaml/households/households_config.yaml"
 
-  # =============================================
   # ALLOCATION MODE (choose one)
-  # =============================================
 
   # Option 1: Unified strategy (RECOMMENDED - controls everything in one place)
   #   - Defines both household AND venue allocations in order
@@ -85,9 +75,7 @@ households:
   # Export file for household allocations (automatically created after distribution)
   export_file: "household_allocations.csv"
 
-# ========================================
 # EXAMPLES
-# ========================================
 
 # Example 1: Load only London LGU and all its children
 # filter:

@@ -6,7 +6,7 @@
 # 1. Employees are first distributed to companies (via venue_distributor)
 # 2. This config runs and creates offices based on employee count
 #
-# Example: If a company has 150 employees, and max_capacity is 50,
+# Example: If a company has 150 employees, and child_max_size is 50,
 #          this will create 3 offices (50 + 50 + 50).
 #          If a company has 5 employees, it will create 1 office with 5 employees.
 
@@ -18,10 +18,7 @@ child_venue_type: office      # Type of child venues to create
 group_by_attribute: null
 
 # Maximum employees per office
-max_capacity: 50
-
-# Minimum employees needed to create an office
-min_capacity: 1
+child_max_size: 50
 
 # Properties to add to each created office
 child_properties:
@@ -32,9 +29,7 @@ distribution_strategy: even
 
 balance_by: sex
 
-# ========================================
 # ACTIVITY MANAGEMENT
-# ========================================
 # Control how employees' activity_map is updated when moving to offices
 
 # Activity map key: Which activity to set when adding to office

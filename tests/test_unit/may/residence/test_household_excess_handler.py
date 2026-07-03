@@ -9,13 +9,11 @@ from may.residence.household_distributor import HouseholdDistributor
 STRESS_DATA = "tests/test_data/stress_world"
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Fixtures
-# ──────────────────────────────────────────────────────────────────────
 
 @pytest.fixture
 def geography():
-    geo = Geography(data_dir=f"{STRESS_DATA}/geography")
+    geo = Geography(data_dir=f"{STRESS_DATA}/geography", levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 
@@ -51,9 +49,7 @@ def hd(geography, population_manager, venue_manager):
     return distributor
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Helpers
-# ──────────────────────────────────────────────────────────────────────
 
 def family_households(hd, geo_unit_code=None):
     """Return all created family households, optionally filtered by geo unit."""
@@ -93,9 +89,7 @@ def run_family_round(hd):
     )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_excess_to_households — basic behaviour
-# ──────────────────────────────────────────────────────────────────────
 
 class TestExcessBasicBehaviour:
     """Core properties that must always hold when adding excess people."""
@@ -179,13 +173,10 @@ class TestExcessBasicBehaviour:
         np.random.seed(0)
         run_family_round(hd)
 
-        # Manually drain the OA pool across all SGUs (there are only 4 OA total
-        # and they all go into elderly-pair households in normal allocation).
-        # We simply call excess on a category that is empty in every geo unit.
-        # SGU_S3 has zero OA by design; we can also drain SGU_S1 & S2 OA via
-        # a prior distribution round, but it's simpler to just target OA when
-        # all OA are already allocated (which they are after the family round
-        # doesn't consume them, so let's explicitly allocate them first).
+        # Drain the OA pool across all SGUs via the elderly-pair round (there
+        # are only 4 OA total and they all go into elderly-pair households),
+        # then call excess on the now-empty OA category. SGU_S3 has zero OA by
+        # design.
         hd.round_distributor.distribute_households_round(
             pattern_filter=["0 0 0 2"],
             rule_name="Elderly pair",
@@ -238,9 +229,7 @@ class TestExcessBasicBehaviour:
         assert stats["households_modified"] == 0
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_excess_to_households — constraint enforcement
-# ──────────────────────────────────────────────────────────────────────
 
 class TestExcessConstraints:
     """Constraints must be enforced strictly on every household."""
@@ -264,7 +253,7 @@ class TestExcessConstraints:
             comp = composition(hh, hd.categories)
             assert comp.get("Kids", 0) <= 4, (
                 f"Household {hh.id} has {comp['Kids']} kids — constraint max=4 violated. "
-                f"Pattern: {hh.properties.get('actual_pattern')}"
+                f"Pattern: {hh.properties.get('allocation_pattern')}"
             )
 
     def test_max_per_household_never_exceeded(self, hd):
@@ -325,9 +314,7 @@ class TestExcessConstraints:
             )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_excess_to_households — add_distribution sampling
-# ──────────────────────────────────────────────────────────────────────
 
 class TestExcessDistribution:
     """add_distribution config controls how many are added per household."""
@@ -380,9 +367,7 @@ class TestExcessDistribution:
         )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_excess_to_households — refresh_pools
-# ──────────────────────────────────────────────────────────────────────
 
 class TestExcessRefreshPools:
     """refresh_pools=True must rebuild the pools from allocated_people."""
@@ -432,9 +417,7 @@ class TestExcessRefreshPools:
             assert count == 1, f"Person {pid} is in {count} households after refresh round"
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_excess_to_households — geo-unit isolation
-# ──────────────────────────────────────────────────────────────────────
 
 class TestExcessGeoUnitIsolation:
     """People must only be added to households in their own geo unit."""
@@ -472,9 +455,7 @@ class TestExcessGeoUnitIsolation:
                     )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_excess_to_households — rule_name validation
-# ──────────────────────────────────────────────────────────────────────
 
 class TestExcessWithRule:
     """When a rule_name is provided, relationship constraints must be respected."""
@@ -519,13 +500,12 @@ class TestExcessWithRule:
         )
 
     def test_excess_completes_couple_via_pair_matching(self, hd):
-        """adding a second Adult to a one-adult household under a rule whose
-        role carries a pair_matching constraint completes a *couple* — the added
-        adult and the existing one get bidirectional `cohabiting_couple` tags,
-        instead of an un-coupled second adult (the pre-fix behavior).
+        """Adding a second Adult to a one-adult household under a rule whose
+        role carries a pair_matching constraint completes a *couple*: the added
+        adult and the existing one get bidirectional `cohabiting_couple` tags.
 
-        Exercises the modified selection path directly (the tiny stress world
-        only produces one single-adult household, so the round-level excess
+        Exercises the selection path directly (the tiny stress world only
+        produces one single-adult household, so the round-level excess
         distribution can't be relied on to target it)."""
         np.random.seed(0)
         run_family_round(hd)
@@ -565,9 +545,7 @@ class TestExcessWithRule:
         assert abs(person.age - existing_adult.age) <= 19
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_overflow_to_households — basic behaviour
-# ──────────────────────────────────────────────────────────────────────
 
 class TestOverflowBasicBehaviour:
     """
@@ -667,9 +645,7 @@ class TestOverflowBasicBehaviour:
         assert "error" in stats
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_overflow_to_households — balanced distribution
-# ──────────────────────────────────────────────────────────────────────
 
 class TestOverflowBalancedDistribution:
     """
@@ -751,9 +727,7 @@ class TestOverflowBalancedDistribution:
         )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # allocate_overflow_to_households — pattern_bias
-# ──────────────────────────────────────────────────────────────────────
 
 class TestOverflowPatternBias:
     """
@@ -854,9 +828,7 @@ class TestOverflowPatternBias:
         )
 
 
-# ──────────────────────────────────────────────────────────────────────
 # Full pipeline: nobody stranded after overflow + promotion
-# ──────────────────────────────────────────────────────────────────────
 
 class TestFullPipelineNoStrandedPeople:
     """
@@ -1052,5 +1024,5 @@ class TestFullPipelineNoStrandedPeople:
                     f"Supervision rule violated: household {hh.id} has "
                     f"{comp['Kids']} kids but 0 adults. "
                     f"Full composition: {comp}. "
-                    f"Pattern: {hh.properties.get('actual_pattern')}"
+                    f"Pattern: {hh.properties.get('allocation_pattern')}"
                 )

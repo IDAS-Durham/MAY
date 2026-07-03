@@ -6,9 +6,7 @@ import pytest
 from may.utils.attribute_access import get_person_attribute, get_nested_value
 
 
-# =============================================================================
 # Minimal test objects
-# =============================================================================
 
 class FakeVenue:
     def __init__(self, properties=None, **kwargs):
@@ -37,9 +35,7 @@ class FakePerson:
         return self._residence
 
 
-# =============================================================================
 # get_nested_value tests
-# =============================================================================
 
 class TestGetNestedValue:
     def test_direct_attribute(self):
@@ -84,9 +80,7 @@ class TestGetNestedValue:
         assert get_nested_value(venue, "original_pattern") == "2 0 1 0"
 
 
-# =============================================================================
 # get_person_attribute tests
-# =============================================================================
 
 class TestGetPersonAttribute:
     def test_none_person(self):

@@ -45,7 +45,7 @@ p.geographical_unit = MockGU()
 
 h = Household(1, "GU1")
 h.add_member(p)
-h.properties = {"_structure": "Single Adult", "original_pattern": "0 0 1 0", "actual_pattern": "0 0 1 0"}
+h.properties = {"_structure": "Single Adult", "original_pattern": "0 0 1 0", "allocation_pattern": "0 0 1 0"}
 h.geographical_unit = MockGU()
 
 print("Assigning")

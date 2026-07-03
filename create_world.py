@@ -8,19 +8,17 @@ import numpy as np
 import numba as nb
 import yaml
 from may.config_loader import setup_geography
-from may.geography import VenueManager
-from may.population import PopulationManager
+from may.geography import VenueManager, VenueError
+from may.population import PopulationManager, PopulationError
 from may.world import World, setup_households
+from may.residence.household_distributor import HouseholdError
+from may.attribute_assignment import AttributeAssignmentError
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
 from may.utils.debug_output import export_residence_venues, export_commute_mode_debug
 from may.utils import path_resolver as pr
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
-
-if os.environ.get('PYTHONHASHSEED') is None:
-    os.environ['PYTHONHASHSEED'] = '0'
-    os.execv(sys.executable, [sys.executable] + sys.argv)
 
 logger = logging.getLogger("create_world")
 logging.basicConfig(
@@ -48,6 +46,48 @@ def set_random_seed(seed=999):
     return
 
 set_random_seed(0)
+
+
+VALID_POPULATION_TYPES = {"matrix", "explicit", "explicit_batch"}
+
+
+def setup_population(config, geo):
+    """Build the PopulationManager, failing loud on bad config or missing data.
+    ``data_dir`` is resolved once and used by
+    every mode; ``type`` is validated against the closed set rather than
+    silently dispatching to matrix. Raises PopulationError on any miss."""
+    pop_config = config.get("population", {})
+    data_dir = pr.resolve(pop_config.get("data_dir", "data/population"))
+    population = PopulationManager(geography=geo, data_dir=data_dir)
+
+    pop_type = pop_config.get("type", "matrix")
+    if pop_type not in VALID_POPULATION_TYPES:
+        raise PopulationError(
+            f"Unknown population.type {pop_type!r}; expected one of "
+            f"{sorted(VALID_POPULATION_TYPES)}."
+        )
+
+    column_mapping = pop_config.get("column_mapping", {})
+    if pop_type == "explicit_batch":
+        population.load_batch_explicit_from_csv(
+            data_dir=data_dir, column_mapping=column_mapping
+        )
+    elif pop_type == "explicit":
+        filename = pop_config.get("filename")
+        if not filename:
+            raise PopulationError(
+                "population.type 'explicit' requires a 'filename' in configuration."
+            )
+        population.load_explicit_from_csv(
+            filename=filename, column_mapping=column_mapping
+        )
+    else:  # matrix
+        male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
+        female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
+        population.load_demographics_from_csv(male_file, female_file)
+        population.generate_population()
+
+    return population
 
 
 def main():
@@ -105,44 +145,20 @@ def main():
     )
 
     yaml_config_file = pr.resolve(venue_config.get("config_file", "venues_config.yaml"))
-    venues.load_from_yaml_config(yaml_config_file)
+    try:
+        venues.load_from_yaml_config(yaml_config_file)
+    except VenueError as e:
+        logger.error(f"Venue loading failed: {e}")
+        sys.exit(1)
 
     # Load population
     logger.info("")
     logger.info("Loading population...")
-    pop_config = config.get("population", {})
-    population = PopulationManager(
-        geography=geo,
-        data_dir=pr.resolve(pop_config.get("data_dir", "data/population"))
-    )
-
-    pop_type = pop_config.get("type", "matrix")
-    if pop_type == "explicit" or pop_type == "explicit_batch":
-        column_mapping = pop_config.get("column_mapping", {})
-        
-        if pop_type == "explicit_batch":
-            population.load_batch_explicit_from_csv(
-                data_dir=pop_config.get("data_dir", "1911_data/population"),
-                column_mapping=column_mapping
-            )
-        else:
-            filename = pop_config.get("filename")
-            if not filename:
-                logger.error("Population type 'explicit' required a 'filename' in configuration")
-                sys.exit(1)
-                
-            population.load_explicit_from_csv(
-                filename=filename,
-                column_mapping=column_mapping
-            )
-    else:
-        # Load demographic data (matrix style)
-        male_file = pop_config.get("demographics_male_file", "demographics_male.csv")
-        female_file = pop_config.get("demographics_female_file", "demographics_female.csv")
-        population.load_demographics_from_csv(male_file, female_file)
-
-        # Generate population
-        population.generate_population()
+    try:
+        population = setup_population(config, geo)
+    except PopulationError as e:
+        logger.error(f"Population loading failed: {e}")
+        sys.exit(1)
 
     # Households are allocated by the explicit `residence_allocation` timeline
     # step (see the timeline loop below), not implicitly before the timeline.
@@ -155,9 +171,7 @@ def main():
     world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
     logger.info(world)
 
-    # ========================================
     # TIMELINE - Unified Event Processing
-    # ========================================
     # This replaces the separate "attributes" and "venue_pipeline" sections if "timeline" is present.
     
     timeline_config = config.get("timeline", {})
@@ -169,15 +183,12 @@ def main():
         logger.info("=" * 60)
 
         # Households/residence venues are allocated by an explicit
-        # `residence_allocation` step. Warn loudly if households are enabled
-        # but no such step exists — otherwise they'd silently never allocate.
+        # `residence_allocation` step. A households: block only exists to wire
+        # data for that step, so a block with no step is almost always a mistake.
         step_types = [s.get("type") for s in timeline_config.get("steps", [])]
-        if (
-            config.get("households", {}).get("enabled", True)
-            and "residence_allocation" not in step_types
-        ):
+        if config.get("households") and "residence_allocation" not in step_types:
             logger.warning(
-                "households.enabled is true but the timeline has no "
+                "a households: block is configured but the timeline has no "
                 "'residence_allocation' step — households will NOT be allocated."
             )
 
@@ -200,15 +211,23 @@ def main():
                         "`config:` to an allocation-strategy YAML file "
                         "(e.g. configs/<scenario>/households/allocation_strategy.yaml)."
                     )
-                world.household_distributor = setup_households(
-                    geo, population, venues, config, strategy_file=step_config
-                )
+                try:
+                    world.household_distributor = setup_households(
+                        geo, population, venues, config, strategy_file=step_config
+                    )
+                except HouseholdError as e:
+                    logger.error(f"Household allocation failed: {e}")
+                    sys.exit(1)
 
             elif step_type == "attribute":
                 logger.info("")
                 logger.info(f"[ATTRIBUTE] {step_config}")
-                world.assign_attributes(step_config)
-                
+                try:
+                    world.assign_attributes(step_config)
+                except AttributeAssignmentError as e:
+                    logger.error(f"Attribute assignment failed: {e}")
+                    sys.exit(1)
+
             elif step_type == "distributor":
                 logger.info("")
                 logger.info(f"[DISTRIBUTOR] {step_config}")
@@ -229,7 +248,8 @@ def main():
                 except Exception as e:
                     logger.error(f"Failed to run distributor {step_config}: {e}")
                     logger.exception(e)
-                    
+                    sys.exit(1)
+
             elif step_type == "child_creator":
                 logger.info("")
                 logger.info(f"[CHILD CREATOR] {step_config}")
@@ -239,7 +259,8 @@ def main():
                 except Exception as e:
                     logger.error(f"Failed to run child creator {step_config}: {e}")
                     logger.exception(e)
-                    
+                    sys.exit(1)
+
             else:
                 logger.warning(f"Unknown timeline step type: {step_type}")
 
@@ -253,10 +274,8 @@ def main():
             )
 
     else:
-        # The legacy no-timeline path (implicit pre-timeline households +
-        # the `attributes` / `venue_pipeline` fallback blocks) has been
-        # removed. Every scenario now drives all events through the timeline,
-        # including an explicit `residence_allocation` step for households.
+        # Every scenario drives all events through the timeline, including an
+        # explicit `residence_allocation` step for households.
         raise ValueError(
             "No enabled timeline with steps found. The legacy "
             "attributes/venue_pipeline path has been removed — every config "
@@ -265,9 +284,7 @@ def main():
             "households are enabled."
         )
 
-    # ========================================
     # RELATIONSHIP PIPELINE - Build agent networks
-    # ========================================
     relationship_config = config.get("relationship_pipeline", {})
 
     if relationship_config.get("enabled", False):
@@ -291,10 +308,9 @@ def main():
             except Exception as e:
                 logger.error(f"Failed to build relationships from {config_path}: {e}")
                 logger.exception(e)
+                sys.exit(1)
 
-    # ========================================
     # ROMANTIC RELATIONSHIPS - Sexual orientation and partnerships
-    # ========================================
     romantic_config = config.get("romantic_relationships", {})
 
     if romantic_config.get("enabled", False):
@@ -313,6 +329,7 @@ def main():
         except Exception as e:
             logger.error(f"Failed to distribute romantic relationships: {e}")
             logger.exception(e)
+            sys.exit(1)
 
     logger.info("")
     logger.info("=" * 60)
@@ -327,23 +344,37 @@ def main():
     if serial_config.get("enabled", True):
         logger.info("")
         logger.info("Exporting world to HDF5...")
-        output_dir = pr.resolve(serial_config.get("output_dir", "."))
-        filename = args.filename or serial_config.get("filename", "world_state.h5")
+        try:
+            config_file = serial_config.get("config_file")
+            if not config_file:
+                raise ValueError(
+                    "serialization.enabled is true but serialization.config_file "
+                    "is missing — a serialization schema is required."
+                )
+            output_dir = pr.resolve(serial_config.get("output_dir", "."))
+            filename = args.filename or serial_config.get("filename", "world_state.h5")
 
-        if output_dir != ".":
-            os.makedirs(output_dir, exist_ok=True)
+            if output_dir != ".":
+                os.makedirs(output_dir, exist_ok=True)
 
-        export_path = os.path.join(output_dir, filename)
-        config_file = pr.resolve(serial_config.get("config_file")) if serial_config.get("config_file") else None
-        if config_file:
-            world.export_to_hdf5(export_path, config_file=config_file)
-        else:
-            world.export_to_hdf5(export_path)
+            export_path = os.path.join(output_dir, filename)
+            world.export_to_hdf5(export_path, config_file=pr.resolve(config_file))
+        except Exception as e:
+            logger.error(f"Failed to serialize world to HDF5: {e}")
+            logger.exception(e)
+            sys.exit(1)
 
     return world
 
 
 if __name__ == "__main__":
+    # Force a deterministic hash seed for reproducible runs. This re-execs the
+    # interpreter, so it must stay in the CLI entry path — doing it at import
+    # time replaces the process whenever the module is imported (e.g. by tests).
+    if os.environ.get('PYTHONHASHSEED') is None:
+        os.environ['PYTHONHASHSEED'] = '0'
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
     profiler = cProfile.Profile()
     profiler.enable()
 

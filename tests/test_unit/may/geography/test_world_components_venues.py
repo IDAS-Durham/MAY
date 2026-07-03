@@ -6,7 +6,7 @@ from may.geography.venue import Venue
 @pytest.fixture
 def loaded_geography():
     """Fixture that initializes a Geography with the micro_world data for tests"""
-    geo = Geography(data_dir="tests/test_data/micro_world/geography")
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 

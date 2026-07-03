@@ -20,6 +20,12 @@ from .person import Person
 logger = logging.getLogger("population")
 
 
+class PopulationError(Exception):
+    """Population data is missing, empty, or unloadable; raising this fails the
+    run loudly. ``create_world`` is the only place that turns this into a
+    process exit."""
+
+
 class PopulationManager:
     """
     Manages population generation and distribution.
@@ -52,7 +58,7 @@ class PopulationManager:
         """
         Create a nested defaultdict for demographics storage.
 
-        This is a separate function (not a lambda) to make the object pickle-compatible.
+        Defined as a named function so the object stays pickle-compatible.
         Returns a defaultdict(dict) for storing age -> sex -> count mappings.
         """
         return defaultdict(dict)
@@ -80,9 +86,9 @@ class PopulationManager:
         female_path = os.path.join(self.data_dir, female_file)
 
         if not os.path.exists(male_path) or not os.path.exists(female_path):
-            logger.error(f"Demographics files not found: {male_path} or {female_path}")
-            logger.info("Cannot generate population without demographics data")
-            return
+            raise PopulationError(
+                f"Demographics files not found: {male_path} or {female_path}"
+            )
 
         # Get the smallest geographical level from the loaded geography
         # to filter demographics to only relevant geo units
@@ -90,8 +96,9 @@ class PopulationManager:
         smallest_units_dict = self.geography.get_units_by_level(smallest_level)
 
         if not smallest_units_dict:
-            logger.warning(f"No {smallest_level} units found in geography. Cannot load demographics.")
-            return
+            raise PopulationError(
+                f"No {smallest_level} units found in geography. Cannot load demographics."
+            )
 
         # Create a set of geo unit names that exist in our geography for fast lookup
         valid_geo_units = set(smallest_units_dict.keys())
@@ -122,7 +129,7 @@ class PopulationManager:
 
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
-        # Note: Using a regular function instead of lambda for pickle compatibility
+        # Named function keeps this pickle-compatible
         self.precise_demographics = defaultdict(self._create_nested_defaultdict)
         total_people = 0
 
@@ -173,8 +180,7 @@ class PopulationManager:
         """
         path = os.path.join(self.data_dir, filename)
         if not os.path.exists(path):
-            logger.error(f"Explicit population file not found: {path}")
-            return
+            raise PopulationError(f"Explicit population file not found: {path}")
 
         logger.info(f"Loading explicit population from {path}")
         df = pd.read_csv(path)
@@ -191,9 +197,9 @@ class PopulationManager:
         target_to_csv = column_mapping
         
         # Identify geographical column
-        # Priority: 1. mapped 'geo_unit', 2. literal 'geo_unit', 3. literal 'SGU', 4. literal 'MGU'
+        # Priority: 1. mapped 'geo_unit', 2. literal 'geo_unit', 3. any configured level label
         geo_levels = set(self.geography.levels)
-        geo_cols = {'geo_unit', 'SGU', 'MGU'}.union(geo_levels)
+        geo_cols = {'geo_unit'}.union(geo_levels)
         
         mapped_geo_col = target_to_csv.get('geo_unit')
         actual_geo_col = None
@@ -204,7 +210,7 @@ class PopulationManager:
             actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
             
         if actual_geo_col is None:
-             raise ValueError(f"Missing required geographical column (e.g., 'geo_unit', 'SGU', 'MGU') in population data")
+             raise ValueError(f"Missing required geographical column ('geo_unit' or one of {sorted(geo_levels)}) in population data")
 
         people_count = 0
         
@@ -248,9 +254,9 @@ class PopulationManager:
                     properties[target] = val
 
             # Add all other columns not in mapping to properties.
-            # The geographical column drives `geographical_unit`; it must not
-            # also be duplicated as a property (parallel with VenueManager,
-            # which excludes its geo column from the property dict).
+            # The geographical column drives `geographical_unit` and is kept out
+            # of the property dict (parallel with VenueManager, which keeps its
+            # geo column out of properties).
             mapped_csv_cols = set(target_to_csv.values())
             reserved_cols = mapped_csv_cols | {actual_geo_col}
             for col, val in row_dict.items():
@@ -291,8 +297,9 @@ class PopulationManager:
                     
         """
         if not self.precise_demographics:
-            logger.error("No demographics data loaded. Cannot generate population.")
-            return
+            raise PopulationError(
+                "No demographics data loaded. Cannot generate population."
+            )
 
         logger.info("Generating population from precise demographics...")
         Person.reset_counter()
@@ -302,8 +309,9 @@ class PopulationManager:
         smallest_units_dict = self.geography.get_units_by_level(smallest_level)
 
         if not smallest_units_dict:
-            logger.warning(f"No {smallest_level} units found in geography. Cannot generate population.")
-            return
+            raise PopulationError(
+                f"No {smallest_level} units found in geography. Cannot generate population."
+            )
 
         # Collect all (age, sex, geo_unit, count) tuples and sort by age
         all_age_sex_geo = []
@@ -459,12 +467,12 @@ class PopulationManager:
         """
         Load individual-level population data from multiple MGU-level CSV files.
         """
-        # 1. Identify all MGUs in the current geography
-        mgu_units = self.geography.get_units_by_level("MGU")
+        # 1. Identify all units at the batch-partition level (levels[1])
+        mgu_units = self.geography.get_units_by_level(self.geography.levels[1])
         mgu_names = set(mgu_units.keys())
-        
-        # 2. Identify all loaded SGUs for internal filtering
-        loaded_sgus = set(self.geography.get_units_by_level("SGU").keys())
+
+        # 2. Identify all loaded smallest-level units for internal filtering
+        loaded_sgus = set(self.geography.get_units_by_level(self.geography.levels[0]).keys())
         
         # Reset ID counter once for the whole batch
         Person.reset_counter()
@@ -482,9 +490,9 @@ class PopulationManager:
             total_files += 1
             
             # Filter rows by geographical unit to only keep what is in our geography
-            # Check for any valid geo level column (SGU, MGU, or custom levels)
+            # Check for any valid geo level column ('geo_unit' or any configured level)
             geo_levels = set(self.geography.levels)
-            geo_cols = {'SGU', 'MGU', 'geo_unit'}.union(geo_levels)
+            geo_cols = {'geo_unit'}.union(geo_levels)
             actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
 
             if actual_geo_col and actual_geo_col in df.columns:

@@ -36,8 +36,7 @@ class VenueChildCreator:
         parent_venue_type,
         child_venue_type,
         group_by_attribute=None,
-        max_capacity=30,
-        min_capacity=1,
+        child_max_size=30,
         child_properties=None,
         distribution_strategy='even',
         balance_by=None,
@@ -57,8 +56,7 @@ class VenueChildCreator:
             parent_venue_type: Type of parent venues to process (e.g., "school")
             child_venue_type: Type of child venues to create (e.g., "classroom")
             group_by_attribute: Attribute to group by (e.g., "age", "sex")
-            max_capacity: Maximum people per child venue
-            min_capacity: Minimum people to create a child venue (default: 1)
+            child_max_size: Maximum people per child venue
             child_properties: Dict of properties to add to each child venue
             distribution_strategy: How to distribute people ('even' or 'fill')
             balance_by: Optional attribute (or list of attributes) to balance evenly across
@@ -96,8 +94,7 @@ class VenueChildCreator:
         self.parent_venue_type = parent_venue_type
         self.child_venue_type = child_venue_type
         self.group_by_attribute = group_by_attribute
-        self.max_capacity = max_capacity
-        self.min_capacity = min_capacity
+        self.child_max_size = child_max_size
         self.child_properties = child_properties or {}
         self.distribution_strategy = distribution_strategy
         self.balance_by = balance_by
@@ -110,7 +107,19 @@ class VenueChildCreator:
         self.exclude_subset_keys = exclude_subset_keys
         self.include_subset_keys = include_subset_keys
 
-        # Statistics
+        if distribution_strategy not in ('even', 'fill'):
+            raise ValueError(
+                f"Unknown distribution_strategy '{distribution_strategy}'. "
+                f"Valid values: 'even', 'fill'."
+            )
+        for f in self.member_filters:
+            ftype = f.get('type', 'numerical')
+            if ftype not in ('numerical', 'categorical'):
+                raise ValueError(
+                    f"Unknown member_filter type '{ftype}' for attribute "
+                    f"'{f.get('attribute')}'. Valid types: 'numerical', 'categorical'."
+                )
+
         self.stats = {
             'parents_processed': 0,
             'children_created': 0,
@@ -128,8 +137,7 @@ class VenueChildCreator:
         parent_venue_type: school
         child_venue_type: classroom
         group_by_attribute: age
-        max_capacity: 30
-        min_capacity: 10
+        child_max_size: 30
         child_properties:
           capacity: 30
         distribution_strategy: even
@@ -151,8 +159,7 @@ class VenueChildCreator:
             parent_venue_type=config['parent_venue_type'],
             child_venue_type=config['child_venue_type'],
             group_by_attribute=config.get('group_by_attribute'),
-            max_capacity=config.get('max_capacity', 30),
-            min_capacity=config.get('min_capacity', 1),
+            child_max_size=config.get('child_max_size', 30),
             child_properties=config.get('child_properties', {}),
             distribution_strategy=config.get('distribution_strategy', 'even'),
             balance_by=config.get('balance_by'),
@@ -166,7 +173,6 @@ class VenueChildCreator:
             include_subset_keys=config.get('include_subset_keys'),
         )
 
-        # Log configuration summary
         logger.info(f"  Parent type: {instance.parent_venue_type} → Child type: {instance.child_venue_type}")
         if instance.balance_by:
             logger.info(f"  Balancing children by: {instance.balance_by}")
@@ -195,7 +201,6 @@ class VenueChildCreator:
         logger.info(f"Creating {self.child_venue_type}s for {self.parent_venue_type}s")
         logger.info("=" * 60)
 
-        # Get all parent venues
         parent_venues = world.venues.get_venues_by_type(self.parent_venue_type)
 
         if not parent_venues:
@@ -204,11 +209,9 @@ class VenueChildCreator:
 
         logger.info(f"Processing {len(parent_venues)} {self.parent_venue_type}(s)")
 
-        # Process each parent venue
         for parent_venue in parent_venues:
             self._process_parent_venue(parent_venue, world)
 
-        # Log statistics
         logger.info("")
         logger.info("Summary:")
         logger.info(f"  Parents processed: {self.stats['parents_processed']}")
@@ -228,7 +231,6 @@ class VenueChildCreator:
             parent_venue: Parent Venue object
             world: World object
         """
-        # Get all members of the parent venue
         members = parent_venue.get_all_members(
             exclude_subset_keys=self.exclude_subset_keys,
             include_subset_keys=self.include_subset_keys,
@@ -240,7 +242,6 @@ class VenueChildCreator:
 
         #logger.info(f"  {parent_venue.name}: {len(members)} members")
 
-        # Apply member filters if specified
         if self.member_filters:
             original_count = len(members)
             members = self._filter_members(members)
@@ -250,14 +251,11 @@ class VenueChildCreator:
                 logger.debug(f"  {parent_venue.name}: No members after filtering, skipping")
                 return
 
-        # Group members by attribute if specified
         if self.group_by_attribute:
             groups = self._group_members_by_attribute(members, self.group_by_attribute)
         else:
-            # Single group with all members
             groups = {'all': members}
 
-        # Process each group
         total_children_created = 0
         for group_key, group_members in groups.items():
             children_created = self._create_children_for_group(
@@ -309,13 +307,6 @@ class VenueChildCreator:
                     if get_person_attribute(p, attr_name) in allowed_values
                 ]
 
-            else:
-                logger.warning(
-                    f"Unknown filter type '{filter_type}' for attribute '{attr_name}'. "
-                    f"Valid types are: 'numerical', 'categorical'. "
-                    f"This filter has been SKIPPED — all {len(filtered)} members pass through."
-                )
-
         return filtered
 
     def _group_members_by_attribute(self, members, attribute_name):
@@ -335,28 +326,21 @@ class VenueChildCreator:
         groups = defaultdict(list)
 
         for person in members:
-            # Get attribute value from person
             attr_value = get_person_attribute(person, attribute_name)
 
             if attr_value is not None:
-                # Apply attribute mapping if configured
                 if self.attribute_mapping:
-                    # Check if this specific value has a mapping
                     if attr_value in self.attribute_mapping:
                         group_key = self.attribute_mapping[attr_value]
-                    # Check for default mapping
                     elif 'default' in self.attribute_mapping:
                         group_key = self.attribute_mapping['default']
-                    # No mapping, use original value
                     else:
                         group_key = attr_value
                 else:
-                    # No mapping configured, use original value
                     group_key = attr_value
 
                 groups[group_key].append(person)
             else:
-                # Put in 'unknown' group if attribute not found
                 groups['unknown'].append(person)
 
         return dict(groups)
@@ -403,27 +387,18 @@ class VenueChildCreator:
         """
         num_members = len(group_members)
 
-        # Check minimum capacity
-        if num_members < self.min_capacity:
-            logger.debug(f"    Group {group_key}: {num_members} members (below min {self.min_capacity}), skipping")
-            return 0
-
-        # Calculate number of child venues needed
-        num_children = math.ceil(num_members / self.max_capacity)
+        num_children = math.ceil(num_members / self.child_max_size)
 
         #logger.info(f"    Group {group_key}: {num_members} members → {num_children} {self.child_venue_type}(s)")
 
-        # Create child venues
         child_venues = []
         for i in range(num_children):
-            # Prepare properties for this child
             child_props = self.child_properties.copy()
-            child_props['group_key'] = group_key  # Store which group this is for
+            child_props['group_key'] = group_key
 
             if self.group_by_attribute:
                 child_props[self.group_by_attribute] = group_key  # e.g., 'age': 10
 
-            # Create the child venue
             child_venue = world.venues.create_child_venue(
                 parent_venue=parent_venue,
                 child_venue_type=self.child_venue_type,
@@ -431,7 +406,6 @@ class VenueChildCreator:
             )
             child_venues.append(child_venue)
 
-        # Distribute members to child venues
         self._distribute_members_to_children(group_members, child_venues)
 
         self.stats['children_created'] += num_children
@@ -451,9 +425,8 @@ class VenueChildCreator:
         """
         # When balancing by an attribute (e.g. sex), deal each value's members
         # round-robin across the child venues so every venue gets a proportional
-        # mix that mirrors the cohort, rather than contiguous slices of an
-        # arrival-ordered (and therefore sex-clustered) list. A single shared
-        # pointer carried across the strata keeps per-venue totals even too.
+        # mix that mirrors the cohort. A single shared pointer carried across the
+        # strata keeps per-venue totals even too.
         if self.balance_by and len(child_venues) > 1:
             strata = self._stratify_members(members, self.balance_by)
             ptr = 0
@@ -465,16 +438,13 @@ class VenueChildCreator:
             return
 
         if self.distribution_strategy == 'even':
-            # Distribute evenly across all children
             members_per_child = len(members) // len(child_venues)
             remainder = len(members) % len(child_venues)
 
             member_index = 0
             for i, child_venue in enumerate(child_venues):
-                # Calculate how many to add to this child
                 count = members_per_child + (1 if i < remainder else 0)
 
-                # Add members to this child
                 for _ in range(count):
                     if member_index < len(members):
                         person = members[member_index]
@@ -482,10 +452,10 @@ class VenueChildCreator:
                         member_index += 1
 
         elif self.distribution_strategy == 'fill':
-            # Fill each child to max_capacity before moving to next
+            # Fill each child to child_max_size before moving to next
             member_index = 0
             for child_venue in child_venues:
-                for _ in range(self.max_capacity):
+                for _ in range(self.child_max_size):
                     if member_index < len(members):
                         person = members[member_index]
                         self._add_person_to_child(person, child_venue)
@@ -501,22 +471,18 @@ class VenueChildCreator:
             person: Person object
             child_venue: Child Venue object
         """
-        # Determine activity name to use
         activity_name = self.activity_map_key if self.activity_map_key else self.child_venue_type
 
-        # If replacing parent activity, clear the existing activity first
         if self.replace_parent_activity and self.activity_map_key:
             if self.activity_map_key in person.activity_map:
                 person.activity_map[self.activity_map_key] = {}
 
-        # Add person to child venue
         child_venue.add_to_subset(
             person,
             subset_key=self.subset_key,
             activity_name=activity_name
         )
 
-        # Optionally remove from parent venue
         if self.remove_from_parent:
             parent = child_venue.parent
             if parent:
@@ -542,14 +508,11 @@ class VenueChildCreator:
         for child_venue in child_venues:
             members = child_venue.get_all_members()
 
-            # Get parent info
             parent = child_venue.parent
             parent_name = parent.name if parent else "None"
 
-            # Get group key
             group_key = child_venue.properties.get('group_key', 'N/A')
 
-            # Create row
             row = {
                 'child_venue_id': child_venue.id,
                 'child_venue_name': child_venue.name,
@@ -557,17 +520,15 @@ class VenueChildCreator:
                 'parent_venue_name': parent_name,
                 'group_key': group_key,
                 'num_members': len(members),
-                'max_capacity': self.max_capacity,
-                'utilization_pct': f"{(len(members) / self.max_capacity * 100):.1f}" if self.max_capacity > 0 else "0.0",
+                'child_max_size': self.child_max_size,
+                'utilization_pct': f"{(len(members) / self.child_max_size * 100):.1f}" if self.child_max_size > 0 else "0.0",
             }
 
-            # Add group attribute if specified
             if self.group_by_attribute:
                 row[self.group_by_attribute] = child_venue.properties.get(self.group_by_attribute, 'N/A')
 
             rows.append(row)
 
-        # Create DataFrame and export
         df = pd.DataFrame(rows)
 
         if not df.empty:
@@ -580,5 +541,5 @@ class VenueChildCreator:
         filter_info = f", filters={len(self.member_filters)}" if self.member_filters else ""
         return (
             f"<VenueChildCreator: {self.parent_venue_type} → {self.child_venue_type}, "
-            f"group_by={self.group_by_attribute}, max_capacity={self.max_capacity}{filter_info}>"
+            f"group_by={self.group_by_attribute}, child_max_size={self.child_max_size}{filter_info}>"
         )

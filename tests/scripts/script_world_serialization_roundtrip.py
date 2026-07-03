@@ -144,7 +144,7 @@ def test_serialization_roundtrip(world, output_file="test_world_roundtrip.h5"):
     logger.info("")
     logger.info("Step 1: Exporting World to HDF5...")
     try:
-        world.export_to_hdf5(output_file)
+        world.export_to_hdf5(output_file, config_file="configs/2021/serialization_config.yaml")
         file_size_mb = os.path.getsize(output_file) / (1024 * 1024)
         logger.info(f"✓ Successfully saved to {output_file} ({file_size_mb:.2f} MB)")
     except Exception as e:

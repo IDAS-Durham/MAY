@@ -141,7 +141,7 @@ venue_selection:
 
   venue_geo_level: "SGU"
 
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
 
   venue_location_source: "coordinates"
 
@@ -194,9 +194,7 @@ settings:
   # Performance
   use_spatial_index: true  # Use KDTree for distance queries
 
-# ============================================================================
 # FALLBACK BEHAVIOR
-# ============================================================================
 # What to do when no eligible venues are found for a person?
 
 fallback:
@@ -212,9 +210,7 @@ fallback:
     max_iterations: 3
     distance_multiplier: 2.0  # Double search radius each iteration
 
-# ============================================================================
 # VALIDATION & CONSTRAINTS
-# ============================================================================
 
 validation:
   # Ensure person has required attributes before attempting allocation

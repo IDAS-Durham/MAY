@@ -1,5 +1,5 @@
 """
-Unit tests for assigner.py — orchestration logic.
+Unit tests for the attribute assigner orchestration logic.
 
 Covers:
 - _passes_filters(): age, sex, numerical, activity include/exclude, required attributes
@@ -23,9 +23,7 @@ from may.attribute_assignment.assignment_config import (
 )
 
 
-# =============================================================================
 # Minimal real objects
-# =============================================================================
 
 class MinimalGeoUnit:
     def __init__(self, name, level="SGU", parent=None):
@@ -143,9 +141,7 @@ class MinimalConfig:
         self.categories = {}
 
 
-# =============================================================================
 # Fixtures
-# =============================================================================
 
 @pytest.fixture(autouse=True)
 def reset_ids():
@@ -158,9 +154,7 @@ def geo_unit():
     return MinimalGeoUnit("E00001234")
 
 
-# =============================================================================
 # _passes_filters() Tests
-# =============================================================================
 
 class TestPassesFilters:
     """
@@ -344,66 +338,47 @@ class TestPassesFilters:
         assert assigner._passes_filters(MinimalPerson(age=30, activities={'study'})) is False
 
     # --- Required attributes ---
+    # required_attributes does not gate _passes_filters: a missing dependency is
+    # enforced at the point of use (strategy/lookup fails loud → assign_all
+    # guard), so presence/absence of a required attribute does not change filtering.
 
-    def test_required_attribute_present(self):
+    def test_required_attribute_present_passes(self):
         assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}}
+            required_attributes={'ethnicity': {'required': True}}
         )
-        person = MinimalPerson(properties={'ethnicity': 'W'})
-        assert assigner._passes_filters(person) is True
+        assert assigner._passes_filters(MinimalPerson(properties={'ethnicity': 'W'})) is True
 
-    def test_required_attribute_missing_with_error_if_missing(self):
+    def test_required_attribute_missing_no_longer_filters(self):
+        """A missing required attribute passes filters; enforcement is downstream."""
         assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}}
+            required_attributes={'ethnicity': {'required': True}}
         )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is False
+        assert assigner._passes_filters(MinimalPerson(properties={})) is True
 
-    def test_required_attribute_missing_without_error_if_missing(self):
-        """If error_if_missing is False, missing required attr still passes."""
+    def test_required_attribute_missing_without_filters_passes(self):
+        """No filters dict + missing required attr → still passes (not dropped)."""
         assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': False}}
+            required_attributes={'ethnicity': {'required': True}}
         )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is True
+        assert assigner._passes_filters(MinimalPerson(properties={})) is True
 
-    def test_required_attribute_not_required_passes(self):
-        assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': False}}
-        )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is True
-
-    def test_required_attributes_checked_even_without_filters(self):
-        """No filters dict but required_attributes should still be checked."""
-        assigner = self._make_assigner(
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}}
-        )
-        person = MinimalPerson(properties={})
-        assert assigner._passes_filters(person) is False
-
-    def test_required_attributes_with_filters_also_present(self):
-        """Both filters and required attributes apply."""
+    def test_required_attribute_does_not_override_real_filter(self):
+        """Real filters still apply; required_attributes don't add a gate."""
         assigner = self._make_assigner(
             filters={'age': {'attribute': 'age', 'type': 'numerical', 'numerical': {'min': 18}}},
-            required_attributes={'ethnicity': {'required': True, 'error_if_missing': True}},
+            required_attributes={'ethnicity': {'required': True}},
         )
-        # Passes age, has ethnicity
-        person1 = MinimalPerson(age=25, properties={'ethnicity': 'W'})
-        assert assigner._passes_filters(person1) is True
-
-        # Passes age, missing ethnicity
-        person2 = MinimalPerson(age=25, properties={})
-        assert assigner._passes_filters(person2) is False
+        # Fails the age filter regardless of the missing required attribute.
+        assert assigner._passes_filters(MinimalPerson(age=10, properties={})) is False
+        # Passes the age filter even though the required attribute is missing.
+        assert assigner._passes_filters(MinimalPerson(age=25, properties={})) is True
 
         # Fails age, has ethnicity
         person3 = MinimalPerson(age=10, properties={'ethnicity': 'W'})
         assert assigner._passes_filters(person3) is False
 
 
-# =============================================================================
 # _get_dependency_aware_order() Tests
-# =============================================================================
 
 class TestGetDependencyAwareOrder:
     """
@@ -512,10 +487,12 @@ class TestGetDependencyAwareOrder:
         # adult was created before child → lower id → comes first in base order
         assert result[0].id == adult.id
 
-    def test_cycle_detection_falls_back_gracefully(self):
+    def test_cycle_fails_loud(self):
         """
-        If roles A and B depend on each other (cycle), remaining nodes
-        should be appended in base order instead of crashing.
+        If roles A and B depend on each other (cycle), the order can't be
+        satisfied — fail loud rather than silently appending in id order.
+        Real cycles are caught at config load; reaching the assigner with one
+        is a backstop that must still raise.
         """
         roles = {
             "role_a": Role(name="role_a", description="", subsets=["Adults"], role_type="primary"),
@@ -538,11 +515,10 @@ class TestGetDependencyAwareOrder:
         person_b = MinimalPerson(age=8, category="Kids")
         person_categories = {person_a.id: "Adults", person_b.id: "Kids"}
 
-        # Should not crash — cycle causes fallback to base order
-        result = assigner._get_dependency_aware_order(
-            [person_a, person_b], "Family", person_categories
-        )
-        assert len(result) == 2
+        with pytest.raises(RuntimeError, match="unordered"):
+            assigner._get_dependency_aware_order(
+                [person_a, person_b], "Family", person_categories
+            )
 
     def test_isolated_node_no_dependencies(self):
         """Person with no dependencies and nobody depends on them."""
@@ -602,9 +578,7 @@ class TestGetDependencyAwareOrder:
         assert result_ids.index(pb.id) < result_ids.index(pc.id)
 
 
-# =============================================================================
 # _assign_other_residences() Tests
-# =============================================================================
 
 class TestAssignOtherResidences:
     """
@@ -690,10 +664,10 @@ class TestAssignOtherResidences:
         assert person1.properties['ethnicity'] == 'W'
         assert person2.properties['ethnicity'] == 'A'
 
-    def test_strategy_returning_none_counts_as_unassigned(self):
-        """If strategy returns None, person counted as unassigned."""
-        # Probabilistic lookup against an unregistered source returns None
-        # (the silent-miss path the assigner must count, not crash on).
+    def test_missing_source_leaves_residents_unassigned(self):
+        """A probabilistic rule against an unregistered source produces no
+        distribution, so the strategy fails for that resident and leaves them
+        unassigned."""
         config = MinimalConfig(
             attribute_name="ethnicity",
             venue_assignment_rules=[
@@ -701,7 +675,7 @@ class TestAssignOtherResidences:
                  'assignment': {'strategy': 'probabilistic', 'data_source': 'missing_source'}}
             ],
         )
-        dm = SimpleDataManager(sources={})  # lookup misses → strategy returns None
+        dm = SimpleDataManager(sources={})  # lookup misses → no distribution
         assigner = AttributeAssigner(config, dm)
 
         geo = MinimalGeoUnit("E00001234")
@@ -710,26 +684,20 @@ class TestAssignOtherResidences:
 
         result = assigner._assign_other_residences([venue])
         assert result == 0
-        assert assigner.stats['unassigned_people'] > 0
+        assert 'ethnicity' not in person.properties
 
-    def test_strategy_returning_none_with_fallback_still_assigns(self):
-        """
-        ConstantStrategy with no value falls back to its EXPLICIT
-        probabilistic fallback. If that source exists, assignment succeeds.
-        (Fallbacks must be declared — there is no implicit default anymore.)
-        """
+    def test_probabilistic_venue_assignment_assigns(self):
+        """A venue rule with a probabilistic strategy assigns from the geo source."""
         assigner = self._make_assigner(venue_assignment_rules=[
             {'venue_types': ['care_home'],
-             'assignment': {'strategy': 'constant',  # no value
-                            'fallback': {'strategy': 'probabilistic',
-                                         'data_source': 'geo_distribution'}}}
+             'assignment': {'strategy': 'probabilistic',
+                            'data_source': 'geo_distribution'}}
         ])
         geo = MinimalGeoUnit("E00001234")
         person = MinimalPerson(geographical_unit=geo)
         venue = MinimalVenue(venue_type="care_home", members=[person], geographical_unit=geo)
 
         result = assigner._assign_other_residences([venue])
-        # Fallback to geo_distribution succeeds → person gets assigned
         assert result == 1
         assert person.properties['ethnicity'] == 'W'
 
@@ -750,9 +718,7 @@ class TestAssignOtherResidences:
         assert assigner.stats['assignments_by_venue_type']['care_home'] == 2
 
 
-# =============================================================================
 # Batch vs Sequential equivalence Tests
-# =============================================================================
 
 class TestBatchVsSequentialEquivalence:
     """
@@ -893,9 +859,7 @@ class TestBatchVsSequentialEquivalence:
         assert assigner.stats['assigned_people'] == 0
 
 
-# =============================================================================
 # Statistics tracking Tests
-# =============================================================================
 
 class TestStatisticsTracking:
     """Verifies stat counters are accurate during assignment."""
@@ -918,28 +882,6 @@ class TestStatisticsTracking:
 
         assert assigner.stats['attribute_distribution']['W'] == 5
 
-    def test_fallback_reason_tracking(self):
-        """Fallback reasons should be recorded in stats."""
-        geo = MinimalGeoUnit("E00001234")
-        venue = MinimalVenue(venue_type="household", geographical_unit=geo)
-        dm = SimpleDataManager()
-        config = MinimalConfig(attribute_name="test_attr")
-        assigner = AttributeAssigner(config, dm)
-
-        class FallbackStrategy:
-            strategy_type = "test"
-            def assign(self, person, household, context):
-                context['fallback_reason'] = "TEST_FALLBACK"
-                return "fallback_val"
-
-        people = [MinimalPerson(geographical_unit=geo, residence_venue=venue) for _ in range(3)]
-        strategy = FallbackStrategy()
-        np.random.seed(42)
-        assigner._assign_all_people_sequential(people, strategy)
-
-        assert assigner.stats['fallbacks_by_reason']['TEST_FALLBACK'] == 3
-        assert assigner.stats['assigned_people'] == 3
-
     def test_strategy_type_tracking(self):
         """Strategy type should be tracked in stats."""
         config = MinimalConfig(
@@ -959,18 +901,14 @@ class TestStatisticsTracking:
         assert assigner.stats['assignments_by_strategy']['venue_care_home'] == 1
 
 
-# =============================================================================
 # _get_or_create_strategy cache Tests
-# =============================================================================
 
-# =============================================================================
 # _get_person_residence_venue() Tests
-# =============================================================================
 
 class TestGetPersonResidenceVenue:
     """
-    Tests residence venue resolution from person's activity_map.
-    Regression tests for bug where venue=None on subset caused AttributeError.
+    Tests residence venue resolution from person's activity_map, including
+    when a subset's venue is None.
     """
 
     def _make_assigner(self):
@@ -992,10 +930,8 @@ class TestGetPersonResidenceVenue:
         assert result is None
 
     def test_returns_none_when_subset_venue_is_none(self):
-        """
-        Regression test: subset exists in activity_map but venue=None.
-        Previously crashed with AttributeError: 'NoneType' has no attribute 'id'.
-        """
+        """When a subset exists in activity_map but its venue is None,
+        resolution returns None."""
         assigner = self._make_assigner()
         person = MinimalPerson(residence_venue=None)  # subset exists, venue=None
         result = assigner._get_person_residence_venue(person)
@@ -1009,9 +945,7 @@ class TestGetPersonResidenceVenue:
         assert result is None
 
 
-# =============================================================================
 # _get_or_create_strategy cache Tests
-# =============================================================================
 
 class TestStrategyCache:
     """Tests strategy caching behaviour."""
@@ -1028,10 +962,9 @@ class TestStrategyCache:
 
     def test_different_config_objects_same_content_create_different_strategies(self):
         """
-        BUG DOCUMENTATION: Strategy cache uses id(assignment_config) as key.
-        Two dicts with identical content but different object ids will create
-        separate strategy instances. This is by design for performance but
-        means inline-constructed fallback configs won't be cached.
+        Strategy cache uses id(assignment_config) as key, so two dicts with
+        identical content but different object ids create separate strategy
+        instances.
         """
         config = MinimalConfig()
         dm = SimpleDataManager()

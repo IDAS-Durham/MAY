@@ -6,8 +6,18 @@ from collections import defaultdict
 from .assignment_config import AttributeAssignmentConfig
 from .data_sources import DataSourceManager
 from .strategies import StrategyFactory
+from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("may.attribute_assignment.assigner")
+
+
+class AttributeAssignmentError(Exception):
+    """Raised when assignment can't complete on the given data/config. Mirrors
+    PopulationError/VenueError/HouseholdError: every eligible person is assigned
+    on complete data, or the build fails loud. A person left unassigned
+    — strategy failure, unclassifiable residence, no matching role, no value —
+    aborts the run."""
+
 
 def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] = None) -> Dict[str, Any]:
     """
@@ -27,13 +37,19 @@ def assign_attributes(venue_manager, config_path: str, geo_units: Optional[set] 
     # Initialize data manager
     data_manager = DataSourceManager(config)
 
-    # Load data
-    if geo_units:
-        logger.info(f"Preloading data for {len(geo_units)} geographical units...")
-        data_manager.load_all(geo_units)
-    else:
-        logger.info("Loading all data sources...")
-        data_manager.load_all()
+    # Surface a data-source load failure as AttributeAssignmentError so
+    # create_world exits cleanly.
+    try:
+        if geo_units:
+            logger.info(f"Preloading data for {len(geo_units)} geographical units...")
+            data_manager.load_all(geo_units)
+        else:
+            logger.info("Loading all data sources...")
+            data_manager.load_all()
+    except (FileNotFoundError, RuntimeError, ValueError, KeyError) as e:
+        raise AttributeAssignmentError(
+            f"could not load data sources for '{config_path}': {e}"
+        ) from e
 
     # Create assigner and run
     assigner = AttributeAssigner(config, data_manager)
@@ -68,8 +84,8 @@ class AttributeAssigner:
         # Pre-compute filter configuration
         self._has_filters = hasattr(config, 'filters') and config.filters
         self._optimized_filters = []
-        # Filters that inspect the person's activity_map (assigned venues/subsets)
-        # rather than a scalar attribute. Populated below.
+        # Filters that inspect the person's activity_map (assigned venues/subsets).
+        # Populated below.
         self._activity_venue_filters = []
         if self._has_filters:
             for name, cfg in config.filters.items():
@@ -90,20 +106,21 @@ class AttributeAssigner:
                 # Categorical "include" values: accept either nested
                 # (categorical: {values: [...]}) or flat (values: [...]) form.
                 cat_values = cfg.get('categorical', {}).get('values', cfg.get('values'))
+                # Categorical "exclude" values: reject people whose value is in
+                # this list (e.g. the out-of-boundary sentinel).
+                cat_exclude = cfg.get('categorical', {}).get('exclude', cfg.get('exclude'))
                 self._optimized_filters.append({
                     'attr': attr,
                     'type': ftype,
                     'min': num.get('min'),
                     'max': num.get('max'),
                     'values': cat_values,
-                    'is_age': attr == 'age',
-                    'is_sex': attr == 'sex'
+                    'exclude': cat_exclude,
                 })
 
         self._activity_filters = config.filters.get('activities', {}) if self._has_filters else {}
         self._include_activities = self._activity_filters.get('include', [])
         self._exclude_activities = self._activity_filters.get('exclude', [])
-        self._required_attrs = list(config.required_attributes.items()) if config.required_attributes else []
 
         # Statistics
         self.stats = {
@@ -118,10 +135,12 @@ class AttributeAssigner:
             'assignments_by_strategy': defaultdict(int),
             'attribute_distribution': defaultdict(int),
             'household_structure_counts': defaultdict(int),
-            'fallbacks_by_reason': defaultdict(int),
             'unassigned_people': 0,
             'filtered_people': 0,  # People filtered out by age/activity filters
             'assigned_people': 0,  # People successfully assigned
+            # People dropped by a categorical 'exclude' filter, keyed by attribute
+            # (e.g. the out-of-boundary sentinel).
+            'value_excluded': defaultdict(int),
         }
 
     def _get_or_create_strategy(self, assignment_config):
@@ -172,6 +191,18 @@ class AttributeAssigner:
 
         # Report statistics
         self._report_statistics()
+
+        # Fail loud if anyone who should have been assigned wasn't; the
+        # per-person cause was logged above.
+        if self.stats['unassigned_people'] > 0:
+            raise AttributeAssignmentError(
+                f"{self.stats['unassigned_people']} person(s) left unassigned for "
+                f"attribute '{self.attribute_name}' — see the logged errors/warnings "
+                f"above for the per-person cause (missing data, unclassifiable "
+                f"residence, no matching role, or a strategy returning no value). "
+                f"The engine assigns every eligible person on complete data or fails "
+                f"loud."
+            )
 
         return self.stats
 
@@ -311,26 +342,11 @@ class AttributeAssigner:
             bool: True if person passes all filters
         """
         if not self._has_filters:
-            # Check required attributes even if no filters
-            for attr_name, attr_config in self._required_attrs:
-                if attr_config.get('required', False):
-                    if attr_name not in person.properties:
-                        if attr_config.get('error_if_missing', False):
-                            return False
             return True
 
         # 1. Attribute filters
         for f in self._optimized_filters:
-            # Use direct attribute access for age/sex (significant speedup)
-            if f['is_age']:
-                person_value = person.age
-            elif f['is_sex']:
-                person_value = person.sex
-            else:
-                # Check properties first
-                person_value = person.properties.get(f['attr'])
-                if person_value is None:
-                    person_value = getattr(person, f['attr'], None)
+            person_value = get_person_attribute(person, f['attr'])
 
             if person_value is None:
                 continue
@@ -345,6 +361,10 @@ class AttributeAssigner:
             elif f['type'] == 'categorical':
                 values = f['values']
                 if values is not None and person_value not in values:
+                    return False
+                exclude = f['exclude']
+                if exclude is not None and person_value in exclude:
+                    self.stats['value_excluded'][f['attr']] += 1
                     return False
 
         # 2. Activity filters (Fast set intersection check)
@@ -388,13 +408,6 @@ class AttributeAssigner:
             if not matched:
                 return False
 
-        # 3. Required attributes
-        for attr_name, attr_config in self._required_attrs:
-            if attr_config.get('required', False):
-                if attr_name not in person.properties:
-                    if attr_config.get('error_if_missing', False):
-                        return False
-
         return True
 
     def _assign_all_people(self, venue_manager):
@@ -425,6 +438,11 @@ class AttributeAssigner:
         self.stats['total_people'] = len(all_people)
         logger.info(f"  ✓ Eligible for assignment: {len(eligible_people)} / {len(all_people)} people")
         logger.info(f"  ✓ Filtered out: {self.stats['filtered_people']} people")
+        for attr, n in self.stats['value_excluded'].items():
+            logger.info(
+                f"  ✓ Excluded {n} people from '{self.attribute_name}' "
+                f"({attr} value in exclude list, e.g. out of boundary)"
+            )
         logger.info("")
 
         # Get assignment rule and strategy
@@ -449,7 +467,6 @@ class AttributeAssigner:
         logger.info(f"✓ Filtered {self.stats['filtered_people']} people (age/activity filters)")
         logger.info(f"✓ Assigned {self.stats['assigned_people']} people")
         logger.info(f"✓ Unassigned {self.stats['unassigned_people']} people (failed assignment)")
-        logger.info(f"✓ Fallback used: {self.stats.get('fallback_count', 0)} times")
         logger.info("")
 
     def _assign_all_people_batch(self, eligible_people, strategy):
@@ -473,9 +490,14 @@ class AttributeAssigner:
         households = [self._get_person_residence_venue(p) for p in eligible_people]
         contexts = [{'attribute_name': self.attribute_name} for _ in eligible_people]
 
-        # Call batch assignment
+        # A batch fails as a whole; surface it as AttributeAssignmentError.
         logger.info(f"  Running batch assignment...")
-        results = strategy.assign_batch(eligible_people, households, contexts)
+        try:
+            results = strategy.assign_batch(eligible_people, households, contexts)
+        except Exception as e:
+            raise AttributeAssignmentError(
+                f"batch assignment of '{self.attribute_name}' failed: {e}"
+            ) from e
 
         # Assign results to people
         logger.info(f"  Applying results to people...")
@@ -535,7 +557,7 @@ class AttributeAssigner:
                 logger.debug(f"    Geo Unit: {person.geographical_unit.name if person.geographical_unit else 'None'}")
                 logger.debug(f"    Existing attributes: {list(person.properties.keys())}")
 
-            # Pass strategy directly instead of looking it up again
+            # Reuse the pre-created strategy
             household = self._get_person_residence_venue(person)
             context = {'attribute_name': self.attribute_name, 'debug': is_sample}
 
@@ -555,11 +577,6 @@ class AttributeAssigner:
 
                     self.stats['assignments_by_strategy'][strategy.strategy_type] += 1
                     self.stats['assigned_people'] += 1
-
-                    # Record fallback reason
-                    if 'fallback_reason' in context:
-                        self.stats['fallbacks_by_reason'][context['fallback_reason']] += 1
-                        del context['fallback_reason']
                 else:
                     self.stats['unassigned_people'] += 1
             except Exception as e:
@@ -603,7 +620,7 @@ class AttributeAssigner:
                         f"(geo_unit={household.geographical_unit.name if household.geographical_unit else 'None'})")
             logger.debug(f"  Members: {len(members)}")
             logger.debug(f"  Original pattern: {household.properties.get('original_pattern', 'N/A')}")
-            logger.debug(f"  Actual pattern: {household.properties.get('actual_pattern', 'N/A')}")
+            logger.debug(f"  Allocation pattern: {household.properties.get('allocation_pattern', 'N/A')}")
 
         # Pre-calculate person categories (subsets) to avoid repeated lookups
         # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
@@ -708,11 +725,6 @@ class AttributeAssigner:
                     dist_key = str(value) if isinstance(value, (list, dict)) else value
                     self.stats['attribute_distribution'][dist_key] += 1
 
-                    # Record fallback reason
-                    if 'fallback_reason' in context:
-                        self.stats['fallbacks_by_reason'][context['fallback_reason']] += 1
-                        del context['fallback_reason']
-
                     if self.verbose:
                         logger.debug(f"    ✓ Assigned: {self.attribute_name}={value} "
                                    f"(role={role}, strategy={strategy.strategy_type})")
@@ -808,14 +820,18 @@ class AttributeAssigner:
                     neighbor = next(p for p in members if p.id == neighbor_id)
                     queue.append(neighbor)
 
-        # 4. Handle remaining people (cycle or isolated)
+        # 4. Every member must be orderable. Cross-role cycles are rejected at
+        #    config load, so unprocessed people here mean the derived per-person
+        #    graph is inconsistent — fail loud.
         if processed_count < len(members):
-            # If there's a cycle or missing dependencies, just append remaining in base order
             processed_ids = {p.id for p in result}
-            for p in base_sorted:
-                if p.id not in processed_ids:
-                    result.append(p)
-                    
+            unordered = [p.id for p in base_sorted if p.id not in processed_ids]
+            raise RuntimeError(
+                f"Assignment ordering for structure {structure!r} left people "
+                f"{unordered} unordered — a cross-role dependency cycle escaped "
+                f"load-time validation."
+            )
+
         return result
 
     def _get_person_category(self, person) -> str:
@@ -899,14 +915,6 @@ class AttributeAssigner:
             logger.info("Assignments by venue type:")
             for venue_type, count in sorted(self.stats['assignments_by_venue_type'].items()):
                 logger.info(f"  {venue_type}: {count}")
-
-        # Show fallback diagnostics
-        if self.stats['fallbacks_by_reason']:
-            logger.info("")
-            logger.info("FALLBACK DIAGNOSTICS (Total fallbacks: {})".format(sum(self.stats['fallbacks_by_reason'].values())))
-            for reason, count in sorted(self.stats['fallbacks_by_reason'].items()):
-                logger.info(f"  {reason}: {count}")
-            logger.info("")
 
         # Household structure distribution (only if household-level)
         if self.stats['household_structure_counts']:

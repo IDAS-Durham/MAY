@@ -41,7 +41,6 @@ class SerializationConfig:
         self.geography_properties = []
         self.venue_global_settings = {}
         self.venue_type_properties = {}
-        self.subset_properties = []
         self.relationships = {}
         self.output_settings = {}
 
@@ -64,7 +63,6 @@ class SerializationConfig:
         self._parse_population()
         self._parse_geography()
         self._parse_venues()
-        self._parse_subsets()
         self._parse_relationships()
         self._parse_output()
 
@@ -104,11 +102,6 @@ class SerializationConfig:
                 logger.info(f"  Properties: {properties}")
             else:
                 logger.debug(f"Venue '{venue_type}': minimal serialization (core attributes only)")
-
-    def _parse_subsets(self):
-        """Parse subsets configuration section."""
-        subsets_config = self.config.get('subsets', {})
-        self.subset_properties = subsets_config.get('properties', [])
 
     def _parse_relationships(self):
         """Parse relationships configuration section."""
@@ -163,14 +156,6 @@ class SerializationConfig:
     def should_include_activity_map(self):
         """Check if activity_map should be serialized."""
         return self.relationships.get('include_activity_map', True)
-
-    def should_include_venue_hierarchy(self):
-        """Check if venue parent-child hierarchy should be serialized."""
-        return self.relationships.get('include_venue_hierarchy', True)
-
-    def should_include_geography_hierarchy(self):
-        """Check if geography parent-child hierarchy should be serialized."""
-        return self.relationships.get('include_geography_hierarchy', True)
 
     def get_compression_settings(self):
         """

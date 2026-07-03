@@ -99,7 +99,7 @@ def load_world_from_hdf5(input_file, config_file="configs/2021/serialization_con
         logger.info(f"  People: {num_people:,}")
         logger.info(f"  Venues: {num_venues:,}")
 
-        # Pre-load names and registries from metadata group (new format)
+        # Pre-load names and registries from the metadata group
         geo_names = None
         level_registry = None
         venue_names = None
@@ -162,7 +162,6 @@ def load_world_from_hdf5(input_file, config_file="configs/2021/serialization_con
             logger.warning("World will be created without venues")
 
         # Load Relationships (activity_map)
-        # Group was renamed from 'relationships' to 'activity_mappings' in new format
         activity_group_name = 'activity_mappings' if 'activity_mappings' in f else 'relationships'
         # Compute aggregate statistics from HDF5 data before closing the file
         slim_statistics = None
@@ -212,10 +211,6 @@ def load_world_from_hdf5(input_file, config_file="configs/2021/serialization_con
 
     return world
 
-
-# ============================================================================
-# Slim statistics helpers
-# ============================================================================
 
 def _compute_array_stats(data, max_categories: int = 25) -> dict:
     """Return numeric or categorical summary stats for a single HDF5 dataset array."""
@@ -278,7 +273,6 @@ def _compute_slim_statistics(f) -> dict:
     """
     stats: dict = {}
 
-    # ---- Person properties --------------------------------------------------
     person_stats: dict = {}
     if 'population' in f:
         pop = f['population']
@@ -302,7 +296,6 @@ def _compute_slim_statistics(f) -> dict:
                     person_stats[prop_name] = {'type': 'error', 'error': str(e)}
     stats['person_properties'] = person_stats
 
-    # ---- Subset sizes (proxy for contacts) ----------------------------------
     if 'venues' in f and 'subsets' in f['venues']:
         mc = f['venues']['subsets']['member_counts'][:].astype(np.int64)
         non_empty = mc[mc > 0]
@@ -316,7 +309,6 @@ def _compute_slim_statistics(f) -> dict:
                 'non_empty_subsets': int(len(non_empty)),
             }
 
-    # ---- Activity map -------------------------------------------------------
     activity_group_name = (
         'activity_mappings' if 'activity_mappings' in f else 'relationships'
     )
@@ -329,7 +321,7 @@ def _compute_slim_statistics(f) -> dict:
         n_people = len(activity_offsets)
         n_rows = len(activity_data)
 
-        # Per-activity unique-person counts using numpy (fast, no Python loop)
+        # Per-activity unique-person counts, vectorised with numpy
         # Deduplicate (person_id, activity_idx) pairs then count per activity
         if n_rows > 0:
             pairs = np.unique(
@@ -372,7 +364,6 @@ def _compute_slim_statistics(f) -> dict:
             'mean_contacts_estimate': mean_contacts_est,
         }
 
-    # ---- Venue properties ---------------------------------------------------
     venue_prop_stats: dict = {}
     if 'venues' in f and 'properties' in f['venues']:
         for venue_type in f['venues']['properties'].keys():
@@ -427,7 +418,6 @@ def _compute_unit_statistics(f, geography) -> dict:
     AGE_LABELS = ['0-15', '16-24', '25-34', '35-49', '50-64', '65+']
     AGE_BREAKS = [0, 16, 25, 35, 50, 65, np.inf]
 
-    # ---- Person stats per leaf unit (sort-then-group) -----------------------
     sort_idx = np.argsort(person_geo_ids, kind='stable')
     sg = person_geo_ids[sort_idx]
     sa = ages[sort_idx]
@@ -460,13 +450,12 @@ def _compute_unit_statistics(f, geography) -> dict:
             'activity_counts':  {},
         }
 
-    # ---- Venue type counts per leaf unit ------------------------------------
     if 'venues' in f:
         v = f['venues']
         v_geo_ids  = v['geo_unit_ids'][:]
         types_raw  = v['types'][:] if 'types' in v else np.array([], dtype='u1')
 
-        # Decode type registry if present (new format uses uint8 indices)
+        # Decode type registry if present (uint8 indices)
         type_reg = None
         try:
             type_reg = f['metadata']['registries']['venue_types'][:].astype(str)
@@ -497,7 +486,6 @@ def _compute_unit_statistics(f, geography) -> dict:
                         str(k): int(v) for k, v in zip(t_u, t_c)
                     }
 
-    # ---- Activity counts per leaf unit from activity_map -------------------
     act_grp = 'activity_mappings' if 'activity_mappings' in f else 'relationships'
     if act_grp in f and 'activity_map' in f[act_grp]:
         am             = f[act_grp]['activity_map']
@@ -509,8 +497,8 @@ def _compute_unit_statistics(f, geography) -> dict:
         pid_to_geo = np.full(max_pid + 1, -1, dtype=np.int64)
         pid_to_geo[person_ids_arr.astype(np.int64)] = person_geo_ids.astype(np.int64)
 
-        # Unique (person_id, activity_idx) pairs — avoids counting same person
-        # multiple times for the same activity (they may have several venues/subsets)
+        # Unique (person_id, activity_idx) pairs — one count per person per
+        # activity (a person may have several venues/subsets)
         pa_pairs = np.unique(act_data[:, [0, 1]].astype(np.int64), axis=0)
 
         # Vectorised geo_id lookup
@@ -540,7 +528,6 @@ def _compute_unit_statistics(f, geography) -> dict:
                         str(activity_names[act_idx])
                     ] = count
 
-    # ---- Aggregate upward through the geographic hierarchy ------------------
     all_stats = dict(leaf_stats)
 
     def _add(dst: dict, src: dict) -> None:
@@ -604,13 +591,13 @@ def _load_geography(geo_group, config, geo_names=None, level_registry=None):
     # Read core datasets
     ids = geo_group['ids'][:]
 
-    # Names: new format stores in metadata/names/geography; old format stores inline
+    # Names: read from metadata/names/geography when present, else inline
     if geo_names is not None:
         names = geo_names
     else:
         names = geo_group['names'][:].astype(str)
 
-    # Levels: new format stores as uint8 integers with a registry lookup; old format stores as strings
+    # Levels: uint8 integers with a registry lookup, or strings
     if level_registry is not None:
         levels_raw = geo_group['levels'][:]
         levels = np.array([level_registry[int(v)] for v in levels_raw])
@@ -639,7 +626,7 @@ def _load_geography(geo_group, config, geo_names=None, level_registry=None):
     # Create Geography object
     geography = Geography(levels=unique_levels)
 
-    # Create all units first (without parent links, as the parent unit might not exist yet)
+    # Create all units first; link parents in a second pass once every unit exists
     # Creates it as a dict object as it's hashable, so quick for setting the parent relationships
     units_by_id = {}
     for i, (unit_id, name, level) in enumerate(zip(ids, names, levels)):
@@ -654,9 +641,9 @@ def _load_geography(geo_group, config, geo_names=None, level_registry=None):
             properties[prop_name] = _convert_numpy_value(prop_array[i])
 
         unit = GeographicalUnit(
-            int(unit_id),  # Convert to Python int
-            name=str(name),  # Convert to Python str
-            level=str(level),  # Convert to Python str
+            int(unit_id),
+            name=str(name),
+            level=str(level),
             parent=None,  # Will be set in next pass
             coordinates=coordinates,
             properties=properties
@@ -686,7 +673,7 @@ def _load_population(pop_group, geography, config, slim=False):
     # Read core datasets
     ids = pop_group['ids'][:]
     ages = pop_group['ages'][:]
-    # Sexes: new format stores as uint8 (0=male, 1=female, 2=unknown); old format stores as strings
+    # Sexes: uint8 (0=male, 1=female, 2=unknown) or strings
     _SEX_DECODE = {0: "male", 1: "female", 2: "unknown"}
     sex_raw = pop_group['sexes'][:]
     if sex_raw.dtype.kind in ('u', 'i'):
@@ -713,7 +700,7 @@ def _load_population(pop_group, geography, config, slim=False):
     # Create PopulationManager
     population = PopulationManager(geography, 'dummy_data_dir')
 
-    # Get all geo units for lookup (by ID, not name)
+    # Get all geo units for lookup, keyed by ID
     all_units = geography.units_by_id
 
     # Create Person objects
@@ -755,13 +742,13 @@ def _load_venues(venues_group, geography, config, venue_names=None, type_registr
     # Read core venue datasets
     ids = venues_group['ids'][:]
 
-    # Names: new format stores in metadata/names/venues; old format stores inline
+    # Names: read from metadata/names/venues when present, else inline
     if venue_names is not None:
         names = venue_names
     else:
         names = venues_group['names'][:].astype(str)
 
-    # Types: new format stores as uint8 integers with a registry lookup; old format stores as strings
+    # Types: uint8 integers with a registry lookup, or strings
     if type_registry is not None:
         types_raw = venues_group['types'][:]
         types = np.array([type_registry[int(v)] for v in types_raw])
@@ -802,10 +789,10 @@ def _load_venues(venues_group, geography, config, venue_names=None, type_registr
     # Create VenueManager
     venue_manager = VenueManager(geography, filter_by_geography=False)
 
-    # Get all geo units for lookup (by ID, not name)
+    # Get all geo units for lookup, keyed by ID
     all_units = geography.units_by_id
 
-    # Create Venue objects first (without parent links)
+    # Create Venue objects first; parent links are set in a later pass
     num_venues = len(ids)
     venues_by_global_id = {}
     venue_type_counters = {}  # Track type-specific indices for properties
@@ -871,7 +858,7 @@ def _load_subsets(subsets_group, venues_by_global_id, subset_names_arr=None, sli
     # Read subset metadata
     venue_ids = subsets_group['venue_ids'][:]
     subset_indices = subsets_group['subset_indices'][:]
-    # Names: new format stores in metadata/names/subsets; old format stores inline
+    # Names: read from metadata/names/subsets when present, else inline
     if subset_names_arr is not None:
         subset_names = subset_names_arr
     else:

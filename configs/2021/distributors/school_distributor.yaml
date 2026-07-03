@@ -1,6 +1,4 @@
-# ============================================================================
 # School Distributor Configuration
-# ============================================================================
 # This distributor allocates people to schools and sets their activity_map.
 # Access via: person.activity_map['primary_activity'] -> school venue
 #
@@ -9,11 +7,8 @@
 # - Respects attribute constraints (age, gender)
 # - Distance-based with spatial efficiency
 # - Capacity-aware allocation
-# ============================================================================
 
-# ============================================================================
 # BASIC INFO
-# ============================================================================
 distributor_name: "school_distributor"
 venue_type: "school"
 description: "Distribute people to schools based on age, gender, and proximity"
@@ -25,16 +20,12 @@ activity_map_key: "primary_activity"
 # Subset to add students to
 subset_key: "student"
 
-# ============================================================================
 # SPECIAL CASES: Priority allocation rules
-# ============================================================================
 # These rules are checked FIRST, before normal venue selection
 # If a special case matches, it overrides normal allocation
 
 special_cases:
-  # --------------------------------
   # Boarding school students
-  # --------------------------------
   - name: "boarding_school_students"
     description: "Students in boarding schools MUST attend the linked school"
     priority: 1  # Highest priority
@@ -63,9 +54,7 @@ special_cases:
       # What to do if no matching school found
       if_no_match: "error"  # "error", "warn", "skip", "fallback_to_normal"
 
-# ============================================================================
 # ELIGIBILITY: Who can be allocated?
-# ============================================================================
 # These rules determine which people are eligible for school allocation
 # and which schools they can attend
 # NOTE: People matched by special_cases are handled separately
@@ -168,9 +157,7 @@ eligibility:
 
   # General attribute-based filtering (applies to all groups)
   attributes:
-    # --------------------------------
     # Age restriction
-    # --------------------------------
     - name: "age"
       type: "numerical"
       description: "Person age must fall within school's statutory age range"
@@ -186,9 +173,7 @@ eligibility:
         min: 5   # Default minimum age
         max: 18  # Default maximum age
 
-    # --------------------------------
     # Gender restriction
-    # --------------------------------
     - name: "sex"
       type: "categorical"
       description: "Person sex must match school's gender policy"
@@ -209,15 +194,11 @@ eligibility:
       # Case sensitivity
       case_sensitive: false
 
-# ============================================================================
 # VENUE SELECTION: How to pick eligible venues?
-# ============================================================================
 # These rules determine which venues (schools) a person can choose from
 
 venue_selection:
-  # --------------------------------
   # Selection method
-  # --------------------------------
   # Options:
   #   - "count": Pick N closest venues
   #   - "distance": Pick all venues within radius
@@ -241,9 +222,7 @@ venue_selection:
   # max_distance: 10
   # max_distance_unit: "km"  # "km", "miles", "meters"
 
-  # --------------------------------
   # Geographical level configuration
-  # --------------------------------
   # FLEXIBILITY: What geographical level are venues assigned to?
   # This allows the system to work when venue data is at different granularity than person data
   # If person level differs from venue level, the system will automatically traverse the hierarchy
@@ -254,11 +233,9 @@ venue_selection:
   #   - "LGU": Large venues (universities, hospitals) might only have large geographical unit data
   # Note: People are always at SGU level, system will traverse up to match venue level if needed
 
-  # --------------------------------
   # Location calculation
-  # --------------------------------
   # Where to measure distance FROM
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
   # Options:
   #   - "geographical_unit.coordinates": Use person's geographical unit coordinates (lat/lon)
   #                                     Will automatically use the ancestor at venue_geo_level
@@ -272,33 +249,25 @@ venue_selection:
   # Distance calculation method
   distance_metric: "haversine"  # "haversine" (great-circle), "euclidean"
 
-  # --------------------------------
   # Filtering
-  # --------------------------------
   # Only consider venues that exist in loaded geography
   filter_by_geography: true  # Already enforced by venues_config.yaml
 
   # Only consider venues with available capacity
   respect_capacity: true
 
-# ============================================================================
 # ALLOCATION STRATEGY: How to assign person to venue?
-# ============================================================================
 # Once we have eligible venues, how do we pick THE one?
 
 allocation:
-  # --------------------------------
   # Strategy
-  # --------------------------------
   strategy: "random"
   # Options:
   #   - "random": Randomly pick from eligible venues
   #   - "closest": Always pick closest
   #   - "proportional": Weight by inverse distance (closer = higher probability)
 
-  # --------------------------------
   # Capacity management
-  # --------------------------------
   capacity_column: "SchoolCapacity"
 
   # What to do if capacity is missing or 0
@@ -319,9 +288,7 @@ allocation:
     distribute_evenly: true  # Spread overflow across all venues proportionally
     max_overflow_per_venue: null  # null = unlimited, or set a max (e.g., 1.5x capacity)
 
-  # --------------------------------
   # Batch processing (for performance)
-  # --------------------------------
   # Process people from same geo_unit together
   # Reduces spatial queries from millions to thousands
   batch_by: "geo_unit"  # "geo_unit", "none"
@@ -329,9 +296,7 @@ allocation:
   # For batched allocation, use geo_unit centroid as location
   batch_location_source: "centroid"
 
-# ============================================================================
 # EXECUTION SETTINGS
-# ============================================================================
 
 settings:
   # Execution order (higher = earlier)
@@ -347,9 +312,7 @@ settings:
   # Performance
   use_spatial_index: true  # Use KDTree for distance queries
 
-# ============================================================================
 # FALLBACK BEHAVIOR
-# ============================================================================
 # What to do when no eligible venues are found for a person?
 
 fallback:
@@ -365,9 +328,7 @@ fallback:
     max_iterations: 3
     distance_multiplier: 2.0  # Double search radius each iteration
 
-# ============================================================================
 # VALIDATION & CONSTRAINTS
-# ============================================================================
 
 validation:
   # Ensure person has required attributes before attempting allocation
@@ -389,9 +350,7 @@ validation:
     - "Gender"
     - "SchoolCapacity"
 
-# ============================================================================
 # NOTES
-# ============================================================================
 #
 # ALLOCATION LOGIC:
 #
@@ -469,4 +428,3 @@ validation:
 #   3. Boarding students get matched to school by name+geo_unit
 #   4. Regular students get allocated by distance
 #
-# ============================================================================

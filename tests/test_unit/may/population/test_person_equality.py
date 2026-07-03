@@ -31,10 +31,6 @@ def reset_person_counter():
     Person.reset_counter()
 
 
-# ============================================================================
-# Person Equality Tests
-# ============================================================================
-
 class TestPersonEquality:
     """Test Person.__eq__ method."""
 
@@ -212,10 +208,6 @@ class TestPersonEquality:
         assert person != {'id': person.id, 'age': 30}
 
 
-# ============================================================================
-# Person Hash Tests
-# ============================================================================
-
 class TestPersonHash:
     """Test Person.__hash__ method."""
 
@@ -298,10 +290,6 @@ class TestPersonHash:
         assert person_dict[person1] == 'second_value'
         assert person_dict[person2] == 'second_value'
 
-
-# ============================================================================
-# Integration Tests
-# ============================================================================
 
 class TestPersonEqualityIntegration:
     """Integration tests for equality and hashing."""

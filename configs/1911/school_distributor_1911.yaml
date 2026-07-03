@@ -1,6 +1,4 @@
-# ============================================================================
 # Educational Venue Distributor for Durham 1911
-# ============================================================================
 # This file configures how eligible people are assigned to school venues.
 # The allocation flows through 5 phases in order:
 #   1. Special cases (e.g., boarding school students)
@@ -8,7 +6,6 @@
 #   3. Normal allocation (allocate_by_geo_unit using the strategy below)
 #   4. Fallback for anyone still unallocated
 #   5. Exports (CSV reports)
-# ============================================================================
 
 # --- IDENTITY ---
 # These link the distributor to venue objects and person activity maps.
@@ -31,7 +28,7 @@ settings:
 # --- VENUE SELECTION ---
 # Controls HOW candidate venues are found for each person/batch.
 #
-#   person_location_source: Dot-path to get (lat, lon) from a Person object.
+#   locate_person_by: Dot-path to get (lat, lon) from a Person object.
 #       Examples: "geographical_unit.coordinates", "properties.workplace_sgu"
 #
 #   venue_geo_level: The geography level at which venues are grouped (e.g., "SGU").
@@ -47,7 +44,7 @@ settings:
 #       Higher = broader search, more likely to find capacity, but slower.
 #       50 means each batch considers the 50 closest schools.
 venue_selection:
-  person_location_source: "geographical_unit.coordinates"
+  locate_person_by: "geographical_unit.coordinates"
   venue_geo_level: "SGU"
   batch_geo_level: "SGU"
   consider_by: "count"

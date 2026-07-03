@@ -1,15 +1,10 @@
-# ============================================================================
 # Streamlined Attribute Assignment Configuration
-# ============================================================================
 # This configuration uses a simplified, flexible approach:
 # 1. Define ROLES and map them to household subsets (from household_config.yaml)
 # 2. Define HOUSEHOLD STRUCTURES with flexible pattern matching
 # 3. Define ASSIGNMENT RULES based on structure type and role
-# ============================================================================
 
-# ============================================================================
 # Ethnicity Inheritance Rules
-# ============================================================================
 # These rules govern how children inherit ethnicity from parents and
 # how we reverse-infer parent ethnicities from adult children.
 #
@@ -38,34 +33,30 @@
 #   Child is B → Both parents must be B
 #   Child is O → Both parents must be O
 #   Child is M → Parents must be different (one is X, other is Y where X ≠ Y)
-# ============================================================================
 
-# ============================================================================
 # IMPORTANT SCHEMA DEFINITION:
 # The root attribute configuration MUST be defined as a nested dictionary 
 # under the 'attribute:' key. Top-level 'attribute_name' will be ignored.
-# ============================================================================
-attribute:
-  name: "ethnicity"
-  description: "Assigns ethnicity based on residence structure and roles"
-  data_type: "categorical"
+step:
   assignment_level: "person_by_residence"
 
   # Venue types to apply household structure-based assignment to
   # Other residence types (not in this list) use venue_assignment_rules instead
   residence_venue_types: ["household"]
 
+attributes:
+  - name: "ethnicity"
+    description: "Assigns ethnicity based on residence structure and roles"
+    data_type: "categorical"
 
-# ============================================================================
+
 # Role Definitions
-# ============================================================================
 # Define roles and which household subsets (age categories) they apply to
 #
 # IMPORTANT SCHEMA DEFINITION: 
 # Roles MUST be defined globally here at the root level, NOT nested inside 
 # individual `household_structures`. The parser builds a global registry.
 # If nested inside a structure, subset mapping fails.
-# ============================================================================
 
 roles:
   primary_adult:
@@ -100,15 +91,13 @@ roles:
     description: "Children and dependent young adults in families"
     subsets: ["Kids", "Young Adults"]
 
-# ============================================================================
 # Household Structure Definitions
-# ============================================================================
 # Define the three household types with flexible pattern matching
 # Pattern format: "Kids Young_Adults Adults Old_Adults"
 #
 # IMPORTANT SCHEMA DEFINITION:
-# Structure matching strictly requires the `matching_rules: \n - actual: [...]` 
-# format. Legacy flat `patterns: [...]` arrays are not supported and will fail.
+# Structure matching strictly requires the `matching_rules: \n - actual: [...]`
+# format.
 #
 # Operators supported: >=N, <=N, N (exact), >=0 (any)
 #
@@ -194,42 +183,38 @@ household_structures:
           - "0 >=0 >=0 >=0"
         description: "Flexible multi-person households (no kids)"
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 # Define where to load demographic data from
 
 data_sources:
   geo_distribution:
     type: "csv_lookup"
+    format: "geo_distribution"
     description: "Geographical unit ethnicity distributions"
 
     files:
       - path: "${data_root}/population/ethnicity/ethnicity_5groups_by_OA.csv"
-        key_column: "geo_unit"
+        key_columns:
+          geo_unit: ~        # null value: key passed directly, no person-resolution
         value_columns:
           W: "W"
           A: "A"
           B: "B"
           M: "M"
-          O: "CO"
+          O: "O"
         total_column: "total"
-
-    fallback:
-      W: 0.81
-      A: 0.09
-      B: 0.04
-      M: 0.03
-      O: 0.03
 
 
   pair_probabilities:
     type: "csv_lookup"
+    format: "pair"
     description: "Conditional partner ethnicity probabilities"
 
     files:
       - path: "${data_root}/population/ethnicity/precomputed_area_partnerships.csv"
-        key_columns: ["geo_unit", "first_ethnicity"]
+        key_columns:
+          geo_unit: ~
+          first_ethnicity: ~
         value_columns:
           W: "prob_W"
           A: "prob_A"
@@ -237,20 +222,13 @@ data_sources:
           M: "prob_M"
           O: "prob_O"
 
-    fallback: "uniform"
-
-# ============================================================================
 # Assignment Rules by Household Structure
-# ============================================================================
 # Note: To assign a hardcoded value instead of using a probabilistic distribution,
 # you can use `strategy: "constant"` and `value: "your_value"`.
-# ============================================================================
 
 assignment_rules:
 
-  # --------------------------------------------------------------------------
   # FAMILY HOUSEHOLDS (with inheritance)
-  # --------------------------------------------------------------------------
 
   Family:
     description: "Assignment rules for family households"
@@ -271,9 +249,7 @@ assignment_rules:
           strategy: "partnership"
           data_source: "pair_probabilities"
           partner_role: "primary_adult"
-          fallback:
-            strategy: "probabilistic"
-            data_source: "geo_distribution"
+          marginal_source: "geo_distribution"
 
       # Extra adults: Independent assignment
       - role: "extra_adult"
@@ -292,16 +268,14 @@ assignment_rules:
             roles: ["primary_adult", "secondary_adult"]
           logic:
             # Both parents same ethnicity → child gets same ethnicity
-            - when: "count(unique_values) == 1"
+            - when: {unique_count: 1}
               then: "values[0]"
               note: "W+W=W, A+A=A, B+B=B, O+O=O, M+M=M"
             # Parents have different ethnicities → child is Mixed
-            - when: "count(unique_values) > 1"
+            - when: {unique_count_at_least: 2}
               then: "M"
               note: "W+A=M, W+B=M, A+O=M, M+W=M, etc."
-          fallback:
-            strategy: "probabilistic"
-            data_source: "geo_distribution"
+          marginal_source: "geo_distribution"
 
       # Elderly: Reverse inheritance from primary_adult (parents of adults)
       - role: "primary_elder"
@@ -313,16 +287,14 @@ assignment_rules:
             role: "primary_adult"
           logic:
             # For non-mixed ethnicities, both parents must be same
-            - when: "primary_adult.ethnicity in ['W', 'A', 'B', 'O']"
-              then: "primary_adult.ethnicity"
+            - when: {role: primary_adult, attr: ethnicity, in: ["W", "A", "B", "O"]}
+              then: {copy: {role: primary_adult, attr: ethnicity}}
             # For mixed ethnicity, parents must be different - pick first parent
-            - when: "primary_adult.ethnicity == 'M'"
+            - when: {role: primary_adult, attr: ethnicity, equals: "M"}
               then:
                 strategy: "probabilistic"
                 data_source: "geo_distribution"
-          fallback:
-            strategy: "probabilistic"
-            data_source: "geo_distribution"
+          marginal_source: "geo_distribution"
 
       - role: "secondary_elder"
         priority: 6
@@ -333,10 +305,10 @@ assignment_rules:
             role: "primary_adult"
           logic:
             # For non-mixed ethnicities, must match primary_elder
-            - when: "primary_adult.ethnicity in ['W', 'A', 'B', 'O']"
-              then: "primary_adult.ethnicity"
+            - when: {role: primary_adult, attr: ethnicity, in: ["W", "A", "B", "O"]}
+              then: {copy: {role: primary_adult, attr: ethnicity}}
             # For mixed ethnicity, must be different from primary_elder
-            - when: "primary_adult.ethnicity == 'M'"
+            - when: {role: primary_adult, attr: ethnicity, equals: "M"}
               then:
                 strategy: "probabilistic"
                 data_source: "geo_distribution"
@@ -349,9 +321,7 @@ assignment_rules:
           strategy: "probabilistic"
           data_source: "geo_distribution"
 
-  # --------------------------------------------------------------------------
   # COUPLE HOUSEHOLDS (no inheritance)
-  # --------------------------------------------------------------------------
 
   Couple:
     description: "Assignment rules for couple households (adult or elderly couples)"
@@ -372,9 +342,7 @@ assignment_rules:
           strategy: "partnership"
           data_source: "pair_probabilities"
           partner_role: "primary_adult"
-          fallback:
-            strategy: "probabilistic"
-            data_source: "geo_distribution"
+          marginal_source: "geo_distribution"
 
       # Primary elder: Use geo distribution
       - role: "primary_elder"
@@ -391,13 +359,9 @@ assignment_rules:
           strategy: "partnership"
           data_source: "pair_probabilities"
           partner_role: "primary_elder"
-          fallback:
-            strategy: "probabilistic"
-            data_source: "geo_distribution"
+          marginal_source: "geo_distribution"
 
-  # --------------------------------------------------------------------------
   # INDEPENDENTS (no inheritance, no partnership)
-  # --------------------------------------------------------------------------
 
   Independents:
     description: "Assignment rules for independent living arrangements"
@@ -417,9 +381,7 @@ assignment_rules:
           strategy: "probabilistic"
           data_source: "geo_distribution"
 
-# ============================================================================
 # Venue Assignment Rules (Non-Household)
-# ============================================================================
 
 venue_assignment_rules:
   - venue_types: ["care_home", "boarding_school", "student_dorms"]

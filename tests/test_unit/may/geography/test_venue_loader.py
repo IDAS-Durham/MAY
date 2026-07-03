@@ -1,8 +1,7 @@
 """
-Tests for VenueManager loader behaviour. These cover the failure modes the
-production log surfaced (missing CSVs, no-name-column CSVs, cross- and
-same-type name collisions) plus untested code paths (filter_column,
-extend() ID merge, capacity_config propagation).
+Tests for VenueManager loader behaviour: missing CSVs, no-name-column CSVs,
+cross- and same-type name collisions, plus filter_column, extend() ID merge,
+and capacity_config propagation.
 """
 
 import logging
@@ -12,19 +11,15 @@ import pandas as pd
 import pytest
 
 from may.geography import Geography
-from may.geography.venue_manager import VenueManager
+from may.geography.venue_manager import VenueManager, VenueError
 
 
 @pytest.fixture
 def loaded_geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography")
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
     geo.load_from_csv()
     return geo
 
-
-# ---------------------------------------------------------------------------
-# No-name-column CSVs (the '12537' / '13817' bug)
-# ---------------------------------------------------------------------------
 
 def test_csv_without_name_column_uses_auto_generated_names(loaded_geography, caplog):
     """A CSV with no 'name' column must NOT synthesise names from the row index.
@@ -78,10 +73,6 @@ def test_csv_with_blank_name_falls_back_to_auto_name(loaded_geography):
     assert 'Real Name' in names
     assert 'cinema_1' in names
 
-
-# ---------------------------------------------------------------------------
-# Name collisions
-# ---------------------------------------------------------------------------
 
 def test_cross_type_name_collision_keeps_both_venues(loaded_geography, caplog):
     """A school and a boarding_school sharing a name (real-world overlap)
@@ -158,19 +149,15 @@ def test_same_type_name_collision_keeps_both_venues(loaded_geography, caplog):
     assert {h.properties['capacity'] for h in homes} == {10, 20}
 
 
-# ---------------------------------------------------------------------------
-# Missing CSV file
-# ---------------------------------------------------------------------------
-
-def test_missing_csv_warns_and_other_types_still_load(loaded_geography, tmp_path, caplog):
-    """If a configured CSV is absent, we warn and continue loading the rest."""
+def test_missing_csv_fails_loud(loaded_geography, tmp_path):
+    """An enabled venue type pointing at an absent CSV is a hard error — the
+    engine works on complete data or fails loudly. A typo'd filename must not
+    silently build an empty venue set."""
     venues_dir = tmp_path / "venues"
     venues_dir.mkdir()
-    # Provide one real file…
     (venues_dir / "cinemas.csv").write_text(
         "name,geo_unit\nOdeon,SGU_001\n"
     )
-    # …and a config that also references a non-existent file.
     (venues_dir / "test_venues_config.yaml").write_text(
         "venue_types:\n"
         "  cinema:\n"
@@ -178,29 +165,15 @@ def test_missing_csv_warns_and_other_types_still_load(loaded_geography, tmp_path
         "    filename: cinemas.csv\n"
         "  field:\n"
         "    enabled: true\n"
-        "    filename: field.csv\n"
+        "    filename: field.csv\n"   # does not exist
         "settings:\n"
         "  filter_by_geography: true\n"
     )
 
     vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
-    with caplog.at_level(logging.WARNING, logger='venuemanager'):
+    with pytest.raises(VenueError, match="field.csv"):
         vm.load_from_yaml_config("test_venues_config.yaml")
 
-    # The present type loaded.
-    assert len(vm.get_venues_by_type('cinema')) == 1
-    # The missing one did not crash and produced no venues.
-    assert not vm.get_venues_by_type('field')
-    # We surfaced the missing file.
-    assert any(
-        'not found' in r.message and 'field.csv' in r.message
-        for r in caplog.records
-    )
-
-
-# ---------------------------------------------------------------------------
-# filter_column / filter_values
-# ---------------------------------------------------------------------------
 
 def test_filter_column_filter_values_drops_rows(loaded_geography, caplog):
     """When a venue config specifies filter_column + filter_values, only
@@ -224,10 +197,6 @@ def test_filter_column_filter_values_drops_rows(loaded_geography, caplog):
     company_names = {v.name for v in vm.get_venues_by_type('company')}
     assert company_names == {'Keep1', 'Keep2'}
 
-
-# ---------------------------------------------------------------------------
-# extend() ID counter merge
-# ---------------------------------------------------------------------------
 
 def test_extend_merges_id_counters_no_collision(loaded_geography):
     """After extend(), creating a new venue must not reuse an ID from the
@@ -253,17 +222,9 @@ def test_extend_merges_id_counters_no_collision(loaded_geography):
     assert new_hospital.id >= 2
 
 
-# ---------------------------------------------------------------------------
-# subset metadata propagation
-# ---------------------------------------------------------------------------
-
 def test_venue_type_metadata_propagates_to_venues(loaded_geography, tmp_path):
     """Properties declared on the venue type config (is_residence,
     subset_categories, subset_key) must end up on every venue's properties.
-
-    Note: capacity rules used to live here under `capacity_config` but were
-    moved to the allocation step that owns them. venues_config now describes
-    only the venue itself.
     """
     venues_dir = tmp_path / "venues"
     venues_dir.mkdir()
@@ -293,13 +254,9 @@ def test_venue_type_metadata_propagates_to_venues(loaded_geography, tmp_path):
     assert venue.properties.get('subset_categories') == ['young', 'old']
     # is_residence_type derives from venue_configs.
     assert vm.is_residence_type('student_dorms') is True
-    # capacity rules no longer come from venues_config.
+    # capacity config is not supplied by venues_config.
     assert vm.get_capacity_config('student_dorms') is None
 
-
-# ---------------------------------------------------------------------------
-# Total-venues log line reports the true count
-# ---------------------------------------------------------------------------
 
 def test_total_venues_log_reflects_true_count_with_collisions(loaded_geography, tmp_path, caplog):
     """The 'Total venues created' line must reflect the actual number of
@@ -352,10 +309,6 @@ def test_total_venues_log_no_parenthetical_when_no_collisions(loaded_geography, 
     assert len(total_lines) == 1
     assert total_lines[0].strip() == 'Total venues created: 2'
 
-
-# ---------------------------------------------------------------------------
-# Production yaml no longer references missing field.csv
-# ---------------------------------------------------------------------------
 
 def test_production_yaml_does_not_reference_missing_files():
     """Each enabled venue type in configs/2021/venues/venues_config.yaml must

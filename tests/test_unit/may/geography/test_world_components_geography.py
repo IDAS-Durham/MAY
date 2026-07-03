@@ -10,7 +10,8 @@ def test_setup_geography_and_loading():
     # Create a dummy config dict
     config = {
         "geography": {
-            "data_dir": "tests/test_data/micro_world/geography"
+            "data_dir": "tests/test_data/micro_world/geography",
+            "levels": ["SGU", "MGU", "LGU"]
         }
     }
     

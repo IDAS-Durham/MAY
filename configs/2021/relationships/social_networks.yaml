@@ -1,20 +1,14 @@
-# ============================================================================
 # Social Networks Configuration
-# ============================================================================
-# Three networks accumulated into a single 'friendships' key, approximating
-# the behaviour of the old FriendshipBuilder (friendships.yaml).
+# Three networks accumulated into a single 'friendships' key.
 #
-# Mean counts are proportional to the old source weights (0.6 / 0.3 / 0.1)
+# Mean counts are proportional to the network weights (0.6 / 0.3 / 0.1)
 # applied to a target of ~6 contacts per person.
 # Contacts are stored as a set — duplicate contacts across networks are
 # automatically deduplicated.
-# ============================================================================
 
 networks:
 
-  # --------------------------------------------------------------------------
-  # 1. Activity peers — same venue, similar age  (old weight: 60%)
-  # --------------------------------------------------------------------------
+  # 1. Activity peers — same venue, similar age  (weight: 60%)
   - name: activity_peers
     network_type: activity_peers
     pool_type: activity
@@ -31,9 +25,7 @@ networks:
         attribute: age
         max_difference: 5
 
-  # --------------------------------------------------------------------------
-  # 2. Local geographic — same SGU, similar age  (old weight: 30%)
-  # --------------------------------------------------------------------------
+  # 2. Local geographic — same SGU, similar age  (weight: 30%)
   - name: geographic_local
     network_type: intra_geo_unit
     pool_type: geographic
@@ -47,9 +39,7 @@ networks:
         attribute: age
         max_difference: 10
 
-  # --------------------------------------------------------------------------
-  # 3. Community — same MGU, broader age range  (old weight: 10%)
-  # --------------------------------------------------------------------------
+  # 3. Community — same MGU, broader age range  (weight: 10%)
   - name: geographic_community
     network_type: intra_geo_unit
     pool_type: geographic

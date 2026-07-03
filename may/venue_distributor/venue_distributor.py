@@ -65,10 +65,10 @@ class VenueDistributor(BaseDistributor):
         self.allocation = AllocationEngine(self)
         self.reporting = ReportingManager(self)
 
-        # Parsing location attribute
+        # Where to locate the person for venue matching (e.g. 'geographical_unit.coordinates'
+        # for residence, or 'properties.workplace_sgu' for work location).
         self.person_loc_attr = (self.config.get('venue_selection', {})
-                                .get('person_location_source', 'geographical_unit.coordinates'))
-        self.person_location_attribute_config = self._parse_location_attribute(self.person_loc_attr)
+                                .get('locate_person_by', 'geographical_unit.coordinates'))
 
         self._pre_processed_filters = self._pre_process_filters(
             self.config.get('eligibility', {}).get('global_filters', [])
@@ -86,23 +86,6 @@ class VenueDistributor(BaseDistributor):
         self._load_probability_files()
 
         logger.info(f"Initialized VenueDistributor for venue_type='{self.venue_type}'")
-
-    def _parse_location_attribute(self, attr_string: str) -> Dict:
-        """
-        Parses the person_location_source string into a dictionary for easier lookup.
-        Examples:
-        - 'geographical_unit' -> {'type': 'direct', 'attribute': 'geographical_unit'}
-        - 'geographical_unit.coordinates' -> {'type': 'nested', 'attribute': 'geographical_unit', 'sub_attribute': 'coordinates'}
-        - 'properties.workplace_sgu' -> {'type': 'properties', 'attribute': 'workplace_sgu'}
-        """
-        if '.' in attr_string:
-            parts = attr_string.split('.')
-            if parts[0] == 'properties':
-                return {'type': 'properties', 'attribute': parts[1]}
-            else:
-                return {'type': 'nested', 'attribute': parts[0], 'sub_attribute': parts[1]}
-        else:
-            return {'type': 'direct', 'attribute': attr_string}
 
     def _load_probability_files(self):
         """
@@ -233,8 +216,40 @@ class VenueDistributor(BaseDistributor):
 
         # Phase 3: Normal Allocation
         if remaining:
-            normal_unallocated = self._allocate_normal(remaining, venues)
-            unallocated_total.extend(normal_unallocated)
+            vt = self.venue_type
+            deprioritize_flag = self.config.get('allocation', {}).get('deprioritize_flag')
+            if deprioritize_flag:
+                # Allocate people WITHOUT the flag (e.g. native workers) first
+                # so they claim capacity; people WITH it (e.g. redistributed
+                # workers bounced back in-boundary) take only the remaining slack.
+                # Capacity is tracked on the venues, so the second pass sees what the
+                # first consumed. Flagged people left unallocated are an explicit
+                # overflow category: kept as-is and counted.
+                native = [p for p in remaining if not p.properties.get(deprioritize_flag)]
+                flagged = [p for p in remaining if p.properties.get(deprioritize_flag)]
+                native_unallocated = self._allocate_normal(native, venues) if native else []
+                flagged_unallocated = self._allocate_normal(flagged, venues) if flagged else []
+                # "Unplaced" = reached this step but found no in-boundary venue of this
+                # type — capacity full OR no eligible venue (e.g. no matching sector
+                # nearby). For a workplace distributor that is effectively unemployment.
+                logger.info(
+                    f"  [capacity priority] '{vt}': "
+                    f"{len(native) - len(native_unallocated):,}/{len(native):,} non-flagged placed "
+                    f"({len(native_unallocated):,} unplaced — no in-boundary {vt}: "
+                    f"capacity full or no eligible venue); "
+                    f"{len(flagged) - len(flagged_unallocated):,}/{len(flagged):,} '{deprioritize_flag}' placed "
+                    f"({len(flagged_unallocated):,} unplaced -> outside, kept attempted destination, no venue)."
+                )
+                unallocated_total.extend(native_unallocated)
+                unallocated_total.extend(flagged_unallocated)
+            else:
+                # No deprioritisation: single normal pass. The honest eligible-vs-
+                # allocated tally (incl. anything placed in the priority phase above)
+                # is reported by reporting.log_allocation_summary. Logging the
+                # phase-3 remainder here would understate placement for priority-
+                # allocation distributors (e.g. university), so the summary handles it.
+                normal_unallocated = self._allocate_normal(remaining, venues)
+                unallocated_total.extend(normal_unallocated)
 
         # Phase 4: Fallbacks and Verification
         if unallocated_total:

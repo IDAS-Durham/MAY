@@ -7,6 +7,6 @@ for any geographical hierarchy.
 from .abstract_set import AbstractSet
 from .subset import Subset
 from .person import Person
-from .population import PopulationManager
+from .population import PopulationManager, PopulationError
 
-__all__ = ['Person', 'PopulationManager']
+__all__ = ['Person', 'PopulationManager', 'PopulationError']

@@ -16,7 +16,7 @@ import logging
 import numpy as np
 from collections import defaultdict
 
-from may.attribute_assignment.assigner import AttributeAssigner
+from may.attribute_assignment.assigner import AttributeAssigner, AttributeAssignmentError
 from may.attribute_assignment.assignment_config import (
     AssignmentRule,
     Role,
@@ -27,9 +27,7 @@ from may.attribute_assignment.assignment_config import (
 )
 
 
-# =============================================================================
 # Minimal real objects
-# =============================================================================
 
 class MinimalGeoUnit:
     def __init__(self, name, level="SGU", parent=None):
@@ -111,13 +109,24 @@ class SimpleGeoSource:
         self._fallback = fallback or {}
 
     def lookup(self, *args, **kwargs):
-        if len(args) == 1:
+        # Pair form: (geo_unit_str, first_value).
+        if args and isinstance(args[0], str):
+            if len(args) == 2:
+                geo, val = args
+                return self._lookup_data.get(geo, {}).get(val, self._fallback)
             return self._lookup_data.get(args[0], self._fallback)
-        elif len(args) == 2:
-            geo, val = args
-            nested = self._lookup_data.get(geo, {})
-            return nested.get(val, self._fallback)
-        return self._fallback
+        # Draw form: (person, household, context) — resolve residence geo like
+        # the real GeoDistribution source.
+        person = args[0] if args else None
+        household = args[1] if len(args) > 1 else None
+        geo_unit = None
+        if household is not None and getattr(household, 'geographical_unit', None):
+            geo_unit = household.geographical_unit.name
+        if not geo_unit and getattr(person, 'geographical_unit', None):
+            geo_unit = person.geographical_unit.name
+        if not geo_unit:
+            raise KeyError("no residence geographical_unit for person")
+        return self._lookup_data.get(geo_unit, self._fallback)
 
 
 class SimpleDataManager:
@@ -161,9 +170,7 @@ class MinimalConfig:
     get_assignment_rule = AttributeAssignmentConfig.get_assignment_rule
 
 
-# =============================================================================
 # Fixtures
-# =============================================================================
 
 @pytest.fixture(autouse=True)
 def reset_ids():
@@ -223,8 +230,8 @@ def _build_family_config(geo_source, pair_source=None):
         "strategy": "inheritance",
         "inherit_from": {"roles": ["primary_adult", "secondary_adult"]},
         "logic": [
-            {"when": "count(unique_values) == 1", "then": "values[0]"},
-            {"when": "count(unique_values) > 1", "then": "M"},
+            {"when": {"unique_count": 1}, "then": "values[0]"},
+            {"when": {"unique_count_at_least": 2}, "then": "M"},
         ],
     }
 
@@ -265,9 +272,7 @@ def _build_family_config(geo_source, pair_source=None):
     return config
 
 
-# =============================================================================
 # _assign_household() Tests
-# =============================================================================
 
 class TestAssignHousehold:
     """
@@ -387,10 +392,8 @@ class TestAssignHousehold:
 
         assigner._assign_household(household)
 
-        # If context propagation failed, secondary_adult's partnership strategy
-        # would have fallen back to geo_distribution instead of using pair probs.
-        # Both adults would get "W" regardless, but the assignment path matters.
-        # The real signal here is that the child inherited correctly (not fallback).
+        # The child inheriting "W" confirms context propagation carried the
+        # partner reference into the partnership strategy.
         assert child.properties["ethnicity"] == "W"
 
     def test_dependency_ordering_adults_before_children(self, geo_unit):
@@ -502,11 +505,10 @@ class TestAssignHousehold:
         assert adult.properties["ethnicity"] == "A"
         assert child.properties["ethnicity"] == "A"
 
-    # ---- BUG DETECTION ----
 
     def test_assigned_people_counter_incremented(self, geo_unit):
         """
-        assigned_people is now incremented in _assign_household alongside
+        _assign_household increments assigned_people alongside
         assignments_by_role and assignments_by_strategy.
         """
         geo_source = SimpleGeoSource(lookup_data={"E00001234": {"W": 1.0}})
@@ -535,8 +537,8 @@ class TestAssignHousehold:
 
     def test_list_return_value_handled_in_attribute_distribution(self, geo_unit):
         """
-        Strategies that return lists (like ProbabilisticConditionsStrategy) are now
-        handled correctly: the list is converted to str() for the distribution counter.
+        Strategies that return lists (like ProbabilisticConditionsStrategy) are
+        handled: the list is converted to str() for the distribution counter.
         """
         config = MinimalConfig(
             attribute_name="comorbidities",
@@ -581,16 +583,14 @@ class TestAssignHousehold:
         # Attribute stored correctly
         assert person.properties["comorbidities"] == ["cvd", "crd"]
 
-        # Stats are now consistent
+        # Stats reflect the assignment
         assert assigner.stats['assigned_people'] == 1
         assert assigner.stats['assignments_by_role']['primary_adult'] == 1
         assert assigner.stats['attribute_distribution']["['cvd', 'crd']"] == 1
         assert assigner.stats['unassigned_people'] == 0
 
 
-# =============================================================================
 # assign_all() Tests
-# =============================================================================
 
 class TestAssignAll:
     """Tests for the main entry point routing logic."""
@@ -610,7 +610,7 @@ class TestAssignAll:
         venue = MinimalVenue(venue_type="household", members=[])
         vm = MinimalVenueManager([venue])
 
-        # Should not crash — just finds no people
+        # Finds no people
         stats = assigner.assign_all(vm)
         assert stats['total_people'] == 0
 
@@ -657,10 +657,21 @@ class TestAssignAll:
         with pytest.raises(ValueError, match="Unknown assignment_level"):
             assigner.assign_all(vm)
 
+    def test_unassigned_person_fails_loud(self, geo_unit):
+        """A full run that leaves anyone unassigned aborts."""
+        config = _build_family_config(SimpleGeoSource())
+        dm = SimpleDataManager(sources={"geo_distribution": SimpleGeoSource()})
+        assigner = AttributeAssigner(config, dm)
 
-# =============================================================================
+        # 1-member household with no pattern → unclassifiable → 1 unassigned.
+        person = MinimalPerson(age=30, category="Adults", geographical_unit=geo_unit)
+        vm = MinimalVenueManager([MinimalVenue(venue_type="household", members=[person])])
+
+        with pytest.raises(AttributeAssignmentError, match="unassigned"):
+            assigner.assign_all(vm)
+
+
 # _assign_all_residences() — Stats accounting Tests
-# =============================================================================
 
 class TestAssignAllResidencesStats:
     """
@@ -670,8 +681,8 @@ class TestAssignAllResidencesStats:
 
     def test_unassigned_people_accumulated_not_overwritten(self, geo_unit):
         """
-        unassigned_people is now accumulated incrementally from both
-        _assign_household and _assign_other_residences, not overwritten.
+        unassigned_people accumulates from both _assign_household and
+        _assign_other_residences.
         """
         config = _build_family_config(SimpleGeoSource(fallback={"W": 1.0}))
         config.household_structures["Independents"] = HouseholdStructure(
@@ -717,9 +728,7 @@ class TestAssignAllResidencesStats:
 
     def test_total_people_incremental_vs_final(self, geo_unit):
         """
-        _assign_household increments total_people per household (line 689).
-        _assign_all_residences then overwrites with venue.size() sum (line 209).
-        The final value is correct but the incremental work is wasted.
+        total_people ends at the venue.size() sum after _assign_all_residences.
         """
         config = _build_family_config(SimpleGeoSource(fallback={"W": 1.0}))
         config.household_structures["Independents"] = HouseholdStructure(
@@ -740,7 +749,7 @@ class TestAssignAllResidencesStats:
         vm = MinimalVenueManager([hh])
         assigner._assign_all_residences(vm)
 
-        # total_people should be 1 regardless of the incremental/overwrite path
+        # total_people should be 1
         assert assigner.stats['total_people'] == 1
 
     def test_households_separated_from_other_venues(self, geo_unit):
@@ -779,9 +788,7 @@ class TestAssignAllResidencesStats:
         assert assigner.stats['other_residences_processed'] == 1
 
 
-# =============================================================================
 # _check_required_attributes() Tests
-# =============================================================================
 
 class TestCheckRequiredAttributes:
     """Tests logging/warning behavior for required attribute checking."""

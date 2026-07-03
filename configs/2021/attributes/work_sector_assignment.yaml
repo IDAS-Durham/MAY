@@ -1,6 +1,4 @@
-# ============================================================================
 # Work Sector Attribute Assignment Configuration
-# ============================================================================
 # Assigns work sector (industry) based on:
 # 1. Workplace LGU location (not residence)
 # 2. Person's sex (for demographic realism)
@@ -10,17 +8,16 @@
 #
 # Assignment Level: person
 # Dependencies: workplace_location (LGU), workplace_sgu (SGU)
-# ============================================================================
 
-attribute:
-  name: "work_sector"
-  description: "Assigns industry sector based on workplace LGU and sex"
-  data_type: "categorical"
+step:
   assignment_level: "person"
 
-# ============================================================================
+attributes:
+  - name: "work_sector"
+    description: "Assigns industry sector based on workplace LGU and sex"
+    data_type: "categorical"
+
 # Filters - Only assign to working-age people (18-65)
-# ============================================================================
 filters:
   age:
     attribute: "age"
@@ -30,26 +27,33 @@ filters:
       min: 18
       max: 64
 
-# ============================================================================
+  # Only people with an in-boundary workplace get a sector. Students
+  # (primary_activity) have no workplace_location; OUTSIDE workers (below) have no
+  # in-world workplace — both would miss the LGU+sex lookup key.
+  activities:
+    exclude: ["primary_activity"]
+
+  out_of_boundary:
+    attribute: "workplace_location"
+    type: "categorical"
+    description: "Exclude out-of-area workers (no in-world workplace, no sector row)"
+    exclude: ["OUTSIDE"]
+
 # Required Attributes (Dependencies)
-# ============================================================================
 required_attributes:
   - name: "workplace_location"
     description: "Workplace LGU must be assigned first"
     required: true
-    error_if_missing: true
   - name: "workplace_sgu"
     description: "Workplace SGU must be assigned first"
     required: true
-    error_if_missing: true
 
-# ============================================================================
 # Data Sources
-# ============================================================================
 data_sources:
   # Workplace LGU + Sex stratified industry distribution
   workplace_industry_by_sex:
     type: "csv_lookup"
+    format: "multi_key"
     description: "Industry distribution by workplace LGU and sex for demographic accuracy"
 
     files:
@@ -86,30 +90,7 @@ data_sources:
           Q: "Human Health and Social Work Activities"
           Other: "Other"
 
-    fallback:
-      # National fallback (approximate UK 2021 employment distribution)
-      A: 0.01
-      B: 0.002
-      C: 0.08
-      D: 0.005
-      E: 0.007
-      F: 0.07
-      G: 0.15
-      H: 0.05
-      I: 0.07
-      J: 0.045
-      K: 0.035
-      L: 0.02
-      M: 0.09
-      N: 0.08
-      O: 0.045
-      P: 0.09
-      Q: 0.13
-      Other: 0.04
-
-# ============================================================================
 # Assignment Rules (Person-Level)
-# ============================================================================
 assignment_rules:
   person:
     description: "Assign work sector based on workplace LGU + sex"

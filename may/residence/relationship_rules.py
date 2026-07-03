@@ -11,7 +11,7 @@ The system is fully generic and works with:
 - Any numerical attributes (age, income, education years, etc.)
 - Any categorical attributes (sex, religion, occupation, etc.)
 
-No hardcoded assumptions about specific attributes - everything is configurable and pattern-based.
+Everything is configurable and pattern-based.
 """
 
 import os
@@ -37,9 +37,9 @@ class RelationshipRule:
     """A relationship rule, resolved by name from allocation steps.
 
     Rules are looked up via `get_rule_by_name` (allocation steps reference
-    them by `rule:`); they do not carry their own pattern list. Which
-    patterns a rule runs on is owned entirely by the allocation step
-    (`patterns:` / `target_patterns:`), the single source of truth.
+    them by `rule:`). Which patterns a rule runs on is owned entirely by the
+    allocation step (`patterns:` / `target_patterns:`), the single source of
+    truth.
     """
     name: str
     roles: Dict[str, Dict]  # role_name -> {categories: [...], count: ...}
@@ -113,8 +113,7 @@ class RelationshipRulesValidator:
             config = yaml.safe_load(f)
 
         # An empty YAML body parses to None. Treat it the same as a missing
-        # file: leave the validator disabled with no rules, rather than
-        # crashing world creation with AttributeError.
+        # file: leave the validator disabled with no rules.
         if config is None:
             logger.warning(f"Empty relationship rules config: {config_file}")
             logger.warning("Relationship rules disabled")
@@ -126,9 +125,6 @@ class RelationshipRulesValidator:
 
         # Parse rules
         for rule_config in config.get('rules', []):
-            # A rule's `patterns:` list (if present in older configs) is
-            # intentionally ignored: it is redundant with the allocation
-            # step's own patterns and is no longer read anywhere.
             rule = RelationshipRule(
                 name=rule_config.get('name', 'Unnamed rule'),
                 roles=rule_config.get('roles', {}),
@@ -173,7 +169,19 @@ class RelationshipRulesValidator:
             return
 
         geo_code_column = source.get('geo_code_column', 'geo_unit')
-        geo_level = source.get('geo_level', 'MGU')
+        geo_level = source.get('geo_level')
+        if not geo_level:
+            raise ValueError(
+                f"same_category_source[{attribute}] needs 'geo_level' (the geography "
+                f"level its codes refer to); there is no default."
+            )
+        geo_levels = getattr(self.geography, 'levels', None)
+        if geo_levels and geo_level not in geo_levels:
+            raise ValueError(
+                f"same_category_source[{attribute}] geo_level '{geo_level}' is not a "
+                f"configured geography level {geo_levels}. "
+                f"An unmatched level silently degrades to the scalar fallback for every person."
+            )
         formula = source.get('formula') or []
         if not formula:
             logger.warning(f"same_category_source[{attribute}] has no formula; skipped")
@@ -347,7 +355,7 @@ class RelationshipRulesValidator:
         if not other_people:
             return (True, 0.0)
 
-        attribute = constraint.get('attribute', 'age')  # Default to 'age' for backward compatibility
+        attribute = constraint.get('attribute', 'age')  # Default to 'age'
         min_diff = constraint.get('min_difference', 0)
         max_diff = constraint.get('max_difference', 100)
 
@@ -363,9 +371,8 @@ class RelationshipRulesValidator:
         #
         # `categorical_from: <role>` lets the rule pin the override to a specific
         # role. When it names the *other* role (the existing members), the cap is
-        # per-member, so other_people cannot be collapsed to a bare min/max — we
-        # evaluate each member individually below. When it names the candidate's
-        # own role, or is absent, behaviour is identical to before.
+        # per-member, so we evaluate each member individually below. When it names
+        # the candidate's own role, or is absent, the cap is read off the candidate.
         max_diff_by_cat = constraint.get('max_difference_by_categorical_attribute', {})
         getter = self._get_attribute_getter(attribute)
 
@@ -836,9 +843,8 @@ class RelationshipRulesValidator:
         # whenever a top-level `same_category_sources` entry exists for this
         # attribute (the source provides the live per-area value; the scalar
         # below is only used when the candidate's area is missing from it).
-        # `same_category_probability` is accepted for back-compat with worlds
-        # that have no source configured (e.g. Medieval), where the scalar IS
-        # the authoritative value.
+        # `same_category_probability` applies to worlds that have no source
+        # configured (e.g. Medieval), where the scalar is the authoritative value.
         cat_attr_config = constraint.get('categorical_attribute', {})
         cat_attribute = cat_attr_config.get('attribute', 'sex')
         fallback_prob = cat_attr_config.get(

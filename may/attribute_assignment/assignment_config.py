@@ -10,6 +10,7 @@ Simplified attribute assignment configuration:
 
 import yaml
 import logging
+from collections import defaultdict
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,20 +33,16 @@ def _pattern_matches_cached(actual: str, template: str) -> bool:
         actual="2 0 2 0", template=">=1 >=0 2 0" -> True
         actual="0 1 2 0", template=">=1 >=0 2 0" -> False
     """
-    # Handle empty patterns
     if not actual or not template:
         return False
 
-    # Parse actual pattern into counts
     try:
         actual_counts = [int(x) for x in actual.split()]
     except ValueError:
         return False
 
-    # Parse template pattern using CompositionPattern (which is now cached)
     template_pattern = CompositionPattern.from_string(template)
 
-    # Check each category
     if len(actual_counts) != len(template_pattern.requirements):
         return False
 
@@ -77,7 +74,6 @@ class DataSourceConfig:
     type: str
     description: str
     files: List[Dict[str, Any]] = field(default_factory=list)
-    fallbacks: List[Dict[str, Any]] = field(default_factory=list)
     config: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -172,8 +168,6 @@ class MatchingRule:
         # Get age categories from household properties
         age_categories = household.properties.get('_age_categories', [])
         if not age_categories:
-            # Try to get from config if available
-            # For now, return empty string
             return ''
 
         # Build category name → index mapping
@@ -314,6 +308,43 @@ class StructureAssignmentRules:
     rules: List[AssignmentRule] = field(default_factory=list)
 
 
+def _extract_role_dependencies(assignment: Dict[str, Any]) -> List[str]:
+    """
+    Collect every role this assignment references and must therefore be assigned
+    after.
+
+    A strategy may read another role's already-assigned value three ways:
+    `inherit_from` (copy it), `partner_role` (match it), or `exclude` (differ
+    from it). Each referenced role becomes an ordering dependency so the topo-sort
+    assigns it first whenever both roles are present in a household. Only declared
+    references count — an absent reference is the author choosing not to relate
+    the roles, not a dependency.
+    """
+    deps: List[str] = []
+
+    inherit_from = assignment.get('inherit_from') or {}
+    if isinstance(inherit_from, dict):
+        # Forward inheritance uses 'roles' (list); reverse uses 'role' (string).
+        if 'roles' in inherit_from:
+            deps.extend(inherit_from['roles'])
+        elif 'role' in inherit_from:
+            deps.append(inherit_from['role'])
+
+    partner_role = assignment.get('partner_role')
+    if partner_role:
+        deps.append(partner_role)
+
+    # `exclude` lists live inside declarative logic `then` blocks; each entry is a
+    # "role.attr" reference to a role this one must differ from.
+    for entry in assignment.get('logic') or []:
+        then = entry.get('then') if isinstance(entry, dict) else None
+        if isinstance(then, dict):
+            for ref in then.get('exclude') or []:
+                deps.append(ref.split('.', 1)[0])
+
+    return deps
+
+
 class AttributeAssignmentConfig:
     """
     Configuration loader for attribute assignment.
@@ -332,12 +363,14 @@ class AttributeAssignmentConfig:
             self.raw_config = yaml.safe_load(f)
 
         # Parse sections
-        self.attribute_name = self._parse_attribute()
+        self.attributes = self._parse_attributes()
+        # Primary produced attribute (single-output configs have exactly one).
+        self.attribute_name = self.attributes[0]['name']
+        self.produced_attributes = [a['name'] for a in self.attributes]
         self.assignment_level = self._parse_assignment_level()
         self.residence_venue_types = self._parse_residence_venue_types()
         self.filters = self._parse_filters()
         self.required_attributes = self._parse_required_attributes()
-        self.region_mapping = self.raw_config.get('region_mapping', {})
         self.categories = self._parse_categories()
         self.roles = self._parse_roles()
         self.household_structures = self._parse_household_structures()
@@ -363,20 +396,43 @@ class AttributeAssignmentConfig:
         logger.info(f"  Household structures: {len(self.household_structures)}")
         logger.info(f"  Assignment rules: {len(self.assignment_rules)}")
 
-    def _parse_attribute(self) -> str:
-        """Parse attribute name."""
-        return self.raw_config.get('attribute', {}).get('name', 'unknown')
+    def _parse_attributes(self) -> List[Dict[str, Any]]:
+        """Parse the produced-attribute declarations.
+
+        Produced attributes are always a top-level `attributes:` list; each entry
+        carries a 'name'. A single-output config declares a one-entry list. Step
+        config (assignment_level, residence_venue_types) lives under `step:`.
+        A top-level singular `attribute:` block raises a clear error.
+        """
+        if 'attribute' in self.raw_config:
+            raise ValueError(
+                "top-level 'attribute:' block is retired. Declare the "
+                "produced attribute(s) as an 'attributes:' list and step config "
+                "under 'step:'."
+            )
+        raw = self.raw_config.get('attributes')
+        if not raw or not isinstance(raw, list):
+            raise ValueError(
+                "config needs an 'attributes:' list declaring the produced "
+                "attribute(s), e.g. `attributes:\\n  - name: ethnicity`."
+            )
+        for entry in raw:
+            if not isinstance(entry, dict) or 'name' not in entry:
+                raise ValueError(
+                    f"each 'attributes' entry needs a 'name', got {entry!r}"
+                )
+        return raw
 
     def _parse_assignment_level(self) -> str:
         """Parse assignment level: 'person' or 'person_by_residence'."""
-        return self.raw_config.get('attribute', {}).get('assignment_level', 'person_by_residence')
+        return self.raw_config.get('step', {}).get('assignment_level', 'person_by_residence')
 
     def _parse_residence_venue_types(self) -> List[str]:
         """Residence venue types assigned by household structure (default ['household']).
 
         Other residence types fall through to venue_assignment_rules.
         """
-        return self.raw_config.get('attribute', {}).get('residence_venue_types', ['household'])
+        return self.raw_config.get('step', {}).get('residence_venue_types', ['household'])
 
     def _parse_filters(self) -> Dict[str, Any]:
         """Parse filters (e.g., activity-based filtering)."""
@@ -385,31 +441,33 @@ class AttributeAssignmentConfig:
     def _parse_required_attributes(self) -> Dict[str, Any]:
         """Parse required attributes (dependencies).
 
-        Supports two formats:
-        1. Dict format: {attr_name: {description: "...", required: true, ...}}
-        2. List format: [{name: "attr_name", description: "...", required: true, ...}]
+        Canonical form is a list of entries, each carrying a 'name':
 
-        Returns a dict format for backward compatibility.
+            required_attributes:
+              - name: ethnicity
+                required: true
+
+        Returned as a dict keyed by name for internal lookup. The mapping form
+        (`name: {...}`) raises a clear error.
         """
-        raw_attrs = self.raw_config.get('required_attributes', {})
+        raw_attrs = self.raw_config.get('required_attributes', [])
+        if not raw_attrs:
+            return {}
 
-        # If it's already a dict, return it
-        if isinstance(raw_attrs, dict):
-            return raw_attrs
+        if not isinstance(raw_attrs, list):
+            raise ValueError(
+                f"required_attributes must be a list of entries each with a "
+                f"'name', got {type(raw_attrs).__name__}. Convert the "
+                f"mapping form `name:\\n  ...` to `- name: name\\n  ...`."
+            )
 
-        # If it's a list, convert to dict using 'name' field as key
-        if isinstance(raw_attrs, list):
-            result = {}
-            for attr in raw_attrs:
-                if 'name' not in attr:
-                    raise ValueError(f"Required attribute entry missing 'name' field: {attr}")
-                name = attr['name']
-                # Copy all fields except 'name' into the config
-                config = {k: v for k, v in attr.items() if k != 'name'}
-                result[name] = config
-            return result
-
-        return {}
+        result = {}
+        for attr in raw_attrs:
+            if 'name' not in attr:
+                raise ValueError(f"Required attribute entry missing 'name' field: {attr}")
+            name = attr['name']
+            result[name] = {k: v for k, v in attr.items() if k != 'name'}
+        return result
 
     def _parse_categories(self) -> List[Dict[str, Any]]:
         """Parse categories (e.g., age bands)."""
@@ -476,7 +534,7 @@ class AttributeAssignmentConfig:
         return structures
 
     def _parse_data_sources(self) -> Dict[str, DataSourceConfig]:
-        """Parse data sources (wrapped in DataSourceConfig for compatibility with v1)."""
+        """Parse data sources into DataSourceConfig objects."""
         sources = {}
         sources_config = self.raw_config.get('data_sources', {})
 
@@ -486,7 +544,6 @@ class AttributeAssignmentConfig:
                 type=source_data.get('type', 'csv_lookup'),
                 description=source_data.get('description', ''),
                 files=source_data.get('files', []),
-                fallbacks=[source_data.get('fallback', {})],  # YAML uses 'fallback' key
                 config=source_data
             )
 
@@ -511,27 +568,24 @@ class AttributeAssignmentConfig:
                           f"{structure_name}.rules[{i}]",
                 )
 
-                # Extract dependencies from inheritance strategies
-                dependencies = []
-                inherit_from = assignment_data.get('inherit_from', {})
-                if inherit_from:
-                    # Forward inheritance uses 'roles' (list)
-                    if 'roles' in inherit_from:
-                        dependencies.extend(inherit_from['roles'])
-                    # Reverse inheritance uses 'role' (string)
-                    elif 'role' in inherit_from:
-                        dependencies.append(inherit_from['role'])
+                # Ordering dependencies derived from every cross-role reference
+                # (inherit_from/partner_role/exclude).
+                dependencies = _extract_role_dependencies(assignment_data)
 
                 rules.append(AssignmentRule(
                     role=rule_data.get('role'),  # Can be string or list
                     priority=rule_data.get('priority', 999),
                     description=rule_data.get('description', ''),
                     assignment=assignment_data,
-                    dependencies=list(set(dependencies)) # Unique dependencies
+                    dependencies=list(set(dependencies))
                 ))
 
             # Sort rules by priority
             rules.sort(key=lambda r: r.priority)
+
+            # Ordering failures fail loud at load: a reference to an undefined role
+            # is a typo, a cycle is genuinely unorderable.
+            self._validate_role_dependencies(structure_name, rules)
 
             structure_rules[structure_name] = StructureAssignmentRules(
                 structure_name=structure_name,
@@ -540,6 +594,69 @@ class AttributeAssignmentConfig:
             )
 
         return structure_rules
+
+    def _validate_role_dependencies(self, structure_name: str,
+                                    rules: List[AssignmentRule]) -> None:
+        """
+        Reject unorderable cross-role references in one structure.
+
+        Every dependency derived by `_extract_role_dependencies` must name a role
+        defined in this structure (else it is a typo), and the role-level
+        dependency graph must be acyclic (else no assignment order can satisfy it).
+        A role defined here that simply has no member in a given household is fine
+        — that is handled quietly at assignment time, not a structural error.
+        """
+        defined_roles = set()
+        for rule in rules:
+            roles = rule.role if isinstance(rule.role, list) else [rule.role]
+            defined_roles.update(r for r in roles if r is not None)
+
+        # Build role -> {roles it must follow}, validating each reference exists.
+        edges = defaultdict(set)
+        for rule in rules:
+            roles = rule.role if isinstance(rule.role, list) else [rule.role]
+            for dep in rule.dependencies:
+                if dep not in defined_roles:
+                    raise ValueError(
+                        f"{self.config_path.name}: assignment_rules.{structure_name}: "
+                        f"rule for role {rule.role!r} references undefined role "
+                        f"{dep!r}. A cross-role reference "
+                        f"(inherit_from/partner_role/exclude) must name a role "
+                        f"defined in this structure."
+                    )
+                for role in roles:
+                    if role is not None and role != dep:
+                        edges[role].add(dep)
+
+        self._raise_on_dependency_cycle(structure_name, defined_roles, edges)
+
+    def _raise_on_dependency_cycle(self, structure_name: str, roles: set,
+                                   edges: Dict[str, set]) -> None:
+        """Raise if the role dependency graph has a cycle."""
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {role: WHITE for role in roles}
+        path: List[str] = []
+
+        def visit(role: str) -> None:
+            color[role] = GRAY
+            path.append(role)
+            for dep in edges.get(role, ()):
+                if color[dep] == GRAY:
+                    cycle = path[path.index(dep):] + [dep]
+                    raise ValueError(
+                        f"{self.config_path.name}: assignment_rules."
+                        f"{structure_name}: cross-role references form a cycle "
+                        f"({' -> '.join(cycle)}); no assignment order can satisfy "
+                        f"them."
+                    )
+                if color[dep] == WHITE:
+                    visit(dep)
+            path.pop()
+            color[role] = BLACK
+
+        for role in roles:
+            if color[role] == WHITE:
+                visit(role)
 
     def _parse_venue_assignment_rules(self) -> List[Dict[str, Any]]:
         """Parse venue assignment rules."""
@@ -642,7 +759,7 @@ class AttributeAssignmentConfig:
                 elif verbose:
                     logger.debug(f"        ✗ Category '{person_category}' not in role subsets {role.subsets}")
             else:
-                # Fallback to internal lookup only if needed
+                # Otherwise use internal lookup
                 if role.matches(person, verbose=verbose):
                     matched = True
 
@@ -761,7 +878,7 @@ class AttributeAssignmentConfig:
 
         result = None
 
-        # Use pre-filtered categories instead of iterating all
+        # Use pre-filtered categories
         numerical_cats = self._categories_by_attr.get(attribute_name + '_numerical', [])
         if numerical_cats and isinstance(value, (int, float)):
             # For numerical, iterate through sorted categories (typically just 4-5)
@@ -778,7 +895,7 @@ class AttributeAssignmentConfig:
                     result = category
                     break
         else:
-            # For categorical or fallback, check all categories for this attribute
+            # For categorical, check all categories for this attribute
             cats = self._categories_by_attr.get(attribute_name, [])
             for category in cats:
                 if category.get('type') == 'categorical':
@@ -806,20 +923,6 @@ class AttributeAssignmentConfig:
             return None
 
         return person_rules.rules[0]
-
-    def get_required_attribute_mapping(self, attr_name: str) -> Dict[str, str]:
-        """
-        Get mapping for a required attribute.
-
-        Args:
-            attr_name: Name of required attribute
-
-        Returns:
-            Mapping dict or empty dict
-        """
-        if attr_name in self.required_attributes:
-            return self.required_attributes[attr_name].get('mapping', {})
-        return {}
 
     @classmethod
     def from_yaml(cls, config_path: Path) -> 'AttributeAssignmentConfig':
