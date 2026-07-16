@@ -201,7 +201,7 @@ _SELECTOR_OPS = {'>=': operator.ge, '>': operator.gt, '==': operator.eq,
 def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: List) -> None:
     """Resolve `patterns_where` selectors and enforce build-step disjointness.
 
-    Runs once, before any allocation (docs/adr/0028). A selector is a list of
+    Runs once, before any allocation. A selector is a list of
     {category, operator, value} conditions evaluated against each vocabulary
     pattern's minimum counts; the matches are written back into the step as an
     explicit `patterns:` list, so the executor below needs no changes. Every
@@ -302,7 +302,7 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
     (a couple, a parent with an adult child, unrelated people) project onto
     the same pattern. The mixture table gives, per geo unit, the measured
     share of each interpretation, and build steps claim one interpretation
-    each — the quota split happens at build time (docs/adr/0030).
+    each — the quota split happens at build time.
 
     Entirely opt-in: no `mixture:` block means no behavior change, and using
     `interpretation:` on a step without the block is an error.
@@ -326,7 +326,7 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
     if geo_level not in household_distributor.geography.levels:
         raise HouseholdError(
             f"mixture.geo_level {geo_level!r} is not one of the configured "
-            f"geography levels {household_distributor.geography.levels} (docs/adr/0002)."
+            f"geography levels {household_distributor.geography.levels}."
         )
 
     shares: Dict[tuple, Dict[str, float]] = {}

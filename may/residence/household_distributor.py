@@ -106,7 +106,7 @@ class HouseholdDistributor:
         self._sample_lists: Dict[str, Dict[int, List['Person']]] = {}
         self._warned_large_pool = False
 
-        # Structure mixture (docs/adr/0030): set by the allocation strategy
+        # Structure mixture: set by the allocation strategy
         # loader when the strategy has a `mixture:` block; None otherwise.
         self.structure_mixture: Optional[Dict] = None
         self._mixture_quota_cache: Dict[tuple, Dict[str, int]] = {}
