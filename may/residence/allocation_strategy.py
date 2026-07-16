@@ -4,12 +4,15 @@ Unified allocation strategy executor.
 Executes both household and venue allocations in a single YAML-defined sequence.
 """
 
+import csv
 import os
 import logging
+import operator
 import yaml
-from typing import Dict, List
+from typing import Dict, List, Optional
 from .venue_allocator import _allocate_to_venue_type
 from .household_distributor import HouseholdError
+from .composition_pattern import CompositionPattern
 from may.utils import path_resolver as pr
 
 logger = logging.getLogger("allocation_strategy")
@@ -62,7 +65,13 @@ def execute_allocation_strategy(population,
         logger.warning("No allocation steps defined in strategy")
         return {}
 
+    _resolve_pattern_selectors(
+        steps,
+        household_distributor.household_pattern_vocabulary,
+        household_distributor.categories,
+    )
     _validate_step_patterns(steps, household_distributor.household_pattern_vocabulary)
+    _setup_structure_mixture(strategy.get('mixture'), steps, household_distributor)
 
     logger.info(f"Found {len(steps)} allocation steps")
     logger.info("")
@@ -185,6 +194,199 @@ def execute_allocation_strategy(population,
     return all_stats
 
 
+_SELECTOR_OPS = {'>=': operator.ge, '>': operator.gt, '==': operator.eq,
+                 '<=': operator.le, '<': operator.lt}
+
+
+def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: List) -> None:
+    """Resolve `patterns_where` selectors and enforce build-step disjointness.
+
+    Runs once, before any allocation (docs/adr/0028). A selector is a list of
+    {category, operator, value} conditions evaluated against each vocabulary
+    pattern's minimum counts; the matches are written back into the step as an
+    explicit `patterns:` list, so the executor below needs no changes. Every
+    resolved or hand-written build-step pattern is then claimed exactly once —
+    a pattern claimed twice would double its census build quota, so overlap is
+    an error, and a `patterns: null` step takes whatever remains unclaimed.
+    """
+    build_steps = [s for s in steps if s.get('type') == 'household']
+    if not build_steps or not vocabulary:
+        return
+    name_to_idx = {cat.name: idx for idx, cat in enumerate(categories)}
+
+    for step in build_steps:
+        where = step.get('patterns_where')
+        if where is None:
+            continue
+        step_name = step.get('name', 'household')
+        if step.get('patterns') is not None:
+            raise HouseholdError(
+                f"Step '{step_name}': give either 'patterns' or 'patterns_where', not both."
+            )
+        conditions = []
+        for cond in where:
+            cat, op, value = cond.get('category'), cond.get('operator'), cond.get('value')
+            if cat not in name_to_idx:
+                raise HouseholdError(
+                    f"Step '{step_name}': patterns_where category {cat!r} is not one of "
+                    f"{sorted(name_to_idx)}."
+                )
+            if op not in _SELECTOR_OPS:
+                raise HouseholdError(
+                    f"Step '{step_name}': patterns_where operator {op!r} is not one of "
+                    f"{sorted(_SELECTOR_OPS)}."
+                )
+            conditions.append((name_to_idx[cat], _SELECTOR_OPS[op], value))
+
+        matched = []
+        for pattern_str in vocabulary:
+            pattern = CompositionPattern.from_string(pattern_str)
+            if all(op(pattern.get_min_count(idx), value) for idx, op, value in conditions):
+                matched.append(pattern_str)
+        if not matched:
+            raise HouseholdError(
+                f"Step '{step_name}': patterns_where matched no pattern in households.csv."
+            )
+        step['patterns'] = sorted(matched)
+        del step['patterns_where']
+        logger.info(f"Step '{step_name}': patterns_where resolved to {len(matched)} patterns")
+
+    # pattern -> {interpretation-or-None: step name}. A step without an
+    # `interpretation` claims the pattern's WHOLE census count (key None),
+    # which conflicts with any other claim; interpretation steps share a
+    # pattern as long as their interpretations differ — each takes its
+    # mixture quota of the count.
+    claimed: Dict[str, Dict[Optional[str], str]] = {}
+    for step in build_steps:
+        patterns = step.get('patterns')
+        if patterns is None:
+            continue
+        step_name = step.get('name', 'household')
+        interp = step.get('interpretation')
+        for p in patterns:
+            name = p.get('pattern') if isinstance(p, dict) else p
+            holders = claimed.setdefault(name, {})
+            conflict = (holders.get(interp) if interp is not None and None not in holders
+                        else next(iter(holders.values()), None) if interp is None
+                        else holders.get(None) or holders.get(interp))
+            if conflict:
+                raise HouseholdError(
+                    f"Pattern '{name}' is claimed by both '{conflict}' and "
+                    f"'{step_name}' — a pattern's census count is a build quota, so "
+                    f"steps must claim distinct patterns (or distinct interpretations "
+                    f"of one pattern under a mixture)."
+                )
+            holders[interp] = step_name
+
+    for step in build_steps:
+        if step.get('patterns') is not None:
+            continue
+        step_name = step.get('name', 'household')
+        remainder = sorted(vocabulary - set(claimed))
+        if not remainder:
+            raise HouseholdError(
+                f"Step '{step_name}' (patterns: null) has no patterns left — "
+                f"earlier build steps already claim the whole vocabulary."
+            )
+        step['patterns'] = remainder
+        for name in remainder:
+            claimed[name] = {step.get('interpretation'): step_name}
+        logger.info(f"Step '{step_name}': patterns null -> {len(remainder)} remaining patterns")
+
+
+def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
+                             household_distributor) -> None:
+    """Load the structure-mixture table and validate interpretation claims.
+
+    A census composition pattern is a marginal: different household structures
+    (a couple, a parent with an adult child, unrelated people) project onto
+    the same pattern. The mixture table gives, per geo unit, the measured
+    share of each interpretation, and build steps claim one interpretation
+    each — the quota split happens at build time (docs/adr/0030).
+
+    Entirely opt-in: no `mixture:` block means no behavior change, and using
+    `interpretation:` on a step without the block is an error.
+    """
+    interp_steps = [s for s in steps
+                    if s.get('type') == 'household' and s.get('interpretation') is not None]
+    if mixture_cfg is None:
+        if interp_steps:
+            names = [s.get('name', 'household') for s in interp_steps]
+            raise HouseholdError(
+                f"Step(s) {names} use 'interpretation' but the strategy has no "
+                f"'mixture:' block declaring the shares file."
+            )
+        household_distributor.structure_mixture = None
+        return
+
+    path = pr.resolve(mixture_cfg.get('file', ''))
+    if not path or not os.path.exists(path):
+        raise HouseholdError(f"mixture.file not found: {path!r}")
+    geo_level = mixture_cfg.get('geo_level')
+    if geo_level not in household_distributor.geography.levels:
+        raise HouseholdError(
+            f"mixture.geo_level {geo_level!r} is not one of the configured "
+            f"geography levels {household_distributor.geography.levels} (docs/adr/0002)."
+        )
+
+    shares: Dict[tuple, Dict[str, float]] = {}
+    with open(path, newline='', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            key = (row['geo_unit'], row['pattern'])
+            shares.setdefault(key, {})[row['interpretation']] = float(row['share'])
+
+    interps_by_pattern: Dict[str, set] = {}
+    for (geo_unit, pattern), parts in shares.items():
+        total = sum(parts.values())
+        if abs(total - 1.0) > 0.02:
+            raise HouseholdError(
+                f"mixture shares for ({geo_unit}, '{pattern}') sum to {total:.4f}, not 1."
+            )
+        for interp in parts:  # normalise away rounding residue
+            parts[interp] /= total
+        interps_by_pattern.setdefault(pattern, set()).update(parts)
+
+    # Every interpretation of a claimed pattern must be claimed by exactly one
+    # step, or part of its census count would silently never be built.
+    claimed_by_pattern: Dict[str, set] = {}
+    for step in interp_steps:
+        step_name = step.get('name', 'household')
+        interp = step['interpretation']
+        for p in (step.get('patterns') or []):
+            name = p.get('pattern') if isinstance(p, dict) else p
+            if name not in interps_by_pattern:
+                raise HouseholdError(
+                    f"Step '{step_name}' claims interpretation '{interp}' of pattern "
+                    f"'{name}', which has no rows in {path}."
+                )
+            if interp not in interps_by_pattern[name]:
+                raise HouseholdError(
+                    f"Step '{step_name}': interpretation '{interp}' does not exist for "
+                    f"pattern '{name}' in {path} (has {sorted(interps_by_pattern[name])})."
+                )
+            claimed_by_pattern.setdefault(name, set()).add(interp)
+    for pattern, claimed in claimed_by_pattern.items():
+        missing = interps_by_pattern[pattern] - claimed
+        if missing:
+            raise HouseholdError(
+                f"Pattern '{pattern}' has unclaimed interpretation(s) {sorted(missing)} — "
+                f"that share of its census count would never be built. Add a step "
+                f"(rule-free is fine) claiming each interpretation."
+            )
+    unused = set(interps_by_pattern) - set(claimed_by_pattern)
+    if unused:
+        logger.warning(
+            f"mixture file has rows for pattern(s) never claimed with an "
+            f"'interpretation:' step (built whole, mixture ignored): {sorted(unused)}"
+        )
+
+    household_distributor.structure_mixture = {'geo_level': geo_level, 'shares': shares}
+    logger.info(
+        f"Structure mixture loaded: {len(interps_by_pattern)} patterns x "
+        f"{len({g for g, _ in shares})} geo units at {geo_level}"
+    )
+
+
 def _validate_step_patterns(steps: List[Dict], vocabulary: set) -> None:
     """Fail loud on a `household` build-step pattern absent from households.csv.
 
@@ -281,7 +483,8 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
             refresh_pools=refresh_pools,
             round_name=round_name,
             rule_name=rule_name,
-            demotion_rules=demotion_rules
+            demotion_rules=demotion_rules,
+            interpretation=step_config.get('interpretation')
         )
         return stats
     finally:

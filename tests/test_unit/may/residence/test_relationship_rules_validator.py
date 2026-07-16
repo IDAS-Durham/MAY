@@ -526,3 +526,76 @@ def test_validate_composition_missing_category(validator):
         {"category_sum": ["Kids", "Adults"], "max": 5}
     ])[0] is True  # 0 + 2 = 2 <= 5
 
+
+
+# difference_reference (docs/adr/0027)
+
+DIRECTED_PAIR = {
+    'type': 'pair_matching',
+    'categorical_attribute': {'attribute': 'sex', 'same_category_probability': 0.0},
+    'numerical_attribute': {
+        'attribute': 'age',
+        'mean_difference': 3,
+        'std_difference': 4,
+        'max_absolute_difference': 20,
+        'difference_reference': {'attribute': 'sex', 'value': 'male'},
+    },
+}
+
+def test_pair_diff_directed_signs(validator):
+    num = DIRECTED_PAIR['numerical_attribute']
+    man, woman = MockPerson(1, age=33, sex='male'), MockPerson(2, age=30, sex='female')
+    assert validator._pair_diff(man, woman, num) == (3, True)
+    assert validator._pair_diff(woman, man, num) == (3, True)  # order must not matter
+
+def test_pair_diff_undirected_falls_back_to_absolute(validator):
+    num = DIRECTED_PAIR['numerical_attribute']
+    w1, w2 = MockPerson(1, age=40, sex='female'), MockPerson(2, age=30, sex='female')
+    assert validator._pair_diff(w1, w2, num) == (10, False)
+
+def test_directed_penalty_prefers_reference_side_older(validator):
+    older_man = MockPerson(1, age=33, sex='male')
+    older_woman_pair = (MockPerson(2, age=36, sex='female'), MockPerson(3, age=33, sex='male'))
+    woman = MockPerson(4, age=30, sex='female')
+    # man 3y older -> signed diff +3 == mean -> penalty 0
+    assert validator.calculate_pair_numerical_attribute_penalty(older_man, woman, DIRECTED_PAIR) == 0.0
+    # woman 3y older -> signed diff -3, mean +3 -> penalised
+    p = validator.calculate_pair_numerical_attribute_penalty(*older_woman_pair, DIRECTED_PAIR)
+    assert p > 0.0
+
+def test_select_pair_directed_mean_holds(validator):
+    np.random.seed(42)
+    validator.enabled = True
+    # 200 men and 200 women, ages spread 20-59
+    candidates = (
+        [MockPerson(i, age=20 + i % 40, sex='male') for i in range(200)]
+        + [MockPerson(200 + i, age=20 + i % 40, sex='female') for i in range(200)]
+    )
+    diffs = []
+    for _ in range(100):
+        pair = validator.select_pair(candidates, DIRECTED_PAIR)
+        assert pair is not None
+        by_sex = {p.sex: p for p in pair}
+        assert set(by_sex) == {'male', 'female'}  # same_category_probability 0
+        diffs.append(by_sex['male'].age - by_sex['female'].age)
+    mean = sum(diffs) / len(diffs)
+    # signed male-minus-female gap should sit near +3, not near 0
+    assert 1.0 < mean < 5.0
+
+def test_malformed_difference_reference_fails_loud(tmp_path):
+    bad = tmp_path / "rules.yaml"
+    bad.write_text("""
+enabled: true
+rules:
+  - name: Broken
+    roles:
+      role_A: {categories: [Adults], count: 2}
+    selection_order: [role_A]
+    constraints:
+      - type: pair_matching
+        role: role_A
+        numerical_attribute:
+          difference_reference: {value: male}
+""")
+    with pytest.raises(ValueError, match="difference_reference"):
+        RelationshipRulesValidator(categories=[], config_file=str(bad))
