@@ -50,7 +50,7 @@ def test_empty_vocabulary_skips():
     _validate_step_patterns(steps, set())  # nothing to validate against
 
 
-# patterns_where selectors (docs/adr/0028)
+# patterns_where selectors
 
 from dataclasses import dataclass
 from may.residence.allocation_strategy import _resolve_pattern_selectors

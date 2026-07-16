@@ -1,4 +1,4 @@
-"""Structure mixture (docs/adr/0030): interpretation quotas over a pattern's
+"""Structure mixture: interpretation quotas over a pattern's
 census count, loaded from a per-geo-unit shares CSV. Opt-in via the strategy's
 `mixture:` block; strategies without it are untouched.
 """

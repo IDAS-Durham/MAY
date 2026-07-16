@@ -142,7 +142,7 @@ class RelationshipRulesValidator:
         logger.info(f"Loaded {len(self.rules)} relationship rules")
 
         # A malformed difference_reference or roles pair should stop the build
-        # here, not surface as a KeyError mid-allocation (docs/adr/0026, 0027).
+        # here, not surface as a KeyError mid-allocation.
         for rule in self.rules:
             for c in rule.constraints:
                 if c.get('type') != 'pair_matching':
@@ -513,7 +513,7 @@ class RelationshipRulesValidator:
         exactly one member holds the reference value, the difference is
         value(that member) - value(other) and counts as directed. Otherwise
         (no reference, or both/neither members hold the value) the difference
-        is the absolute gap — the pre-reference behavior (docs/adr/0027).
+        is the absolute gap — the pre-reference behavior.
         """
         getter = self._get_attribute_getter(num_attr_config.get('attribute', 'age'))
         v1, v2 = getter(person1), getter(person2)
@@ -648,7 +648,7 @@ class RelationshipRulesValidator:
         # With a difference_reference, rank by distance to a gap sampled from
         # Normal(mean, std) rather than to the mean itself — ranking on the
         # mean would give every couple the same gap instead of the configured
-        # distribution (same reasoning as select_pair, docs/adr/0027).
+        # distribution (same reasoning as select_pair).
         num_attr_config = pair_constraint.get('numerical_attribute', {})
         target_diff = None
         if num_attr_config.get('difference_reference'):
@@ -1091,7 +1091,7 @@ class RelationshipRulesValidator:
             # gate alone would ignore the configured mean, so we collect valid
             # directed candidates and keep the one closest to a gap sampled
             # from Normal(mean, std) — that makes the realised gaps follow the
-            # configured distribution (docs/adr/0027).
+            # configured distribution.
             num_attr_config = constraint.get('numerical_attribute', {})
             diff_ref = num_attr_config.get('difference_reference')
             target_diff = None

@@ -191,7 +191,7 @@ class HouseholdRoundDistributor:
                     continue
 
                 # Under a mixture, this step builds only its interpretation's
-                # quota of the census count (docs/adr/0030).
+                # quota of the census count.
                 if interpretation is not None:
                     count = self.distributor._mixture_quota(
                         geo_unit_code, pattern_str, interpretation, count)

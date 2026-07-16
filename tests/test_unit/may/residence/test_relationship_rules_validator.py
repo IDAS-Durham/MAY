@@ -528,7 +528,7 @@ def test_validate_composition_missing_category(validator):
 
 
 
-# difference_reference (docs/adr/0027)
+# difference_reference
 
 DIRECTED_PAIR = {
     'type': 'pair_matching',
