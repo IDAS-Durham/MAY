@@ -6,6 +6,7 @@ during specific allocation rounds (e.g., initial, demotion, balanced).
 """
 
 import logging
+import time
 from typing import List, Dict, Optional
 from may.residence.composition_pattern import CompositionPattern
 
@@ -99,7 +100,8 @@ class HouseholdRoundDistributor:
                                    refresh_pools: bool = False,
                                    round_name: Optional[str] = None,
                                    rule_name: Optional[str] = None,
-                                   demotion_rules: Optional[Dict[str, str]] = None):
+                                   demotion_rules: Optional[Dict[str, str]] = None,
+                                   interpretation: Optional[str] = None):
         """
         Distribute households in a single round with optional filtering.
 
@@ -167,11 +169,16 @@ class HouseholdRoundDistributor:
             for pattern_str, count in compositions.items():
                 # Only count if pattern matches filter
                 if pattern_set is None or pattern_str in pattern_set:
+                    if interpretation is not None:
+                        count = self.distributor._mixture_quota(
+                            geo_unit_code, pattern_str, interpretation, count)
                     total_households_to_allocate += count
 
         # Progress tracking
         households_processed = 0
         progress_interval = max(1, total_households_to_allocate // 10)  # Update every 10%
+        round_start = time.monotonic()
+        last_heartbeat = round_start
 
         logger.info(f"Allocating {total_households_to_allocate:,} households...")
 
@@ -182,6 +189,14 @@ class HouseholdRoundDistributor:
                 # Check if this pattern should be allocated in this round
                 if pattern_set is not None and pattern_str not in pattern_set:
                     continue
+
+                # Under a mixture, this step builds only its interpretation's
+                # quota of the census count (docs/adr/0030).
+                if interpretation is not None:
+                    count = self.distributor._mixture_quota(
+                        geo_unit_code, pattern_str, interpretation, count)
+                    if count == 0:
+                        continue
 
                 total_requested += count
 
@@ -252,6 +267,23 @@ class HouseholdRoundDistributor:
                     if households_processed % progress_interval == 0 or households_processed == total_households_to_allocate:
                         percent_complete = (households_processed / total_households_to_allocate) * 100
                         logger.info(f"  Progress: {households_processed}/{total_households_to_allocate} households processed ({percent_complete:.1f}%) - {households_created} created")
+
+                    # Time-based heartbeat: the 10% ticks can be an hour apart on
+                    # large geo units, which looks like a hang. Every 30s report
+                    # where we are and how much candidate-list work the role
+                    # preparation has done (the suspected hot spot).
+                    now = time.monotonic()
+                    if now - last_heartbeat >= 30:
+                        last_heartbeat = now
+                        rate = households_processed / (now - round_start)
+                        prep = getattr(self.distributor, 'candidate_prep_stats', {})
+                        logger.info(
+                            f"  [heartbeat] {households_processed:,} processed "
+                            f"({rate:.1f} households/s), at {geo_unit_code} pattern '{pattern_str}'; "
+                            f"role preps: {prep.get('calls', 0):,} calls, "
+                            f"{prep.get('candidates', 0):,} candidates materialized "
+                            f"(avg {prep.get('candidates', 0) / max(1, prep.get('calls', 1)):,.0f}/call)"
+                        )
 
                 # Break outer loop if limit reached
                 if max_households is not None and households_created >= max_households:

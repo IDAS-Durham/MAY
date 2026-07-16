@@ -101,6 +101,15 @@ class HouseholdDistributor:
 
         # Pool of available people by geo_unit and category
         self.person_pool_by_geo_unit: Dict[str, List[Dict[int, 'Person']]] = {}
+        # Companion lists for O(1) random sampling of large pools; entries may
+        # be stale (checked against the dict on probe) — see _sample_candidates.
+        self._sample_lists: Dict[str, Dict[int, List['Person']]] = {}
+        self._warned_large_pool = False
+
+        # Structure mixture (docs/adr/0030): set by the allocation strategy
+        # loader when the strategy has a `mixture:` block; None otherwise.
+        self.structure_mixture: Optional[Dict] = None
+        self._mixture_quota_cache: Dict[tuple, Dict[str, int]] = {}
 
         # Round tracking
         self.current_round: int = 0
@@ -287,6 +296,7 @@ class HouseholdDistributor:
         if refresh:
             # Clear existing pools for refresh
             self.person_pool_by_geo_unit = {}
+            self._sample_lists = {}
 
         # Get all units at the smallest geographical level
         smallest_level = self.geography.levels[0]
@@ -521,15 +531,74 @@ class HouseholdDistributor:
 
         return (role_count, False)  # Don't skip
 
+    def _mixture_quota(self, geo_unit_code: str, pattern_str: str,
+                       interpretation: str, census_count: int) -> int:
+        """This interpretation's quota of a pattern's census count in one geo unit.
+
+        The split is deterministic: floor(count x share) per interpretation,
+        remainder assigned by largest fractional part (ties by name), so quotas
+        always sum exactly to the census count and every step computing against
+        the same (geo unit, pattern) sees one consistent split.
+        """
+        if self.structure_mixture is None:
+            raise HouseholdError(
+                "interpretation quotas requested but no structure mixture is loaded."
+            )
+        key = (geo_unit_code, pattern_str)
+        quotas = self._mixture_quota_cache.get(key)
+        if quotas is None:
+            level = self.structure_mixture['geo_level']
+            unit = self.geography.get_unit(geo_unit_code)
+            while unit is not None and unit.level != level:
+                unit = unit.parent
+            if unit is None:
+                raise HouseholdError(
+                    f"Geo unit '{geo_unit_code}' has no ancestor at mixture "
+                    f"geo_level '{level}'."
+                )
+            shares = self.structure_mixture['shares'].get((unit.name, pattern_str))
+            if shares is None:
+                raise HouseholdError(
+                    f"No mixture shares for ({unit.name}, '{pattern_str}') — the "
+                    f"mixture file must cover every claimed pattern in every loaded "
+                    f"geo unit at its geo_level."
+                )
+            quotas = {i: int(census_count * s) for i, s in shares.items()}
+            remainder = census_count - sum(quotas.values())
+            by_fraction = sorted(shares,
+                                 key=lambda i: (census_count * shares[i]) % 1,
+                                 reverse=True)
+            for i in range(remainder):
+                quotas[by_fraction[i % len(by_fraction)]] += 1
+            self._mixture_quota_cache[key] = quotas
+        if interpretation not in quotas:
+            raise HouseholdError(
+                f"Interpretation '{interpretation}' not in mixture shares for "
+                f"({geo_unit_code}, '{pattern_str}'): has {sorted(quotas)}."
+            )
+        return quotas[interpretation]
+
     def _prepare_role_candidates(self, pools: List[List[Person]], category_indices: List[int],
                                  role_index: int, backtrack_attempt: int,
                                  tried_first_role_ids: Set[int], avoid_duplicates: bool,
-                                 show_detailed_logs: bool, log_backtracks: bool) -> List[Person]:
+                                 show_detailed_logs: bool, log_backtracks: bool,
+                                 geo_unit_code: Optional[str] = None) -> List[Person]:
         """
         Prepare candidate pool for role selection with backtracking support.
 
         Gets candidates from specified categories and filters out already-tried candidates
         when backtracking to avoid duplicate attempts.
+
+        Sampling is opt-in: when `candidate_sample_size` is set in the rules
+        file's selection_strategy and the combined pool exceeds it, a uniform
+        random sample of that size is returned instead of the full pool.
+        Everything downstream (constraint filtering, pair matching,
+        max_attempts) is O(candidates), so without the cap the cost per
+        household scales with the geo unit's population — fine for UK Output
+        Areas (~150 people), hours-per-step for Mexican municipios (~500k
+        people). Without the key the full pool is always returned, and a
+        one-time warning points at the key when pools are large enough to
+        make that painful.
 
         Args:
             pools: Available people by category
@@ -540,14 +609,38 @@ class HouseholdDistributor:
             avoid_duplicates: Whether to avoid duplicate attempts during backtracking
             show_detailed_logs: Whether to show detailed debug logs
             log_backtracks: Whether to log backtracking information
+            geo_unit_code: Geo unit whose pools these are (keys the sampling lists)
 
         Returns:
             List of candidate people for this role
         """
-        # Get candidates from these categories (use .values() for dict-based pools)
-        candidates = []
-        for cat_idx in category_indices:
-            candidates.extend(pools[cat_idx].values())
+        cap = None
+        if self.relationship_rules is not None:
+            cap = self.relationship_rules.selection_strategy.get('candidate_sample_size')
+
+        total_available = sum(len(pools[cat_idx]) for cat_idx in category_indices)
+        if cap is not None and geo_unit_code is not None and total_available > cap:
+            candidates = self._sample_candidates(geo_unit_code, pools, category_indices, cap)
+        else:
+            if cap is None and total_available > 10000 and not self._warned_large_pool:
+                self._warned_large_pool = True
+                logger.warning(
+                    f"A rule-based allocation step is drawing from a pool of "
+                    f"{total_available:,} candidates in one geo unit. Cost per household "
+                    f"scales with that pool, so this build may be extremely slow. If your "
+                    f"smallest geo units are large, set selection_strategy.candidate_sample_size "
+                    f"(e.g. 200) in the relationship rules file to sample the pool instead."
+                )
+            # Get candidates from these categories (use .values() for dict-based pools)
+            candidates = []
+            for cat_idx in category_indices:
+                candidates.extend(pools[cat_idx].values())
+
+        stats = getattr(self, 'candidate_prep_stats', None)
+        if stats is None:
+            stats = self.candidate_prep_stats = {'calls': 0, 'candidates': 0}
+        stats['calls'] += 1
+        stats['candidates'] += len(candidates)
 
         # If this is the first role and we're backtracking, exclude already-tried people
         if role_index == 0 and backtrack_attempt > 0 and avoid_duplicates and tried_first_role_ids:
@@ -560,6 +653,52 @@ class HouseholdDistributor:
             logger.debug(f"  Available candidates: {len(candidates)} people")
 
         return candidates
+
+    def _sample_candidates(self, geo_unit_code: str, pools: List[Dict[int, Person]],
+                           category_indices: List[int], cap: int) -> List[Person]:
+        """Draw ~cap people uniformly from the given category pools in O(cap).
+
+        Pools are dicts (id -> Person), which cannot be indexed for random
+        access, so each (geo unit, category) keeps a companion list of the
+        pool's people. The list is not updated when people are allocated —
+        entries whose id is no longer in the dict are simply skipped on probe
+        ("tombstones") — and it is rebuilt from the live dict once it holds
+        more than 4x the pool, which keeps sampling amortised O(cap) across a
+        whole round. The per-category quota is proportional to pool size, so
+        the sample has the same category mix as full materialization.
+        """
+        lists = self._sample_lists.setdefault(geo_unit_code, {})
+        total = sum(len(pools[c]) for c in category_indices)
+        sampled: List[Person] = []
+        for cat_idx in category_indices:
+            pool = pools[cat_idx]
+            if not pool:
+                continue
+            quota = min(len(pool), max(1, int(cap * len(pool) / total)))
+            lst = lists.get(cat_idx)
+            if lst is None or len(lst) > 4 * len(pool):
+                lst = lists[cat_idx] = list(pool.values())
+
+            # One vectorised draw instead of a numpy scalar call per probe —
+            # the per-call overhead dominates at this call volume.
+            picked_ids = set()
+            probe_indices = np.random.randint(len(lst), size=20 * quota)
+            for i in probe_indices:
+                if len(picked_ids) >= quota:
+                    break
+                person = lst[i]
+                if person.id in pool and person.id not in picked_ids:
+                    picked_ids.add(person.id)
+                    sampled.append(person)
+            if len(picked_ids) < quota:
+                # Too many tombstones for probing: rebuild from the live pool
+                # and take the remainder directly.
+                lst = lists[cat_idx] = list(pool.values())
+                remaining = [p for p in lst if p.id not in picked_ids]
+                need = quota - len(picked_ids)
+                idx = np.random.choice(len(remaining), size=min(need, len(remaining)), replace=False)
+                sampled.extend(remaining[i] for i in idx)
+        return sampled
 
     def _can_skip_role_with_no_candidates(self, role_count, category_indices: List[int],
                                           pattern: CompositionPattern,
@@ -622,6 +761,23 @@ class HouseholdDistributor:
                 required_count = constraint.get('require_exact_count')
                 if required_count is None or role_count == required_count:
                     return constraint
+        return None
+
+    def _find_cross_role_pair_constraint(self, rule, role_name: str):
+        """Find a pair_matching constraint pairing this role with another one.
+
+        The `roles: [A, B]` form of pair_matching couples one member of each
+        of two roles (e.g. a Young Adult with an Adult — a couple whose
+        members sit in different member categories, so a single-role pair
+        can't represent them). Returns (constraint, other_role_name) or None.
+        """
+        for constraint in rule.constraints:
+            if constraint.get('type') != 'pair_matching':
+                continue
+            roles = constraint.get('roles')
+            if roles and role_name in roles:
+                other = next(r for r in roles if r != role_name)
+                return constraint, other
         return None
 
     def _handle_role_selection_failure(self, failed_at_role_index: int, rule,
@@ -757,7 +913,8 @@ class HouseholdDistributor:
                 # Prepare candidates for this role (with backtracking support)
                 candidates = self._prepare_role_candidates(
                     pools, category_indices, role_index, backtrack_attempt,
-                    tried_first_role_ids, avoid_duplicates, show_detailed_logs, log_backtracks
+                    tried_first_role_ids, avoid_duplicates, show_detailed_logs, log_backtracks,
+                    geo_unit_code=geo_unit_code
                 )
 
                 if not candidates:
@@ -846,6 +1003,57 @@ class HouseholdDistributor:
                     # Select specific number of people
                     if show_detailed_logs:
                         logger.debug(f"  Mode: Selecting {role_count} person(s) individually")
+
+                    # Cross-role couple: when the pair's other role is already
+                    # filled with exactly one person and this role needs one,
+                    # pick the most couple-compatible candidate for them
+                    # instead of an unconstrained draw.
+                    cross = self._find_cross_role_pair_constraint(rule, role_name)
+                    if cross and role_count == 1:
+                        cross_constraint, other_role = cross
+                        partners = selected_by_role.get(other_role, [])
+                        if len(partners) == 1:
+                            ordered = self.relationship_rules.couple_compatible_candidates(
+                                partners[0], candidates, cross_constraint,
+                                geo_unit_code=geo_unit_code,
+                            )
+                            # The pair ranking says nothing about this role's own
+                            # numerical constraints (e.g. a co-parent must still be
+                            # old enough for the children) — keep the best-ranked
+                            # candidate that satisfies them too.
+                            person = None
+                            for cand in ordered:
+                                ok = True
+                                for c in rule.constraints:
+                                    if c.get('type') != 'numerical_attribute_difference':
+                                        continue
+                                    if c.get('role_1') == role_name:
+                                        others, is_r1 = selected_by_role.get(c.get('role_2'), []), True
+                                    elif c.get('role_2') == role_name:
+                                        others, is_r1 = selected_by_role.get(c.get('role_1'), []), False
+                                    else:
+                                        continue
+                                    if others:
+                                        valid, _ = self.relationship_rules.validate_numerical_attribute_difference_constraint(
+                                            cand, others, c, is_role_1=is_r1)
+                                        if not valid:
+                                            ok = False
+                                            break
+                                if ok:
+                                    person = cand
+                                    break
+                            if person is None:
+                                if show_detailed_logs:
+                                    logger.debug(f"  ✗ FAILED: No couple-compatible candidate for {other_role}")
+                                failed_at_role_index = role_index
+                                break
+                            selected_by_role[role_name].append(person)
+                            candidates = [p for p in candidates if p.id != person.id]
+                            if cross_constraint.get('creates_romantic_couple', False):
+                                couples_to_flag.append((partners[0], person))
+                            if show_detailed_logs:
+                                logger.debug(f"  ✓ Selected cross-role partner: {person}")
+                            continue
 
                     for i in range(role_count):
                         person = self.relationship_rules.select_person_with_constraint(
