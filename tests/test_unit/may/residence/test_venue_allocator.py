@@ -42,7 +42,7 @@ STRESS_DATA = "tests/test_data/stress_world"
 
 @pytest.fixture
 def geography():
-    geo = Geography(data_dir=f"{STRESS_DATA}/geography", levels=["SGU", "MGU", "LGU"])
+    geo = Geography(data_dir=f"{STRESS_DATA}/geography", levels=["SGU", "MGU", "LGU"], hierarchy_file="hierarchy.csv")
     geo.load_from_csv()
     return geo
 

@@ -89,11 +89,19 @@ data_sources:
     format: "multi_key"
     description: "Comorbidity probabilities stratified by demographics"
 
+    # One file per nation. The region key makes them disjoint (England holds the
+    # nine ITL1 English regions, each other file holds one nation), so they stack
+    # into a single lookup; a region appearing twice is a hard error.
+    #
+    # Only the England file is measured. Scotland, Wales and Northern Ireland are
+    # copies of the English region each most resembles, because no devolved-nation
+    # source publishes comorbidity by ethnicity at all. The `&`/`*` anchors below
+    # just avoid repeating one identical key/value mapping four times.
     files:
       - path: "${data_root}/population/comorbidities/comorbidities_by_region.csv"
 
         # Multi-key lookup (all keys must match for a row)
-        key_columns:
+        key_columns: &comorbidity_keys
           sex:
             attribute: "sex"
 
@@ -111,7 +119,7 @@ data_sources:
             property: "name"
 
         # Value columns: condition probabilities
-        value_columns:
+        value_columns: &comorbidity_values
           no_condition: "no_condition_midpoint_rounded"
           has_comorbidity: "has_comorbidity_midpoint_rounded"
           multiple_morbidities: "multiple_morbidities_count_midpoint_rounded"
@@ -123,6 +131,18 @@ data_sources:
           cancer: "has_had_cancer_diagnosis_count_midpoint_rounded"
           immunosuppression: "has_had_immunosuppression_diagnosis_count_midpoint_rounded"
           neuro: "has_had_neuro_diagnosis_count_midpoint_rounded"
+
+      - path: "${data_root}/population/comorbidities/SCT_comorbidities_by_region.csv"
+        key_columns: *comorbidity_keys
+        value_columns: *comorbidity_values
+
+      - path: "${data_root}/population/comorbidities/WLS_comorbidities_by_region.csv"
+        key_columns: *comorbidity_keys
+        value_columns: *comorbidity_values
+
+      - path: "${data_root}/population/comorbidities/NI_comorbidities_by_region.csv"
+        key_columns: *comorbidity_keys
+        value_columns: *comorbidity_values
 
 
 # Assignment Rules (Person-Level)

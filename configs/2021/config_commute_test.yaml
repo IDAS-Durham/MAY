@@ -22,6 +22,11 @@ data_root: data
 geography:
   data_dir: "data/geography"
   levels: ["SGU", "MGU", "LGU", "XLGU"]
+  # This world is England-only, so only the EW files are wired in.
+  hierarchy_file: EW_hierarchy.csv
+  coord_files:
+    SGU: EW_coord_sgu.csv
+    MGU: EW_coord_mgu.csv
   load_all: false
 
   filter:
@@ -45,8 +50,8 @@ geography:
 
 population:
   data_dir: "data/population"
-  demographics_male_file: "demographics_male.csv"
-  demographics_female_file: "demographics_female.csv"
+  demographics_male_file: "EW_demographics_male.csv"
+  demographics_female_file: "EW_demographics_female.csv"
 
 # VENUES
 
@@ -59,7 +64,7 @@ venues:
 
 households:
   data_dir: "data/households"
-  data_file: "households.csv"
+  data_file: "EW_households.csv"
   config_file: "configs/2021/households/households_config.yaml"
   rules_file: "configs/2021/households/relationship_rules.yaml"
   # The allocation strategy lives on the timeline's residence_allocation step.
@@ -100,7 +105,7 @@ timeline:
     - type: attribute
       config: "configs/2021/attributes/workplace_assignment.yaml"
     - type: attribute
-      config: "configs/2021/attributes/workplace_sgu_assignment.yaml"
+      config: "configs/2021/attributes/workplace_mgu_assignment.yaml"
     - type: attribute
       config: "configs/2021/attributes/work_sector_assignment.yaml"
 

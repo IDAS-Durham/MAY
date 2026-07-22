@@ -287,6 +287,34 @@ class TestGeoDistributionSource:
         with pytest.raises(FileNotFoundError, match="not found"):
             source.load_data()
 
+    @staticmethod
+    def _file_entry(path, rows):
+        path.write_text("geo_unit,W,A\n" + "\n".join(rows) + "\n")
+        return {
+            "path": str(path),
+            "key_columns": {"geo_unit": None},
+            "value_columns": {"W": "W", "A": "A"},
+        }
+
+    def test_multiple_files_merge_disjoint_keys(self, tmp_path):
+        """Per-nation files with disjoint geo units combine into one lookup."""
+        source = GeoDistributionSource("test_geo", {"files": [
+            self._file_entry(tmp_path / "a.csv", ["E00001,8,2"]),
+            self._file_entry(tmp_path / "b.csv", ["N00001,1,9"]),
+        ]})
+        source.load_data()
+        assert set(source._lookup) == {"E00001", "N00001"}
+        assert abs(source._lookup["N00001"]["A"] - 0.9) < 1e-9
+
+    def test_overlapping_keys_across_files_raise(self, tmp_path):
+        """The same geo unit in two files must fail loud, never last-file-wins."""
+        source = GeoDistributionSource("test_geo", {"files": [
+            self._file_entry(tmp_path / "a.csv", ["E00001,8,2"]),
+            self._file_entry(tmp_path / "b.csv", ["E00001,1,9"]),
+        ]})
+        with pytest.raises(ValueError, match="already loaded"):
+            source.load_data()
+
     def test_parse_dataframe_with_total_column(self):
         """When total_column is provided, values are divided by total first."""
         source = GeoDistributionSource("test", {

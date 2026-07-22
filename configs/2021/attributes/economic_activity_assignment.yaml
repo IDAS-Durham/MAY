@@ -1,0 +1,107 @@
+# Economic Activity Assignment — UK 2021/22
+#
+# Splits the working-age population by residence LGU, sex and age band into
+# three states from the census economic-activity tables:
+#
+#   employed    in employment (employee or self-employed), incl. FT students
+#   unemployed  economically active, looking for work
+#   inactive    economically inactive (retired, student, home, sick, other)
+#
+# This runs BEFORE workplace_assignment. Only the EMPLOYED go on to get a
+# workplace, sector and company place — without this gate the pipeline assigns a
+# physical workplace to every 18-64 adult, oversubscribing companies ~2.5x
+# against real job supply.
+#
+# Source: EW_economic_activity_by_lad_sex_age.csv (ONS RM024; harmonised to LGU x
+# sex x age band; residence-based). Per-nation files -- SCT/NI equivalents exist.
+#
+# Assignment Level: person
+
+step:
+  assignment_level: "person"
+
+attributes:
+  - name: "economic_activity"
+    description: "employed, unemployed, or inactive"
+    data_type: "categorical"
+
+# Working-age population — the same window workplace_assignment gates on.
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    description: "Working-age population"
+    numerical:
+      min: 18
+      max: 64
+
+# Age bands of the source table (16-24 / 25-34 / 35-49 / 50-64). The age filter
+# above keeps everyone within 18-64, so the 16-24 band effectively covers 18-24.
+categories:
+  - name: "16-24"
+    csv_value: "16-24"
+    attribute: "age"
+    type: "numerical"
+    numerical: {min: 16, max: 24}
+  - name: "25-34"
+    csv_value: "25-34"
+    attribute: "age"
+    type: "numerical"
+    numerical: {min: 25, max: 34}
+  - name: "35-49"
+    csv_value: "35-49"
+    attribute: "age"
+    type: "numerical"
+    numerical: {min: 35, max: 49}
+  - name: "50-64"
+    csv_value: "50-64"
+    attribute: "age"
+    type: "numerical"
+    numerical: {min: 50, max: 64}
+
+data_sources:
+  economic_activity_by_lad_sex_age:
+    type: "csv_lookup"
+    format: "multi_key"
+    description: "Economic-activity counts by residence LGU, sex and age band"
+
+    files:
+      - path: "${data_root}/activities/work/EW_economic_activity_by_lad_sex_age.csv"
+
+        key_columns:
+          LGU_name:
+            attribute: "geographical_unit"
+            type: "ancestor_lookup"
+            level: "LGU"
+            property: "name"
+
+          Sex:
+            attribute: "sex"
+
+          age_band:
+            attribute: "age"
+            type: "category_lookup"
+
+        value_columns:
+          employed: "employed"
+          unemployed: "unemployed"
+          inactive: "inactive"
+
+# No fallback. Every (LGU, sex, age band) cell is populated (375 LGUs x 2 x 4,
+# zero gaps vs hierarchy) so a miss means the geography and table have diverged.
+
+assignment_rules:
+  person:
+    description: "Sample economic activity from the LGU/sex/age distribution"
+
+    rules:
+      - description: "Probabilistic economic activity by LGU, sex and age band"
+        priority: 1
+
+        assignment:
+          strategy: "categorical_sampler"
+          data_source: "economic_activity_by_lad_sex_age"
+
+settings:
+  logging:
+    show_attribute_distribution: true

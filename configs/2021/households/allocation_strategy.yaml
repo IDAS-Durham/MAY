@@ -22,8 +22,13 @@ steps:
     description: "Allocate two-adult families with kids"
     rule: "Two-adult family with kids"
 
+    # England/Wales/Scotland census data buckets 2+ kids as ">=2"; Northern
+    # Ireland splits it into exactly-2 and ">=3". All variants belong to this
+    # step; a pattern absent from an area's data simply has a zero quota there.
     patterns:
       - ">=2 >=0 2 0"
+      - "2 >=0 2 0"
+      - ">=3 >=0 2 0"
       - "1 >=0 2 0"
 
     max_households: null
@@ -33,6 +38,8 @@ steps:
     # When pattern demotes, switch to these rules
     demotion_rules:
       ">=2 >=0 1 0": "Single-adult family with kids"
+      "2 >=0 1 0": "Single-adult family with kids"
+      ">=3 >=0 1 0": "Single-adult family with kids"
       "1 >=0 1 0": "Single-adult family with kids"
 
   # Step 1b: Single-Parent Families with Children
@@ -43,6 +50,8 @@ steps:
 
     patterns:
       - ">=2 >=0 1 0"
+      - "2 >=0 1 0"
+      - ">=3 >=0 1 0"
       - "1 >=0 1 0"
 
     max_households: null
@@ -58,6 +67,10 @@ steps:
     patterns:
       - pattern: ">=2 >=0 >=0 >=0"
         assumption: "2 0 1 1"
+      - pattern: "2 >=0 >=0 >=0"
+        assumption: "2 0 1 1"
+      - pattern: ">=3 >=0 >=0 >=0"
+        assumption: "3 0 1 1"
       - pattern: "1 >=0 >=0 >=0"
         assumption: "1 0 1 1"
 
@@ -310,8 +323,14 @@ steps:
 
     target_patterns:
       - ">=2 >=0 2 0"
+      - "2 >=0 2 0"
+      - ">=3 >=0 2 0"
       - ">=2 >=0 1 0"
+      - "2 >=0 1 0"
+      - ">=3 >=0 1 0"
       - ">=2 >=0 >=0 >=0"
+      - "2 >=0 >=0 >=0"
+      - ">=3 >=0 >=0 >=0"
 
     add_category: "Kids"
 

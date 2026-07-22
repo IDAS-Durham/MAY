@@ -187,24 +187,30 @@ class HouseholdDistributor:
             categories.append(cat)
         return categories
 
-    def load_household_data(self, filename: str = "households.csv"):
+    def load_household_data(self, filename="households.csv",
+                            column_policy: str = "strict"):
         """
         Load household composition data from CSV.
 
         Args:
-            filename: Name of CSV file in data_dir
+            filename: Filename or list of filenames in data_dir. The first
+                column is the geo unit key; the rest are composition patterns.
+            column_policy: "strict" requires all files to share one pattern
+                vocabulary; "union_zero_fill" lets sources with different
+                vocabularies stack, reading an absent pattern as zero
+                households of that shape for that source's geo units.
         """
-        filepath = os.path.join(self.data_dir, filename)
-        logger.info(f"Loading household data from {filepath}")
+        from may.utils.stacked_input import as_path_list, load_stacked_csv
+
+        filepaths = [
+            os.path.join(self.data_dir, p)
+            for p in as_path_list(filename, "households.data_file")
+        ]
+        logger.info(f"Loading household data from {filepaths}")
 
         # Reset state up-front so a second call starts from a clean slate
         # (parallel with load_demographics_from_csv).
         self.household_counts_by_geo_unit = {}
-
-        # Fail loud on missing/empty data — the engine works on complete data
-        # or not at all, matching PopulationError/VenueError.
-        if not os.path.exists(filepath):
-            raise HouseholdError(f"Household data file not found: {filepath}")
 
         # Get the smallest geographical level from the loaded geography
         # to filter household data to only relevant geo units
@@ -220,12 +226,32 @@ class HouseholdDistributor:
         valid_geo_units = set(smallest_units_dict.keys())
         logger.info(f"Filtering household data to {len(valid_geo_units)} {smallest_level}s in loaded geography")
 
-        df = pd.read_csv(filepath)
+        # Fail loud on missing/mismatched data — the engine works on complete
+        # data or not at all, matching PopulationError/VenueError.
+        try:
+            df = load_stacked_csv(
+                filepaths, label="household data", key_column=0,
+                column_policy=column_policy,
+            )
+        except Exception as e:
+            raise HouseholdError(str(e)) from e
 
         # First column is the geo_unit code, rest are household compositions
         geo_unit_col = df.columns[0]
         composition_cols = df.columns[1:]
         self.household_pattern_vocabulary = set(str(c) for c in composition_cols)
+
+        # Every loaded geo unit must have a household row; a gap would leave
+        # its people silently homeless rather than failing the build.
+        missing = valid_geo_units - set(df[geo_unit_col].astype(str))
+        if missing:
+            examples = sorted(missing)[:10]
+            raise HouseholdError(
+                f"{len(missing)} {smallest_level}(s) in the loaded geography "
+                f"have no household data row, e.g. {examples}. The geography "
+                f"filter is the only way to scope a world; household data must "
+                f"cover every loaded unit."
+            )
 
         # Filter to only geo units in our geography BEFORE processing
         df = df[df[geo_unit_col].isin(valid_geo_units)]
@@ -247,7 +273,7 @@ class HouseholdDistributor:
 
         if not self.household_counts_by_geo_unit:
             raise HouseholdError(
-                f"No household data matched the loaded geography in {filepath} "
+                f"No household data matched the loaded geography in {filepaths} "
                 f"(check data_dir and the geography filter)."
             )
 

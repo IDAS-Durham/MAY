@@ -16,7 +16,11 @@ from may.attribute_assignment import AttributeAssignmentError
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
-from may.utils.debug_output import export_residence_venues, export_commute_mode_debug
+from may.utils.debug_output import (
+    export_residence_venues,
+    export_commute_mode_debug,
+    export_work_assignment_debug,
+)
 from may.utils import path_resolver as pr
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
@@ -271,6 +275,20 @@ def main():
             os.makedirs(output_dir, exist_ok=True)
             export_commute_mode_debug(
                 world, os.path.join(output_dir, "commute_mode_debug.csv")
+            )
+            # Work-assignment evidence (placement rate, sector-location
+            # consistency, spatial basis, sex realism). Comparable across the
+            # residence-basis and workplace-basis pipelines.
+            margin_file = pr.resolve(
+                os.path.join(
+                    config.get("data_root", "data"),
+                    "activities/work/EW_industry_sex_lad.csv",
+                )
+            )
+            export_work_assignment_debug(
+                world,
+                os.path.join(output_dir, "work_assignment_debug.csv"),
+                industry_sex_margin_file=margin_file,
             )
 
     else:

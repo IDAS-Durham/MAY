@@ -134,6 +134,23 @@ def _ordered_key_columns(file_config: Dict[str, Any], source_name: str,
     return columns
 
 
+def _merge_disjoint(target: Dict, new: Dict, source_name: str, file_path) -> None:
+    """
+    Merge one file's lookup into the accumulated lookup. A key appearing in
+    two files of one source is a data error — merging would have to pick a
+    winner silently — so overlap fails loud naming examples.
+    """
+    overlap = target.keys() & new.keys()
+    if overlap:
+        examples = sorted(overlap, key=str)[:5]
+        raise ValueError(
+            f"source '{source_name}': {len(overlap)} key(s) in {file_path} "
+            f"were already loaded from an earlier file, e.g. {examples}. "
+            f"Files within one source must cover disjoint keys."
+        )
+    target.update(new)
+
+
 class GeoDistributionSource(DataSource):
     """
     Data source for geographical unit-specific attribute distributions.
@@ -166,7 +183,9 @@ class GeoDistributionSource(DataSource):
         """
         logger.info(f"Loading data for source '{self.name}'...")
 
-        # Process file configuration (should be just one file)
+        # Each file contributes its own geo units; the merged lookup must be
+        # key-disjoint across files.
+        merged: Dict[str, Dict[str, float]] = {}
         for file_config in self._file_configs:
             file_path = Path(pr.resolve(file_config['path']))
 
@@ -184,20 +203,21 @@ class GeoDistributionSource(DataSource):
                     value_columns = file_config.get('value_columns', {})
                     total_column = file_config.get('total_column')
 
-                    # Store lookup dictionary
-                    self._lookup = self._parse_dataframe(
+                    lookup = self._parse_dataframe(
                         df, key_column, value_columns, total_column
                     )
 
-                    logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
+                    logger.info(f"  ✓ Loaded {len(lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
                     # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
+                _merge_disjoint(merged, lookup, self.name, file_path)
             else:
                 raise FileNotFoundError(f"data source file not found: {file_path}")
+        self._lookup = merged
 
         self._data_loaded = True
 
@@ -298,6 +318,7 @@ class DiversitySource(DataSource):
         """Load diversity data from CSV file."""
         logger.info(f"Loading data for source '{self.name}'...")
 
+        merged: Dict[str, Dict[str, float]] = {}
         for file_config in self._file_configs:
             file_path = Path(pr.resolve(file_config['path']))
 
@@ -310,17 +331,19 @@ class DiversitySource(DataSource):
                         df = df[df[key_column].isin(geo_units)]
 
                     value_columns = file_config.get('value_columns', {})
-                    self._lookup = self._parse_diversity_dataframe(df, key_column, value_columns)
+                    lookup = self._parse_diversity_dataframe(df, key_column, value_columns)
 
-                    logger.info(f"  ✓ Loaded {len(self._lookup)} geographical units from {file_path.name}")
+                    logger.info(f"  ✓ Loaded {len(lookup)} geographical units from {file_path.name}")
 
                 except Exception as e:
                     # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
+                _merge_disjoint(merged, lookup, self.name, file_path)
             else:
                 raise FileNotFoundError(f"data source file not found: {file_path}")
+        self._lookup = merged
 
         self._data_loaded = True
 
@@ -386,12 +409,9 @@ class PairProbabilitySource(DataSource):
         """Load pair probability data."""
         logger.info(f"Loading data for source '{self.name}'...")
 
+        merged: Dict[str, Dict[str, Dict[str, float]]] = {}
         for file_config in self._file_configs:
             file_path = Path(pr.resolve(file_config['path']))
-
-            if geo_units:
-                # Partnership data covers all areas, just filter
-                pass
 
             if file_path.exists():
                 try:
@@ -403,17 +423,19 @@ class PairProbabilitySource(DataSource):
                         df = df[df[key_columns[0]].isin(geo_units)]
 
                     value_columns = file_config.get('value_columns', {})
-                    self._lookups = self._parse_pair_dataframe(df, key_columns, value_columns)
+                    lookups = self._parse_pair_dataframe(df, key_columns, value_columns)
 
-                    logger.info(f"  ✓ Loaded {len(self._lookups)} geographical units from {file_path.name}")
+                    logger.info(f"  ✓ Loaded {len(lookups)} geographical units from {file_path.name}")
 
                 except Exception as e:
                     # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
+                _merge_disjoint(merged, lookups, self.name, file_path)
             else:
                 raise FileNotFoundError(f"data source file not found: {file_path}")
+        self._lookups = merged
 
         self._data_loaded = True
 
@@ -506,6 +528,7 @@ class MultiKeyLookupSource(DataSource):
         """Load CSV data and convert to dictionary for fast lookups."""
         logger.info(f"Loading data for source '{self.name}'...")
 
+        merged: Dict = {}
         for file_config in self._file_configs:
             file_path = Path(pr.resolve(file_config['path']))
 
@@ -521,14 +544,22 @@ class MultiKeyLookupSource(DataSource):
                                 df = df[df[col] == value]
                                 logger.info(f"  Applied filter: {col} == '{value}' ({len(df)} rows remaining)")
 
-                    # Get key and value columns
-                    self._key_columns = list(file_config.get('key_columns', {}).keys())
+                    # Key/value column config must agree across a source's
+                    # files — the lookup has one shape.
+                    key_columns = list(file_config.get('key_columns', {}).keys())
+                    if self._key_columns and key_columns != self._key_columns:
+                        raise ValueError(
+                            f"key_columns differ between files: {self._key_columns} "
+                            f"vs {key_columns}."
+                        )
+                    self._key_columns = key_columns
                     self._key_columns_config = file_config.get('key_columns', {})
                     self._value_columns = file_config.get('value_columns', {})
 
                     # Build dictionary: {(key1, key2, ...): {col1: val1, col2: val2, ...}}
                     logger.info(f"  Building lookup dictionary from {len(df)} rows...")
 
+                    file_lookup = {}
                     for _, row in df.iterrows():
                         # Build key tuple
                         key = tuple(row[col] for col in self._key_columns)
@@ -536,16 +567,18 @@ class MultiKeyLookupSource(DataSource):
                         # Build value dict
                         values = {name: float(row[csv_col]) for name, csv_col in self._value_columns.items()}
 
-                        self._lookup_dict[key] = values
+                        file_lookup[key] = values
 
-                    logger.info(f"  ✓ Loaded {len(self._lookup_dict)} rows from {file_path.name} into dictionary")
+                    logger.info(f"  ✓ Loaded {len(file_lookup)} rows from {file_path.name} into dictionary")
                 except Exception as e:
                     # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
+                _merge_disjoint(merged, file_lookup, self.name, file_path)
             else:
                 raise FileNotFoundError(f"data source file not found: {file_path}")
+        self._lookup_dict = merged
 
         self._data_loaded = True
 
@@ -764,6 +797,8 @@ class OriginDestinationMatrixSource(DataSource):
         """Load origin-destination flow data from CSV."""
         logger.info(f"Loading data for source '{self.name}'...")
 
+        # Merged across files on origin keys; origins must be file-disjoint.
+        merged: Dict = {}
         for file_config in self._file_configs:
             file_path = Path(pr.resolve(file_config['path']))
 
@@ -799,7 +834,7 @@ class OriginDestinationMatrixSource(DataSource):
                             logger.info(f"  Filtered O-D matrix from {original_len} to {len(df)} rows based on {len(overlap)} matching origins")
 
                     # Parse DataFrame
-                    self._lookup = self._parse_od_dataframe(
+                    lookup = self._parse_od_dataframe(
                         df,
                         origin_column,
                         destination_column,
@@ -808,15 +843,17 @@ class OriginDestinationMatrixSource(DataSource):
                         exclude_destinations
                     )
 
-                    logger.info(f"  ✓ Loaded {len(self._lookup)} origins from {file_path.name}")
+                    logger.info(f"  ✓ Loaded {len(lookup)} origins from {file_path.name}")
 
                 except Exception as e:
                     # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
+                _merge_disjoint(merged, lookup, self.name, file_path)
             else:
                 raise FileNotFoundError(f"data source file not found: {file_path}")
+        self._lookup = merged
 
         # Apply the out-of-boundary policy AFTER parsing and OUTSIDE the
         # per-file try/except above — policy violations must fail loud.
@@ -1068,6 +1105,7 @@ class GUSamplerSource(DataSource):
                                 df = df[~df[col].isin(exclude_values)]
 
                     # Group by parent GU and build child GU distribution
+                    file_lookup = {}
                     for parent_name, group in df.groupby(parent_column):
                         geo_dist = {}
                         for _, row in group.iterrows():
@@ -1078,15 +1116,16 @@ class GUSamplerSource(DataSource):
 
                         # Normalize to probabilities
                         if geo_dist:
-                            self._lookup[parent_name] = self._normalize_probabilities(geo_dist)
+                            file_lookup[parent_name] = self._normalize_probabilities(geo_dist)
 
-                    logger.info(f"  ✓ Loaded {geo_unit_level} distributions for {len(self._lookup)} parent GUs from {file_path.name}")
+                    logger.info(f"  ✓ Loaded {geo_unit_level} distributions for {len(file_lookup)} parent GUs from {file_path.name}")
 
                 except Exception as e:
                     # Fail loud on a load/parse error.
                     raise RuntimeError(
                         f"failed to load data source file {file_path}: {e}"
                     ) from e
+                _merge_disjoint(self._lookup, file_lookup, self.name, file_path)
             else:
                 raise FileNotFoundError(f"data source file not found: {file_path}")
 

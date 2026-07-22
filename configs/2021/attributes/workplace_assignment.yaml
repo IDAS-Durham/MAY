@@ -37,6 +37,14 @@ filters:
   activities:
     exclude: ["primary_activity"]
 
+  # Only people in employment get a workplace. Unemployed and economically
+  # inactive working-age adults do not commute to a job.
+  economic_activity:
+    attribute: "economic_activity"
+    type: "categorical"
+    description: "In employment only"
+    exclude: ["unemployed", "inactive"]
+
 # Data Sources
 data_sources:
   commuting_flows:
@@ -51,20 +59,16 @@ data_sources:
     #   redistribute -> keep workers in-boundary: drop out-of-boundary destinations
     #                   and renormalise each origin onto its in-boundary ones
     #   outside      -> model them as working outside the area (outside_value sentinel)
-    out_of_boundary: "redistribute"
+    out_of_boundary: "outside"
     # Required under redistribute: what to do for an origin whose ENTIRE
     # distribution is out of boundary (nothing to redistribute onto).
     on_empty: "outside"
     # Required whenever the 'outside' outcome can occur. The explicit sentinel
     # value written to workplace_location for out-of-area workers.
     outside_value: "OUTSIDE"
-    # Optional (redistribute only): person property flagging a worker who was
-    # bounced back in-boundary, so the venue layer can deprioritise them when
-    # workplace capacity is scarce. Scenario-named, not hardcoded.
-    redistributed_flag: "workplace_redistributed"
 
     files:
-      - path: "${data_root}/activities/work/EW-work-destination-likelihood.csv"
+      - path: "${data_root}/activities/work/EW-work-destination-likelihood-modelled-prepandemic.csv"
 
         # Geographic unit levels for matching (configurable!)
         origin_level: "LGU"       # Match person's residence at LGU level

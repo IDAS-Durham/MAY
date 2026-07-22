@@ -85,36 +85,75 @@ class TestLoadDemographicsFromCsv:
         bad = pd.DataFrame({'wrong_col': ['SGU_001'], '0': [1]})
         data_dir = self._write_demographics_pair(tmp_path, bad, bad)
         pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
-        with pytest.raises(ValueError, match="geo_unit"):
+        with pytest.raises(PopulationError, match="geo_unit"):
             pm.load_demographics_from_csv()
 
-    def test_rows_outside_geography_are_filtered_out(self, sgu_geo, tmp_path):
+    def test_rows_outside_geography_are_filtered_out(self, tmp_path):
         """Source CSVs cover the whole country; we should only retain the
         rows whose geo_unit is in the loaded geography."""
+        geo = _make_geo({'SGU': ['SGU_001']})
         in_geo = pd.DataFrame({
             'geo_unit': ['SGU_001', 'OUT_OF_GEO_999'],
             '0': [3, 99],
         })
         data_dir = self._write_demographics_pair(tmp_path, in_geo, in_geo)
-        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        pm = PopulationManager(geography=geo, data_dir=data_dir)
         pm.load_demographics_from_csv()
 
         assert set(pm.precise_demographics.keys()) == {'SGU_001'}
         assert pm.precise_demographics['SGU_001'][0]['male'] == 3
 
+    def test_uncovered_geo_unit_raises(self, sgu_geo, tmp_path):
+        """Every loaded geo unit needs a demographics row; a partial file
+        must fail loud rather than quietly build a world with people missing."""
+        df = pd.DataFrame({'geo_unit': ['SGU_001'], '0': [3]})
+        data_dir = self._write_demographics_pair(tmp_path, df, df)
+        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        with pytest.raises(PopulationError, match="SGU_002"):
+            pm.load_demographics_from_csv()
+
+    def test_stacked_files_cover_geography_together(self, sgu_geo, tmp_path):
+        """Demographics may come as several files whose rows stack; coverage
+        is judged on the stacked whole."""
+        df_a = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '0': [3, 1]})
+        df_b = pd.DataFrame({'geo_unit': ['SGU_003'], '0': [7]})
+        df_a.to_csv(tmp_path / "part_a.csv", index=False)
+        df_b.to_csv(tmp_path / "part_b.csv", index=False)
+        pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
+        pm.load_demographics_from_csv(
+            male_file=["part_a.csv", "part_b.csv"],
+            female_file=["part_a.csv", "part_b.csv"],
+        )
+        assert set(pm.precise_demographics.keys()) == {'SGU_001', 'SGU_002', 'SGU_003'}
+        assert pm.precise_demographics['SGU_003'][0]['male'] == 7
+
+    def test_stacked_files_with_different_ages_raise(self, sgu_geo, tmp_path):
+        """Age columns must match across stacked demographics files."""
+        df_a = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '0': [3, 1]})
+        df_b = pd.DataFrame({'geo_unit': ['SGU_003'], '1': [7]})
+        df_a.to_csv(tmp_path / "part_a.csv", index=False)
+        df_b.to_csv(tmp_path / "part_b.csv", index=False)
+        pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
+        with pytest.raises(PopulationError, match="column"):
+            pm.load_demographics_from_csv(
+                male_file=["part_a.csv", "part_b.csv"],
+                female_file=["part_a.csv", "part_b.csv"],
+            )
+
     def test_zero_count_cells_do_not_create_demographic_entries(
-        self, sgu_geo, tmp_path
+        self, tmp_path
     ):
         """Zero counts must be filtered out — generate_population iterates
         every (age, sex, count) tuple, so leaving zeros in inflates the work
         with no observable effect."""
+        geo = _make_geo({'SGU': ['SGU_001']})
         df = pd.DataFrame({
             'geo_unit': ['SGU_001'],
             '0': [0],   # zero males age 0
             '1': [4],   # four males age 1
         })
         data_dir = self._write_demographics_pair(tmp_path, df, df)
-        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        pm = PopulationManager(geography=geo, data_dir=data_dir)
         pm.load_demographics_from_csv()
 
         sgu_data = pm.precise_demographics['SGU_001']
@@ -140,13 +179,14 @@ class TestLoadDemographicsFromCsv:
             pm.load_demographics_from_csv()
         assert pm.precise_demographics == {}
 
-    def test_second_load_replaces_first(self, sgu_geo, tmp_path):
+    def test_second_load_replaces_first(self, tmp_path):
         """Calling load_demographics_from_csv twice must not double-count the
         first load's data into the second's totals."""
-        df1 = pd.DataFrame({'geo_unit': ['SGU_001'], '0': [3]})
-        df2 = pd.DataFrame({'geo_unit': ['SGU_002'], '5': [7]})
+        geo = _make_geo({'SGU': ['SGU_001', 'SGU_002']})
+        df1 = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '0': [3, 2]})
+        df2 = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '5': [0, 7]})
         data_dir = self._write_demographics_pair(tmp_path, df1, df1)
-        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        pm = PopulationManager(geography=geo, data_dir=data_dir)
         pm.load_demographics_from_csv()
         # Overwrite files with the second dataset
         self._write_demographics_pair(tmp_path, df2, df2)

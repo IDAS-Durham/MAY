@@ -1,5 +1,6 @@
 import logging
 from .geographical_unit import GeographicalUnit
+from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 logger = logging.getLogger("geography")
 
@@ -8,7 +9,8 @@ class Geography:
     Main geography container. Loads and manages hierarchical geographical units.
     Generic implementation that works with any geography structure.
     """
-    def __init__(self, data_dir="data/geography", levels=None, filters=None):
+    def __init__(self, data_dir="data/geography", levels=None, filters=None,
+                 hierarchy_file=None, coord_files=None):
         self.data_dir = data_dir
         self.units = {}           # All units by name: {name: GeographicalUnit}
         self.units_by_id = {}     # All units by ID: {id: GeographicalUnit}
@@ -29,6 +31,13 @@ class Geography:
         # Example: {'level': 'MGU', 'codes': ['E02000173', 'E02000187']}
         # Note: the 'codes' key holds names
         self.filters = filters
+
+        # Input files, named explicitly: a hierarchy file (or list of files
+        # to stack) and a {level: file-or-list} coordinate mapping. Relative
+        # paths resolve against data_dir. A level absent from coord_files
+        # simply has no coordinates.
+        self.hierarchy_file = hierarchy_file
+        self.coord_files = coord_files or {}
 
         # ID counter for generating unique IDs
         self._next_id = 0
@@ -72,17 +81,29 @@ class Geography:
 
     def load_from_csv(self):
         """
-        Load geography data from CSV files.
-        Expects files: hierarchy.csv, coord_sgu.csv, coord_mgu.csv, etc.
+        Load geography data from the configured hierarchy and coordinate CSVs.
+        Each may be a single file or a list of files stacked into one table.
         """
-        import pandas as pd
         import os
 
         logger.info(f"Loading geography from {self.data_dir}")
 
-        # 1. Load hierarchy file (defines parent-child relationships)
-        hierarchy_path = os.path.join(self.data_dir, "hierarchy.csv")
-        hierarchy_df = pd.read_csv(hierarchy_path)
+        # 1. Load hierarchy file(s) (define parent-child relationships)
+        if not self.hierarchy_file:
+            raise ValueError(
+                "geography requires 'hierarchy_file' (a path or list of paths) "
+                "and optionally 'coord_files' (a {level: path-or-list} mapping); "
+                "relative paths resolve against geography data_dir."
+            )
+        hierarchy_paths = [
+            os.path.join(self.data_dir, p)
+            for p in as_path_list(self.hierarchy_file, "geography.hierarchy_file")
+        ]
+        # Leaf units are the row keys: the same smallest-level unit defined in
+        # two files (or twice in one) is a data error, not something to merge.
+        hierarchy_df = load_stacked_csv(
+            hierarchy_paths, label="geography hierarchy", key_column=self.levels[0]
+        )
 
         logger.info(f"Loaded hierarchy with {len(hierarchy_df)} entries")
 
@@ -91,7 +112,7 @@ class Geography:
         if missing_levels:
             logger.error(f"Hierarchy file is missing columns for configured levels: {missing_levels}")
             logger.info(f"Available columns: {hierarchy_df.columns.tolist()}")
-            raise ValueError(f"Missing columns {missing_levels} in {hierarchy_path}")
+            raise ValueError(f"Missing columns {missing_levels} in {hierarchy_paths}")
 
         # Reject rows that are missing a value at any configured level; a
         # blank/NaN cell would create a ghost unit named "nan" and corrupt the
@@ -128,30 +149,42 @@ class Geography:
                 f"reduced from {original_size} to {len(hierarchy_df)} rows"
             )
 
-        # 3. Load coordinates for each level, restricted to names present in
-        # the (post-filter) hierarchy, to avoid reading entire coord files when
-        # only a small filter is in effect.
+        # 3. Load coordinates for each level with configured files, restricted
+        # to names present in the (post-filter) hierarchy. A level without an
+        # entry in coord_files has no coordinates, by declaration.
+        unknown_levels = [lvl for lvl in self.coord_files if lvl not in self.levels]
+        if unknown_levels:
+            raise ValueError(
+                f"coord_files references unknown level(s) {unknown_levels}; "
+                f"configured levels are {self.levels}."
+            )
         names_per_level = {
             level: set(hierarchy_df[level].unique()) for level in self.levels
         }
-        coords = {}
-        for level in self.levels:
-            level_lower = level.replace(".", "").lower()  # "S.G.U" -> "sgu"
-            coord_file = os.path.join(self.data_dir, f"coord_{level_lower}.csv")
-
-            if not os.path.exists(coord_file):
-                coords[level] = {}
-                logger.warning(f"No coordinate file found for {level}")
-                continue
-
-            coord_df = pd.read_csv(coord_file)
-            self._validate_coord_columns(coord_df, coord_file, level)
+        coords = {level: {} for level in self.levels}
+        for level, file_spec in self.coord_files.items():
+            coord_paths = [
+                os.path.join(self.data_dir, p)
+                for p in as_path_list(file_spec, f"geography.coord_files.{level}")
+            ]
+            coord_df = load_stacked_csv(
+                coord_paths, label=f"{level} coordinates"
+            )
+            self._validate_coord_columns(coord_df, coord_paths, level)
             for _candidate in ('geo_unit', level.lower(), level):
                 if _candidate in coord_df.columns:
                     name_col = _candidate
                     break
             else:
                 name_col = coord_df.columns[0]
+
+            duplicated = coord_df[name_col].dropna()
+            duplicated = duplicated[duplicated.duplicated()].unique()
+            if len(duplicated) > 0:
+                raise ValueError(
+                    f"{level} coordinates define {len(duplicated)} unit(s) more "
+                    f"than once across {coord_paths}, e.g. {list(duplicated[:5])}."
+                )
 
             wanted = names_per_level[level]
             if wanted:
@@ -180,20 +213,28 @@ class Geography:
         logger.info(f"Created {len(self.units_by_id)} total units")
 
         # 5. Build parent-child relationships, vectorized per level pair.
-        # Each (child, parent) pair appears once after drop_duplicates, so this
-        # is one pass per level pair.
+        # Each (child, parent) pair appears once after drop_duplicates. A child
+        # mapping to two different parents — in one file or across files — is
+        # a hard error: silently keeping one parent would corrupt the tree.
         for i in range(len(self.levels) - 1):
             child_level = self.levels[i]
             parent_level = self.levels[i + 1]
             pairs = hierarchy_df[[child_level, parent_level]].drop_duplicates()
+            conflicted = pairs[pairs[child_level].duplicated(keep=False)]
+            if len(conflicted) > 0:
+                examples = [
+                    f"{child!r} -> {sorted(group[parent_level].unique())}"
+                    for child, group in list(conflicted.groupby(child_level))[:5]
+                ]
+                raise ValueError(
+                    f"{conflicted[child_level].nunique()} {child_level} unit(s) "
+                    f"map to more than one {parent_level} parent: {examples}. "
+                    f"Every unit must have exactly one parent."
+                )
             child_index = self.units_by_level[child_level]
             parent_index = self.units_by_level[parent_level]
             for child_name, parent_name in pairs.itertuples(index=False, name=None):
-                child = child_index.get(child_name)
-                parent = parent_index.get(parent_name)
-                if child is None or parent is None or child.parent is not None:
-                    continue
-                parent.add_child(child)
+                parent_index[parent_name].add_child(child_index[child_name])
 
         logger.info("Built hierarchical relationships")
         self._log_summary()

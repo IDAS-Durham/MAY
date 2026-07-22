@@ -287,9 +287,14 @@ def setup_households(geo, population, venues, config, strategy_file=None):
         rules_file=pr.resolve(household_config.get("rules_file")) if household_config.get("rules_file") else None,
     )
 
-    # Load household data
+    # Load household data. data_file may be a single file or a list of files
+    # to stack; column_policy: union_zero_fill lets sources with different
+    # composition vocabularies combine (absent pattern = zero households).
     household_data_file = household_config.get("data_file", "households.csv")
-    household_distributor.load_household_data(household_data_file)
+    household_distributor.load_household_data(
+        household_data_file,
+        column_policy=household_config.get("column_policy", "strict"),
+    )
 
     # Distribute households and venues based on configuration mode.
     # The strategy file comes from the residence_allocation timeline step;

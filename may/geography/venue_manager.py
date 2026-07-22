@@ -335,7 +335,9 @@ class VenueManager:
 
     def load_venue_type_from_csv(self, venue_type, filename, filter_column=None, filter_values=None):
         """
-        Load venues of a specific type from a CSV file (relative to data_dir).
+        Load venues of a specific type from CSV (relative to data_dir).
+        ``filename`` may be a single file or a list of files stacked into one
+        table; all files must share the same columns.
 
         Expected columns:
         - name (optional): Name of the venue
@@ -346,13 +348,22 @@ class VenueManager:
         A missing file is a hard error (VenueError) — callers that tolerate
         absent files (e.g. batch mode) must check existence before calling.
         """
-        venue_path = os.path.join(self.data_dir, filename)
+        from may.utils.stacked_input import as_path_list, load_stacked_csv
 
-        if not os.path.exists(venue_path):
-            raise VenueError(f"Venue file not found: {venue_path}")
+        venue_paths = [
+            os.path.join(self.data_dir, p)
+            for p in as_path_list(filename, f"venue type '{venue_type}'")
+        ]
 
-        venue_df = pd.read_csv(venue_path)
-        logger.info(f"Loading {venue_type} venues from {venue_path}")
+        # low_memory=False: chunked inference can give one column two Python
+        # types, which breaks the typed HDF5 property arrays on export.
+        try:
+            venue_df = load_stacked_csv(
+                venue_paths, label=f"{venue_type} venues", low_memory=False
+            )
+        except Exception as e:
+            raise VenueError(str(e)) from e
+        logger.info(f"Loading {venue_type} venues from {venue_paths}")
 
         self.load_venue_type_from_df(
             venue_type,
@@ -445,6 +456,11 @@ class VenueManager:
                 # named by substituting {unit} into the filename. Absent per-unit
                 # files are skipped (partial geographies are routine), but an
                 # enabled batch type matching zero files is a hard error.
+                if not isinstance(filename, str):
+                    raise VenueError(
+                        f"Batch venue type '{venue_type}' takes a single "
+                        f"filename pattern, not a list; got {filename!r}."
+                    )
                 if '{unit}' not in filename:
                     raise VenueError(
                         f"Batch venue type '{venue_type}' filename must contain "

@@ -53,7 +53,16 @@ venue_types:
 
   company:
     enabled: true
-    filename: primary_activities/companies.csv
+    # Calibrated per-nation employer stocks, stacked into one venue table
+    # (identical columns, geography-filtered like any venue file). These are
+    # the builds the workplace-capacity weighting is aggregated from, so
+    # location, sector and the company match all read the same employer
+    # stock. Coverage is disjoint and UK-complete: E+W, Scotland, Northern
+    # Ireland.
+    filename:
+      - primary_activities/EW_companies.csv
+      - primary_activities/SCT_companies.csv
+      - primary_activities/NI_companies.csv
     description: "Commercial workplaces and businesses"
     is_residence: false  # Not a place where people live
 

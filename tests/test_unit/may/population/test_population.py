@@ -424,20 +424,20 @@ class TestPopulationManagerIntegration:
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create simple demographics
             male_data = {
-                'geo_unit': ['E00000001', 'E00000002'],
-                '0': [2, 1],
-                '25': [3, 2],
-                '65': [1, 2]
+                'geo_unit': ['E00000001', 'E00000002', 'E00000003'],
+                '0': [2, 1, 0],
+                '25': [3, 2, 0],
+                '65': [1, 2, 0]
             }
             male_df = pd.DataFrame(male_data)
             male_path = os.path.join(tmpdir, 'demographics_male.csv')
             male_df.to_csv(male_path, index=False)
 
             female_data = {
-                'geo_unit': ['E00000001', 'E00000002'],
-                '0': [1, 2],
-                '25': [2, 3],
-                '65': [2, 1]
+                'geo_unit': ['E00000001', 'E00000002', 'E00000003'],
+                '0': [1, 2, 0],
+                '25': [2, 3, 0],
+                '65': [2, 1, 0]
             }
             female_df = pd.DataFrame(female_data)
             female_path = os.path.join(tmpdir, 'demographics_female.csv')

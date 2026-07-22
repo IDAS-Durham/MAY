@@ -1,0 +1,91 @@
+# Multi-nation smoke world — one LGU from each of England, Scotland and
+# Northern Ireland in a single world, built from per-nation data files
+# stacked by the engine (no pre-merged UK CSVs anywhere).
+#
+#   * County Durham            (England;  EW files)
+#   * Aberdeen City            (Scotland; S files)
+#   * Antrim and Newtownabbey  (N. Ireland; NI files)
+#
+# The timeline is deliberately short: residence allocation (households +
+# residence venues) and ethnicity. That exercises every stacked input —
+# geography, coordinates, demographics, households (union vocabulary),
+# venues, attribute data sources — without the England-only later pipeline
+# (schools, commute) that this world has no data for.
+
+data_root: data
+
+geography:
+  data_dir: "${data_root}/geography"
+  levels: ["SGU", "MGU", "LGU", "XLGU"]
+  hierarchy_file:
+    - EW_hierarchy.csv
+    - SCT_hierarchy.csv
+    - NI_hierarchy.csv
+  coord_files:
+    SGU:
+      - EW_coord_sgu.csv
+      - SCT_coord_sgu.csv
+      - NI_coord_sgu.csv
+    MGU:
+      - EW_coord_mgu.csv
+      - SCT_coord_mgu.csv
+      - NI_coord_mgu.csv
+  load_all: false
+  filter:
+    level: LGU
+    codes:
+      - "County Durham"
+      - "Aberdeen City"
+      - "Antrim and Newtownabbey"
+
+population:
+  data_dir: "${data_root}/population"
+  demographics_male_file:
+    - EW_demographics_male.csv
+    - SCT_demographics_male.csv
+    - NI_demographics_male.csv
+  demographics_female_file:
+    - EW_demographics_female.csv
+    - SCT_demographics_female.csv
+    - NI_demographics_female.csv
+
+venues:
+  data_dir: "${data_root}/venues"
+  config_file: "${config_root}/venues/venues_config.yaml"
+  export_file: "venue_allocations.csv"
+
+households:
+  data_dir: "${data_root}/households"
+  data_file:
+    - EW_households.csv
+    - SCT_households.csv
+    - NI_households.csv
+  # NI's pattern vocabulary differs from EW/SCT; union them, zeros elsewhere.
+  column_policy: union_zero_fill
+  config_file: "${config_root}/households/households_config.yaml"
+  rules_file: "${config_root}/households/relationship_rules.yaml"
+  export_file: "household_allocations.csv"
+
+debug_outputs:
+  enabled: true
+
+timeline:
+  enabled: true
+  steps:
+    - type: residence_allocation
+      config: "${config_root}/households/allocation_strategy.yaml"
+
+    - type: attribute
+      config: "${config_root}/attributes/attribute_assignment.yaml"
+
+relationship_pipeline:
+  enabled: false
+
+romantic_relationships:
+  enabled: false
+
+serialization:
+  enabled: true
+  config_file: "${config_root}/serialization_config.yaml"
+  output_dir: "${output_root}/multi_nation_test"
+  filename: "world_multi_nation_test.h5"

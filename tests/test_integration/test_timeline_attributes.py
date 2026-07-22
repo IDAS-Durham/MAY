@@ -15,7 +15,7 @@ def test_dir():
 
 @pytest.fixture
 def geography(test_dir):
-    geo = Geography(data_dir=os.path.join(test_dir, "geography"), levels=["SGU", "MGU", "LGU"])
+    geo = Geography(data_dir=os.path.join(test_dir, "geography"), levels=["SGU", "MGU", "LGU"], hierarchy_file="hierarchy.csv")
     geo.load_from_csv()
     return geo
 

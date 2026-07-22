@@ -11,7 +11,8 @@ def test_setup_geography_and_loading():
     config = {
         "geography": {
             "data_dir": "tests/test_data/micro_world/geography",
-            "levels": ["SGU", "MGU", "LGU"]
+            "levels": ["SGU", "MGU", "LGU"],
+            "hierarchy_file": "hierarchy.csv"
         }
     }
     

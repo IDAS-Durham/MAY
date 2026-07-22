@@ -16,7 +16,7 @@ from may.geography.venue_manager import VenueManager, VenueError
 
 @pytest.fixture
 def loaded_geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"], hierarchy_file="hierarchy.csv")
     geo.load_from_csv()
     return geo
 
@@ -326,9 +326,11 @@ def test_production_yaml_does_not_reference_missing_files():
         if not type_config.get('enabled', True):
             continue
         filename = type_config.get('filename', f"{venue_type}s.csv")
-        # Resolve relative to the production data dir.
-        full_path = os.path.join("data/venues", filename)
-        if not os.path.exists(full_path):
-            missing.append((venue_type, full_path))
+        filenames = filename if isinstance(filename, list) else [filename]
+        for name in filenames:
+            # Resolve relative to the production data dir.
+            full_path = os.path.join("data/venues", name)
+            if not os.path.exists(full_path):
+                missing.append((venue_type, full_path))
 
     assert not missing, f"Enabled venue types reference missing CSVs: {missing}"

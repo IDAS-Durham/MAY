@@ -16,7 +16,7 @@ origin_source:
   level: "MGU"
 destination_source:
   type: "ancestor"
-  from: "properties.workplace_sgu"
+  from: "properties.workplace_mgu"
   level: "MGU"
 
 class_source: "properties.commute_mode"

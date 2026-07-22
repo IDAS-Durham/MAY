@@ -135,18 +135,28 @@ It has seven top-level sections:
 
 | Key | What it does |
 |---|---|
-| `data_dir` | Folder with `hierarchy.csv`, `coord_sgu.csv`, `coord_mgu.csv`. |
-| `levels` | Names of the geographical hierarchy levels, smallest → largest. The default for England is `["SGU", "MGU", "LGU", "XLGU"]` (Output Area → MSOA → Local Authority → Region). |
+| `data_dir` | Base folder the file paths below resolve against. |
+| `hierarchy_file` | The hierarchy CSV — a single path, or a list of paths that the engine stacks into one table (the UK build lists one file per nation). |
+| `coord_files` | Mapping of level → coordinate CSV(s), same path-or-list rule. Omit a level to load it without coordinates. |
+| `levels` | Names of the geographical hierarchy levels, smallest → largest. The UK build uses `["SGU", "MGU", "LGU", "XLGU"]` (Output Area → MSOA → Local Authority → Region/Nation). |
 | `load_all` | `true` to build the entire dataset, `false` to use the filter below. |
 | `filter.level` | Which level the filter applies to (`SGU`, `MGU`, `LGU`, `XLGU`). |
 | `filter.codes` | Inline list of codes to include (small lists). |
 | `filter.file` | Path to a text file with one code per line (large lists). |
 
-**Example — build all of England:**
+When several files are listed, they must all exist and share the same columns, and no
+unit may appear in two files — any violation stops the run with a message naming the
+offending files. A filter can span files freely (e.g. one English and one Scottish LAD).
+
+**Example — build the whole UK:**
 ```yaml
 geography:
   data_dir: "data/geography"
   levels: ["SGU", "MGU", "LGU", "XLGU"]
+  hierarchy_file: [hierarchy_EW.csv, hierarchy_S.csv, hierarchy_NI.csv]
+  coord_files:
+    SGU: [coord_sgu_EW.csv, coord_sgu_S.csv, coord_sgu_NI.csv]
+    MGU: [coord_mgu_EW.csv, coord_mgu_S.csv, coord_mgu_NI.csv]
   load_all: true
 ```
 
@@ -164,10 +174,12 @@ geography:
 ```yaml
 population:
   data_dir: "data/population"
-  demographics_male_file: "demographics_male.csv"
-  demographics_female_file: "demographics_female.csv"
+  demographics_male_file: [EW_demographics_male.csv, SCT_demographics_male.csv, NI_demographics_male.csv]
+  demographics_female_file: [EW_demographics_female.csv, SCT_demographics_female.csv, NI_demographics_female.csv]
 ```
-The two CSVs are matrices: rows = SGU codes, columns = ages 0–99.
+The CSVs are matrices: rows = SGU codes, columns = ages 0–99. Each key takes a single
+file or a list to stack (same columns, disjoint SGUs). Every SGU in the loaded
+geography must have a row in the stacked data, or the run stops naming the gaps.
 
 ### 4.3 `venues:` — places people go
 
@@ -184,11 +196,18 @@ See **§5.1** to enable/disable venue types and §6 for the CSVs they read.
 ```yaml
 households:
   data_dir: "data/households"
-  data_file: "households.csv"
+  data_file: [EW_households.csv, SCT_households.csv, NI_households.csv]
+  # NI's composition columns differ from EW/SCT; union them, absent = zero.
+  column_policy: union_zero_fill
   config_file: "configs/2021/households/households_config.yaml"
   strategy_file: "configs/2021/households/allocation_strategy.yaml"
   export_file: "household_allocations.csv"
 ```
+
+`data_file` takes a single file or a list to stack. By default all files must share
+the same composition-pattern columns; `column_policy: union_zero_fill` lets files
+with different vocabularies combine — a pattern absent from a file counts as zero
+households of that shape in its areas, and each fill is logged as a warning.
 
 ### 4.5 `timeline:` — the order things happen
 
@@ -697,19 +716,24 @@ If you add a new property (e.g. `income`) to people via attribute YAMLs, you mus
 
 ```
 data/
-├── geography/
-│   ├── hierarchy.csv          # SGU,MGU,LGU,XLGU
-│   ├── coord_sgu.csv
-│   └── coord_mgu.csv
+├── geography/                 # one file per nation, stacked by the engine
+│   ├── hierarchy_EW.csv       # SGU,MGU,LGU,XLGU (England+Wales)
+│   ├── hierarchy_S.csv        #   "  (Scotland)
+│   ├── hierarchy_NI.csv       #   "  (Northern Ireland)
+│   ├── coord_sgu_{EW,S,NI}.csv
+│   └── coord_mgu_{EW,S,NI}.csv
 ├── population/
-│   ├── demographics_male.csv  # rows=SGU, cols=ages 0–99
-│   ├── demographics_female.csv
+│   ├── ew_demographics_{male,female}.csv   # rows=SGU, cols=ages 0–99
+│   ├── sct_demographics_{male,female}.csv
+│   ├── ni_demographics_{male,female}.csv
 │   ├── comorbidities/
 │   ├── ethnicity/
 │   ├── leisure_participation/
 │   └── sexual_orientation/
 ├── households/
-│   ├── households.csv         # geo_unit + columns of composition patterns
+│   ├── EW_households.csv      # geo_unit + columns of composition patterns
+│   ├── SCT_households.csv
+│   ├── NI_households.csv      # NI's pattern columns differ; see column_policy
 │   └── household_allocations.csv  (output)
 ├── venues/
 │   ├── primary_activities/    # Schools_EW.csv, uk_universities.csv, companies.csv

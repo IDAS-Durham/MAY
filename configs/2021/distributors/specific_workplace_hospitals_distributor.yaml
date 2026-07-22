@@ -32,7 +32,7 @@ eligibility:
       min: 18
       max: 64
 
-    - attribute: "properties.workplace_sgu"
+    - attribute: "properties.workplace_mgu"
       type: "categorical"
       description: "Geographical unit name for where they are supposed to work"
 
@@ -70,10 +70,10 @@ venue_selection:
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to hospitals near their WORK location, not home
-  locate_person_by: "properties.workplace_sgu"
+  locate_person_by: "properties.workplace_mgu"
 
   # Batch at SGU level (workplace) for better performance
-  batch_geo_level: "SGU"
+  batch_geo_level: "MGU"
 
   # Only consider hospitals in loaded geography with capacity
   filter_by_geography: true
