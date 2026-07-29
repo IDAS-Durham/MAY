@@ -647,6 +647,8 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         'capacity_property': step_config.get('capacity_property', 'capacity'),
         'eligibility': step_config.get('eligibility', {}),
         'strategy': step_config.get('strategy', 'random'),
+        # Settings the named strategy reads; "age_weighted" takes its bands here.
+        'strategy_config': step_config.get('strategy_config', {}),
         'max_allocations': step_config.get('max_allocations'),
         # Capacity rules owned by this allocation step. The presence of
         # capacity_config.attribute_capacities.column_mappings selects

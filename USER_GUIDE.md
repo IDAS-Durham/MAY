@@ -736,9 +736,9 @@ data/
 │   ├── NI_households.csv      # NI's pattern columns differ; see column_policy
 │   └── household_allocations.csv  (output)
 ├── venues/
-│   ├── primary_activities/    # Schools_EW.csv, uk_universities.csv, companies.csv
+│   ├── primary_activities/    # schools/, companies/, uk_universities.csv
 │   ├── medical/hospitals.csv
-│   ├── residences/            # care_homes.csv, boarding_schools.csv, student_dorms.csv
+│   ├── residences/            # care_homes/, boarding_schools.csv, student_dorms.csv
 │   ├── leisure/               # cinemas.csv, groceries.csv, gyms.csv, pubs.csv
 │   └── venue_allocations.csv  (output)
 └── activities/
@@ -757,11 +757,11 @@ Beyond that, columns must match what the relevant YAML expects. For example:
 
 | File | Required by | Required columns |
 |---|---|---|
-| `Schools_EW.csv` | `school_distributor.yaml` | `StatutoryLowAge`, `StatutoryHighAge`, `Gender`, `SchoolCapacity` |
+| `schools/EW_Schools.csv` | `school_distributor.yaml` | `StatutoryLowAge`, `StatutoryHighAge`, `Gender`, `SchoolCapacity` |
 | `uk_universities.csv` | `university_distributor.yaml` | `n_students` |
-| `companies.csv` | `company_distributor.yaml` | `industry_code`, `sizeband`, `employee_count` |
+| `companies/companies.csv` | `company_distributor.yaml` | `industry_code`, `sizeband`, `employee_count` |
 | `hospitals.csv` | `hospital_distributor.yaml` | `n_beds`, `estimated_staff` |
-| `care_homes.csv` | `venues_config.yaml` (care_home) | `capacity`, `age_50_64_male`, … `age_95_plus_female` |
+| `care_homes/EW_care_homes.csv` | `venues_config.yaml` (care_home) | `capacity`, `age_50_64_male`, … `age_95_plus_female` |
 | `boarding_schools.csv` | `venues_config.yaml` (boarding_school) | `n_total`, `n_0_15_male`, `n_16_24_female`, … |
 | `student_dorms.csv` | `venues_config.yaml` (student_dorms) | `n_total`, `n_16_24`, … `n_65_99` |
 
@@ -780,7 +780,7 @@ For an England-2021 build:
 1. Replace the files under `data/geography/` with 2021 OA → MSOA → LAD → Region hierarchy and centroids.
 2. Replace `data/population/demographics_{male,female}.csv` with 2021 census age × sex per OA.
 3. Replace `data/households/households.csv` with 2021 household composition counts per OA.
-4. Update venue CSVs (`Schools_EW.csv`, `uk_universities.csv`, `companies.csv`, `hospitals.csv`, …) with 2021 inventories.
+4. Update venue CSVs (`schools/EW_Schools.csv`, `uk_universities.csv`, `companies/companies.csv`, `hospitals.csv`, …) with 2021 inventories.
 5. Update region-keyed reference files: `data/population/comorbidities/`, `data/population/ethnicity/`, `data/population/sexual_orientation/`.
 6. Update commuting flow / industry tables under `data/activities/work/`.
 
@@ -825,7 +825,7 @@ Tests live in `tests/`. Run `pytest` to verify nothing is broken before/after a 
 |---|---|
 | `KeyError` on a CSV column | A YAML references a column name that doesn't exist in the CSV — align them. |
 | Many people unallocated to households | Population doesn't match `households.csv` totals; check demotion/promotion settings in `households_config.yaml`. |
-| `if_no_match: error` from school distributor | Boarding-school name in residences CSV doesn't match a school in `Schools_EW.csv`. |
+| `if_no_match: error` from school distributor | Boarding-school name in residences CSV doesn't match a school in `schools/EW_Schools.csv`. |
 | Workplace step assigns no one | Education steps haven't been run before workplace assignment, or `primary_activity` filter is excluding everyone. |
 | Property missing from `world_state.h5` | Add it to `configs/2021/serialization_config.yaml`. |
 | Geography filter returns 0 areas | `filter.level` doesn't match the level the codes belong to (e.g. LAD codes with `level: MGU`). |

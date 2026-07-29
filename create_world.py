@@ -223,6 +223,14 @@ def main():
                     logger.error(f"Household allocation failed: {e}")
                     sys.exit(1)
 
+                # Who ended up living where, for every residence venue type.
+                if config.get("debug_outputs", {}).get("enabled", False):
+                    output_dir = pr.resolve(config.get("serialization", {}).get("output_dir", "."))
+                    os.makedirs(output_dir, exist_ok=True)
+                    export_residence_venues(
+                        world, os.path.join(output_dir, "residence_venues.csv")
+                    )
+
             elif step_type == "attribute":
                 logger.info("")
                 logger.info(f"[ATTRIBUTE] {step_config}")

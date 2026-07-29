@@ -110,7 +110,8 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
     # Apply strategy (sort eligible people)
     strategy = allocation_config.get('strategy', 'random')
-    eligible_people = _apply_strategy(eligible_people, strategy)
+    strategy_config = allocation_config.get('strategy_config') or {}
+    eligible_people = _apply_strategy(eligible_people, strategy, strategy_config)
 
     # Determine how many to allocate
     max_allocations = allocation_config.get('max_allocations')
@@ -314,13 +315,76 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
     return eligible
 
 
-def _apply_strategy(people: List, strategy: str) -> List:
+def _build_age_weight_lookup(bands) -> Dict[int, float]:
+    """
+    Expand a list of {range: [min, max], weight: w} bands into age -> weight.
+
+    Overlaps are rejected rather than resolved by band order, which would give
+    one age two weights depending on how the config happened to be written.
+    """
+    if not bands:
+        raise ValueError(
+            "strategy 'age_weighted' requires strategy_config.bands, a list of "
+            "{range: [min_age, max_age], weight: w}"
+        )
+
+    lookup: Dict[int, float] = {}
+    for band in bands:
+        age_range = band.get('range')
+        weight = band.get('weight')
+        if age_range is None or weight is None:
+            raise ValueError(f"age_weighted band needs 'range' and 'weight': {band}")
+
+        min_age, max_age = age_range
+        weight = float(weight)
+        if weight <= 0:
+            raise ValueError(f"age_weighted band weight must be positive: {band}")
+
+        for age in range(int(min_age), int(max_age) + 1):
+            if age in lookup:
+                raise ValueError(f"age_weighted bands overlap at age {age}")
+            lookup[age] = weight
+
+    return lookup
+
+
+def _weighted_order(people: List, bands) -> List:
+    """
+    Order people by a weighted sample without replacement, heaviest first.
+
+    Efraimidis-Spirakis, in log space: person i gets the key log(u)/w_i for u
+    uniform on (0, 1], sorted descending. That is the same ordering as the
+    usual u**(1/w_i) without its underflow, which collapses small weights to
+    a tie at zero. The order restricted to any subset is itself a valid
+    weighted order for that subset, so ordering the whole pool once and then
+    splitting it by geographical unit matches drawing within each unit.
+    """
+    lookup = _build_age_weight_lookup(bands)
+
+    weights = np.empty(len(people), dtype=np.float64)
+    for i, person in enumerate(people):
+        try:
+            weights[i] = lookup[person.age]
+        except KeyError:
+            raise ValueError(
+                f"Person {person.id} is aged {person.age}, which no age_weighted "
+                f"band covers (bands cover {min(lookup)}-{max(lookup)})"
+            ) from None
+
+    keys = np.log(1.0 - np.random.random(len(people))) / weights
+    return [people[i] for i in np.argsort(-keys)]
+
+
+def _apply_strategy(people: List, strategy: str, strategy_config: Dict) -> List:
     """
     Apply allocation strategy to sort/select people.
 
     Args:
         people: List of Person objects
-        strategy: Strategy name ("random", "oldest_first", "youngest_first")
+        strategy: Strategy name ("random", "oldest_first", "youngest_first",
+                  "age_weighted")
+        strategy_config: Settings for the strategy. "age_weighted" reads its
+                         'bands' from here; the others take nothing.
 
     Returns:
         list: Sorted/shuffled list of people
@@ -331,6 +395,8 @@ def _apply_strategy(people: List, strategy: str) -> List:
         people.sort(key=lambda p: p.age, reverse=True)
     elif strategy == "youngest_first":
         people.sort(key=lambda p: p.age)
+    elif strategy == "age_weighted":
+        return _weighted_order(people, strategy_config.get('bands'))
     else:
         logger.warning(f"Unknown strategy '{strategy}', using random")
         np.random.shuffle(people)
@@ -518,8 +584,10 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
     # Apply strategy to each attribute group
     strategy = allocation_config.get('strategy', 'random')
+    strategy_config = allocation_config.get('strategy_config') or {}
     for attr_slot in people_by_attributes:
-        people_by_attributes[attr_slot] = _apply_strategy(people_by_attributes[attr_slot], strategy)
+        people_by_attributes[attr_slot] = _apply_strategy(
+            people_by_attributes[attr_slot], strategy, strategy_config)
 
     # Pre-group people by geographical unit AND attribute slot
     # Structure: {(column_name, geo_unit): deque([person, ...])}

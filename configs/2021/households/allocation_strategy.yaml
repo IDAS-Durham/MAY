@@ -109,6 +109,85 @@ steps:
     enable_demotion: null
 
 
+  # Step 3c: Elderly to Care Homes (Venues)
+  #
+  # This runs BEFORE the elderly household steps, and the order is load-bearing.
+  #
+  # The census splits usual residents into household residents and communal
+  # residents. The household composition counts describe the first block and the
+  # care-home venue counts describe the second, so the two never claim the same
+  # person. The engine has no such partition: every step draws from one pool of
+  # people, so whichever runs first takes its share from the whole age
+  # distribution and leaves the rest whatever remains.
+  #
+  # The two draws are not symmetric. This step is age-selective — it needs the
+  # oldest tail. The elderly household patterns are age-blind above 65: "0 0 0 2"
+  # asks for two old adults, not which two. Running the age-blind steps first
+  # strips a little over half the 65+ population uniformly, including half the
+  # 85-year-olds, and no weighting can recover a tail that has already gone.
+  # Running this step first takes the tail it needs and hands back a residual
+  # the household steps are, by their own definition, indifferent to.
+  - name: "Elderly to Care Homes"
+    type: "venue"
+    description: "Allocate elderly to care homes, weighted by care-home residence rate"
+
+    venue_type: "care_home"
+
+    subset_key: "resident"
+
+    # General eligibility (pre-filter before attribute matching)
+    # This gets people who are eligible, then they get sorted into the age
+    # slots defined by capacity_config.
+    eligibility:
+      - attribute: "age"
+        min: 50  # Minimum age to consider for care homes
+
+    # Capacity rules for this step. The venue files carry two resident columns.
+    # No UK nation publishes care-home-specific age detail finer than this that
+    # survives across all three, so the slots stop here and the fill strategy
+    # below carries the age structure instead.
+    capacity_config:
+      attribute_capacities:
+        column_mappings:
+          n_50_64:
+            age_band: [50, 64]
+          n_65_plus:
+            age_band: [65, 120]
+
+    # Weighted sample without replacement: someone's chance of being drawn early
+    # is proportional to their band's care-home RESIDENCE RATE — care-home
+    # residents divided by population, by age band.
+    #
+    # It has to be a rate and not a share of residents. The pool being drawn
+    # from already carries the local age structure, so weighting by "share of
+    # care-home residents in this band" would let that structure count twice.
+    # By rate, age 90 outweighs age 65 by 24.5x; by share of residents, only
+    # 3.6x — under-placing the very old by roughly sevenfold.
+    #
+    # The rates are sex-neutral at every band (0.1131 female against 0.1084 male
+    # at 85-94), so one curve serves both sexes and there is no sex term.
+    #
+    # 85+ stays a single open band. A finer curve above it would need a finer
+    # denominator, and the England and Wales single-year population above 85 is
+    # disaggregated from a census band that has no internal detail.
+    #
+    # The 50-64 row never competes with the others, because the strategy is
+    # applied per capacity slot and that slot holds only 50-64s at one weight.
+    # It is here so the curve reads as the curve, and so the config does not
+    # silently depend on where the slot boundaries happen to fall.
+    strategy: "age_weighted"
+    strategy_config:
+      bands:
+        - {range: [50, 64],  weight: 0.00128}
+        - {range: [65, 65],  weight: 0.0066}
+        - {range: [66, 69],  weight: 0.0069}
+        - {range: [70, 74],  weight: 0.0092}
+        - {range: [75, 79],  weight: 0.0174}
+        - {range: [80, 84],  weight: 0.0347}
+        - {range: [85, 120], weight: 0.1133}
+
+    max_allocations: null
+
   # Step 4a: Elderly Couples
   - name: "Elderly Couples"
     type: "household"
@@ -214,61 +293,6 @@ steps:
     strategy: "random"
     max_allocations: null
 
-  # Step 7: Elderly to Care Homes (Venues)
-  - name: "Elderly to Care Homes"
-    type: "venue"
-    description: "Allocate elderly to care homes with age/sex matching"
-
-    venue_type: "care_home"
-
-    subset_key: "resident"
-
-    # General eligibility (pre-filter before attribute matching)
-    # This gets people who are eligible, then they get sorted into
-    # specific age/sex slots based on capacity_config
-    eligibility:
-      - attribute: "age"
-        min: 50  # Minimum age to consider for care homes
-
-    # Capacity rules for this step.
-    capacity_config:
-      total_capacity_column: "capacity"
-      attribute_capacities:
-        column_mappings:
-          age_50_64_male:
-            age_band: [50, 64]
-            sex: "male"
-          age_50_64_female:
-            age_band: [50, 64]
-            sex: "female"
-          age_65_74_male:
-            age_band: [65, 74]
-            sex: "male"
-          age_65_74_female:
-            age_band: [65, 74]
-            sex: "female"
-          age_75_84_male:
-            age_band: [75, 84]
-            sex: "male"
-          age_75_84_female:
-            age_band: [75, 84]
-            sex: "female"
-          age_85_94_male:
-            age_band: [85, 94]
-            sex: "male"
-          age_85_94_female:
-            age_band: [85, 94]
-            sex: "female"
-          age_95_plus_male:
-            age_band: [95, 120]
-            sex: "male"
-          age_95_plus_female:
-            age_band: [95, 120]
-            sex: "female"
-
-    strategy: "oldest_first"  # Prioritize oldest within each age/sex group
-    max_allocations: null
-
   # Step 9: Students to Dormitories (Venues)
   - name: "Students to Dormitories"
     type: "venue"
@@ -313,7 +337,7 @@ steps:
       - "0 0 0 >=3"     # 3+ old adults
 
     max_households: null
-    refresh_pools: true  # Refresh to exclude care home residents
+    refresh_pools: false
     enable_demotion: null
 
   # Step 11: Add Excess Kids to Families (Household Excess)

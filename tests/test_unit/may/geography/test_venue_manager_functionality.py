@@ -39,7 +39,7 @@ class TestCoordinatesParsing:
         assert venue.coordinates == (51.5, -0.1)
 
     def test_capitalised_lat_lon_also_work(self, loaded_geography):
-        """Schools_EW.csv ships with 'Latitude'/'Longitude' columns — the
+        """EW_Schools.csv ships with 'Latitude'/'Longitude' columns — the
         loader must accept them, not silently drop coordinates."""
         vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
         df = pd.DataFrame({

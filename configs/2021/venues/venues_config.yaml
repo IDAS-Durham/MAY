@@ -29,7 +29,10 @@ venue_types:
 
   school:
     enabled: true
-    filename: primary_activities/Schools_EW.csv
+    filename:
+      - primary_activities/schools/EW_Schools.csv
+      - primary_activities/schools/SCT_Schools.csv
+      - primary_activities/schools/NI_Schools.csv
     description: "Educational institutions for primary and secondary education"
     is_residence: false  # Not a place where people live
 
@@ -41,7 +44,14 @@ venue_types:
 
   care_home:
     enabled: true
-    filename: residences/care_homes.csv
+    # Per-nation builds of homes for older adults, stacked into one venue table.
+    # Column policy stays strict (the default): the allocator reads a missing
+    # slot column as zero and carries on, so a zero-filled union would hand a
+    # whole nation's care homes no residents at all and raise nothing.
+    filename:
+      - residences/care_homes/EW_care_homes.csv
+      - residences/care_homes/SCT_care_homes.csv
+      - residences/care_homes/NI_care_homes.csv
     description: "Residential care facilities for elderly or disabled persons"
     is_residence: true  # People live here
 
@@ -60,9 +70,9 @@ venue_types:
     # stock. Coverage is disjoint and UK-complete: E+W, Scotland, Northern
     # Ireland.
     filename:
-      - primary_activities/EW_companies.csv
-      - primary_activities/SCT_companies.csv
-      - primary_activities/NI_companies.csv
+      - primary_activities/companies/EW_companies.csv
+      - primary_activities/companies/SCT_companies.csv
+      - primary_activities/companies/NI_companies.csv
     description: "Commercial workplaces and businesses"
     is_residence: false  # Not a place where people live
 

@@ -1493,6 +1493,13 @@ class HouseholdDistributor:
 
         This is useful when you're allocating people to venues between household rounds.
 
+        The person pools are pruned as well as the allocated set. Household
+        rounds only consult ``allocated_people`` when a pool is built or
+        refreshed, so a round with ``refresh_pools: false`` after a venue step
+        would otherwise draw people the venue has already taken and seat them
+        in a household as well. ``_sample_lists`` needs no pruning: its probe
+        tests membership of the live pool dict.
+
         Args:
             people: List of Person objects to mark as allocated
             venue_type: Type of venue (for logging purposes)
@@ -1505,6 +1512,10 @@ class HouseholdDistributor:
             if person.id not in self.allocated_people:
                 self.allocated_people.add(person.id)
                 count += 1
+
+            pools = self.person_pool_by_geo_unit.get(person.geographical_unit.name)
+            if pools is not None:
+                pools[self._get_person_category_idx(person)].pop(person.id, None)
 
         logger.info(f"Marked {count} people as allocated to {venue_type}")
         return count

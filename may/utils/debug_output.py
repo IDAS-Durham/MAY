@@ -117,7 +117,7 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
 
     # Collect residence data
     residence_data = []
-    all_venues = world.venues.get_all_venues().values()
+    all_venues = world.venues.get_all_venues_list()
 
     for venue in all_venues:
         # Check all subsets. Households use dynamic categories (Kids, Adults, etc).
@@ -143,6 +143,8 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
                     'HID': s_hid,
                     'BTCode': bt_code,
                     'VenueType': venue_type,
+                    'VenueID': venue.id,
+                    'GeoUnit': venue.geographical_unit.name if venue.geographical_unit else '',
                     'PersonID': person.id,
                     'AgeSex': age_sex
                 })
@@ -161,7 +163,8 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
 
         # Write to CSV
         with open(output_file, 'w', newline='') as f:
-            fieldnames = ['HID', 'BTCode', 'VenueType', 'PersonID', 'AgeSex']
+            fieldnames = ['HID', 'BTCode', 'VenueType', 'VenueID', 'GeoUnit',
+                          'PersonID', 'AgeSex']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(residence_data)

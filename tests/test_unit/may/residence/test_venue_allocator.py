@@ -192,14 +192,14 @@ class TestApplyStrategy:
     def test_oldest_first_sorts_descending(self, hd):
         """oldest_first must produce descending age order."""
         people = all_people(hd)
-        result = _apply_strategy(list(people), "oldest_first")
+        result = _apply_strategy(list(people), "oldest_first", {})
         ages = [p.age for p in result]
         assert ages == sorted(ages, reverse=True)
 
     def test_youngest_first_sorts_ascending(self, hd):
         """youngest_first must produce ascending age order."""
         people = all_people(hd)
-        result = _apply_strategy(list(people), "youngest_first")
+        result = _apply_strategy(list(people), "youngest_first", {})
         ages = [p.age for p in result]
         assert ages == sorted(ages)
 
@@ -207,7 +207,7 @@ class TestApplyStrategy:
         """random strategy must return all the same people, just shuffled."""
         people = all_people(hd)
         original_ids = {p.id for p in people}
-        result = _apply_strategy(list(people), "random")
+        result = _apply_strategy(list(people), "random", {})
         result_ids = {p.id for p in result}
         assert result_ids == original_ids
         assert len(result) == len(people)
@@ -215,8 +215,83 @@ class TestApplyStrategy:
     def test_unknown_strategy_falls_back_to_random(self, hd):
         """An unrecognised strategy name must not crash and must return all people."""
         people = all_people(hd)
-        result = _apply_strategy(list(people), "nonexistent_strategy")
+        result = _apply_strategy(list(people), "nonexistent_strategy", {})
         assert {p.id for p in result} == {p.id for p in people}
+
+
+# _apply_strategy — age_weighted
+
+
+# Covers every age in the stress world (3-78) plus the open top band.
+AGE_WEIGHT_BANDS = [
+    {"range": [0, 64], "weight": 0.001},
+    {"range": [65, 120], "weight": 0.1},
+]
+
+
+class TestAgeWeightedStrategy:
+    """age_weighted must be a weighted sample without replacement, and must
+    refuse a band table it cannot apply rather than quietly guessing."""
+
+    def test_returns_a_permutation_of_the_input(self, hd):
+        """Weighting reorders the pool; it must not drop or duplicate anyone."""
+        people = all_people(hd)
+        result = _apply_strategy(list(people), "age_weighted",
+                                 {"bands": AGE_WEIGHT_BANDS})
+        assert sorted(p.id for p in result) == sorted(p.id for p in people)
+
+    def test_heavier_band_is_drawn_first_far_more_often_than_chance(self, hd):
+        """The 65+ band carries 100x the weight, so a 65+ person must lead the
+        ordering far more often than their 4-in-28 share of the pool."""
+        people = all_people(hd)
+        share = sum(1 for p in people if p.age >= 65) / len(people)
+
+        np.random.seed(0)
+        leads = sum(
+            _apply_strategy(list(people), "age_weighted",
+                            {"bands": AGE_WEIGHT_BANDS})[0].age >= 65
+            for _ in range(300)
+        )
+        assert leads / 300 > 5 * share
+
+    def test_equal_weights_do_not_collapse_to_input_order(self, hd):
+        """A single band gives every person the same weight, which must still
+        shuffle. The textbook u**(1/w) key underflows to a tie at zero for
+        small weights and would silently return the input order."""
+        people = all_people(hd)
+        bands = [{"range": [0, 120], "weight": 0.00128}]
+
+        np.random.seed(0)
+        orders = {
+            tuple(p.id for p in _apply_strategy(list(people), "age_weighted",
+                                                {"bands": bands}))
+            for _ in range(20)
+        }
+        assert len(orders) > 1
+
+    def test_missing_bands_raises(self, hd):
+        """No band table is a config error, not a reason to fall back."""
+        with pytest.raises(ValueError, match="requires strategy_config.bands"):
+            _apply_strategy(all_people(hd), "age_weighted", {})
+
+    def test_overlapping_bands_raise(self, hd):
+        """Overlapping bands would give one age two weights by band order."""
+        bands = [{"range": [0, 70], "weight": 0.01},
+                 {"range": [65, 120], "weight": 0.1}]
+        with pytest.raises(ValueError, match="overlap at age 65"):
+            _apply_strategy(all_people(hd), "age_weighted", {"bands": bands})
+
+    def test_non_positive_weight_raises(self, hd):
+        """A zero weight cannot be sampled; it must not be silently tolerated."""
+        bands = [{"range": [0, 120], "weight": 0}]
+        with pytest.raises(ValueError, match="weight must be positive"):
+            _apply_strategy(all_people(hd), "age_weighted", {"bands": bands})
+
+    def test_age_outside_every_band_raises(self, hd):
+        """An uncovered age must fail loudly rather than take a default weight."""
+        bands = [{"range": [0, 70], "weight": 0.01}]
+        with pytest.raises(ValueError, match="which no age_weighted band covers"):
+            _apply_strategy(all_people(hd), "age_weighted", {"bands": bands})
 
 
 # _check_attribute_constraints
@@ -447,27 +522,47 @@ class TestSimpleAllocation:
 class TestAttributeAwareAllocation:
     """Attribute-aware allocation: per-slot capacity, correct demographic matching."""
 
-    def _care_home_config(self):
+    def _care_home_config(self, strategy="age_weighted"):
+        """The two-band schema the UK venue files carry: n_50_64 and an open
+        n_65_plus, filled by care-home residence rate."""
         return {
             "eligibility": [{"attribute": "age", "min": 50}],
-            "strategy": "oldest_first",
+            "strategy": strategy,
+            "strategy_config": {
+                "bands": [
+                    {"range": [50, 64], "weight": 0.00128},
+                    {"range": [65, 74], "weight": 0.0092},
+                    {"range": [75, 84], "weight": 0.0347},
+                    {"range": [85, 120], "weight": 0.1133},
+                ]
+            },
             "capacity_config": {
                 "attribute_capacities": {
                     "column_mappings": {
-                        "age_50_64_male":   {"age_band": [50, 64], "sex": "male"},
-                        "age_50_64_female": {"age_band": [50, 64], "sex": "female"},
-                        "age_65_74_male":   {"age_band": [65, 74], "sex": "male"},
-                        "age_65_74_female": {"age_band": [65, 74], "sex": "female"},
-                        "age_75_84_male":   {"age_band": [75, 84], "sex": "male"},
-                        "age_75_84_female": {"age_band": [75, 84], "sex": "female"},
-                        "age_85_94_male":   {"age_band": [85, 94], "sex": "male"},
-                        "age_85_94_female": {"age_band": [85, 94], "sex": "female"},
-                        "age_95_plus_male":   {"age_band": [95, 120], "sex": "male"},
-                        "age_95_plus_female": {"age_band": [95, 120], "sex": "female"},
+                        "n_50_64":   {"age_band": [50, 64]},
+                        "n_65_plus": {"age_band": [65, 120]},
                     }
                 }
             },
         }
+
+    def test_venue_residents_are_removed_from_the_household_pools(self, hd):
+        """Household rounds only consult allocated_people when a pool is built
+        or refreshed, so a venue step must prune the pools as well as the set.
+        Otherwise a later round with refresh_pools: false seats a care-home
+        resident in a household too."""
+        hd._prepare_person_pools()
+        cfg = self._care_home_config()
+        stats = _allocate_with_attributes("care_home", cfg, hd.population, hd.venue_manager, hd)
+        assert stats["allocated"] > 0
+
+        still_pooled = {
+            pid
+            for pools in hd.person_pool_by_geo_unit.values()
+            for pool in pools
+            for pid in pool
+        }
+        assert still_pooled.isdisjoint(hd.allocated_people)
 
     def test_only_eligible_ages_placed_in_care_homes(self, hd):
         """Care homes have age>=50 eligibility; no person under 50 must be placed."""
@@ -480,27 +575,27 @@ class TestAttributeAwareAllocation:
                     f"Person {person.id} age={person.age} placed in care home but age < 50"
                 )
 
-    def test_person_placed_in_correct_age_sex_slot(self, hd):
-        """id=13 (age=68, sex=female) fits age_65_74_female slot in SGU_S1 care home."""
+    def test_person_placed_in_correct_age_slot(self, hd):
+        """id=21 (age=55) is SGU_S2's only 50-64, and that home has one such slot."""
         cfg = self._care_home_config()
         _allocate_with_attributes("care_home", cfg, hd.population, hd.venue_manager, hd)
         care_homes = hd.venue_manager.get_venues_by_type("care_home")
-        s1_ch = next(c for c in care_homes if c.geographical_unit.name == "SGU_S1")
-        slot_residents = s1_ch.properties.get("residents_age_65_74_female", [])
-        assert any(p.id == 13 for p in slot_residents), (
-            "id=13 (age=68, female) must be in age_65_74_female slot of SGU_S1 care home"
+        s2_ch = next(c for c in care_homes if c.geographical_unit.name == "SGU_S2")
+        slot_residents = s2_ch.properties.get("residents_n_50_64", [])
+        assert [p.id for p in slot_residents] == [21], (
+            "id=21 (age=55) must fill the n_50_64 slot of SGU_S2's care home"
         )
 
     def test_person_not_placed_in_wrong_slot(self, hd):
-        """id=14 (age=75, sex=male) must NOT appear in the female slot."""
+        """The 50-64 slot must not absorb someone the 65+ band claims. id=22
+        (age=70) and id=23 (age=78) belong in n_65_plus, not n_50_64."""
         cfg = self._care_home_config()
         _allocate_with_attributes("care_home", cfg, hd.population, hd.venue_manager, hd)
         care_homes = hd.venue_manager.get_venues_by_type("care_home")
-        s1_ch = next(c for c in care_homes if c.geographical_unit.name == "SGU_S1")
-        female_slot = s1_ch.properties.get("residents_age_65_74_female", [])
-        assert all(p.id != 14 for p in female_slot), (
-            "id=14 (male) must not appear in the female age slot"
-        )
+        s2_ch = next(c for c in care_homes if c.geographical_unit.name == "SGU_S2")
+        younger_slot = s2_ch.properties.get("residents_n_50_64", [])
+        assert all(p.id not in (22, 23) for p in younger_slot)
+        assert {p.id for p in s2_ch.properties.get("residents_n_65_plus", [])} == {22, 23}
 
     def test_slot_capacity_is_hard_cap(self, hd):
         """The number of residents in any slot must not exceed that slot's CSV capacity."""
