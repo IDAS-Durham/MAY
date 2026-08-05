@@ -1,0 +1,121 @@
+# Commutes Assignment Configuration
+# Decides ONE thing: does this employed person travel to a workplace at all, or
+# do they work from home?
+#
+# This is the first step of the work pipeline, and it runs on the finest
+# geography available. The census travel-to-work tables are published at output
+# area, so they capture what a local-authority average cannot, like whether this
+# particular OA is a retirement development, a business park or a student quarter.
+# Every downstream step then answers a narrower question: the O-D matrix says
+# only WHERE someone works, given that they travel there at all.
+#
+# Why this ordering matters. An LGU average cannot know that W00010589 in
+# Cardiff is Llys Enfys, a retirement development whose census return is one
+# worker, working from home. Drawing the commute/no-commute split there first
+# yields "from_home" for everyone in that OA, so nobody is given a workplace and
+# nothing downstream asks which bus they caught. That question has no answer
+# there, because all ten of the OA's travel-mode counts are zero.
+#
+# Assignment Level: person
+# Dependencies: economic_activity (only the employed are asked)
+
+step:
+  assignment_level: "person"
+
+attributes:
+  - name: "commutes"
+    description: "Whether an employed person travels to a workplace or works from home"
+    data_type: "categorical"
+
+# Filters. The same working-age and employment gates the rest of the work
+# pipeline uses, so that `commutes` exists for exactly the people who will go on
+# to be asked where they work.
+filters:
+  age:
+    attribute: "age"
+    type: "numerical"
+    description: "Working age population"
+    numerical:
+      min: 18
+      max: 64
+
+  # People with a primary activity (students) are not in the labour pipeline.
+  activities:
+    exclude: ["primary_activity"]
+
+  economic_activity:
+    attribute: "economic_activity"
+    type: "categorical"
+    description: "In employment only"
+    exclude: ["unemployed", "inactive"]
+
+required_attributes:
+  - name: "economic_activity"
+    description: "Employment gate must run first"
+    required: true
+
+data_sources:
+  travel_to_work_split:
+    type: "csv_lookup"
+    format: "multi_key"
+    description: "Works-from-home vs travels-to-work counts by residence SGU"
+
+    # Built by dev-scripts/transport/source/build_commute_split_raked.py from
+    # the census travel-to-work tables and the O-D matrix.
+    #
+    # The two sources disagree on the LEVEL of home working by roughly six times
+    # (23.93% against 4.12% for County Durham + Darlington) because they are
+    # different vintages: the census table is the raw March-2021 lockdown count,
+    # the O-D matrix is a modelled pre-pandemic estimate. Each is authoritative
+    # over a different thing, so the build script keeps the census table's
+    # variation BETWEEN output areas and rakes each local authority's total back
+    # to the O-D figure. What lands here is already raked; the engine just draws
+    # from it.
+    #
+    # The `prepandemic` in these filenames MUST match the vintage of the O-D
+    # file named in workplace_assignment.yaml. The split drawn here is the split
+    # that file is then filtered by; two vintages would silently disagree about
+    # how many people commute at all. Rerun the build script to change vintage.
+    files:
+      - path: "${data_root}/activities/commute/EW_commute_split_by_sgu_prepandemic.csv"
+
+        # Key = residence SGU code (OA in England, Wales and Scotland; Data Zone
+        # in Northern Ireland), same resolution as commute_mode_assignment.
+        key_columns: &commutes_keys
+          "sgu":
+            attribute: "geographical_unit"
+            type: "ancestor_lookup"
+            level: "SGU"
+            property: "name"
+
+        value_columns: &commutes_values
+          from_home: "from_home"
+          travels: "travels"
+
+      - path: "${data_root}/activities/commute/SCT_commute_split_by_sgu_prepandemic.csv"
+        key_columns: *commutes_keys
+        value_columns: *commutes_values
+
+      - path: "${data_root}/activities/commute/NI_commute_split_by_sgu_prepandemic.csv"
+        key_columns: *commutes_keys
+        value_columns: *commutes_values
+
+# No fallback. An SGU where both columns are zero has no worker signal at all
+# (neither home workers nor travellers) and fails loud naming the SGU. Four such
+# output areas exist UK-wide, all in Scotland. Raking cannot
+# invent a split for them, so the build script writes the zeros through rather
+# than guessing.
+
+assignment_rules:
+  person:
+    description: "Draw travels-to-work vs works-from-home from the residence OA"
+    rules:
+      - description: "Probabilistic split from the raked OA travel-to-work table"
+        priority: 1
+        assignment:
+          strategy: "categorical_sampler"
+          data_source: "travel_to_work_split"
+
+settings:
+  logging:
+    show_attribute_distribution: true  # Two categories, worth printing

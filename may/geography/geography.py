@@ -214,7 +214,7 @@ class Geography:
 
         # 5. Build parent-child relationships, vectorized per level pair.
         # Each (child, parent) pair appears once after drop_duplicates. A child
-        # mapping to two different parents — in one file or across files — is
+        # mapping to two different parents, in one file or across files, is
         # a hard error: silently keeping one parent would corrupt the tree.
         for i in range(len(self.levels) - 1):
             child_level = self.levels[i]

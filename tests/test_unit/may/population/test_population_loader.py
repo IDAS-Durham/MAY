@@ -1,7 +1,7 @@
 """
 Contract tests for PopulationManager loaders and generators.
 
-These cover the public load_* / generate_* surface of population.py — the
+These cover the public load_* / generate_* surface of population.py, the
 methods the create_world flow exercises end-to-end every run. They pin down
 the sad paths, the cross-method side effects, and the kwarg-independence
 guard for the Person constructor.
@@ -48,7 +48,7 @@ def _make_geo(level_units):
 
 @pytest.fixture
 def sgu_geo():
-    """Geography with three SGUs (the smallest level) — production shape."""
+    """Geography with three SGUs (the smallest level), matching production shape."""
     return _make_geo({'SGU': ['SGU_001', 'SGU_002', 'SGU_003']})
 
 
@@ -67,7 +67,7 @@ def two_level_geo():
     return geo
 
 
-# load_demographics_from_csv — sad paths and side effects the production
+# load_demographics_from_csv: sad paths and side effects the production
 # log relies on
 
 class TestLoadDemographicsFromCsv:
@@ -143,7 +143,7 @@ class TestLoadDemographicsFromCsv:
     def test_zero_count_cells_do_not_create_demographic_entries(
         self, tmp_path
     ):
-        """Zero counts must be filtered out — generate_population iterates
+        """Zero counts must be filtered out, because generate_population iterates
         every (age, sex, count) tuple, so leaving zeros in inflates the work
         with no observable effect."""
         geo = _make_geo({'SGU': ['SGU_001']})
@@ -172,7 +172,7 @@ class TestLoadDemographicsFromCsv:
         assert pm.precise_demographics == {}
 
     def test_missing_files_raises(self, sgu_geo, tmp_path):
-        """A missing demographics file fails loud — the run must not
+        """A missing demographics file fails loud, so the run cannot
         continue toward a phantom (empty) population."""
         pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
         with pytest.raises(PopulationError, match="not found"):
@@ -195,21 +195,21 @@ class TestLoadDemographicsFromCsv:
         assert pm.precise_demographics['SGU_002'][5]['male'] == 7
 
 
-# load_explicit_from_df — sad paths and column-mapping semantics
+# load_explicit_from_df: sad paths and column-mapping semantics
 
 class TestLoadExplicitFromDf:
 
     def test_missing_geo_column_raises(self, sgu_geo):
         """An explicit-population frame with no recognised geographical
-        column is unloadable — must fail loudly, not produce zero people."""
+        column is unloadable and must fail loudly rather than produce zero people."""
         df = pd.DataFrame({'Age': [25], 'Gender': ['M']})
         pm = PopulationManager(geography=sgu_geo, data_dir='/tmp')
         with pytest.raises(ValueError, match="geographical column"):
             pm.load_explicit_from_df(df, column_mapping={'age': 'Age', 'sex': 'Gender'})
 
     def test_unknown_geo_unit_skips_row_with_warning(self, sgu_geo, caplog):
-        """A row whose geo_unit isn't in the loaded geography must be skipped
-        — silently producing a Person with geographical_unit=None corrupts
+        """A row whose geo_unit isn't in the loaded geography must be skipped,
+        because silently producing a Person with geographical_unit=None corrupts
         every downstream lookup."""
         df = pd.DataFrame({
             'Age': [25, 30],
@@ -253,7 +253,7 @@ class TestLoadExplicitFromDf:
 
     def test_unknown_sex_token_falls_back_to_unknown(self, sgu_geo):
         """An unrecognised sex string must not be silently dropped or
-        relabelled — it stays as the lower-cased original so downstream
+        relabelled, staying as the lower-cased original so downstream
         diagnostics can spot it."""
         df = pd.DataFrame({'Age': [25], 'Sex': ['nonbinary'], 'geo_unit': ['SGU_001']})
         pm = PopulationManager(geography=sgu_geo, data_dir='/tmp')
@@ -282,7 +282,7 @@ class TestLoadExplicitFromDf:
 
     def test_literal_geo_column_does_not_leak_into_properties(self, sgu_geo):
         """The geographical column drives `geographical_unit` and must not
-        also appear in `properties` — even when the caller didn't add a
+        also appear in `properties`, even when the caller didn't add a
         'geo_unit' entry to the column mapping. Duplicating the SGU name as a
         property would re-shadow downstream lookups that expect only domain
         attributes."""
@@ -319,7 +319,7 @@ class TestLoadExplicitFromDf:
 
     def test_mapped_csv_columns_do_not_appear_in_properties(self, sgu_geo):
         """Columns consumed by the mapping (Age/Sex/geo_unit) must not also
-        leak into properties — that would store the same datum twice and
+        leak into properties, which would store the same datum twice and
         let buggy callers diverge them."""
         df = pd.DataFrame({
             'Age': [25],
@@ -358,7 +358,7 @@ class TestLoadBatchExplicitFromCsv:
         self, two_level_geo, tmp_path
     ):
         """Production has one file per MGU. If a particular MGU's file is
-        missing, batch load must continue — there is no 'fail loudly' here
+        missing, batch load must continue, and there is no 'fail loudly' here
         because partial geographies are routine."""
         # Write only M_a's file; M_b's is intentionally absent.
         (tmp_path / "M_a_pop.csv").write_text(
@@ -410,7 +410,7 @@ class TestLoadBatchExplicitFromCsv:
         assert len(pm.people_by_id) == 2
 
 
-# generate_population — kwarg independence
+# generate_population: kwarg independence
 
 class TestGeneratePopulationKwargIndependence:
     """generate_population must give each Person its own properties /
@@ -448,7 +448,7 @@ class TestGeneratePopulationKwargIndependence:
         assert 'leisure' not in pm.people[1].activity_map
 
 
-# generate_population — observable side effects on geography
+# generate_population: observable side effects on geography
 
 class TestGeneratePopulationGeoLinkage:
 

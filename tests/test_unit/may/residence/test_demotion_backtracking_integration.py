@@ -77,7 +77,7 @@ def populate_pools(distributor, people, geo_unit_code="SGU_001"):
     return pools
 
 
-# Group 1: _attempt_with_demotion — Demotion Loop Tests
+# Group 1: _attempt_with_demotion, demotion loop tests
 
 class TestAttemptWithDemotion:
     """Tests for the demotion loop that wraps allocation."""
@@ -191,7 +191,7 @@ class TestAttemptWithDemotion:
     def test_demotion_exhausts_max_attempts(self, distributor):
         """Every demotion still fails → loop runs max_attempts times then returns None."""
         geo = distributor.geography.get_unit("SGU_001")
-        # Empty pools — nothing can work
+        # Empty pools, so nothing can work
         populate_pools(distributor, [])
 
         pattern = CompositionPattern.from_string(">=2 >=0 2 0")
@@ -258,7 +258,7 @@ class TestAttemptWithDemotion:
         # It should either succeed via demotion or return None gracefully.
 
 
-# Group 2: _allocate_household_with_rules — Rules Integration
+# Group 2: _allocate_household_with_rules, rules integration
 
 class TestAllocateHouseholdWithRules:
     """Tests for the full rules-based allocation flow."""
@@ -342,7 +342,7 @@ class TestAllocateHouseholdWithRules:
         assert household.num_members == 1
 
 
-# Group 3: distribute_households_round — Round Distribution
+# Group 3: distribute_households_round, round distribution
 
 class TestDistributeHouseholdsRound:
     """Tests for the round distribution orchestration."""

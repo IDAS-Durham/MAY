@@ -1,57 +1,74 @@
-# Commute test world with varied geography for debugging the RouteDistributor.
+# Four-nation commute world running the full pipeline over England, Wales, Scotland
+# and Northern Ireland at once, built from per-nation files stacked by the
+# engine (no pre-merged UK CSVs anywhere).
 #
-# Spans three transport regions to exercise every commute mode + multi-leg
-# interchanges + route-miss fallbacks in a single world:
+# It exists to exercise the paths that only appear once
+# more than one nation is loaded, and each LGU is here for a reason:
 #
-#   * Greater Manchester (Manchester, Salford)     -> Metrolink (mode_class=tube)
-#   * Inner London (Camden, Westminster, Islington, Lambeth)
-#                                                  -> Tube interchanges, multi-leg
-#                                                     journeys, Overground, Elizabeth
-#   * Tyne & Wear + Durham
-#     (Newcastle upon Tyne, Gateshead, County Durham, Darlington)
-#                                                  -> Tyne & Wear Metro (tube),
-#                                                     ECML rail (Durham<->Newcastle),
-#                                                     mixed urban/rural for fallbacks
+#   * Camden, Westminster    (England)  tube interchanges, multi-leg journeys
+#   * Newcastle upon Tyne    (England)  Tyne & Wear Metro, ECML rail
+#   * Cardiff                (Wales)    rail only, no tube network
+#   * Glasgow City           (Scotland) the Glasgow Subway, the only Scottish
+#                                       tube system in the routing table
+#   * City of Edinburgh      (Scotland) rail, and the known gap: Edinburgh Trams
+#                                       is absent from the metros source, so
+#                                       tram commuters here become route misses
+#   * Belfast                (N. Ireland) NI Railways is now in the routing
+#                                       table (52 lines out of Belfast Grand
+#                                       Central / Belfast Central to Bangor,
+#                                       Larne Harbour, Londonderry, Portadown,
+#                                       Newry and Lisburn), so NI train
+#                                       commuters route rather than falling back
+#                                       to car_solo as they did before. NI has
+#                                       no tube or tram network, so tube legs
+#                                       here are correctly zero.
 #
-# ~9.5K SGUs / ~2.5M people. Output filename is distinct from existing worlds
-# (world_state.h5, london_xlgu.h5, world_msm_hubs.h5) so this run will not
-# overwrite them.
+# ~14.1K SGUs, about 5.9% of UK output areas.
 
 data_root: data
+
+# GEOGRAPHY
 
 geography:
   data_dir: "${data_root}/geography"
   levels: ["SGU", "MGU", "LGU", "XLGU"]
-  # This world is England-only, so only the EW files are wired in.
-  hierarchy_file: EW_hierarchy.csv
+  hierarchy_file:
+    - EW_hierarchy.csv
+    - SCT_hierarchy.csv
+    - NI_hierarchy.csv
   coord_files:
-    SGU: EW_coord_sgu.csv
-    MGU: EW_coord_mgu.csv
+    SGU:
+      - EW_coord_sgu.csv
+      - SCT_coord_sgu.csv
+      - NI_coord_sgu.csv
+    MGU:
+      - EW_coord_mgu.csv
+      - SCT_coord_mgu.csv
+      - NI_coord_mgu.csv
   load_all: false
-
   filter:
     level: LGU
     codes:
-      # Greater Manchester (Metrolink)
-      - "Manchester"
-      - "Salford"
-      # Inner London (TfL tube + rail)
       - "Camden"
       - "Westminster"
-      - "Islington"
-      - "Lambeth"
-      # Tyne & Wear + Durham (Metro + ECML)
       - "Newcastle upon Tyne"
-      - "Gateshead"
-      - "County Durham"
-      - "Darlington"
+      - "Cardiff"
+      - "Glasgow City"
+      - "City of Edinburgh"
+      - "Belfast"
 
 # POPULATION
 
 population:
   data_dir: "${data_root}/population"
-  demographics_male_file: "EW_demographics_male.csv"
-  demographics_female_file: "EW_demographics_female.csv"
+  demographics_male_file:
+    - EW_demographics_male.csv
+    - SCT_demographics_male.csv
+    - NI_demographics_male.csv
+  demographics_female_file:
+    - EW_demographics_female.csv
+    - SCT_demographics_female.csv
+    - NI_demographics_female.csv
 
 # VENUES
 
@@ -64,51 +81,34 @@ venues:
 
 households:
   data_dir: "${data_root}/households"
-
-  # All three files, even though this world is England-only. The allocation
-  # strategy names both bucket schemes for large families (E&W and Scotland use
-  # ">=2"; Northern Ireland splits it into exactly-2 and ">=3"), and the step
-  # validator builds its vocabulary from the household files that were actually
-  # loaded. Loading EW alone therefore makes the NI patterns look like typos and
-  # stops the run before residence allocation. union_zero_fill gives NI-only
-  # patterns a zero quota in English areas, which is what the strategy already
-  # documents as the intended behaviour.
   data_file:
     - EW_households.csv
     - SCT_households.csv
     - NI_households.csv
+  # NI's pattern vocabulary differs from EW/SCT (exactly-2 and >=3 where the
+  # others have >=2); union them, zeros elsewhere.
   column_policy: union_zero_fill
-
   config_file: "${config_root}/households/households_config.yaml"
   rules_file: "${config_root}/households/relationship_rules.yaml"
-  # The allocation strategy lives on the timeline's residence_allocation step.
   export_file: "household_allocations.csv"
 
-# DEBUG OUTPUTS (keep ON for commute verification)
+# DEBUG OUTPUTS
 
 debug_outputs:
   enabled: true
 
-# TIMELINE, same order as config.yaml and config_commute_uk.yaml.
-#
-# The three configs differ only in which geography they load. The step order is
-# one pipeline and every config runs all of it, because the order encodes what
-# each step is allowed to assume: the employment gate before anyone is sent to a
-# workplace, the commute/no-commute split before the O-D matrix is asked where,
-# and the three route distributors after the mode draw with bus last (train and
-# tube hand their misses to it).
+# TIMELINE
 
 timeline:
   enabled: true
-
   steps:
-    # 0. Households + residence venues (runs the allocation strategy first).
     - type: residence_allocation
       config: "${config_root}/households/allocation_strategy.yaml"
 
-    # 1. Initial attributes
+    # 1. Base attributes
     - type: attribute
       config: "${config_root}/attributes/attribute_assignment.yaml"
+
     - type: attribute
       config: "${config_root}/attributes/comorbidity_assignment.yaml"
 
@@ -158,13 +158,15 @@ timeline:
     - type: attribute
       config: "${config_root}/attributes/work_mode_correction.yaml"
 
-    # 7. Commute assignment
+    # 7. Commute assignment. The mode source is UK-wide as of the harmonised
+    # per-nation build, so all four nations get a mode here. What differs by
+    # nation is whether the routing table can then serve it.
     - type: attribute
       config: "${config_root}/attributes/commute_mode_assignment.yaml"
 
-    # Route legs (commute mode -> transport_line venues + per-leg timing).
-    # Bus MUST stay last: train and tube rewrite their misses to `bus`, and only
-    # a distributor running after them will pick those riders up.
+    # Bus MUST stay last. It derives its pools at runtime from MGU centroids so
+    # there is no table to read, and train and tube rewrite their misses to
+    # `bus`. Only a distributor running after them will pick those riders up.
     - type: distributor
       config: "${config_root}/distributors/route_commute_train.yaml"
     - type: distributor
@@ -191,10 +193,10 @@ romantic_relationships:
   enabled: true
   config: "${config_root}/relationships/romantic_relationships.yaml"
 
-# SERIALIZATION with a distinct filename so existing worlds are not overwritten
+# SERIALIZATION
 
 serialization:
   enabled: true
   config_file: "${config_root}/serialization_config.yaml"
-  output_dir: "${output_root}/2021"
-  filename: "commute_test_world_v3.h5"
+  output_dir: "${output_root}/commute_uk"
+  filename: "world_commute_uk.h5"

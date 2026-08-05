@@ -12,27 +12,31 @@ enabled: true
 # `attribute`, the per-rule scalar is the authoritative value.
 #
 # Each entry declares:
-#   attribute        – which `categorical_attribute.attribute` this source
+#   attribute:         which `categorical_attribute.attribute` this source
 #                      applies to (e.g. "sex", "religion", "ethnicity", ...).
 #                      Only pair_matching rules whose `attribute` matches will
 #                      use this source.
-#   csv_path         – CSV with one row per area.
-#   geo_code_column  – name of the column in the CSV that holds the area code.
-#   geo_level        – which geography level those codes refer to
+#   csv_path:          CSV with one row per area.
+#   geo_code_column:   name of the column in the CSV that holds the area code.
+#   geo_level:         which geography level those codes refer to
 #                      (SGU / MGU / LGU / XLGU). The validator walks each
 #                      person's home unit up to this level before lookup.
-#   formula          – a list of {column, weight} pairs. The probability for
+#   formula:           a list of {column, weight} pairs. The probability for
 #                      an area is the linear combination
 #                          P = Σ ( CSV[column] * weight )
 #                      with the result clamped to [0, 1]. Use whatever columns
 #                      and weights are appropriate for your domain.
 same_category_sources:
-  # Per-MSOA P(same-sex couple) from the ONS 2021 sexual-orientation marginals.
+  # Per-area P(same-sex couple) from the 2021/2022 census sexual-orientation
+  # marginals, one file per nation stacked into a single table.
   # Modeling assumption: homosexuals always pair same-sex; bisexuals pair
   # same-sex half the time; heterosexuals never. Adjust the weights below if
   # you prefer a different mapping.
   - attribute: "sex"
-    csv_path: "${data_root}/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+    csv_path:
+      - "${data_root}/population/sexual_orientation/EW_orientation_by_mgu.csv"
+      - "${data_root}/population/sexual_orientation/SCT_orientation_by_mgu.csv"
+      - "${data_root}/population/sexual_orientation/NI_orientation_by_mgu.csv"
     geo_code_column: "geo_unit"
     geo_level: "MGU"
     formula:

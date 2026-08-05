@@ -301,7 +301,7 @@ def test_setup_geography_passes_levels_filter_and_files_through(four_level_geo_d
 def test_coord_loading_restricted_to_post_filter_names(tmp_path, caplog):
     """
     Coord rows for filtered-out units must not be loaded. Otherwise a 2-LGU
-    run reads 239k SGU coords for nothing — a real cost on the production
+    run reads 239k SGU coords for nothing, a real cost on the production
     dataset.
     """
     geo_dir = tmp_path / "geography"

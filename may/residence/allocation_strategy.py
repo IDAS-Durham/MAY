@@ -186,7 +186,7 @@ def execute_allocation_strategy(population,
     logger.info(f"  Allocation rate: {alloc_pct:.1f}%")
     logger.info("=" * 60)
 
-    # Optionally export unallocated people (skipped for large worlds —
+    # Optionally export unallocated people (skipped for large worlds, since it
     # builds a DataFrame across every unplaced person).
     if export_debug_csv:
         household_distributor.export_unallocated_people_to_csv()
@@ -205,7 +205,7 @@ def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: L
     {category, operator, value} conditions evaluated against each vocabulary
     pattern's minimum counts; the matches are written back into the step as an
     explicit `patterns:` list, so the executor below needs no changes. Every
-    resolved or hand-written build-step pattern is then claimed exactly once —
+    resolved or hand-written build-step pattern is then claimed exactly once.
     a pattern claimed twice would double its census build quota, so overlap is
     an error, and a `patterns: null` step takes whatever remains unclaimed.
     """
@@ -254,7 +254,7 @@ def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: L
     # pattern -> {interpretation-or-None: step name}. A step without an
     # `interpretation` claims the pattern's WHOLE census count (key None),
     # which conflicts with any other claim; interpretation steps share a
-    # pattern as long as their interpretations differ — each takes its
+    # pattern as long as their interpretations differ, since each takes its
     # mixture quota of the count.
     claimed: Dict[str, Dict[Optional[str], str]] = {}
     for step in build_steps:
@@ -302,7 +302,7 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
     (a couple, a parent with an adult child, unrelated people) project onto
     the same pattern. The mixture table gives, per geo unit, the measured
     share of each interpretation, and build steps claim one interpretation
-    each — the quota split happens at build time.
+    each, so the quota split happens at build time.
 
     Entirely opt-in: no `mixture:` block means no behavior change, and using
     `interpretation:` on a step without the block is an error.
@@ -390,13 +390,14 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
 def _validate_step_patterns(steps: List[Dict], vocabulary: set) -> None:
     """Fail loud on a `household` build-step pattern absent from households.csv.
 
-    A build step's matcher iterates the CSV columns, so a pattern that isn't a
-    column never appears — it builds nothing with no log at all (the silent
-    exact-string foot-gun: typo / stray space / wrong operator). Only build steps
-    are checked: `household_excess`/`household_overflow` `target_patterns` are a
-    catch-all superset matched against existing households' original_pattern and
-    already warn ("matched no households") on a miss, and `household_promotion`
-    source_patterns match a runtime allocation_pattern, not the CSV.
+    A build step's matcher iterates the CSV columns, so a pattern that is not a
+    column matches nothing and builds nothing, with no log line to show it. A
+    typo, a stray space, or the wrong operator all land in that case, since the
+    match is on exact strings. Only build steps are checked.
+    `household_excess`/`household_overflow` `target_patterns` are a catch-all
+    superset matched against existing households' original_pattern, and already
+    warn ("matched no households") on a miss, while `household_promotion`
+    source_patterns match a runtime allocation_pattern rather than the CSV.
     """
     if not vocabulary:
         return  # no data loaded to validate against
@@ -466,6 +467,24 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
             else:
                 # Simple format
                 pattern_list.append(p)
+
+    # `assumptions:` is the step-level spelling of the same thing, for steps that
+    # pick their patterns with `patterns_where`, because a selector resolves to plain
+    # strings, so there is no per-pattern dict left to hang an assumption on.
+    # A key naming a pattern this step did not claim is skipped rather than an
+    # error, so one map can cover several census vocabularies (e.g. the
+    # England/Wales ">=2" bucket and the Northern Ireland "2"/">=3" split) when
+    # only one of them is loaded.
+    step_assumptions = step_config.get('assumptions') or {}
+    if step_assumptions and pattern_list is not None:
+        claimed = set(pattern_list)
+        for pattern_str, assumption_str in step_assumptions.items():
+            if pattern_str in claimed and pattern_str not in pattern_assumptions:
+                pattern_assumptions[pattern_str] = assumption_str
+                logger.info(f"  Pattern '{pattern_str}' has assumption: '{assumption_str}'")
+        skipped = sorted(set(step_assumptions) - claimed)
+        if skipped:
+            logger.info(f"  Assumptions for patterns not in this data, skipped: {skipped}")
 
     # Temporarily override demotion if specified
     original_demotion = None

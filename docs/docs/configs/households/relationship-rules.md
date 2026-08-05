@@ -34,7 +34,10 @@ Set `false` to disable all rule-based internal structure. Households are still f
 ```yaml
 same_category_sources:
   - attribute: "sex"
-    csv_path: "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+    csv_path:
+      - "data/population/sexual_orientation/EW_orientation_by_mgu.csv"
+      - "data/population/sexual_orientation/SCT_orientation_by_mgu.csv"
+      - "data/population/sexual_orientation/NI_orientation_by_mgu.csv"
     geo_code_column: "geo_unit"
     geo_level: "MGU"
     formula:

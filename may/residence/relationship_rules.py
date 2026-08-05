@@ -28,6 +28,7 @@ from dataclasses import dataclass
 
 from may.population.person import Person
 from may.utils.attribute_access import get_person_attribute
+from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 logger = logging.getLogger("relationship_rules")
 
@@ -182,7 +183,8 @@ class RelationshipRulesValidator:
         Expected schema (see yaml/households/relationship_rules.yaml for an example):
 
             attribute:        <name of the categorical attribute, e.g. "sex">
-            csv_path:         <path to a CSV with one row per area>
+            csv_path:         <path to a CSV with one row per area, or a list of
+                               such paths to stack (e.g. one file per nation)>
             geo_code_column:  <column in the CSV holding the area code>
             geo_level:        <Geography level name, e.g. "MGU">
             formula:          <list of {column, weight} pairs; P = Σ col * weight>
@@ -192,12 +194,20 @@ class RelationshipRulesValidator:
         matches will then use the per-area value instead of its scalar fallback.
         """
         attribute = source.get('attribute')
-        path = pr.resolve(source.get('csv_path', '')) or None
         if not attribute:
             logger.warning("same_category_source missing required 'attribute'; skipped")
             return
-        if not path or not os.path.exists(path):
-            logger.warning(f"same_category_source[{attribute}] csv_path missing or not found: {path}; skipped")
+        spec = source.get('csv_path')
+        paths = [
+            pr.resolve(p) for p in
+            as_path_list(spec, f"same_category_source[{attribute}].csv_path")
+        ] if spec else []
+        absent = [p for p in paths if not os.path.exists(p)]
+        if not paths or absent:
+            logger.warning(
+                f"same_category_source[{attribute}] csv_path missing or not found: "
+                f"{absent or spec}; skipped"
+            )
             return
 
         geo_code_column = source.get('geo_code_column', 'geo_unit')
@@ -231,14 +241,15 @@ class RelationshipRulesValidator:
             logger.warning(f"same_category_source[{attribute}] formula has no valid terms; skipped")
             return
 
-        import csv as _csv
+        table = load_stacked_csv(
+            paths, label=f"same_category_source[{attribute}]",
+            key_column=geo_code_column,
+        )
         by_code: Dict[str, float] = {}
-        with open(path) as f:
-            reader = _csv.DictReader(f)
-            for row in reader:
-                code = row[geo_code_column].strip()
-                p = sum(float(row[col]) * w for col, w in terms)
-                by_code[code] = max(0.0, min(1.0, p))
+        for row in table.to_dict('records'):
+            code = str(row[geo_code_column]).strip()
+            p = sum(float(row[col]) * w for col, w in terms)
+            by_code[code] = max(0.0, min(1.0, p))
 
         self._same_category_sources[attribute] = {
             "geo_level": geo_level,
@@ -247,7 +258,7 @@ class RelationshipRulesValidator:
 
         logger.info(
             f"Loaded same_category_source[{attribute}]: {len(by_code)} {geo_level} "
-            f"entries from {path}"
+            f"entries from {len(paths)} file(s): {paths}"
         )
 
     def _resolve_same_category_prob(self,
@@ -315,7 +326,8 @@ class RelationshipRulesValidator:
         """
         Validate a household composition against a set of constraints.
 
-        This unifies the validation logic previously scattered across classes.
+        The single validation entry point for every rule that constrains
+        composition.
 
         Args:
             composition: Dict of category_name -> count
@@ -398,7 +410,7 @@ class RelationshipRulesValidator:
         # child, a mother 45y). By default that value is read off the *candidate*.
         # That is correct at creation (selection_order makes the parent the
         # candidate) but wrong on the household_excess path, where the candidate
-        # is the person being *added* — adding a Kid would silently key the
+        # is the person being *added*, since adding a Kid would silently key the
         # father/mother cap onto the child's sex.
         #
         # `categorical_from: <role>` lets the rule pin the override to a specific
@@ -513,7 +525,7 @@ class RelationshipRulesValidator:
         exactly one member holds the reference value, the difference is
         value(that member) - value(other) and counts as directed. Otherwise
         (no reference, or both/neither members hold the value) the difference
-        is the absolute gap — the pre-reference behavior.
+        is the absolute gap and the comparison is undirected.
         """
         getter = self._get_attribute_getter(num_attr_config.get('attribute', 'age'))
         v1, v2 = getter(person1), getter(person2)
@@ -646,7 +658,7 @@ class RelationshipRulesValidator:
             required_cat_value = np.random.choice(sorted(others)) if others else partner_cat
 
         # With a difference_reference, rank by distance to a gap sampled from
-        # Normal(mean, std) rather than to the mean itself — ranking on the
+        # Normal(mean, std) rather than to the mean itself, because ranking on the
         # mean would give every couple the same gap instead of the configured
         # distribution (same reasoning as select_pair).
         num_attr_config = pair_constraint.get('numerical_attribute', {})
@@ -929,7 +941,7 @@ class RelationshipRulesValidator:
         )
 
         # Running counters (constant memory) for stage-1 diagnostics. We never
-        # store the full per-call list — at England scale that would be tens of
+        # store the full per-call list. At England scale that would be tens of
         # millions of floats, and `mean / min / max` is all anyone reads.
         attr_stats = self.stats['same_category_lookup'].setdefault(
             cat_attribute,
@@ -1087,10 +1099,10 @@ class RelationshipRulesValidator:
             np.random.shuffle(shuffled_remaining)
 
             # Try to find a valid partner. Without a difference_reference the
-            # first valid candidate wins, exactly as before. With one, the hard
+            # first valid candidate wins. With one, the hard
             # gate alone would ignore the configured mean, so we collect valid
             # directed candidates and keep the one closest to a gap sampled
-            # from Normal(mean, std) — that makes the realised gaps follow the
+            # from Normal(mean, std), which makes the realised gaps follow the
             # configured distribution.
             num_attr_config = constraint.get('numerical_attribute', {})
             diff_ref = num_attr_config.get('difference_reference')

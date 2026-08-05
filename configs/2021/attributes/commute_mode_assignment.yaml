@@ -1,8 +1,13 @@
 # Commute Mode Assignment Configuration
-# Assigns method of travel to work from UK Census 2021 TS061, sampled on the
-# person's residence OA (= SGU). Residence-side mode mix (D2). Excludes the
-# "Work mainly at or from home" column and renormalizes over the remaining 10
-# modes (D3) — work_mode stays authoritative, assigned earlier.
+# Assigns method of travel to work, sampled on the person's residence SGU.
+# Residence-side mode mix (D2). Excludes the work-from-home column and
+# renormalizes over the remaining 10 modes (D3); work_mode stays authoritative
+# and is assigned earlier.
+#
+# UK-wide, from three censuses harmonised into one vocabulary at build time:
+#   England & Wales  ONS Census 2021 TS061,          output area
+#   Scotland         NRS Census 2022 UV701,          output area
+#   Northern Ireland NISRA Census 2021 MS-I01 (FTB), data zone 2021
 #
 # Assignment Level: person
 # Dependencies: work_mode (from workplace_assignment), residence geographical_unit
@@ -59,37 +64,56 @@ data_sources:
   travel_to_work_mode:
     type: "csv_lookup"
     format: "multi_key"
-    description: "TS061 method-of-travel-to-work counts by residence OA (SGU)"
+    description: "Harmonised method-of-travel-to-work counts by residence SGU"
 
+    # One file per nation, in the same shape. The three censuses ask this
+    # question differently (Scotland has one "Underground, subway or tram"
+    # column where England & Wales has four modes in one; NI has a car-pool
+    # category the others fold into driver/passenger, and no tram category at
+    # all because it has no tram), so the harmonisation happens at build time in
+    # data/activities/commute/source/build_commute_mode_shares.py rather than
+    # here. That script emits one vocabulary and one key column name, which is
+    # what makes stacking possible: MultiKeyLookupSource requires key_columns to
+    # be byte-identical across a source's files, and the dict key has to equal
+    # the CSV header. The raw census headers never would have matched.
     files:
-      - path: "${data_root}/activities/commute/mode_transport_by_oa.csv"
+      - path: "${data_root}/activities/commute/EW_commute_mode_by_sgu.csv"
 
-        # Key = residence OA code. The dict key MUST equal the CSV header so the
-        # MultiKeyLookupSource can read row["2021 output area"]. Resolved from the
-        # person's residence SGU (get_ancestor_by_level('SGU') returns self).
-        key_columns:
-          "2021 output area":
+        # Key = residence SGU code (OA in England, Wales and Scotland; Data Zone
+        # in Northern Ireland). Resolved from the person's residence unit, where
+        # get_ancestor_by_level('SGU') returns self.
+        key_columns: &commute_mode_keys
+          "sgu":
             attribute: "geographical_unit"
             type: "ancestor_lookup"
             level: "SGU"
             property: "name"
 
-        # Output category -> CSV column. WFH + Total deliberately omitted (D3):
-        # the remaining 10 counts are renormalized to probabilities at lookup.
-        # One category per non-WFH column preserves the census mode shares (D1).
-        # Only tube/train/bus get a distributor + venue in task 8; the rest are
-        # terminal modes with no commute venue.
-        value_columns:
-          tube: "Underground, metro, light rail, tram"
-          train: "Train"
-          bus: "Bus, minibus or coach"
-          taxi: "Taxi"
-          motorcycle: "Motorcycle, scooter or moped"
-          car_solo: "Driving a car or van"
-          car_passenger: "Passenger in a car or van"
-          bike: "Bicycle"
-          walk: "On foot"
-          other: "Other method of travel to work"
+        # Output category -> CSV column. `total` and `work_from_home` exist in
+        # the files for QA but are deliberately not mapped (D3): the ten mode
+        # counts are renormalized to probabilities at lookup, and work_mode
+        # (assigned earlier) stays authoritative on who works from home.
+        # Only tube/train/bus get a distributor + venue; the rest are terminal
+        # modes with no commute venue.
+        value_columns: &commute_mode_values
+          tube: "tube"
+          train: "train"
+          bus: "bus"
+          taxi: "taxi"
+          motorcycle: "motorcycle"
+          car_solo: "car_solo"
+          car_passenger: "car_passenger"
+          bike: "bike"
+          walk: "walk"
+          other: "other"
+
+      - path: "${data_root}/activities/commute/SCT_commute_mode_by_sgu.csv"
+        key_columns: *commute_mode_keys
+        value_columns: *commute_mode_values
+
+      - path: "${data_root}/activities/commute/NI_commute_mode_by_sgu.csv"
+        key_columns: *commute_mode_keys
+        value_columns: *commute_mode_values
 
 # Assignment Rules (Person-Level)
 assignment_rules:
@@ -101,3 +125,21 @@ assignment_rules:
         assignment:
           strategy: "categorical_sampler"
           data_source: "travel_to_work_mode"
+
+          # The draw is unconstrained: every mode the person's own output area
+          # reports is on the table, weighted as the census weights it. Nothing
+          # here consults the transport network.
+          #
+          # That is deliberate. Constraining the draw to journeys the network
+          # can serve makes the mode mix a function of world size. In a world
+          # small enough that a third of its commuters work outside it, most
+          # rail journeys leave the boundary and rail collapses. It also cannot
+          # answer for an output area whose entire census mix sits on one
+          # route-checked mode, of which there are ten UK-wide, all with four
+          # or fewer commuters and all in disclosure-control territory. Those
+          # ten would halt a 239,000-area build.
+          #
+          # Journeys the network cannot serve are repaired afterwards instead,
+          # by the route distributors' `on_miss` ladder, which costs work in
+          # proportion to how often it fires rather than to the size of the
+          # world. See route_commute_train.yaml.

@@ -2,15 +2,15 @@
 Tests for the venue allocator.
 
 Covers:
-  - _get_eligible_people   — eligibility filtering
-  - _apply_strategy        — sort ordering
-  - _check_attribute_constraints — venue-level min/max from CSV columns
+  - _get_eligible_people: eligibility filtering
+  - _apply_strategy: sort ordering
+  - _check_attribute_constraints: venue-level min/max from CSV columns
   - _allocate_to_venue_type (simple mode)
   - _allocate_with_attributes (attribute-aware mode)
 
 Design principle: every assertion reflects the *intended* behaviour
 described in the source code.  We do not soften expectations to pass
-tests — a failing test signals a real bug.
+tests, so a failing test signals a real bug.
 
 Test data lives in tests/test_data/stress_world/
 Population (28 people across 3 SGUs):
@@ -156,14 +156,14 @@ class TestGetEligiblePeople:
         ]
         eligible = _get_eligible_people(hd.population, hd, eligibility=eligibility)
         assert all(p.age >= 65 and p.sex == "female" for p in eligible)
-        # id=13: age=68, sex=female, SGU_S1 — must be present
+        # id=13: age=68, sex=female, SGU_S1, must be present
         assert 13 in {p.id for p in eligible}
-        # id=14: age=75, sex=male — must NOT be present
+        # id=14: age=75, sex=male, must NOT be present
         assert 14 not in {p.id for p in eligible}
 
     def test_already_allocated_excluded_from_criteria_match(self, hd):
         """Pre-allocated people must be excluded even when they match all criteria."""
-        # id=13: age=68, sex=female — matches age>=65 AND sex=female
+        # id=13: age=68, sex=female, matches age>=65 AND sex=female
         mark_allocated(hd, [13])
         eligibility = [
             {"attribute": "age", "min": 65},
@@ -219,7 +219,7 @@ class TestApplyStrategy:
         assert {p.id for p in result} == {p.id for p in people}
 
 
-# _apply_strategy — age_weighted
+# _apply_strategy: age_weighted
 
 
 # Covers every age in the stress world (3-78) plus the open top band.
@@ -324,7 +324,7 @@ class TestCheckAttributeConstraints:
         constraints = {
             "age": {"min_column": "StatutoryLowAge", "max_column": "StatutoryHighAge"}
         }
-        p = person_by_id(hd, 0)  # age=3, SGU_S1 — below minimum 5
+        p = person_by_id(hd, 0)  # age=3, SGU_S1, below minimum 5
         assert _check_attribute_constraints(p, school, constraints) is False
 
     def test_person_above_maximum_age_fails(self, hd):
@@ -333,7 +333,7 @@ class TestCheckAttributeConstraints:
         constraints = {
             "age": {"min_column": "StatutoryLowAge", "max_column": "StatutoryHighAge"}
         }
-        p = person_by_id(hd, 7)  # age=19, SGU_S1 — above maximum 16
+        p = person_by_id(hd, 7)  # age=19, SGU_S1, above maximum 16
         assert _check_attribute_constraints(p, school, constraints) is False
 
     def test_person_exactly_at_minimum_passes(self, hd):
@@ -342,7 +342,7 @@ class TestCheckAttributeConstraints:
         constraints = {
             "age": {"min_column": "StatutoryLowAge", "max_column": "StatutoryHighAge"}
         }
-        p = person_by_id(hd, 1)  # age=5, sex=female, SGU_S1 — exactly at minimum
+        p = person_by_id(hd, 1)  # age=5, sex=female, SGU_S1, exactly at minimum
         assert _check_attribute_constraints(p, school, constraints) is True
 
     def test_person_exactly_at_maximum_passes(self, hd):
@@ -351,7 +351,7 @@ class TestCheckAttributeConstraints:
         constraints = {
             "age": {"min_column": "StatutoryLowAge", "max_column": "StatutoryHighAge"}
         }
-        p = person_by_id(hd, 6)  # age=16, sex=male, SGU_S1 — exactly at maximum
+        p = person_by_id(hd, 6)  # age=16, sex=male, SGU_S1, exactly at maximum
         assert _check_attribute_constraints(p, school, constraints) is True
 
     def test_nan_constraint_values_are_ignored(self, hd):
@@ -362,17 +362,17 @@ class TestCheckAttributeConstraints:
         constraints = {
             "age": {"min_column": "StatutoryLowAge", "max_column": "StatutoryHighAge"}
         }
-        p = person_by_id(hd, 7)  # age=19 — would normally fail max, but max is NaN
+        p = person_by_id(hd, 7)  # age=19, would normally fail max, but max is NaN
         assert _check_attribute_constraints(p, school, constraints) is True
 
     def test_empty_constraints_always_passes(self, hd):
         """An empty constraints dict must not reject any person."""
         school = next(iter(hd.venue_manager.get_venues_by_type("boarding_school")))
-        p = person_by_id(hd, 0)  # id=0, age=3 — any person
+        p = person_by_id(hd, 0)  # id=0, age=3, any person
         assert _check_attribute_constraints(p, school, {}) is True
 
 
-# _allocate_to_venue_type — simple mode
+# _allocate_to_venue_type: simple mode
 
 
 class TestSimpleAllocation:
@@ -516,7 +516,7 @@ class TestSimpleAllocation:
         assert "capacity_pct" in stats
 
 
-# _allocate_with_attributes — attribute-aware mode (care_home)
+# _allocate_with_attributes: attribute-aware mode (care_home)
 
 
 class TestAttributeAwareAllocation:
@@ -687,7 +687,7 @@ class TestAttributeAwareAllocation:
         assert stats["allocated"] == 0
 
 
-# Mode gate — _allocate_to_venue_type routes by presence of column_mappings
+# Mode gate: _allocate_to_venue_type routes by presence of column_mappings
 
 
 class TestAllocationModeGate:
@@ -737,7 +737,7 @@ class TestAllocationModeGate:
         assert "allocation_by_attribute" not in stats
 
 
-# Attribute constraints — boarding_school
+# Attribute constraints: boarding_school
 
 
 class TestBoardingSchoolAttributeConstraints:
@@ -776,7 +776,7 @@ class TestBoardingSchoolAttributeConstraints:
         for s in schools:
             all_school_residents.extend(s.properties.get("residents", []))
         resident_ids = {p.id for p in all_school_residents}
-        # id=0: age=3 — below StatutoryLowAge=5
+        # id=0: age=3, below StatutoryLowAge=5
         assert 0 not in resident_ids, (
             "id=0 (age=3) must not be placed in a school with StatutoryLowAge=5"
         )
@@ -799,14 +799,14 @@ class TestBoardingSchoolAttributeConstraints:
                 )
 
     def test_eligible_children_within_range_are_placed(self, hd):
-        """Children aged 5–16 in SGU_S1 must be placed up to slot capacity."""
+        """Children aged 5-16 in SGU_S1 must be placed up to slot capacity."""
         cfg = self._boarding_config()
         stats = _allocate_with_attributes(
             "boarding_school", cfg, hd.population, hd.venue_manager, hd
         )
         # School slots: n_0_15_female=3, n_0_15_male=3 for ages 0-15
         # In SGU_S1 children aged 5-15: person 102(5f), 103(7m), 104(9f), 105(11m), 106(14f)
-        # — 5 children within statutory range and within 0-15 slot
+        # That is 5 children within statutory range and within the 0-15 slot
         # So at least some should be placed
         assert stats["allocated"] > 0
 

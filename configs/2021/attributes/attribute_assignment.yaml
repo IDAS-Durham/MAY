@@ -193,9 +193,31 @@ data_sources:
     description: "Geographical unit ethnicity distributions"
 
     files:
-      - path: "${data_root}/population/ethnicity/ethnicity_5groups_by_OA.csv"
+      - path: "${data_root}/population/ethnicity/EW_ethnicity.csv"
         key_columns:
           geo_unit: ~        # null value: key passed directly, no person-resolution
+        value_columns:
+          W: "W"
+          A: "A"
+          B: "B"
+          M: "M"
+          O: "O"
+        total_column: "total"
+
+      - path: "${data_root}/population/ethnicity/SCT_ethnicity.csv"
+        key_columns:
+          geo_unit: ~
+        value_columns:
+          W: "W"
+          A: "A"
+          B: "B"
+          M: "M"
+          O: "O"
+        total_column: "total"
+
+      - path: "${data_root}/population/ethnicity/NI_ethnicity.csv"
+        key_columns:
+          geo_unit: ~
         value_columns:
           W: "W"
           A: "A"
@@ -211,7 +233,29 @@ data_sources:
     description: "Conditional partner ethnicity probabilities"
 
     files:
-      - path: "${data_root}/population/ethnicity/precomputed_area_partnerships.csv"
+      - path: "${data_root}/population/ethnicity/EW_precomputed_area_partnerships.csv"
+        key_columns:
+          geo_unit: ~
+          first_ethnicity: ~
+        value_columns:
+          W: "prob_W"
+          A: "prob_A"
+          B: "prob_B"
+          M: "prob_M"
+          O: "prob_O"
+
+      - path: "${data_root}/population/ethnicity/SCT_precomputed_area_partnerships.csv"
+        key_columns:
+          geo_unit: ~
+          first_ethnicity: ~
+        value_columns:
+          W: "prob_W"
+          A: "prob_A"
+          B: "prob_B"
+          M: "prob_M"
+          O: "prob_O"
+
+      - path: "${data_root}/population/ethnicity/NI_precomputed_area_partnerships.csv"
         key_columns:
           geo_unit: ~
           first_ethnicity: ~

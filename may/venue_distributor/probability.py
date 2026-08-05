@@ -9,9 +9,9 @@ rather than in either of them.
 
 from may.utils.stacked_input import as_path_list
 
-# Retired probability_config keys. `default` filled probabilities for geo units
-# absent from the file; probability files now have to cover the loaded geography,
-# so a leftover key would sit in a config looking load-bearing while doing nothing.
+# Keys rejected inside a probability_config block. Probability files have to
+# cover the loaded geography, so a `default` rate has no geo unit left to fill
+# and would sit in a config describing a value the gate never applies.
 RETIRED_PROBABILITY_KEYS = ("default",)
 
 # The lookup attribute whose values are SGU names, and so the only one whose

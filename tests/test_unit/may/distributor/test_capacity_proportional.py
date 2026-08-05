@@ -18,7 +18,7 @@ from may.venue_distributor.allocation_engine import (
 )
 
 
-# Minimal real objects — just the interface allocate_by_geo_unit touches.
+# Minimal real objects covering just the interface allocate_by_geo_unit touches.
 
 class Geo:
     def __init__(self, name, level="SGU", coordinates=(21.0, -102.0)):
@@ -108,7 +108,7 @@ def make_engine(venues, geo):
 
 
 def sorted_cohort(ages, per_age):
-    """Age-sorted, sex-sorted-within-age — the stream shape that triggered the bug."""
+    """Age-sorted, sex-sorted-within-age, the stream shape that triggered the bug."""
     people = []
     for age in ages:
         people += [Person(age, "male") for _ in range(per_age)]

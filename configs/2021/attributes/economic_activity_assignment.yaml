@@ -1,4 +1,4 @@
-# Economic Activity Assignment — UK 2021/22
+# Economic Activity Assignment for UK 2021/22
 #
 # Splits the working-age population by residence LGU, sex and age band into
 # three states from the census economic-activity tables:
@@ -8,12 +8,13 @@
 #   inactive    economically inactive (retired, student, home, sick, other)
 #
 # This runs BEFORE workplace_assignment. Only the EMPLOYED go on to get a
-# workplace, sector and company place — without this gate the pipeline assigns a
+# workplace, sector and company place. Without this gate the pipeline assigns a
 # physical workplace to every 18-64 adult, oversubscribing companies ~2.5x
 # against real job supply.
 #
-# Source: EW_economic_activity_by_lad_sex_age.csv (ONS RM024; harmonised to LGU x
-# sex x age band; residence-based). Per-nation files -- SCT/NI equivalents exist.
+# Sources: one file per nation, all harmonised to LGU x sex x age band and
+# residence-based: EW (ONS RM024), SCT (NRS UV601a), NI (NISRA). Together they
+# cover all 374 UK local authorities; all three are loaded below.
 #
 # Assignment Level: person
 
@@ -25,7 +26,7 @@ attributes:
     description: "employed, unemployed, or inactive"
     data_type: "categorical"
 
-# Working-age population — the same window workplace_assignment gates on.
+# Working-age population, the same window workplace_assignment gates on.
 filters:
   age:
     attribute: "age"
@@ -68,7 +69,7 @@ data_sources:
     files:
       - path: "${data_root}/activities/work/EW_economic_activity_by_lad_sex_age.csv"
 
-        key_columns:
+        key_columns: &economic_activity_keys
           LGU_name:
             attribute: "geographical_unit"
             type: "ancestor_lookup"
@@ -82,12 +83,23 @@ data_sources:
             attribute: "age"
             type: "category_lookup"
 
-        value_columns:
+        value_columns: &economic_activity_values
           employed: "employed"
           unemployed: "unemployed"
           inactive: "inactive"
 
-# No fallback. Every (LGU, sex, age band) cell is populated (375 LGUs x 2 x 4,
+      # Scotland (NRS) and Northern Ireland (NISRA), harmonised to the same
+      # columns and age bands as the ONS table at build time. LGU names are
+      # disjoint across the three, so they merge into one lookup.
+      - path: "${data_root}/activities/work/SCT_economic_activity_by_lad_sex_age.csv"
+        key_columns: *economic_activity_keys
+        value_columns: *economic_activity_values
+
+      - path: "${data_root}/activities/work/NI_economic_activity_by_lad_sex_age.csv"
+        key_columns: *economic_activity_keys
+        value_columns: *economic_activity_values
+
+# No fallback. Every (LGU, sex, age band) cell is populated (374 LGUs x 2 x 4,
 # zero gaps vs hierarchy) so a miss means the geography and table have diverged.
 
 assignment_rules:

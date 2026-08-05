@@ -1,5 +1,5 @@
 """
-Extended unit tests for strategies.py — covers the 4 untested strategies
+Extended unit tests for strategies.py, covering the 4 untested strategies
 and the StrategyFactory completeness.
 
 Covers:
@@ -325,7 +325,7 @@ class TestProbabilisticConditionsStrategy:
 
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "comorbidities"})
         assert result == []
-        assert result is not None  # [] is not None — passes the None check
+        assert result is not None  # [] is not None, so it passes the None check
 
 
 # Gated hierarchical comorbidity sampler
@@ -411,7 +411,7 @@ class TestGatedConditionsSampler:
         assert abs(empties / n - 0.7) < 0.03
 
     def test_missing_joint_column_raises(self):
-        """gated_conditions needs the joint columns — missing one fails loud."""
+        """gated_conditions needs the joint columns, and missing one fails loud."""
         strategy = self._make({"has_comorbidity": 0.3, "multiple_morbidities": 0.1, "cvd": 0.2})
         with pytest.raises(RuntimeError, match="requires 'no_condition'"):
             self._assign(strategy)
@@ -462,12 +462,15 @@ class TestCommutingLikelihoodStrategy:
     def _make_od_source(self, data):
         return ODMatrixSource(lookup_data=data)
 
-    def _make_strategy(self, outputs, data_source_name="commuting_flows"):
-        return {
+    def _make_strategy(self, outputs, data_source_name="commuting_flows", condition=None):
+        config = {
             "strategy": "commuting_likelihood",
             "data_source": data_source_name,
             "outputs": outputs,
         }
+        if condition:
+            config["condition"] = condition
+        return config
 
     # --- Single output ---
 
@@ -632,7 +635,7 @@ class TestCommutingLikelihoodStrategy:
     def test_metadata_key_missing_raises_valueerror(self):
         """
         If output_source is not 'destination' and not in metadata,
-        _build_output raises ValueError — misconfigured outputs should
+        _build_output raises ValueError, because misconfigured outputs should
         fail loudly, not silently return the wrong data.
         """
         source = self._make_od_source({
@@ -677,6 +680,100 @@ class TestCommutingLikelihoodStrategy:
         person = MinimalPerson(geographical_unit=MinimalGeoUnit("ORIGIN_A"))
         result = strategy.assign(person, MinimalVenue(), {"attribute_name": "loc"})
         assert result == {}
+
+
+class TestCommutingLikelihoodCondition:
+    """The destination draw can be restricted to O-D rows consistent with an
+    attribute already assigned from a finer geography.
+
+    The O-D matrix is published per local authority; whether someone commutes at
+    all is known per output area. Conditioning lets the coarse source answer only
+    "where", for the people the fine source says actually travel.
+    """
+
+    # One origin offering both a home-working row and two travelling rows.
+    LOOKUP = {
+        "Cardiff": [
+            ("Cardiff", {"work_mode": "From_Home"}, 0.2),
+            ("Cardiff", {"work_mode": "Normal"}, 0.5),
+            ("Newport", {"work_mode": "Hybrid"}, 0.3),
+        ]
+    }
+    CONDITION = {
+        "attribute": "commutes",
+        "metadata_key": "work_mode",
+        "map": {"travels": ["Normal", "Hybrid"], "from_home": ["From_Home"]},
+    }
+
+    def _strategy(self):
+        dm = SimpleDataManager(sources={"commuting_flows": ODMatrixSource(lookup_data=self.LOOKUP)})
+        return CommutingLikelihoodStrategy({
+            "strategy": "commuting_likelihood",
+            "data_source": "commuting_flows",
+            "outputs": {"workplace_location": "destination", "work_mode": "work_mode"},
+            "condition": self.CONDITION,
+        }, dm)
+
+    def _person(self, commutes):
+        return MinimalPerson(geographical_unit=MinimalGeoUnit("Cardiff"),
+                             properties={"commutes": commutes})
+
+    def test_from_home_can_only_draw_the_home_row(self):
+        strategy = self._strategy()
+        for _ in range(25):
+            result = strategy.assign(self._person("from_home"), MinimalVenue(),
+                                     {"attribute_name": "workplace_location"})
+            assert result["work_mode"] == "From_Home"
+
+    def test_travels_never_draws_the_home_row(self):
+        strategy = self._strategy()
+        seen = set()
+        for _ in range(50):
+            result = strategy.assign(self._person("travels"), MinimalVenue(),
+                                     {"attribute_name": "workplace_location"})
+            seen.add(result["work_mode"])
+        assert "From_Home" not in seen
+        assert seen <= {"Normal", "Hybrid"}
+
+    def test_surviving_rows_are_renormalised(self):
+        # Normal 0.5 and Hybrid 0.3 must become 0.625 / 0.375, not stay at 0.8.
+        strategy = self._strategy()
+        dests = strategy._filter_by_condition(
+            list(self.LOOKUP["Cardiff"]), {"Normal", "Hybrid"}, "Cardiff",
+        )
+        assert sum(lik for _, _, lik in dests) == pytest.approx(1.0)
+        by_mode = {m["work_mode"]: lik for _, m, lik in dests}
+        assert by_mode["Normal"] == pytest.approx(0.625)
+        assert by_mode["Hybrid"] == pytest.approx(0.375)
+
+    def test_batch_groups_by_condition_value(self):
+        strategy = self._strategy()
+        people = [self._person("travels") for _ in range(20)] + \
+                 [self._person("from_home") for _ in range(20)]
+        results = strategy.assign_batch(people, [MinimalVenue()] * 40,
+                                        [{"attribute_name": "workplace_location"}] * 40)
+        assert all(r["work_mode"] in ("Normal", "Hybrid") for r in results[:20])
+        assert all(r["work_mode"] == "From_Home" for r in results[20:])
+
+    def test_origin_with_no_matching_rows_fails_loud(self):
+        dm = SimpleDataManager(sources={"commuting_flows": ODMatrixSource(lookup_data={
+            "Cardiff": [("Cardiff", {"work_mode": "From_Home"}, 1.0)]
+        })})
+        strategy = CommutingLikelihoodStrategy({
+            "strategy": "commuting_likelihood",
+            "data_source": "commuting_flows",
+            "outputs": {"workplace_location": "destination"},
+            "condition": self.CONDITION,
+        }, dm)
+        with pytest.raises(ValueError, match="no destinations with work_mode"):
+            strategy.assign(self._person("travels"), MinimalVenue(),
+                            {"attribute_name": "workplace_location"})
+
+    def test_unmapped_condition_value_fails_loud(self):
+        strategy = self._strategy()
+        with pytest.raises(ValueError, match="is not in the map"):
+            strategy.assign(self._person("nonsense"), MinimalVenue(),
+                            {"attribute_name": "workplace_location"})
 
 
 # GUSamplerStrategy Tests
@@ -958,7 +1055,7 @@ class TestCategoricalSamplerStrategy:
         Probabilities are always normalized, even if they're close to 1.0.
         This avoids numpy tolerance issues.
         """
-        # Sum = 0.995 — normalized despite being close to 1.0
+        # Sum = 0.995, normalized despite being close to 1.0
         source = MultiKeySource(return_value={"A": 0.5, "B": 0.495})
         dm = SimpleDataManager(sources={"sector_probs": source})
         strategy = CategoricalSamplerStrategy(self._make_strategy(), dm)
@@ -966,7 +1063,7 @@ class TestCategoricalSamplerStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
         assert result in {"A", "B"}
 
-# StrategyFactory — Complete Registration Tests
+# StrategyFactory: complete registration tests
 
 class TestStrategyFactoryComplete:
     """All 9 strategy types must be registered and instantiable."""

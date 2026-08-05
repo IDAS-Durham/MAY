@@ -1,5 +1,5 @@
 """
-Contract tests for HouseholdDistributor.load_household_data — the loader
+Contract tests for HouseholdDistributor.load_household_data, the loader
 exercised by these production log lines:
 
     Loading household data from data/households/households.csv
@@ -90,8 +90,8 @@ class TestLoadHouseholdDataHappyPath:
         assert any('Loaded household data for 2 geographical units' in r.message for r in caplog.records)
 
     def test_geo_unit_with_only_zero_counts_is_omitted_entirely(self, tmp_path):
-        """A geo_unit row whose counts are all zero must produce no entry —
-        not an empty dict — so downstream `if geo_unit in counts` checks
+        """A geo_unit row whose counts are all zero must produce no entry,
+        rather than an empty dict, so downstream `if geo_unit in counts` checks
         don't accidentally process empty households."""
         geo = _make_geo(['SGU_001', 'SGU_002'])
         hd = _make_distributor(geo, str(tmp_path))
@@ -112,7 +112,7 @@ class TestLoadHouseholdDataSadPaths:
 
     def test_missing_file_raises(self, tmp_path):
         """A missing households CSV must fail loud (HouseholdError), like
-        PopulationError/VenueError — the engine works on complete data or not
+        PopulationError/VenueError, since the engine works on complete data or not
         at all. Once a residence_allocation step is in the timeline,
         missing household data is a misconfiguration, not a tolerable no-op."""
         geo = _make_geo(['SGU_001'])
@@ -135,7 +135,7 @@ class TestLoadHouseholdDataSadPaths:
 
     def test_no_rows_match_geography_raises(self, tmp_path):
         """A present file whose rows are all outside the loaded geography
-        would build zero households — fail loud instead."""
+        would build zero households, so it fails loud instead."""
         geo = _make_geo(['SGU_001'])
         hd = _make_distributor(geo, str(tmp_path))
         _write_households_csv(
@@ -166,7 +166,7 @@ class TestLoadHouseholdDataReload:
 
     def test_second_load_replaces_first(self, tmp_path):
         """Calling load_household_data twice must produce the same state
-        as calling it once with the second file — not a union of the two.
+        as calling it once with the second file, rather than a union of the two.
         Otherwise stale entries from a prior load silently shadow the
         intended state, and downstream allocators see geo_units that the
         current run shouldn't include."""
@@ -194,7 +194,7 @@ class TestLoadHouseholdDataReload:
 
     def test_reload_after_missing_file_raises_and_clears_state(self, tmp_path):
         """A re-load pointing at a missing file must fail loud, and must clear
-        prior state before raising — so a caught error can't leave stale counts
+        prior state before raising, so a caught error can't leave stale counts
         that make the world look loaded."""
         geo = _make_geo(['SGU_001'])
         hd = _make_distributor(geo, str(tmp_path))

@@ -11,7 +11,6 @@ activity_map_key: "commute"
 leg_venue_type: "train_line"
 leg_subset_key: "rider"
 
-routes_table: "${data_root}/activities/commute/routes.csv"
 legs_table:   "${data_root}/activities/commute/route_legs.csv"
 
 # Person -> routing-table key. MGUs in the routing table are MSOA codes
@@ -34,19 +33,50 @@ class_map:
 # Eligibility: must have commute_mode set (i.e. passed the Step A gates).
 require_properties:
   - "commute_mode"
+  # A workplace is required too. Someone with a travel mode but no assigned
+  # workplace has no journey to route, and counting them as a route miss would
+  # both overstate the miss rate and rewrite the mode of a person who never
+  # commutes. Only matters when commute_mode is drawn before the workplace
+  # exists; harmless otherwise, since anyone in a workplace venue has this.
+  - "workplace_mgu"
 
 # Per-leg numeric metadata to attach to Subset.member_metadata. Keys are the
 # field names stored on the subset (and later in the HDF5 side-table); values
 # are the columns to read from route_legs.csv.
+# Station catchment. Riders do not have to live in an MGU that contains a
+# station; each endpoint snaps to the nearest MGU the routing table serves.
+# 10 km assumes people drive or bus to a rail station (park-and-ride), so the
+# access speed is a road speed, not a walking one. Beyond 10 km there is no
+# realistic rail option and the rider is a genuine miss.
+catchment:
+  max_access_km: 10
+  access_speed_kmh: 30
+
 leg_metadata:
   t_board_min:  "t_board_min"
   t_alight_min: "t_alight_min"
 
-# route-miss fallback. Overwrite commute_mode to walk; no venue is
-# assigned (so zero commute transmission).
+# Route-miss repair. A rider whose journey the rail network cannot serve is
+# handed to the generic shared pool rather than taken off shared transport
+# altogether.
+#
+# What is being preserved here is exposure, not the mode label. The census
+# recorded this person sharing enclosed air with strangers; rewriting them to
+# car_solo would say the opposite, and the force of infection they carry would
+# go to zero. Bus is this model's generic bounded pool of people sharing air for
+# a bounded time, so it is the honest degradation: the mode is wrong, the
+# exposure is roughly right. Rewriting to a car gets both wrong.
+#
+# This works because route_commute_bus runs AFTER this distributor in the
+# timeline, requires the same two properties, and filters on commute_mode ==
+# "bus". Anyone rewritten here is therefore picked up and placed by it. Move bus
+# earlier in the timeline and these people silently stop being placed at all.
+#
+# Bus itself caps at 50 km, so the longest misses (Edinburgh to Glasgow) fall
+# through bus to car_solo there. That is right, since nobody buses 67 km daily.
 on_miss:
   set:
-    commute_mode: "car_solo"
+    commute_mode: "bus"
 
 settings:
   verbose: true

@@ -2,11 +2,9 @@
 # Assigns the specific MGU (MSOA) within the workplace LGU, weighted by real
 # JOB SUPPLY (company capacity), not by where workers live.
 #
-# This replaces the former workplace_sgu_assignment, which weighted an OA within
-# the LGU by the RESIDENCE `Total` of EW_workers_by_industry_by_OA.csv -- placing
-# people where workers sleep rather than where jobs are. Company venues attach at
-# MGU, so MGU is the natural workplace resolution; the weight is the summed
-# employee_count capacity per MGU from the BRES-calibrated companies.csv.
+# Company venues attach at MGU, so MGU is the natural workplace resolution. The
+# weight is the summed employee_count capacity per MGU from the BRES-calibrated
+# companies.csv.
 #
 # Assignment Level: person
 # - Samples MGU within the workplace LGU weighted by total company capacity
@@ -83,6 +81,25 @@ data_sources:
           level: "MGU"  # Geographical level
 
         weight_column: "Total"  # Total company capacity (sum of employee_count)
+
+      # Scotland and Northern Ireland, built to the same schema from their own
+      # companies files. Identical columns to the England+Wales file, so they
+      # stack; each MGU appears in exactly one of the three.
+      - path: "${data_root}/activities/work/SCT_workplace_capacity_by_mgu.csv"
+        key_columns:
+          LGU: {attribute: workplace_location}
+        geographical_unit_column:
+          name: "MGU"
+          level: "MGU"
+        weight_column: "Total"
+
+      - path: "${data_root}/activities/work/NI_workplace_capacity_by_mgu.csv"
+        key_columns:
+          LGU: {attribute: workplace_location}
+        geographical_unit_column:
+          name: "MGU"
+          level: "MGU"
+        weight_column: "Total"
 
 # Assignment Rules (Person-Level)
 assignment_rules:

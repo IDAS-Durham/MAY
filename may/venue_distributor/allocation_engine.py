@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 def _multinomial_capacity_draw(remaining: np.ndarray, n: int) -> Tuple[np.ndarray, int]:
     """Place n people across venues, weighted by remaining capacity.
 
-    One multinomial draw per round — O(venues), independent of n. Any venue drawn
+    One multinomial draw per round, O(venues) and independent of n. Any venue drawn
     over its remaining capacity is capped and the excess re-drawn over the
     still-open venues; repeats until placed or every venue is full. Returns the
     per-venue placed counts and the residual that did not fit: the caller reports
@@ -277,7 +277,7 @@ class AllocationEngine:
 
                 elif strategy == 'capacity_proportional':
                     # Draw the whole cohort into venues in one batch multinomial,
-                    # weighted by remaining capacity only — distance-free, O(venues).
+                    # weighted by remaining capacity only, distance-free and O(venues).
                     # Age/sex mixing is emergent, not enforced.
                     remaining = np.array(
                         [self.distributor._get_remaining_capacity(v) for v in available_venues],

@@ -2,7 +2,7 @@
 Functional contract tests for VenueManager.
 
 These cover the real, user-facing behaviour of the venue load pipeline,
-residence helpers, export, and auto-discovery — happy and sad paths.
+residence helpers, export, and auto-discovery, across happy and sad paths.
 Edge cases triggered by specific source-data quirks live in
 test_venue_loader.py; this file is the contract.
 """
@@ -39,7 +39,7 @@ class TestCoordinatesParsing:
         assert venue.coordinates == (51.5, -0.1)
 
     def test_capitalised_lat_lon_also_work(self, loaded_geography):
-        """EW_Schools.csv ships with 'Latitude'/'Longitude' columns — the
+        """EW_Schools.csv ships with 'Latitude'/'Longitude' columns, so the
         loader must accept them, not silently drop coordinates."""
         vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
         df = pd.DataFrame({
@@ -135,7 +135,7 @@ class TestGeoColumnResolution:
         assert v.geographical_unit.name == 'MGU_01'
 
     def test_missing_geo_column_raises(self, loaded_geography):
-        """A CSV with no recognised geographical column is unloadable —
+        """A CSV with no recognised geographical column is unloadable, so
         we should fail loudly, not silently produce zero venues."""
         vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
         df = pd.DataFrame({'name': ['Foo'], 'capacity': [10]})
@@ -165,7 +165,7 @@ class TestGeographicFiltering:
 
     def test_filter_off_attempts_all_rows_then_skips_unknown(self, loaded_geography, caplog):
         """With geography filtering off, the loader still must skip rows
-        whose geo_unit isn't actually in the geography — silently producing
+        whose geo_unit isn't actually in the geography, because silently producing
         a venue with `geographical_unit=None` would corrupt downstream code."""
         vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
         df = pd.DataFrame({
@@ -232,7 +232,7 @@ class TestYamlConfig:
 
     def test_explicit_empty_venue_types_is_valid_no_op(self, loaded_geography, tmp_path):
         """An explicit `venue_types: {}` is a legitimate 'this world has no
-        venues' declaration (e.g. a scenario with no venue data yet) — it must
+        venues' declaration (e.g. a scenario with no venue data yet), so it must
         NOT raise, unlike a missing venue_types key or empty file."""
         config = tmp_path / "no_venues.yaml"
         config.write_text("venue_types: {}\n")
@@ -274,7 +274,7 @@ class TestYamlConfig:
         self, loaded_geography, tmp_path
     ):
         """`household` is intentionally disabled in the production yaml but
-        marked is_residence — the rest of the code relies on
+        marked is_residence, because the rest of the code relies on
         `is_residence_type('household')` returning True without any household
         venues being loaded. Lock this contract in."""
         venues_dir = tmp_path / "venues"
@@ -409,7 +409,7 @@ class TestExportVenuesToCsv:
             data_dir=str(venues_dir),
             filter_by_geography=False,
         )
-        # Load schools first, then hospitals — written rows must still
+        # Load schools first, then hospitals. Written rows must still
         # group by type alphabetically with ascending ids inside.
         vm.load_venue_type_from_df(
             'school',
@@ -437,7 +437,7 @@ class TestExportVenuesToCsv:
 class TestGeoUnitLinkage:
 
     def test_create_venue_registers_with_geographical_unit(self, loaded_geography):
-        """A venue must appear in its GeographicalUnit's venues list — the
+        """A venue must appear in its GeographicalUnit's venues list, because the
         rest of the simulation walks venues *via* the geography."""
         vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
         sgu = loaded_geography.get_unit('SGU_001')

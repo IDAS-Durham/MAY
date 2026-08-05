@@ -197,7 +197,7 @@ def test_filter_raises_on_a_geo_unit_with_no_row(prob_files):
 
 
 def test_filter_selects_by_the_stacked_probabilities(prob_files):
-    """A rate of 1.0 keeps everyone, 0.0 keeps nobody — across both files."""
+    """A rate of 1.0 keeps everyone and 0.0 keeps nobody, across both files."""
     a, b = prob_files
     _write_csv(a, [("geo_unit", "prob_uni_18_22"), ("A001", 1.0), ("A002", 0.0)])
     _write_csv(b, [("geo_unit", "prob_uni_18_22"), ("B001", 1.0), ("B002", 0.0)])

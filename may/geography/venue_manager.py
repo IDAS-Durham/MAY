@@ -34,7 +34,7 @@ class VenueManager:
         # Store full venue type configurations from YAML
         self.venue_configs = {}         # {venue_type: full_config_dict}
 
-        # Capacity configurations per venue type — lazily populated by
+        # Capacity configurations per venue type, lazily populated by
         # allocation steps (residence venue_allocator) at runtime.
         self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
@@ -102,7 +102,7 @@ class VenueManager:
         Remove a venue from the VenueManager and its geographical_unit.
 
         Mirror of add_venue. The venue must be a leaf (no children) and must
-        have no remaining subsets — call migrate_subsets_to first if needed.
+        have no remaining subsets, so call migrate_subsets_to first if needed.
 
         Args:
             venue: Venue object to remove.
@@ -253,7 +253,7 @@ class VenueManager:
 
         has_coords = lat_col is not None and lon_col is not None
 
-        # Detect a 'name' column (case-insensitive) — only treat the column as the venue name
+        # Detect a 'name' column (case-insensitive), treating it as the venue name only
         # if it actually exists. Otherwise the venue keeps its auto-generated name.
         name_col = next((col for col in venue_df.columns if col.lower() == 'name'), None)
 
@@ -345,7 +345,7 @@ class VenueManager:
         - latitude / longitude (optional): coordinates
         - All other columns become properties specific to this venue type
 
-        A missing file is a hard error (VenueError) — callers that tolerate
+        A missing file is a hard error (VenueError), so callers that tolerate
         absent files (e.g. batch mode) must check existence before calling.
         """
         from may.utils.stacked_input import as_path_list, load_stacked_csv
@@ -400,7 +400,7 @@ class VenueManager:
         """
         config_path = pr.resolve(config_file)
         if not os.path.isabs(config_path) and not os.path.exists(config_path):
-            # Relative path not found from CWD — try data_dir-relative.
+            # Relative path not found from CWD, so try data_dir-relative.
             config_path = os.path.join(self.data_dir, config_path)
         if not os.path.exists(config_path):
             raise VenueError(f"Venue config file not found: {config_path}")

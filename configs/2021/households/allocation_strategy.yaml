@@ -22,14 +22,15 @@ steps:
     description: "Allocate two-adult families with kids"
     rule: "Two-adult family with kids"
 
-    # England/Wales/Scotland census data buckets 2+ kids as ">=2"; Northern
-    # Ireland splits it into exactly-2 and ">=3". All variants belong to this
-    # step; a pattern absent from an area's data simply has a zero quota there.
-    patterns:
-      - ">=2 >=0 2 0"
-      - "2 >=0 2 0"
-      - ">=3 >=0 2 0"
-      - "1 >=0 2 0"
+    # Selected by shape rather than by pattern string, because the string
+    # differs between census vocabularies: England/Wales/Scotland bucket 2+ kids
+    # as ">=2", Northern Ireland splits it into exactly-2 and ">=3". "Kids >= 1
+    # with exactly 2 adults" names the family in either, so this file works
+    # whether one nation or four is loaded, and picks up only the patterns the
+    # loaded data actually has.
+    patterns_where:
+      - { category: "Kids",   operator: ">=", value: 1 }
+      - { category: "Adults", operator: "==", value: 2 }
 
     max_households: null
     refresh_pools: false
@@ -48,11 +49,10 @@ steps:
     description: "Allocate single-parent families with kids"
     rule: "Single-adult family with kids"
 
-    patterns:
-      - ">=2 >=0 1 0"
-      - "2 >=0 1 0"
-      - ">=3 >=0 1 0"
-      - "1 >=0 1 0"
+    # Same shape as the step above, one adult instead of two.
+    patterns_where:
+      - { category: "Kids",   operator: ">=", value: 1 }
+      - { category: "Adults", operator: "==", value: 1 }
 
     max_households: null
     refresh_pools: false
@@ -64,15 +64,22 @@ steps:
     description: "Multi-generational households"
     rule: "Multi-generational household"
 
-    patterns:
-      - pattern: ">=2 >=0 >=0 >=0"
-        assumption: "2 0 1 1"
-      - pattern: "2 >=0 >=0 >=0"
-        assumption: "2 0 1 1"
-      - pattern: ">=3 >=0 >=0 >=0"
-        assumption: "3 0 1 1"
-      - pattern: "1 >=0 >=0 >=0"
-        assumption: "1 0 1 1"
+    # Kid households where the census leaves the adult column open (">=0"):
+    # somebody older is there, but the bucket does not say who or how many.
+    patterns_where:
+      - { category: "Kids",   operator: ">=", value: 1 }
+      - { category: "Adults", operator: "==", value: 0 }
+
+    # An open-ended bucket has to be built at some concrete size, so each
+    # pattern declares the shape assumed for it: the minimum number of kids the
+    # bucket guarantees, plus one adult and one old adult. Keys naming a pattern
+    # the loaded census does not have are skipped, so the England/Wales/Scotland
+    # (">=2") and Northern Ireland ("2" / ">=3") spellings can both sit here.
+    assumptions:
+      "1 >=0 >=0 >=0":   "1 0 1 1"
+      ">=2 >=0 >=0 >=0": "2 0 1 1"
+      "2 >=0 >=0 >=0":   "2 0 1 1"
+      ">=3 >=0 >=0 >=0": "3 0 1 1"
 
     max_households: null
     refresh_pools: false
@@ -111,7 +118,8 @@ steps:
 
   # Step 3c: Elderly to Care Homes (Venues)
   #
-  # This runs BEFORE the elderly household steps, and the order is load-bearing.
+  # This runs BEFORE the elderly household steps, and that order decides which
+  # people are still in the pool when each one draws.
   #
   # The census splits usual residents into household residents and communal
   # residents. The household composition counts describe the first block and the
@@ -120,7 +128,7 @@ steps:
   # people, so whichever runs first takes its share from the whole age
   # distribution and leaves the rest whatever remains.
   #
-  # The two draws are not symmetric. This step is age-selective — it needs the
+  # The two draws are not symmetric. This step is age-selective, needing the
   # oldest tail. The elderly household patterns are age-blind above 65: "0 0 0 2"
   # asks for two old adults, not which two. Running the age-blind steps first
   # strips a little over half the 65+ population uniformly, including half the
@@ -155,14 +163,14 @@ steps:
             age_band: [65, 120]
 
     # Weighted sample without replacement: someone's chance of being drawn early
-    # is proportional to their band's care-home RESIDENCE RATE — care-home
+    # is proportional to their band's care-home RESIDENCE RATE, meaning care-home
     # residents divided by population, by age band.
     #
     # It has to be a rate and not a share of residents. The pool being drawn
     # from already carries the local age structure, so weighting by "share of
     # care-home residents in this band" would let that structure count twice.
     # By rate, age 90 outweighs age 65 by 24.5x; by share of residents, only
-    # 3.6x — under-placing the very old by roughly sevenfold.
+    # 3.6x, under-placing the very old by roughly sevenfold.
     #
     # The rates are sex-neutral at every band (0.1131 female against 0.1084 male
     # at 85-94), so one curve serves both sexes and there is no sex term.
@@ -263,26 +271,31 @@ steps:
 
     # General eligibility (pre-filter before attribute matching)
     # People will be sorted into age-band slots based on capacity_config
-    eligibility: {}
+    # The ceiling mirrors the school distributor's 0-19 filter. Without it the
+    # only age limit is StatutoryHighAge from the CSV, and a handful of ISC
+    # members are international colleges that report boarders into their
+    # twenties (CATS Cambridge returns 28). Capping here keeps the CSV faithful
+    # to what the schools actually reported while stopping the allocator from
+    # putting adults in a boarding house.
+    eligibility:
+      - attribute: "age"
+        max: 19
 
     # Capacity rules for this step.
-    # Each allocation step owns its own capacity rules — the same venue type
+    # Each allocation step owns its own capacity rules, since the same venue type
     # could be used by a different step with different capacity semantics.
     capacity_config:
       total_capacity_column: "n_total"
+      # Boarder counts come from the schools' own returns, which report sex but
+      # not an age distribution. The age bands this step used to carry were an
+      # artefact of the census communal-establishment tables; they are gone
+      # because nothing in the source supports them. Age is still constrained,
+      # but by the school's actual boarding age range rather than by a band.
       attribute_capacities:
         column_mappings:
-          n_0_15_male:
-            age_band: [0, 15]
+          n_male:
             sex: "male"
-          n_0_15_female:
-            age_band: [0, 15]
-            sex: "female"
-          n_16_24_male:
-            age_band: [16, 24]
-            sex: "male"
-          n_16_24_female:
-            age_band: [16, 24]
+          n_female:
             sex: "female"
       # Per-venue hard limits from CSV columns (inclusive ranges).
       attribute_constraints:
@@ -312,18 +325,18 @@ steps:
     # Capacity rules for this step.
     capacity_config:
       total_capacity_column: "n_total"
+      # Two bands, because two is all the sources agree on. England & Wales
+      # publishes 16-17/18-20/21-24/25-29/30+, Scotland 0-15/16-24/25-34/35-49/
+      # 50-64/65+, and neither set nests inside the other. 16-24 and 25+ are the
+      # finest split both can produce without inventing a distribution, and the
+      # university distributor filters to 18-24 anyway, so the lost detail never
+      # reached the model.
       attribute_capacities:
         column_mappings:
           n_16_24:
             age_band: [18, 24]
-          n_25_34:
-            age_band: [25, 34]
-          n_35_49:
-            age_band: [35, 49]
-          n_50_64:
-            age_band: [50, 64]
-          n_65_99:
-            age_band: [65, 99]
+          n_25_plus:
+            age_band: [25, 99]
 
     strategy: "random"
     max_allocations: null

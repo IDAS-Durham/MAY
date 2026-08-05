@@ -94,7 +94,7 @@ class HouseholdDistributor:
         self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.categories)}
 
         self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
-        # The set of composition-pattern column headers in households.csv — the
+        # The set of composition-pattern column headers in households.csv, the
         # vocabulary allocation steps may reference. Populated by load_household_data.
         self.household_pattern_vocabulary: Set[str] = set()
         self.allocated_people: Set[int] = set()  # Person IDs that have been allocated
@@ -102,7 +102,7 @@ class HouseholdDistributor:
         # Pool of available people by geo_unit and category
         self.person_pool_by_geo_unit: Dict[str, List[Dict[int, 'Person']]] = {}
         # Companion lists for O(1) random sampling of large pools; entries may
-        # be stale (checked against the dict on probe) — see _sample_candidates.
+        # be stale (checked against the dict on probe); see _sample_candidates.
         self._sample_lists: Dict[str, Dict[int, List['Person']]] = {}
         self._warned_large_pool = False
 
@@ -226,7 +226,7 @@ class HouseholdDistributor:
         valid_geo_units = set(smallest_units_dict.keys())
         logger.info(f"Filtering household data to {len(valid_geo_units)} {smallest_level}s in loaded geography")
 
-        # Fail loud on missing/mismatched data — the engine works on complete
+        # Fail loud on missing/mismatched data. The engine works on complete
         # data or not at all, matching PopulationError/VenueError.
         try:
             df = load_stacked_csv(
@@ -620,7 +620,7 @@ class HouseholdDistributor:
         random sample of that size is returned instead of the full pool.
         Everything downstream (constraint filtering, pair matching,
         max_attempts) is O(candidates), so without the cap the cost per
-        household scales with the geo unit's population — fine for UK Output
+        household scales with the geo unit's population, which is fine for UK Output
         Areas (~150 people), hours-per-step for Mexican municipios (~500k
         people). Without the key the full pool is always returned, and a
         one-time warning points at the key when pools are large enough to
@@ -686,9 +686,9 @@ class HouseholdDistributor:
 
         Pools are dicts (id -> Person), which cannot be indexed for random
         access, so each (geo unit, category) keeps a companion list of the
-        pool's people. The list is not updated when people are allocated —
+        pool's people. The list is not updated when people are allocated, so
         entries whose id is no longer in the dict are simply skipped on probe
-        ("tombstones") — and it is rebuilt from the live dict once it holds
+        ("tombstones"), and it is rebuilt from the live dict once it holds
         more than 4x the pool, which keeps sampling amortised O(cap) across a
         whole round. The per-category quota is proportional to pool size, so
         the sample has the same category mix as full materialization.
@@ -705,7 +705,7 @@ class HouseholdDistributor:
             if lst is None or len(lst) > 4 * len(pool):
                 lst = lists[cat_idx] = list(pool.values())
 
-            # One vectorised draw instead of a numpy scalar call per probe —
+            # One vectorised draw instead of a numpy scalar call per probe, because
             # the per-call overhead dominates at this call volume.
             picked_ids = set()
             probe_indices = np.random.randint(len(lst), size=20 * quota)
@@ -793,7 +793,7 @@ class HouseholdDistributor:
         """Find a pair_matching constraint pairing this role with another one.
 
         The `roles: [A, B]` form of pair_matching couples one member of each
-        of two roles (e.g. a Young Adult with an Adult — a couple whose
+        of two roles (e.g. a Young Adult with an Adult, a couple whose
         members sit in different member categories, so a single-role pair
         can't represent them). Returns (constraint, other_role_name) or None.
         """
@@ -1045,7 +1045,7 @@ class HouseholdDistributor:
                             )
                             # The pair ranking says nothing about this role's own
                             # numerical constraints (e.g. a co-parent must still be
-                            # old enough for the children) — keep the best-ranked
+                            # old enough for the children), so keep the best-ranked
                             # candidate that satisfies them too.
                             person = None
                             for cand in ordered:

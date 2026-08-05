@@ -98,7 +98,7 @@ data_sources:
     # source publishes comorbidity by ethnicity at all. The `&`/`*` anchors below
     # just avoid repeating one identical key/value mapping four times.
     files:
-      - path: "${data_root}/population/comorbidities/comorbidities_by_region.csv"
+      - path: "${data_root}/population/comorbidities/E_comorbidities_by_region.csv"
 
         # Multi-key lookup (all keys must match for a row)
         key_columns: &comorbidity_keys

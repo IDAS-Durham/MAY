@@ -5,7 +5,7 @@ Any config key that names a data file may name several; the files are stacked
 into a single table under a strict contract: every file must exist, all files
 must share one column set (unless a caller opts into zero-filled column
 union), and the key column must be unique within and across files. Violations
-raise StackedInputError — a multi-source load either works exactly like the
+raise StackedInputError, so a multi-source load either works exactly like the
 equivalent single file or fails loudly.
 """
 
@@ -55,8 +55,8 @@ def load_stacked_csv(paths, *, label, key_column=None, column_policy="strict",
         key_column: Column that must be unique across the stacked table.
             A string names the column; 0 means "first column of the first
             file". None skips the uniqueness check (rows have no natural key).
-        column_policy: "strict" — all files must have the same column set;
-            "union_zero_fill" — columns are unioned and a column absent from
+        column_policy: "strict" means all files must have the same column set.
+            "union_zero_fill" means columns are unioned and a column absent from
             a file is zero-filled for that file's rows, with a warning.
         **read_csv_kwargs: Passed through to pandas.read_csv.
 

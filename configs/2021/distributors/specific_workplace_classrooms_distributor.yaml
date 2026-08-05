@@ -47,6 +47,11 @@ eligibility:
       description: "Exclude people in care homes, prisons, and student dorms"
       values: ["household"]
 
+    - attribute: "properties.work_mode"
+      type: "categorical"
+      description: "Only on-site workers take a seat here; From_Home workers have an employer but no on-site post"
+      values: ["Normal", "Hybrid"]
+
   attributes:
     - name: "properties.work_sector"
       type: "categorical"

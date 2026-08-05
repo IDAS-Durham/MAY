@@ -89,7 +89,7 @@ def run_family_round(hd):
     )
 
 
-# allocate_excess_to_households — basic behaviour
+# allocate_excess_to_households: basic behaviour
 
 class TestExcessBasicBehaviour:
     """Core properties that must always hold when adding excess people."""
@@ -229,7 +229,7 @@ class TestExcessBasicBehaviour:
         assert stats["households_modified"] == 0
 
 
-# allocate_excess_to_households — constraint enforcement
+# allocate_excess_to_households: constraint enforcement
 
 class TestExcessConstraints:
     """Constraints must be enforced strictly on every household."""
@@ -314,7 +314,7 @@ class TestExcessConstraints:
             )
 
 
-# allocate_excess_to_households — add_distribution sampling
+# allocate_excess_to_households: add_distribution sampling
 
 class TestExcessDistribution:
     """add_distribution config controls how many are added per household."""
@@ -367,7 +367,7 @@ class TestExcessDistribution:
         )
 
 
-# allocate_excess_to_households — refresh_pools
+# allocate_excess_to_households: refresh_pools
 
 class TestExcessRefreshPools:
     """refresh_pools=True must rebuild the pools from allocated_people."""
@@ -417,7 +417,7 @@ class TestExcessRefreshPools:
             assert count == 1, f"Person {pid} is in {count} households after refresh round"
 
 
-# allocate_excess_to_households — geo-unit isolation
+# allocate_excess_to_households: geo-unit isolation
 
 class TestExcessGeoUnitIsolation:
     """People must only be added to households in their own geo unit."""
@@ -455,7 +455,7 @@ class TestExcessGeoUnitIsolation:
                     )
 
 
-# allocate_excess_to_households — rule_name validation
+# allocate_excess_to_households: rule_name validation
 
 class TestExcessWithRule:
     """When a rule_name is provided, relationship constraints must be respected."""
@@ -479,7 +479,7 @@ class TestExcessWithRule:
 
     def test_valid_rule_name_still_adds_people(self, hd):
         """
-        A valid rule_name must not prevent addition — it filters candidates
+        A valid rule_name must not prevent addition, since it filters candidates
         but should still find valid matches for the family households
         in the stress world (kids aged 3-16, adults aged 30-42, age-diff 14-39).
         """
@@ -545,7 +545,7 @@ class TestExcessWithRule:
         assert abs(person.age - existing_adult.age) <= 19
 
 
-# allocate_overflow_to_households — basic behaviour
+# allocate_overflow_to_households: basic behaviour
 
 class TestOverflowBasicBehaviour:
     """
@@ -645,7 +645,7 @@ class TestOverflowBasicBehaviour:
         assert "error" in stats
 
 
-# allocate_overflow_to_households — balanced distribution
+# allocate_overflow_to_households: balanced distribution
 
 class TestOverflowBalancedDistribution:
     """
@@ -656,7 +656,7 @@ class TestOverflowBalancedDistribution:
     def test_distribution_balanced_across_households(self, hd):
         """
         With N people and M target households, each household should
-        receive either floor(N/M) or ceil(N/M) people — never more,
+        receive either floor(N/M) or ceil(N/M) people, never more,
         never fewer by more than 1.
         """
         np.random.seed(0)
@@ -727,7 +727,7 @@ class TestOverflowBalancedDistribution:
         )
 
 
-# allocate_overflow_to_households — pattern_bias
+# allocate_overflow_to_households: pattern_bias
 
 class TestOverflowPatternBias:
     """
@@ -803,14 +803,14 @@ class TestOverflowPatternBias:
 
         Overflow is geo-unit-scoped: only YA in SGUs that have matching
         target households can be placed. SGU_S3 has no family households,
-        so its 2 YA are correctly excluded — this is intended behaviour.
+        so its 2 YA are correctly excluded, which is intended behaviour.
         We verify that every YA in SGUs that DO have target households is placed.
         """
         np.random.seed(0)
         run_family_round(hd)
 
         # Only SGU_S1 and SGU_S2 have family households matching the target patterns.
-        # SGU_S3 has no matching households, so its YA cannot be placed — by design.
+        # SGU_S3 has no matching households, so its YA cannot be placed, by design.
         ya_in_eligible_sgus = sum(
             pool_size(hd, sgu, "Young Adults")
             for sgu in ["SGU_S1", "SGU_S2"]
@@ -851,13 +851,13 @@ class TestFullPipelineNoStrandedPeople:
                                                        needed, just direct add)
 
     Each category has a distinct failure mode:
-      Kids        — get stranded when every family household is already at max
+      Kids:         get stranded when every family household is already at max
                     kids AND promotion fails to open a slot
-      Young Adults — get stranded when their geo unit has no eligible target
+      Young Adults: get stranded when their geo unit has no eligible target
                     household patterns (SGU_S3 after step 3), rescued by overflow
                     into promoted households
-      Adults      — consumed by family + couple rounds; none should remain
-      Old Adults  — consumed exclusively by the elderly-couple round; none should
+      Adults:       consumed by family + couple rounds; none should remain
+      Old Adults:   consumed exclusively by the elderly-couple round; none should
                     remain (the validation rule blocks them from kid households)
     """
 
@@ -941,8 +941,8 @@ class TestFullPipelineNoStrandedPeople:
 
     def test_no_young_adults_stranded(self, hd):
         """
-        Young Adults in SGU_S3 have no family/couple household after step 3
-        — they are rescued by overflow (step 6) which uses any matching
+        Young Adults in SGU_S3 have no family/couple household after step 3,
+        so they are rescued by overflow (step 6) which uses any matching
         household pattern regardless of geo-unit, and if still remaining,
         by promotion (step 7).
         After the full pipeline, none must remain.
@@ -959,7 +959,7 @@ class TestFullPipelineNoStrandedPeople:
     def test_no_adults_stranded(self, hd):
         """
         Adults are consumed by the family round (steps 1-2) and couple rounds
-        (step 3). After those deterministic rounds, none should be left —
+        (step 3). After those deterministic rounds, none should be left, because
         promotion is not needed for adults in the stress world.
         """
         np.random.seed(42)

@@ -278,7 +278,7 @@ class VenueDistributor(BaseDistributor):
                 native_unallocated = self._allocate_normal(native, venues) if native else []
                 flagged_unallocated = self._allocate_normal(flagged, venues) if flagged else []
                 # "Unplaced" = reached this step but found no in-boundary venue of this
-                # type — capacity full OR no eligible venue (e.g. no matching sector
+                # type, either capacity full or no eligible venue (e.g. no matching sector
                 # nearby). For a workplace distributor that is effectively unemployment.
                 logger.info(
                     f"  [capacity priority] '{vt}': "
@@ -520,7 +520,7 @@ class VenueDistributor(BaseDistributor):
             # so within any age the females (lower ids) precede the males. When a group
             # respects capacity (allow_overflow=False), processing in that order lets the
             # earlier sex claim scarce venue spots first and systematically excludes the
-            # other — a directional gender bias in capacity-limited cohorts (e.g. sixth
+            # other, a directional gender bias in capacity-limited cohorts (e.g. sixth
             # form, nurseries). Overflow groups place everyone regardless of order, so they
             # keep the cheap deterministic ordering.
             #

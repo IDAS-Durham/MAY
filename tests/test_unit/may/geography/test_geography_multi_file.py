@@ -1,7 +1,7 @@
 """
 Multi-file geography: several hierarchy/coordinate files stack into one world.
-Covers the cross-file consistency rules — disjoint leaves, unique parentage,
-disjoint coordinate names — and that a stacked load equals the single-file one.
+Covers the cross-file consistency rules (disjoint leaves, unique parentage,
+disjoint coordinate names) and that a stacked load equals the single-file one.
 """
 
 import pytest

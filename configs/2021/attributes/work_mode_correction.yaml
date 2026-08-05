@@ -1,10 +1,16 @@
 # Work Mode Correction Configuration
 # OVERRIDES `work_mode` for workers whose actually-assigned workplace venue
-# requires on-site presence (hospital, care_home, classroom). These workers
-# may have been tagged From_Home or Hybrid in `workplace_assignment.yaml` —
-# which samples from an LGU-level O-D matrix and is therefore sector-blind.
-# Here we force them to Normal, after the workplace distributors have placed
-# them in a physical venue.
+# requires on-site presence (hospital, care_home, classroom). A hybrid nurse or
+# teacher is really on-site full time, so they are forced to Normal after the
+# workplace distributors have placed them in a physical venue.
+#
+# In practice only Hybrid workers reach here. The three on-site distributors
+# apply their own `work_mode` filter when they place people, so From_Home
+# workers never occupy these venues and never reach this correction. That
+# ordering keeps the correction to people who already commute, and so it only
+# ever asks for a travel mode in an output area whose census records commuters.
+# The seats still fill, because these venues run at 0.3-45% of their eligible
+# pool.
 #
 # Office workers (companies) are left untouched: they keep whatever work_mode
 # was sampled from the O-D matrix. Only people in venues that physically
@@ -16,9 +22,9 @@
 # Why this works as a second assignment of `work_mode`:
 # The person-level assignment path in may/attribute_assignment/assigner.py
 # (`_assign_all_people_batch` / `_assign_all_people_sequential`) assigns
-# `person.properties[self.attribute_name] = value` unconditionally — it does
-# not skip already-assigned attributes. So a second attribute step with
-# `attribute.name: work_mode` overwrites cleanly.
+# `person.properties[self.attribute_name] = value` unconditionally, overwriting
+# whatever an earlier step in the timeline assigned. So a second attribute step
+# with `attribute.name: work_mode` takes effect.
 #
 
 step:
@@ -37,7 +43,7 @@ attributes:
 #   - students (classroom, non-worker subset)
 #   - care-home residents (care_home, resident subset)
 #   - hospital patients (hospital, patient subset)
-#   - office workers (venue type "office" — not listed here)
+#   - office workers (venue type "office", which this list omits)
 filters:
   age:
     attribute: "age"

@@ -225,7 +225,7 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
 
         # Inspect commute legs (post-RouteDistributor). The activity_map shape
         # for shared-transport riders is: person.activity_map["commute"][
-        # "<mode>_line"] = [Subset, Subset, ...] — one subset per leg. Each
+        # "<mode>_line"] = [Subset, Subset, ...], one subset per leg. Each
         # route_commute_<mode>.yaml writes its own venue type, so we union
         # across train_line / tube_line / bus_line.
         commute = person.activity_map.get("commute", {})
@@ -412,16 +412,16 @@ def export_work_assignment_debug(
     directly comparable.
 
     Four metrics (written to a "<stem>_summary.txt" sibling):
-      (1) Company placement rate  -- company-eligible workers seated in a
+      (1) Company placement rate: company-eligible workers seated in a
           company office / all company-eligible workers.
-      (2) Sector-location consistency -- share of company-eligible workers
+      (2) Sector-location consistency: share of company-eligible workers
           whose INTENDED workplace MGU actually contains >=1 company of their
           drawn sector (capacity ignored). Isolates "wrong place" from "right
           place but full".
-      (3) Spatial basis -- Pearson correlation of assigned-workers-per-MGU with
+      (3) Spatial basis: Pearson correlation of assigned-workers-per-MGU with
           company capacity per MGU (job supply) vs with resident-worker count
           per MGU (residence density).
-      (4) Sex realism -- assigned %female by sector vs the census (TS060)
+      (4) Sex realism: assigned %female by sector vs the census (TS060)
           LAD x sex margin, restricted to the world's LGUs. Skipped with a
           warning if the margin file is absent.
 

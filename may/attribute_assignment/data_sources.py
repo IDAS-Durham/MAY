@@ -36,6 +36,10 @@ class DataSource:
         self.config = config
         self.cache: Dict[str, Any] = {}
         self._data_loaded = False
+        # Loaded geo unit names keyed by hierarchy level, set by the manager
+        # before load_data. Only sources that declare a level for their values
+        # read it.
+        self.geo_units_by_level: Optional[Dict[str, set]] = None
 
     def load_data(self, geo_units: Optional[set] = None):
         """
@@ -71,7 +75,7 @@ class DataSource:
                 "Fix the data/config."
             )
 
-        # Clamp negative values to 0 — negative probabilities are invalid
+        # Clamp negative values to 0, since negative probabilities are invalid
         has_negatives = False
         for v in probs.values():
             if v < 0:
@@ -137,8 +141,8 @@ def _ordered_key_columns(file_config: Dict[str, Any], source_name: str,
 def _merge_disjoint(target: Dict, new: Dict, source_name: str, file_path) -> None:
     """
     Merge one file's lookup into the accumulated lookup. A key appearing in
-    two files of one source is a data error — merging would have to pick a
-    winner silently — so overlap fails loud naming examples.
+    two files of one source is a data error. Merging would have to pick a
+    winner silently, so overlap instead fails loud, naming examples.
     """
     overlap = target.keys() & new.keys()
     if overlap:
@@ -545,7 +549,7 @@ class MultiKeyLookupSource(DataSource):
                                 logger.info(f"  Applied filter: {col} == '{value}' ({len(df)} rows remaining)")
 
                     # Key/value column config must agree across a source's
-                    # files — the lookup has one shape.
+                    # files, so the lookup has one shape.
                     key_columns = list(file_config.get('key_columns', {}).keys())
                     if self._key_columns and key_columns != self._key_columns:
                         raise ValueError(
@@ -742,7 +746,7 @@ class OriginDestinationMatrixSource(DataSource):
         self._lookup: Dict[str, List[Tuple[str, Dict[str, Any], float]]] = {}
         self._file_configs = config.get('files', [])
 
-        # Out-of-boundary destination policy. Required, no default —
+        # Out-of-boundary destination policy. Required, with no default, because
         # a destination drawn outside the loaded world boundary is routine in
         # region runs and impossible in whole-country runs, so the engine refuses
         # to guess what to do with it.
@@ -780,7 +784,7 @@ class OriginDestinationMatrixSource(DataSource):
 
         # Optional marker for redistributed assignments. Names the person
         # property set true when an assignment was bounced back in-boundary, so
-        # the venue layer can deprioritise it. Config-named — the engine carries
+        # the venue layer can deprioritise it. Config-named, so the engine carries
         # whatever the scenario calls it. Only meaningful under 'redistribute':
         # flagging it elsewhere raises (no silent no-ops).
         self._redistributed_flag = config.get('redistributed_flag')
@@ -856,24 +860,60 @@ class OriginDestinationMatrixSource(DataSource):
         self._lookup = merged
 
         # Apply the out-of-boundary policy AFTER parsing and OUTSIDE the
-        # per-file try/except above — policy violations must fail loud.
+        # per-file try/except above, since policy violations must fail loud.
         self._apply_boundary_policy(geo_units)
 
         self._data_loaded = True
+
+    def _boundary_units(self, geo_units: set) -> set:
+        """Narrow the loaded geo units to the level destinations are declared at.
+
+        Every file entry must agree on `destination_level`; a source mixing
+        levels in one destination column has no single answer here. When the
+        caller supplied no level breakdown (a direct programmatic load rather
+        than a World run) the flat set stands in.
+        """
+        levels = {fc.get('destination_level') for fc in self._file_configs}
+        levels.discard(None)
+        if not levels:
+            return geo_units
+        if len(levels) > 1:
+            raise ValueError(
+                f"O-D source '{self.name}': files disagree on 'destination_level' "
+                f"({sorted(levels)}). All destinations in one source must live at "
+                "the same hierarchy level."
+            )
+        level = levels.pop()
+        if not self.geo_units_by_level:
+            return geo_units
+        if level not in self.geo_units_by_level:
+            raise ValueError(
+                f"O-D source '{self.name}': destination_level='{level}' is not a "
+                f"level in the loaded geography ({sorted(self.geo_units_by_level)})."
+            )
+        return self.geo_units_by_level[level]
 
     def _apply_boundary_policy(self, geo_units: Optional[set]):
         """
         Resolve destinations that fall outside the loaded world boundary
         according to the configured `out_of_boundary` policy.
 
-        Boundary membership is "destination value is among the loaded geo_units".
+        Boundary membership is "destination value is among the loaded geo units
+        AT `destination_level`". Scoping to the declared level matters because
+        names repeat across levels: a census O-D table lists whole-country
+        catch-alls ("Wales", "England") next to real LADs, and an unscoped check
+        would call "Wales" in-boundary whenever any Welsh unit is loaded, then
+        hand a non-existent LAD to the steps that sample within it.
+
         With no geo_units (an unbounded / whole-world run) there is no boundary,
         so the policy is a no-op.
         """
         if not geo_units:
             return
 
-        # Metadata keys carried per destination (e.g. work_mode) — the sentinel
+        geo_units = self._boundary_units(geo_units)
+
+        # Metadata keys carried per destination (e.g. work_mode). The sentinel
         # destination must carry the same keys so output wiring still resolves.
         meta_keys = []
         for fc in self._file_configs:
@@ -917,8 +957,22 @@ class OriginDestinationMatrixSource(DataSource):
                     self._redistributed_fraction[origin] = out_mass
             else:  # 'outside'
                 outside_origins += 1
-                sentinel_meta = {k: self._outside_value for k in meta_keys}
-                new_lookup[origin] = in_b + [(self._outside_value, sentinel_meta, out_mass)]
+                # Each out-of-boundary row takes the sentinel as its destination
+                # but keeps its own metadata; rows with identical metadata merge.
+                # Collapsing them all onto one row stamped with the sentinel
+                # would erase the distinctions a downstream draw may condition on, and
+                # a draw restricted to travelling work modes would then find no
+                # sentinel row at all and silently renormalise the out-of-area
+                # mass onto in-world destinations.
+                merged_out: Dict[Tuple, Tuple[Dict[str, Any], float]] = {}
+                for _, m, l in out_b:
+                    meta = {k: m.get(k) for k in meta_keys}
+                    key = tuple(sorted((k, str(v)) for k, v in meta.items()))
+                    _, carried = merged_out.get(key, (None, 0.0))
+                    merged_out[key] = (meta, carried + l)
+                new_lookup[origin] = in_b + [
+                    (self._outside_value, meta, mass) for meta, mass in merged_out.values()
+                ]
 
         if self._out_of_boundary == 'error' and error_offenders:
             sample = sorted({d for ds in error_offenders.values() for d in ds})[:15]
@@ -1049,7 +1103,7 @@ class GUSamplerSource(DataSource):
         # Lookup: parent_gu_name -> {child_gu_code: weight}
         self._lookup: Dict[str, Dict[str, float]] = {}
         self._file_configs = config.get('files', [])
-        # Person attribute that supplies the parent GU to sample within — read
+        # Person attribute that supplies the parent GU to sample within, read
         # from config (key_columns value), so the sampler is generic over any
         # parent attribute / hierarchy level.
         self._parent_attribute: Optional[str] = None
@@ -1066,8 +1120,8 @@ class GUSamplerSource(DataSource):
                     df = pd.read_csv(file_path)
 
                     # Parent-GU lookup key: canonical one-entry key_columns mapping.
-                    # Its value names the person attribute that supplies the parent GU
-                    # — generic over any parent attribute.
+                    # Its value names the person attribute that supplies the parent GU,
+                    # which keeps this generic over any parent attribute.
                     parent_column = _ordered_key_columns(file_config, self.name, expected=1)[0]
                     key_resolution = file_config['key_columns'][parent_column]
                     if not isinstance(key_resolution, dict) or not key_resolution.get('attribute'):
@@ -1212,15 +1266,19 @@ class DataSourceManager:
             else:
                 self.sources[source_name] = cls(source_name, source_config.config)
 
-    def load_all(self, geo_units: Optional[set] = None):
+    def load_all(self, geo_units: Optional[set] = None,
+                 geo_units_by_level: Optional[Dict[str, set]] = None):
         """
         Load all data sources.
 
         Args:
             geo_units: Optional set of geographical unit codes to preload
+            geo_units_by_level: The same names keyed by hierarchy level, for
+                sources that declare which level their values live at.
         """
         logger.info("Loading all data sources...")
         for source_name, source in self.sources.items():
+            source.geo_units_by_level = geo_units_by_level
             source.load_data(geo_units)
         logger.info("✓ All data sources loaded")
 

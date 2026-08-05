@@ -6,7 +6,12 @@
 # - Assigns both workplace_location (LGU code) and work_mode (From_Home/Hybrid/Normal)
 # - Based on origin-destination commuting likelihood matrices (LGU to LGU)
 #
-# Dependencies: None (this runs FIRST for workers, before sector assignment)
+# Dependencies: commutes (the output-area commute/no-commute split, drawn first)
+#
+# This step decides WHERE someone works. The commute/no-commute split is drawn
+# first by commutes_assignment at output-area resolution, and the matrix here is
+# filtered to the rows consistent with that draw. The work_mode it emits is the
+# finer Normal/Hybrid/Other/From_Home reading of a decision already taken.
 
 step:
   assignment_level: "person"
@@ -45,6 +50,12 @@ filters:
     description: "In employment only"
     exclude: ["unemployed", "inactive"]
 
+# Required Attributes (Dependencies)
+required_attributes:
+  - name: "commutes"
+    description: "Output-area commute/no-commute split must be drawn first"
+    required: true
+
 # Data Sources
 data_sources:
   commuting_flows:
@@ -52,7 +63,7 @@ data_sources:
     format: "origin_destination_matrix"
     description: "Commuting likelihood from residence to workplace (LGU to LGU)"
 
-    # Out-of-boundary destination policy. REQUIRED — no default.
+    # Out-of-boundary destination policy. REQUIRED, with no default.
     # A region run (e.g. Manchester-only) draws workplace LGUs outside the loaded
     # world; this says what to do with them. It applies only to sub-national region runs.
     #   error        -> fail loud if any drawn destination is out of boundary
@@ -90,10 +101,61 @@ data_sources:
           destination_code: "LGU_destination_code"  # Keep code as metadata if needed
           count: "Count"
 
-        # Filter out special destination codes
-        exclude_destinations:
-          - "888888888"  # Offshore Installation
-          - "999999999"  # Outside UK
+        # No exclude_destinations. The census tables list non-LAD destinations
+        # alongside real ones, including whole-country catch-alls ("England", "Wales",
+        # "Northern Ireland"), "Offshore Installation", "Outside UK", "Other",
+        # and a handful of MSOA-level names in the NI table. Excluding them
+        # would DROP their likelihood and renormalise the rest, quietly moving
+        # those commuters into in-country LADs. Instead they are left in and the
+        # out_of_boundary policy above catches them: none is a unit at
+        # destination_level, so each resolves to the OUTSIDE sentinel and the
+        # worker is modelled as working beyond the simulated area.
+
+      # Scotland. Same harmonised schema as England+Wales, so the same column
+      # mapping repeats verbatim. Origins are disjoint across the three files
+      # (331 EW + 32 SCT + 11 NI = 374 LGUs, no name appears twice), which is
+      # what the loader needs to merge them into one origin lookup.
+      - path: "${data_root}/activities/work/SCT-work-destination-likelihood-modelled-prepandemic.csv"
+
+        origin_level: "LGU"
+        destination_level: "LGU"
+
+        key_columns:
+          LGU_origin_name:
+            attribute: "geographical_unit"
+            type: "ancestor_lookup"
+            level: "LGU"
+            property: "name"
+
+        destination_column: "LGU_destination_name"
+        likelihood_column: "Likelihood"
+        metadata_columns:
+          work_mode: "Place of work indicator"
+          destination_code: "LGU_destination_code"
+          count: "Count"
+
+      # Northern Ireland. NISRA publishes this table by area NAME only, with no
+      # LGU code columns at all, so this entry names its own columns
+      # rather than stacking onto the two above, and omits the destination_code
+      # metadata that does not exist here. Destinations are still UK-wide (373
+      # of them), so an NI resident can be drawn to a GB workplace.
+      - path: "${data_root}/activities/work/NI-work-destination-likelihood-modelled-prepandemic.csv"
+
+        origin_level: "LGU"
+        destination_level: "LGU"
+
+        key_columns:
+          Origin area name:
+            attribute: "geographical_unit"
+            type: "ancestor_lookup"
+            level: "LGU"
+            property: "name"
+
+        destination_column: "Destination area name"
+        likelihood_column: "Likelihood"
+        metadata_columns:
+          work_mode: "Place of work indicator"
+          count: "Count"
 
 # NOTE: there is deliberately NO fallback here. A person whose origin LGU is
 # missing from the matrix fails the build loudly.
@@ -108,9 +170,24 @@ assignment_rules:
         priority: 1
 
         assignment:
-          # New strategy: samples from O-D matrix with work mode
+          # Samples from the O-D matrix with work mode
           strategy: "commuting_likelihood"
           data_source: "commuting_flows"
+
+          # Restrict the draw to O-D rows consistent with the commute/no-commute
+          # split already taken at output-area level. The matrix answers only
+          # WHERE, and only for people the finer source says actually travel.
+          #
+          # "Other" (no fixed place of work) sits on the travels side: the census
+          # travel question asks how you usually get to work, and someone with no
+          # fixed workplace still answers with a mode rather than "works from
+          # home", so they are counted among the ten travel modes.
+          condition:
+            attribute: "commutes"
+            metadata_key: "work_mode"
+            map:
+              travels: ["Normal", "Hybrid", "Other"]
+              from_home: ["From_Home"]
 
           # Assigns both workplace_location and work_mode
           outputs:

@@ -1,18 +1,17 @@
 # Work Sector Attribute Assignment Configuration
 # Assigns work sector (industry) from the job mix of the person's assigned
 # workplace MGU: the per-sector company capacity in that MGU, split into male/
-# female seats by the census industry sex-ratio (EW_workplace_capacity_by_mgu_sex.csv,
-# from the BRES-calibrated companies.csv).
+# female seats by the census industry sex-ratio ({EW,SCT,NI}_workplace_capacity_
+# by_mgu_sex.csv, from the BRES-calibrated per-nation companies files).
 #
 # Because the sector is drawn from the SAME employer stock the company
 # distributor later matches against, a company of the drawn sector is present in
-# the MGU by construction -- the draw cannot send a worker to a location with no
+# the MGU by construction, so the draw cannot send a worker to a location with no
 # employer of their sector.
 #
-# INTERIM LIMITATION -- sex-blind. Keying on MGU alone drops the sex dimension
+# INTERIM LIMITATION: sex-blind. Keying on MGU alone drops the sex dimension
 # (companies.csv carries no sex), so within a sector the assigned sex ratio
-# reflects the local workforce, not the sector-specific ratio. The former
-# LGU x sex draw (EW_industry_sex_lad.csv, TS060 residence) is superseded. The
+# reflects the local workforce rather than the sector-specific ratio. The
 # planned remedy is IPF raking of these MGU sector shares to the TS060 LAD x sex
 # margins; the sex-realism metric in export_work_assignment_debug quantifies the
 # gap in the meantime.
@@ -40,7 +39,7 @@ filters:
 
   # Only people with an in-boundary workplace get a sector. Students
   # (primary_activity) have no workplace; OUTSIDE workers have no in-world
-  # workplace MGU -- both would miss the MGU lookup key.
+  # workplace MGU, so both would miss the MGU lookup key.
   activities:
     exclude: ["primary_activity"]
 
@@ -80,7 +79,7 @@ data_sources:
       - path: "${data_root}/activities/work/EW_workplace_capacity_by_mgu_sex.csv"
 
         # Lookup on the assigned workplace MGU and the person's sex.
-        key_columns:
+        key_columns: &sector_keys
           MGU:
             attribute: "workplace_mgu"
             type: "direct"  # From person.properties["workplace_mgu"]
@@ -89,7 +88,7 @@ data_sources:
             type: "direct"  # person.sex (male/female)
 
         # Value columns: per-sector capacity (exact CSV column names A-Q/Other).
-        value_columns:
+        value_columns: &sector_values
           A: "A"
           B: "B"
           C: "C"
@@ -108,6 +107,17 @@ data_sources:
           P: "P"
           Q: "Q"
           Other: "Other"
+
+      # Scotland and Northern Ireland, same schema and same sector vocabulary,
+      # so both reuse the mapping above. Each workplace MGU appears in exactly
+      # one of the three files.
+      - path: "${data_root}/activities/work/SCT_workplace_capacity_by_mgu_sex.csv"
+        key_columns: *sector_keys
+        value_columns: *sector_values
+
+      - path: "${data_root}/activities/work/NI_workplace_capacity_by_mgu_sex.csv"
+        key_columns: *sector_keys
+        value_columns: *sector_values
 
 # Assignment Rules (Person-Level)
 assignment_rules:

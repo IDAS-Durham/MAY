@@ -249,7 +249,7 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
         return [p for p in population.get_all_people()
                 if p.id not in household_distributor.allocated_people]
 
-    # Support both list format (new) and dict format (legacy)
+    # Criteria are read from the list form; any other shape yields none.
     criteria_list = eligibility if isinstance(eligibility, list) else []
 
     for person in population.get_all_people():

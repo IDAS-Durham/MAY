@@ -176,7 +176,8 @@ def main():
     logger.info(world)
 
     # TIMELINE - Unified Event Processing
-    # This replaces the separate "attributes" and "venue_pipeline" sections if "timeline" is present.
+    # A present "timeline" section drives every event and takes precedence over
+    # the separate "attributes" and "venue_pipeline" sections.
     
     timeline_config = config.get("timeline", {})
 
@@ -204,7 +205,7 @@ def main():
                 # Runs the full household + residence-venue allocation strategy
                 # at this point in the timeline. The step's `config:` points at
                 # the allocation-strategy YAML (any filename, must follow that
-                # format) — the single source of truth for which strategy runs.
+                # format), the single source of truth for which strategy runs.
                 # Placing attribute steps before it lets residence allocation
                 # read those attributes.
                 logger.info("")
@@ -395,7 +396,7 @@ def main():
 
 if __name__ == "__main__":
     # Force a deterministic hash seed for reproducible runs. This re-execs the
-    # interpreter, so it must stay in the CLI entry path — doing it at import
+    # interpreter, so it must stay in the CLI entry path. Doing it at import
     # time replaces the process whenever the module is imported (e.g. by tests).
     if os.environ.get('PYTHONHASHSEED') is None:
         os.environ['PYTHONHASHSEED'] = '0'
