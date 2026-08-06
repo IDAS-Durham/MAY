@@ -28,6 +28,6 @@ allocation:
 fallback:
   strategy: "skip"
 
-exports:
-  venue_summary: "output/1911/workplace_education_venue_summary.csv"
-  unallocated_report: "output/1911/workplace_education_unallocated.csv"
+# exports:
+  # venue_summary: "output/1911/workplace_education_venue_summary.csv"
+  # unallocated_report: "output/1911/workplace_education_unallocated.csv"

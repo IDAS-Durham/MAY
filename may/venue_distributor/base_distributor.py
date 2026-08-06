@@ -8,8 +8,23 @@ from collections import defaultdict
 from scipy.spatial import cKDTree
 import logging
 from may.utils import path_resolver as pr
+from may.utils.attribute_access import compile_path
 
 logger = logging.getLogger(__name__)
+
+# Attributes that Person exposes as a slot or property, so vectorizing them
+# does not need a config path walk.
+_SLOT_GETTERS = {
+    'age': lambda p: getattr(p, 'age', 0),
+    'sex': lambda p: p.sex,
+    'residence.type': lambda p: p.residence_type,
+    'residence.id': lambda p: p.residence.id if p.residence else -1,
+}
+
+# Of those, the ones whose values are already integers and go into an array
+# without a categorical mapping.
+_INTEGER_SLOT_ATTRIBUTES = frozenset({'age', 'residence.id'})
+
 
 class BaseDistributor:
     """
@@ -251,71 +266,32 @@ class BaseDistributor:
         self.person_id_to_index = {person.id: i for i, person in enumerate(people)}
         self.attribute_mappings = {}
 
-        # Pre-calculate path parts to avoid repeated splitting
-        attr_metadata = {}
         numerical_attrs = set(kwargs.get('numerical_attributes', []))
-        
+
+        # Each attribute is resolved once per person. The values feed both the
+        # categorical mapping and the array, so a second walk is not needed.
         for attr in attrs_to_vectorize:
-            if attr == 'age':
-                attr_metadata[attr] = {'parts': ['age'], 'type': 'direct', 'is_numerical': True}
-            elif attr == 'sex':
-                attr_metadata[attr] = {'parts': ['sex'], 'type': 'direct', 'is_numerical': False}
-            elif attr == 'residence.type':
-                attr_metadata[attr] = {'parts': ['residence_type'], 'type': 'property', 'is_numerical': False}
-            elif attr == 'residence.id':
-                attr_metadata[attr] = {'parts': ['residence_id'], 'type': 'property', 'is_numerical': True}
+            getter = _SLOT_GETTERS.get(attr) or compile_path(attr, False)
+            values = [getter(p) for p in people]
+
+            if attr in _INTEGER_SLOT_ATTRIBUTES:
+                self.population_arrays[attr] = np.array(values, dtype=np.int32)
+            elif attr in numerical_attrs:
+                self.population_arrays[attr] = np.array(
+                    [self._safe_int(v) for v in values], dtype=np.int32
+                )
             else:
-                attr_metadata[attr] = {
-                    'parts': attr.split('.'), 
-                    'type': 'nested', 
-                    'is_numerical': attr in numerical_attrs
+                # Index 0 is reserved for missing values, so mapping starts at 1
+                present = {
+                    v for v in values
+                    if v is not None
+                    and not (isinstance(v, (float, np.floating)) and np.isnan(v))
                 }
-
-        # First pass: Identify all unique values for categorical attributes to build mappings
-        categorical_vals = defaultdict(set)
-        
-        for person in people:
-            for attr, meta in attr_metadata.items():
-                if meta['is_numerical']: continue
-                
-                val = self._get_person_attribute(attr, person)
-                if val is not None and not (isinstance(val, (float, np.floating)) and np.isnan(val)):
-                    categorical_vals[attr].add(val)
-
-        # Build mappings: val -> index (starting from 1, 0 is reserved for 'missing/other')
-        for attr, vals in categorical_vals.items():
-            self.attribute_mappings[attr] = {val: i+1 for i, val in enumerate(sorted(list(vals)))}
-
-        # Second pass: Fill arrays
-        for attr, meta in attr_metadata.items():
-            if meta['is_numerical']:
-                if attr == 'age':
-                    self.population_arrays['age'] = np.array([getattr(p, 'age', 0) for p in people], dtype=np.int32)
-                elif attr == 'residence.id':
-                    self.population_arrays[attr] = np.array([p.residence.id if p.residence else -1 for p in people], dtype=np.int32)
-                else:
-                    self.population_arrays[attr] = np.array([
-                        self._safe_int(self._get_person_attribute(attr, p))
-                        for p in people
-                    ], dtype=np.int32)
-            else:
-                mapping = self.attribute_mappings.get(attr, {})
-                parts = meta['parts']
-                # Fast-path for common attributes
-                if attr == 'sex':
-                    self.population_arrays[attr] = np.array([mapping.get(p.sex, 0) for p in people], dtype=np.int32)
-                elif attr == 'residence.type':
-                    self.population_arrays[attr] = np.array([mapping.get(p.residence_type, 0) for p in people], dtype=np.int32)
-                elif attr == 'residence.id':
-                    # Directly use residence.id if it's an integer, otherwise use mapping
-                    self.population_arrays[attr] = np.array([p.residence.id if p.residence else -1 for p in people], dtype=np.int32)
-                else:
-                    # General path (properties, nested, etc.)
-                    # Must use _get_person_attribute to check person.properties
-                    self.population_arrays[attr] = np.array([
-                        mapping.get(self._get_person_attribute(attr, p), 0) 
-                        for p in people
-                    ], dtype=np.int32)
+                mapping = {val: i + 1 for i, val in enumerate(sorted(present))}
+                self.attribute_mappings[attr] = mapping
+                self.population_arrays[attr] = np.array(
+                    [mapping.get(v, 0) for v in values], dtype=np.int32
+                )
 
     def _get_person_attribute(self, path: str, person: Any):
         """
@@ -324,18 +300,7 @@ class BaseDistributor:
         For paths like 'residence.name' or 'residence.geographical_unit.name',
         this looks at the person.residence property.
         """
-        if path.startswith('residence.'):
-            residence = getattr(person, 'residence', None)
-            if residence is None:
-                return None
-            attr_path = path.replace('residence.', '')
-            return self._get_nested_value_with_dict_support(residence, attr_path)
-
-        # Check properties first for common attributes not in slots
-        if hasattr(person, 'properties') and path in person.properties:
-            return person.properties[path]
-
-        return self._get_nested_value_with_dict_support(person, path)
+        return compile_path(path, False)(person)
 
     def _get_nested_value(self, obj, path: str):
         """Get value from nested object path (e.g., 'name' or 'geo_unit')."""

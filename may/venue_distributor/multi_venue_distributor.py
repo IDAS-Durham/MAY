@@ -29,6 +29,35 @@ from may.utils import path_resolver as pr
 
 logger = logging.getLogger(__name__)
 
+# Open-ended bands ("65+", "65-+") run to this age rather than to infinity.
+_OPEN_BAND_MAX = 200
+
+
+def _parse_age_band(label):
+    """Parse an age band such as "16-24", "65-+" or "65+". None if unparseable."""
+    try:
+        if label.endswith('+') and '-' not in label:
+            return int(label[:-1]), _OPEN_BAND_MAX
+        parts = label.split('-')
+        if len(parts) != 2:
+            return None
+        low = int(parts[0])
+        high = _OPEN_BAND_MAX if parts[1].endswith('+') else int(parts[1])
+        return low, high
+    except (ValueError, AttributeError):
+        return None
+
+
+def _parse_numerical_band(label):
+    """Parse a numerical band such as "1.5-3.0". None if unparseable."""
+    try:
+        parts = label.split('-')
+        if len(parts) != 2:
+            return None
+        return float(parts[0]), float(parts[1])
+    except (ValueError, AttributeError):
+        return None
+
 
 class MultiVenueDistributor(BaseDistributor):
     """
@@ -176,7 +205,8 @@ class MultiVenueDistributor(BaseDistributor):
             self.participation_data[venue_type] = {
                 'lookup_index': lookup_index,
                 'row_filters': row_filters,
-                'probability_column': prob_config
+                'probability_column': prob_config,
+                'ranges': self._build_participation_ranges(lookup_index, row_filters),
             }
 
         except Exception as e:
@@ -186,7 +216,44 @@ class MultiVenueDistributor(BaseDistributor):
                 'lookup_index': {},
                 'row_filters': filter_config.get('row_filters', []),
                 'probability_column': filter_config.get('probability_column', {}),
+                'ranges': {},
             }
+
+    def _build_participation_ranges(self, lookup_index: Dict, row_filters: List[Dict]) -> Dict:
+        """
+        Pre-parse the bands each range filter can match, keyed by filter position.
+
+        The bands are fixed once the CSV is loaded, so parsing them per person
+        would repeat the same string work on every allocation decision. Bands
+        stay in lookup-index order because the first match wins.
+        """
+        ranges = {}
+
+        for filter_idx, filter_cfg in enumerate(row_filters):
+            match_type = filter_cfg.get('match_type', 'exact')
+            if match_type == 'age_range':
+                parse = _parse_age_band
+            elif match_type == 'numerical_range':
+                parse = _parse_numerical_band
+            else:
+                continue
+
+            bands = []
+            seen = set()
+            for key_tuple in lookup_index:
+                if filter_idx >= len(key_tuple):
+                    continue
+                label = key_tuple[filter_idx]
+                if label in seen:
+                    continue
+                seen.add(label)
+                bounds = parse(label)
+                if bounds is not None:
+                    bands.append((bounds[0], bounds[1], label))
+
+            ranges[filter_idx] = bands
+
+        return ranges
 
     def _match_row_filters(self, person, row, row_filters: List[Dict]) -> bool:
         """
@@ -346,6 +413,7 @@ class MultiVenueDistributor(BaseDistributor):
         lookup_index = participation_config['lookup_index']
         row_filters = participation_config['row_filters']
         prob_config = participation_config['probability_column']
+        ranges = participation_config['ranges']
 
         # Build lookup key from person attributes
         lookup_keys = []
@@ -361,52 +429,13 @@ class MultiVenueDistributor(BaseDistributor):
             # Find matching CSV value based on match_type
             csv_value = None
 
-            if match_type == 'age_range':
-                # Find which age range this person falls into
-                # Try all possible age ranges in the lookup index
-                for key_tuple in lookup_index.keys():
-                    if filter_idx < len(key_tuple):
-                        age_band = key_tuple[filter_idx]
-                        # Parse "16-24", "65-+", or "65+" formats
-                        try:
-                            if age_band.endswith('+') and '-' not in age_band:
-                                # Standalone "65+" format
-                                min_val = int(age_band[:-1])
-                                max_val = 200
-                            else:
-                                parts = age_band.split('-')
-                                if len(parts) != 2:
-                                    continue
-                                min_val = int(parts[0])
-                                if parts[1].endswith('+'):
-                                    max_val = 200
-                                else:
-                                    max_val = int(parts[1])
-
-                            if min_val <= person_value <= max_val:
-                                csv_value = age_band
-                                break
-                        except (ValueError, AttributeError):
-                            continue
-
-            elif match_type == 'exact':
+            if match_type == 'exact':
                 csv_value = str(person_value)
-
-            elif match_type == 'numerical_range':
-                # Similar to age_range but for numerical ranges
-                for key_tuple in lookup_index.keys():
-                    if filter_idx < len(key_tuple):
-                        range_val = key_tuple[filter_idx]
-                        try:
-                            parts = range_val.split('-')
-                            if len(parts) == 2:
-                                min_val = float(parts[0])
-                                max_val = float(parts[1])
-                                if min_val <= person_value <= max_val:
-                                    csv_value = range_val
-                                    break
-                        except (ValueError, AttributeError):
-                            continue
+            else:
+                for low, high, label in ranges.get(filter_idx, ()):
+                    if low <= person_value <= high:
+                        csv_value = label
+                        break
 
             if csv_value is None:
                 return False

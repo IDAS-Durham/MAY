@@ -73,6 +73,6 @@ fallback:
     max_iterations: 3
     distance_multiplier: 2.0  # Double search radius each iteration
 
-exports:
-  venue_summary: "output/1911/medical_venue_summary.csv"
-  unallocated_report: "output/1911/medical_unallocated.csv"
+# exports:
+  # venue_summary: "output/1911/medical_venue_summary.csv"
+  # unallocated_report: "output/1911/medical_unallocated.csv"
