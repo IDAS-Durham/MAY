@@ -95,7 +95,7 @@ households:
 # DEBUG OUTPUTS
 
 debug_outputs:
-  enabled: true
+  enabled: false
 
 # TIMELINE
 

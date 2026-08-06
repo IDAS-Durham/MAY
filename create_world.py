@@ -25,6 +25,12 @@ from may.utils import path_resolver as pr
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 logger = logging.getLogger("create_world")
+
+# Windows consoles default to cp1252, which cannot encode the non-ASCII
+# characters used in log messages. Force UTF-8 on the log stream.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
