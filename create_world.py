@@ -16,11 +16,21 @@ from may.attribute_assignment import AttributeAssignmentError
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
-from may.utils.debug_output import export_residence_venues, export_commute_mode_debug
+from may.utils.debug_output import (
+    export_residence_venues,
+    export_commute_mode_debug,
+    export_work_assignment_debug,
+)
 from may.utils import path_resolver as pr
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 logger = logging.getLogger("create_world")
+
+# Windows consoles default to cp1252, which cannot encode the non-ASCII
+# characters used in log messages. Force UTF-8 on the log stream.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -172,7 +182,8 @@ def main():
     logger.info(world)
 
     # TIMELINE - Unified Event Processing
-    # This replaces the separate "attributes" and "venue_pipeline" sections if "timeline" is present.
+    # A present "timeline" section drives every event and takes precedence over
+    # the separate "attributes" and "venue_pipeline" sections.
     
     timeline_config = config.get("timeline", {})
 
@@ -200,7 +211,7 @@ def main():
                 # Runs the full household + residence-venue allocation strategy
                 # at this point in the timeline. The step's `config:` points at
                 # the allocation-strategy YAML (any filename, must follow that
-                # format) — the single source of truth for which strategy runs.
+                # format), the single source of truth for which strategy runs.
                 # Placing attribute steps before it lets residence allocation
                 # read those attributes.
                 logger.info("")
@@ -218,6 +229,14 @@ def main():
                 except HouseholdError as e:
                     logger.error(f"Household allocation failed: {e}")
                     sys.exit(1)
+
+                # Who ended up living where, for every residence venue type.
+                if config.get("debug_outputs", {}).get("enabled", False):
+                    output_dir = pr.resolve(config.get("serialization", {}).get("output_dir", "."))
+                    os.makedirs(output_dir, exist_ok=True)
+                    export_residence_venues(
+                        world, os.path.join(output_dir, "residence_venues.csv")
+                    )
 
             elif step_type == "attribute":
                 logger.info("")
@@ -271,6 +290,20 @@ def main():
             os.makedirs(output_dir, exist_ok=True)
             export_commute_mode_debug(
                 world, os.path.join(output_dir, "commute_mode_debug.csv")
+            )
+            # Work-assignment evidence (placement rate, sector-location
+            # consistency, spatial basis, sex realism). Comparable across the
+            # residence-basis and workplace-basis pipelines.
+            margin_file = pr.resolve(
+                os.path.join(
+                    config.get("data_root", "data"),
+                    "activities/work/EW_industry_sex_lad.csv",
+                )
+            )
+            export_work_assignment_debug(
+                world,
+                os.path.join(output_dir, "work_assignment_debug.csv"),
+                industry_sex_margin_file=margin_file,
             )
 
     else:
@@ -369,7 +402,7 @@ def main():
 
 if __name__ == "__main__":
     # Force a deterministic hash seed for reproducible runs. This re-execs the
-    # interpreter, so it must stay in the CLI entry path — doing it at import
+    # interpreter, so it must stay in the CLI entry path. Doing it at import
     # time replaces the process whenever the module is imported (e.g. by tests).
     if os.environ.get('PYTHONHASHSEED') is None:
         os.environ['PYTHONHASHSEED'] = '0'

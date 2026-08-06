@@ -113,11 +113,13 @@ eligibility:
             max: 17
         probability_config:
           type: "file"
-          file_path: "data/activities/university/university_probabilities.csv"
+          file_path:
+            - "data/activities/university/EW_university_probabilities.csv"
+            - "data/activities/university/SCT_university_probabilities.csv"
+            - "data/activities/university/NI_university_probabilities.csv"
           lookup_column: "geo_unit"
           lookup_attribute: "geographical_unit.name"
           probability_column: "prob_uni_18_22"
-          default: 0.35
 ```
 
 `require_unassigned` — when `true`, skips anyone who already has `activity_map_key` assigned.

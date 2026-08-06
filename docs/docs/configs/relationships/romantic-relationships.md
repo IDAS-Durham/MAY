@@ -36,12 +36,21 @@ max_age: 120
 
 ```yaml
 data_sources:
-  prevalence_path: "data/population/sexual_orientation/orientation_prevalence_extended.csv"
-  msoa_marginal_path: "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+  prevalence_path: "data/population/sexual_orientation/orientation_prevalence_synthetic.csv"
+  msoa_marginal_path:
+    - "data/population/sexual_orientation/EW_orientation_by_mgu.csv"
+    - "data/population/sexual_orientation/SCT_orientation_by_mgu.csv"
+    - "data/population/sexual_orientation/NI_orientation_by_mgu.csv"
   geo_level: "MGU"
 ```
 
-When present, the engine uses raked probabilities: national prevalence by sex × age is combined with per-area orientation marginals to produce `P(orientation | sex, age, area)`. `prevalence_path` points to the national-level file; `msoa_marginal_path` to the per-area file; `geo_level` names the geography level at which area codes in that file are expressed.
+When present, the engine uses raked probabilities: national prevalence by sex × age is combined with per-area orientation marginals to produce `P(orientation | sex, age, area)`. `prevalence_path` points to the national-level file; `msoa_marginal_path` to one per-area file or a list of them to stack (here one per UK nation); `geo_level` names the geography level at which area codes in that file are expressed.
+
+!!! warning "The shipped national prevalence file is synthetic"
+
+    The measured `P(orientation | sex, age)` table is embargoed and is not distributed with this repo. `orientation_prevalence_synthetic.csv` is a generated stand-in: its age gradient and sex difference follow patterns published in census bulletins, but the values are invented.
+
+    The per-area marginals *are* real census data, and because the two are reconciled by IPF, each area is still raked to its measured LGB+ level. What the synthetic file governs is how that level is spread across age and sex. Area-level output remains usable; **orientation-by-age figures taken from a generated world restate the stand-in model and must not be reported as estimates.**
 
 Omit this entire block for worlds without area-level orientation data — the engine falls back to the `sexual_orientations.probabilities` values below.
 

@@ -10,16 +10,17 @@ mutually-exclusive paths:
 1. Data-driven (when ``data_sources`` IS set): the two declared files must
    exist or construction fails loud.
    - Demographic prior: ``P(orientation | sex, age_band)`` from the
-     ``demographic_distribution`` source's ``path`` (e.g. orientation_prevalence_extended.csv).
+     ``demographic_distribution`` source's ``path``.
    - Geographic marginal: ``P(orientation | geo_unit)`` from the ``geo_distribution``
-     source's ``path`` (e.g. orientation_by_msoa_normalized.csv), keyed at its ``geo_level``.
+     source's ``path``, which may name one file or several to stack, keyed at
+     its ``geo_level``.
    - The two are reconciled via Iterative Proportional Fitting (IPF) on a
      cell table indexed by ``(sex, age_band, area)``, then sampling is
      cell-batched and vectorized (one np.random.choice per cell), so wall
      time scales in area count, not population.
 
 2. YAML path (when ``data_sources`` is ABSENT): hand-tuned ``probabilities``
-   + ``age_adjustments`` from ``romantic_relationships.yaml`` — for non-UK /
+   + ``age_adjustments`` from ``romantic_relationships.yaml``, for non-UK /
    historical worlds without area data. Per-person; intended for small
    populations.
 
@@ -41,6 +42,7 @@ import numpy as np
 import yaml
 from may.utils import path_resolver as pr
 from may.utils.attribute_access import get_person_attribute
+from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 logger = logging.getLogger("romantic_relationships")
 
@@ -116,17 +118,25 @@ class RomanticDistributor:
         demo_src = ds.get('demographic_distribution', {})
         geo_src = ds.get('geo_distribution', {})
         prev_path = pr.resolve(demo_src.get('path', '')) or None
-        area_path = pr.resolve(geo_src.get('path', '')) or None
         if not prev_path or not os.path.exists(prev_path):
             raise ValueError(
                 f"{self.name}: data_sources declared but demographic_distribution.path "
                 f"missing or not found: {prev_path}. Omit data_sources to "
                 f"use the YAML probabilities path instead."
             )
-        if not area_path or not os.path.exists(area_path):
+
+        # geo_distribution.path may name one file or several (one per nation);
+        # the files are stacked into a single geo_unit -> shares table.
+        area_spec = geo_src.get('path')
+        area_paths = [
+            pr.resolve(p) for p in
+            as_path_list(area_spec, f"{self.name}: geo_distribution.path")
+        ] if area_spec else []
+        absent = [p for p in area_paths if not os.path.exists(p)]
+        if not area_paths or absent:
             raise ValueError(
                 f"{self.name}: data_sources declared but geo_distribution.path missing "
-                f"or not found: {area_path}. Omit data_sources to use the "
+                f"or not found: {absent or area_spec}. Omit data_sources to use the "
                 f"YAML probabilities path instead."
             )
 
@@ -178,17 +188,19 @@ class RomanticDistributor:
         self._prevalence_table = prevalence_table
 
         # MSOA marginals
+        area_df = load_stacked_csv(
+            area_paths, label=f"{self.name}: geo_distribution", key_column='geo_unit'
+        )
         msoa_rows: Dict[str, np.ndarray] = {}
-        with open(area_path) as f:
-            for row in csv.DictReader(f):
-                code = row['geo_unit'].strip()
-                arr = np.zeros(self._n_orients, dtype=np.float64)
-                for i, name in enumerate(self.orientation_names):
-                    if name in row:
-                        arr[i] = float(row[name])
-                s = arr.sum()
-                if s > 0:
-                    msoa_rows[code] = arr / s
+        for row in area_df.to_dict('records'):
+            code = str(row['geo_unit']).strip()
+            arr = np.zeros(self._n_orients, dtype=np.float64)
+            for i, name in enumerate(self.orientation_names):
+                if name in row:
+                    arr[i] = float(row[name])
+            s = arr.sum()
+            if s > 0:
+                msoa_rows[code] = arr / s
 
         self._msoa_codes = sorted(msoa_rows.keys())
         self._msoa_idx_by_code = {c: i for i, c in enumerate(self._msoa_codes)}
@@ -316,7 +328,7 @@ class RomanticDistributor:
         # Convergence criterion: max relative change in cell_count between
         # iterations. This works whether the two marginals are mutually
         # consistent (the usual case in a representative population) or
-        # inconsistent (the result is then the I-projection — IPF still
+        # inconsistent (the result is then the I-projection, since IPF still
         # converges to a stable fixed point, the marginals just don't both
         # match exactly).
         prev_count = cell_count.copy()
@@ -372,7 +384,7 @@ class RomanticDistributor:
                                         partner_sex_arr: np.ndarray,
                                         cell_prob: np.ndarray,
                                         compatibility: Dict[str, Dict[str, List[str]]]) -> np.ndarray:
-        """Cell-batched np.random.choice — one call per unique group.
+        """Cell-batched np.random.choice, one call per unique group.
 
         Groups are keyed on ``(sex, band, msoa, partner_sex)``. Singles share
         groups across partner_sex by encoding "no partner" as -1, so they

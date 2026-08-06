@@ -5,6 +5,38 @@ from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
+
+def _multinomial_capacity_draw(remaining: np.ndarray, n: int) -> Tuple[np.ndarray, int]:
+    """Place n people across venues, weighted by remaining capacity.
+
+    One multinomial draw per round, O(venues) and independent of n. Any venue drawn
+    over its remaining capacity is capped and the excess re-drawn over the
+    still-open venues; repeats until placed or every venue is full. Returns the
+    per-venue placed counts and the residual that did not fit: the caller reports
+    it as unallocated, capacity is never relaxed.
+    """
+    placed = np.zeros(len(remaining), dtype=np.int64)
+    caps = remaining.astype(np.int64).copy()
+    to_place = n
+    while to_place > 0:
+        idx = np.where(caps > 0)[0]
+        if idx.size == 0:
+            break
+        cap_available = int(caps[idx].sum())
+        if to_place >= cap_available:
+            # Demand exceeds every open seat: fill them all, the rest is residual.
+            placed[idx] += caps[idx]
+            caps[idx] = 0
+            to_place -= cap_available
+            break
+        draw = np.random.multinomial(to_place, caps[idx] / cap_available)
+        take = np.minimum(draw, caps[idx])
+        placed[idx] += take
+        caps[idx] -= take
+        to_place -= int(take.sum())
+    return placed, to_place
+
+
 class AllocationEngine:
     """
     Orchestrates the distribution process, including batching and individual allocation.
@@ -155,7 +187,13 @@ class AllocationEngine:
                 vals = tuple(getter(person) for getter in self.attr_getters)
                 people_by_attrs[vals].append(person)
 
-            for attr_vals, group in people_by_attrs.items():
+            # capacity_proportional randomises cohort order so a saturating venue
+            # can't skew toward earlier-processed cohorts.
+            attr_items = list(people_by_attrs.items())
+            if strategy == 'capacity_proportional':
+                np.random.shuffle(attr_items)
+
+            for attr_vals, group in attr_items:
                 cache_key = (venue_search_unit.name, attr_vals)
                 
                 # 1. Get/Cache the pool of venues for this (LGU, attributes) combination
@@ -236,6 +274,33 @@ class AllocationEngine:
                                 venue_ptr += 1
                         if not assigned:
                             unallocated.append(person)
+
+                elif strategy == 'capacity_proportional':
+                    # Draw the whole cohort into venues in one batch multinomial,
+                    # weighted by remaining capacity only, distance-free and O(venues).
+                    # Age/sex mixing is emergent, not enforced.
+                    remaining = np.array(
+                        [self.distributor._get_remaining_capacity(v) for v in available_venues],
+                        dtype=np.int64,
+                    )
+                    placed, residual = _multinomial_capacity_draw(remaining, len(group))
+
+                    # Shuffle within the cohort before slicing: the stream is
+                    # sex-sorted within an age, so contiguous slices would hand a
+                    # venue a single-sex block. Shuffling keeps sex mixing emergent.
+                    np.random.shuffle(group)
+                    i = 0
+                    for v, k in zip(available_venues, placed):
+                        for _ in range(int(k)):
+                            person = group[i]
+                            i += 1
+                            v.add_to_subset(person, subset_key=self.distributor.subset_key,
+                                            activity_name=self.distributor.activity_map_key,
+                                            activity_type=self.distributor.activity_type)
+                            self.distributor._increment_venue_count(v)
+                            allocated += 1
+                    if residual:
+                        unallocated.extend(group[i:])
 
                 elif strategy == 'closest_balanced' and lat is not None:
                     # Weighted allocation: balance distance preference with remaining capacity

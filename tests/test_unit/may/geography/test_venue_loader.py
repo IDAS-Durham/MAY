@@ -16,7 +16,7 @@ from may.geography.venue_manager import VenueManager, VenueError
 
 @pytest.fixture
 def loaded_geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"], hierarchy_file="hierarchy.csv")
     geo.load_from_csv()
     return geo
 
@@ -56,7 +56,7 @@ def test_csv_without_name_column_uses_auto_generated_names(loaded_geography, cap
 
 def test_csv_with_blank_name_falls_back_to_auto_name(loaded_geography):
     """A CSV that has a 'name' column but with NaN/blank for some rows keeps
-    the auto-generated name for those rows — we never fabricate a name."""
+    the auto-generated name for those rows, so no name is ever fabricated."""
     vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
 
     df = pd.DataFrame({
@@ -110,7 +110,7 @@ def test_cross_type_name_collision_keeps_both_venues(loaded_geography, caplog):
 
 def test_same_type_duplicate_both_venues_reachable(loaded_geography):
     """Two care_homes with the same name must both be loadable and reachable
-    by type — no venue is silently dropped."""
+    by type, and no venue is dropped."""
     vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
     df = pd.DataFrame({
         'name': ['Church View', 'Church View'],
@@ -126,7 +126,7 @@ def test_same_type_duplicate_both_venues_reachable(loaded_geography):
 
 def test_same_type_name_collision_keeps_both_venues(loaded_geography, caplog):
     """Two care_homes named 'Church View' (real duplication in source data)
-    must both remain reachable by their (type, id) — name lookup is
+    must both remain reachable by their (type, id). Name lookup is
     necessarily ambiguous, but no venue is silently destroyed."""
     vm = VenueManager(geography=loaded_geography, filter_by_geography=False)
 
@@ -150,7 +150,7 @@ def test_same_type_name_collision_keeps_both_venues(loaded_geography, caplog):
 
 
 def test_missing_csv_fails_loud(loaded_geography, tmp_path):
-    """An enabled venue type pointing at an absent CSV is a hard error — the
+    """An enabled venue type pointing at an absent CSV is a hard error, since the
     engine works on complete data or fails loudly. A typo'd filename must not
     silently build an empty venue set."""
     venues_dir = tmp_path / "venues"
@@ -286,7 +286,7 @@ def test_total_venues_log_reflects_true_count_with_collisions(loaded_geography, 
 
 
 def test_total_venues_log_no_parenthetical_when_no_collisions(loaded_geography, tmp_path, caplog):
-    """No collisions means no shadow count — keep the line clean."""
+    """No collisions means no shadow count, keeping the line clean."""
     venues_dir = tmp_path / "venues"
     venues_dir.mkdir()
     (venues_dir / "homes.csv").write_text(
@@ -326,9 +326,11 @@ def test_production_yaml_does_not_reference_missing_files():
         if not type_config.get('enabled', True):
             continue
         filename = type_config.get('filename', f"{venue_type}s.csv")
-        # Resolve relative to the production data dir.
-        full_path = os.path.join("data/venues", filename)
-        if not os.path.exists(full_path):
-            missing.append((venue_type, full_path))
+        filenames = filename if isinstance(filename, list) else [filename]
+        for name in filenames:
+            # Resolve relative to the production data dir.
+            full_path = os.path.join("data/venues", name)
+            if not os.path.exists(full_path):
+                missing.append((venue_type, full_path))
 
     assert not missing, f"Enabled venue types reference missing CSVs: {missing}"

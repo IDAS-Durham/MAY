@@ -1,8 +1,19 @@
-# Bus commute legs (RouteDistributor). NOTE: bus routes have not been
-# generated yet (D8 — synthetic per-LGU pseudo-routes, deferred). The routing
-# table contains no mode_class=bus rows, so every bus commuter is a miss and
-# falls back to walk via on_miss. This config is wired in now so adding the
-# bus routes later is a data-only change.
+# Bus commute legs (RouteDistributor, pool_rule form).
+#
+# Bus is the most-used commute mode after driving, and there is no real bus
+# topology in the transport data layer. Modelling actual GB and NI bus routes
+# would mean ingesting BODS and Translink GTFS feeds from thousands of
+# operators, and the simulator does not need that: for force-of-infection the
+# only thing a bus has to be is a bounded pool of people sharing air for a
+# bounded time. So the pool is derived rather than measured.
+#
+# This replaces a precomputed table of 5.8M enumerated MGU pairs. Every row in
+# that table was a pure function of its own key (leg_idx always 0, board and
+# alight always the journey endpoints, t_board always 0, line_id a string built
+# from the endpoints, duration a distance calculation), so storing it bought
+# nothing and cost roughly 480 MB. It also grew with the square of the MGU count
+# inside the radius, which is what made each new country expensive. Derived at
+# runtime, adding a country costs nothing.
 distributor_type: "route"
 distributor_name: "route_commute_bus"
 
@@ -10,16 +21,13 @@ activity_map_key: "commute"
 leg_venue_type: "bus_line"
 leg_subset_key: "rider"
 
-routes_table: "${data_root}/activities/commute/routes.csv"
-legs_table:   "${data_root}/activities/commute/route_legs.csv"
-
 origin_source:
   type: "ancestor"
   from: "geographical_unit"
   level: "MGU"
 destination_source:
   type: "ancestor"
-  from: "properties.workplace_sgu"
+  from: "properties.workplace_mgu"
   level: "MGU"
 
 class_source: "properties.commute_mode"
@@ -29,11 +37,40 @@ class_map:
 
 require_properties:
   - "commute_mode"
+  # A workplace is required too. Someone with a travel mode but no assigned
+  # workplace has no journey to route, and counting them as a route miss would
+  # both overstate the miss rate and rewrite the mode of a person who never
+  # commutes. Only matters when commute_mode is drawn before the workplace
+  # exists; harmless otherwise, since anyone in a workplace venue has this.
+  - "workplace_mgu"
+
+# Pool derivation. Riders crossing the same ordered pair of LGUs share one pool,
+# which captures inter-borough commute corridors. Riders whose journey starts
+# and ends in the same LGU share a pool keyed on their origin MGU instead: that
+# is the local-service case, where people boarding at the same place ride
+# together regardless of where they get off.
+#
+# Travel time is great-circle centroid distance at an urban-bus average, floored
+# so same-MGU trips still have a duration and capped so the geographically huge
+# LGUs (County Durham, Highland) do not produce implausible rides. Journeys
+# beyond max_distance_km are treated as route misses, since no one buses that
+# far daily.
+pool_rule:
+  pool_id_prefix: "bus_pool"
+  corridor_level: "LGU"
+  max_distance_km: 50
+  speed_kmh: 30
+  min_duration_min: 5
+  max_duration_min: 60
 
 leg_metadata:
   t_board_min:  "t_board_min"
   t_alight_min: "t_alight_min"
 
+# Last rung of the miss ladder. Train and tube hand their misses here; this one
+# has nowhere further to hand them, so a bus miss is a real one. Reaching it
+# means the journey is over 50 km, which is beyond a daily bus, so car_solo is
+# the honest answer and the person carries no commute exposure.
 on_miss:
   set:
     commute_mode: "car_solo"

@@ -7,7 +7,6 @@ activity_map_key: "commute"
 leg_venue_type: "tube_line"
 leg_subset_key: "rider"
 
-routes_table: "${data_root}/activities/commute/routes.csv"
 legs_table:   "${data_root}/activities/commute/route_legs.csv"
 
 origin_source:
@@ -16,7 +15,7 @@ origin_source:
   level: "MGU"
 destination_source:
   type: "ancestor"
-  from: "properties.workplace_sgu"
+  from: "properties.workplace_mgu"
   level: "MGU"
 
 class_source: "properties.commute_mode"
@@ -26,14 +25,35 @@ class_map:
 
 require_properties:
   - "commute_mode"
+  # A workplace is required too. Someone with a travel mode but no assigned
+  # workplace has no journey to route, and counting them as a route miss would
+  # both overstate the miss rate and rewrite the mode of a person who never
+  # commutes. Only matters when commute_mode is drawn before the workplace
+  # exists; harmless otherwise, since anyone in a workplace venue has this.
+  - "workplace_mgu"
+
+# Station catchment, tighter than rail: people walk or take a short bus to a
+# metro stop rather than driving to one. Beyond 3 km the mode is out of reach,
+# which is the correct answer for most of the country given that
+# only 4% of UK MGUs contain a tube/metro stop at all.
+catchment:
+  max_access_km: 3
+  access_speed_kmh: 10
 
 leg_metadata:
   t_board_min:  "t_board_min"
   t_alight_min: "t_alight_min"
 
+# Route-miss repair, same ladder as route_commute_train.yaml: hand the rider to
+# the generic shared pool rather than off shared transport altogether, so the
+# exposure survives even though the mode label is wrong. Metro misses are mostly
+# people who live too far from a station (a 3 km catchment is a walking radius,
+# not a driving one), and a bus is exactly what those people take instead.
+#
+# Depends on route_commute_bus running after this distributor in the timeline.
 on_miss:
   set:
-    commute_mode: "car_solo"
+    commute_mode: "bus"
 
 settings:
   verbose: true

@@ -98,7 +98,29 @@ def setup_geography(config=None):
     data_dir = pr.resolve(geo_config.get('data_dir', 'data/geography'))
     levels = geo_config.get('levels')  # required; Geography fails loud if absent
 
+    # File keys are explicit: hierarchy_file is a path or list of paths,
+    # coord_files maps level label -> path or list of paths. Both accept
+    # ${...} templating; relative paths resolve against data_dir.
+    hierarchy_file = _resolve_spec(geo_config.get('hierarchy_file'))
+    coord_files = {
+        level: _resolve_spec(spec)
+        for level, spec in (geo_config.get('coord_files') or {}).items()
+    }
+
     # Create Geography object
-    geo = Geography(data_dir=data_dir, filters=filters, levels=levels)
+    geo = Geography(
+        data_dir=data_dir,
+        filters=filters,
+        levels=levels,
+        hierarchy_file=hierarchy_file,
+        coord_files=coord_files,
+    )
 
     return geo, filters
+
+
+def _resolve_spec(spec):
+    """Apply ${...} templating to a path or each path in a list."""
+    if isinstance(spec, list):
+        return [pr.resolve(p) for p in spec]
+    return pr.resolve(spec) if spec else spec

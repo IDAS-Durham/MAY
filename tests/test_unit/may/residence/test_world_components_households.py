@@ -13,7 +13,7 @@ def _seed_rng():
     """Couple formation and overflow allocation draw from the global np.random
     stream (the pair_matching sex roll, age matching, and pool shuffles). Seed
     before every test so outcomes are deterministic and independent of which
-    tests ran earlier — without this the suite passes or fails by execution
+    tests ran earlier, so without this the suite passes or fails by execution
     order. Mirrors the np.random.seed(42) convention already used throughout
     test_allocation_strategy_integration.py.
     """
@@ -22,7 +22,7 @@ def _seed_rng():
 
 @pytest.fixture
 def geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"], hierarchy_file="hierarchy.csv")
     geo.load_from_csv()
     return geo
 

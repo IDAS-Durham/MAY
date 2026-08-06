@@ -1,5 +1,5 @@
 """
-Contract tests for HouseholdDistributor.load_household_data — the loader
+Contract tests for HouseholdDistributor.load_household_data, the loader
 exercised by these production log lines:
 
     Loading household data from data/households/households.csv
@@ -90,8 +90,8 @@ class TestLoadHouseholdDataHappyPath:
         assert any('Loaded household data for 2 geographical units' in r.message for r in caplog.records)
 
     def test_geo_unit_with_only_zero_counts_is_omitted_entirely(self, tmp_path):
-        """A geo_unit row whose counts are all zero must produce no entry —
-        not an empty dict — so downstream `if geo_unit in counts` checks
+        """A geo_unit row whose counts are all zero must produce no entry,
+        rather than an empty dict, so downstream `if geo_unit in counts` checks
         don't accidentally process empty households."""
         geo = _make_geo(['SGU_001', 'SGU_002'])
         hd = _make_distributor(geo, str(tmp_path))
@@ -112,7 +112,7 @@ class TestLoadHouseholdDataSadPaths:
 
     def test_missing_file_raises(self, tmp_path):
         """A missing households CSV must fail loud (HouseholdError), like
-        PopulationError/VenueError — the engine works on complete data or not
+        PopulationError/VenueError, since the engine works on complete data or not
         at all. Once a residence_allocation step is in the timeline,
         missing household data is a misconfiguration, not a tolerable no-op."""
         geo = _make_geo(['SGU_001'])
@@ -135,7 +135,7 @@ class TestLoadHouseholdDataSadPaths:
 
     def test_no_rows_match_geography_raises(self, tmp_path):
         """A present file whose rows are all outside the loaded geography
-        would build zero households — fail loud instead."""
+        would build zero households, so it fails loud instead."""
         geo = _make_geo(['SGU_001'])
         hd = _make_distributor(geo, str(tmp_path))
         _write_households_csv(
@@ -143,7 +143,20 @@ class TestLoadHouseholdDataSadPaths:
             ['1 0 0 0'],
             [('SGU_999', [3])],  # not in geography
         )
-        with pytest.raises(HouseholdError, match="matched the loaded geography"):
+        with pytest.raises(HouseholdError, match="no household data row"):
+            hd.load_household_data("households.csv")
+
+    def test_uncovered_geo_unit_raises(self, tmp_path):
+        """Every loaded geo unit needs a household row; a partial file must
+        fail loud, not quietly leave people in that unit homeless."""
+        geo = _make_geo(['SGU_001', 'SGU_002'])
+        hd = _make_distributor(geo, str(tmp_path))
+        _write_households_csv(
+            tmp_path / "households.csv",
+            ['1 0 0 0'],
+            [('SGU_001', [3])],  # SGU_002 has no row
+        )
+        with pytest.raises(HouseholdError, match="SGU_002"):
             hd.load_household_data("households.csv")
 
 
@@ -153,27 +166,27 @@ class TestLoadHouseholdDataReload:
 
     def test_second_load_replaces_first(self, tmp_path):
         """Calling load_household_data twice must produce the same state
-        as calling it once with the second file — not a union of the two.
+        as calling it once with the second file, rather than a union of the two.
         Otherwise stale entries from a prior load silently shadow the
         intended state, and downstream allocators see geo_units that the
         current run shouldn't include."""
         geo = _make_geo(['SGU_001', 'SGU_002'])
         hd = _make_distributor(geo, str(tmp_path))
-        # First file: covers SGU_001
+        # First file: counts only in SGU_001
         _write_households_csv(
             tmp_path / "first.csv",
             ['1 0 0 0'],
-            [('SGU_001', [3])],
+            [('SGU_001', [3]), ('SGU_002', [0])],
         )
         hd.load_household_data("first.csv")
         assert 'SGU_001' in hd.household_counts_by_geo_unit
 
-        # Second file: covers ONLY SGU_002. SGU_001's stale entry must be
+        # Second file: counts ONLY in SGU_002. SGU_001's stale entry must be
         # gone after the re-load.
         _write_households_csv(
             tmp_path / "second.csv",
             ['1 0 0 0'],
-            [('SGU_002', [5])],
+            [('SGU_001', [0]), ('SGU_002', [5])],
         )
         hd.load_household_data("second.csv")
         assert set(hd.household_counts_by_geo_unit.keys()) == {'SGU_002'}
@@ -181,7 +194,7 @@ class TestLoadHouseholdDataReload:
 
     def test_reload_after_missing_file_raises_and_clears_state(self, tmp_path):
         """A re-load pointing at a missing file must fail loud, and must clear
-        prior state before raising — so a caught error can't leave stale counts
+        prior state before raising, so a caught error can't leave stale counts
         that make the world look loaded."""
         geo = _make_geo(['SGU_001'])
         hd = _make_distributor(geo, str(tmp_path))
@@ -196,3 +209,74 @@ class TestLoadHouseholdDataReload:
         with pytest.raises(HouseholdError):
             hd.load_household_data("vanished.csv")
         assert hd.household_counts_by_geo_unit == {}  # stale state cleared, not re-served
+
+
+# Multi-file stacking: shared or unioned vocabularies, disjoint geo keys
+
+class TestLoadHouseholdDataMultiFile:
+
+    def test_stacked_files_with_shared_vocabulary(self, tmp_path):
+        """Two sources with identical pattern columns stack under strict."""
+        geo = _make_geo(['SGU_001', 'SGU_002'])
+        hd = _make_distributor(geo, str(tmp_path))
+        _write_households_csv(
+            tmp_path / "nation_a.csv", ['1 0 0 0'], [('SGU_001', [3])]
+        )
+        _write_households_csv(
+            tmp_path / "nation_b.csv", ['1 0 0 0'], [('SGU_002', [5])]
+        )
+        hd.load_household_data(["nation_a.csv", "nation_b.csv"])
+        assert hd.household_counts_by_geo_unit == {
+            'SGU_001': {'1 0 0 0': 3},
+            'SGU_002': {'1 0 0 0': 5},
+        }
+
+    def test_stacked_files_with_different_vocabularies_fail_strict(self, tmp_path):
+        geo = _make_geo(['SGU_001', 'SGU_002'])
+        hd = _make_distributor(geo, str(tmp_path))
+        _write_households_csv(
+            tmp_path / "nation_a.csv", ['1 0 0 0'], [('SGU_001', [3])]
+        )
+        _write_households_csv(
+            tmp_path / "nation_b.csv", ['0 0 2 0'], [('SGU_002', [5])]
+        )
+        with pytest.raises(HouseholdError, match="column"):
+            hd.load_household_data(["nation_a.csv", "nation_b.csv"])
+
+    def test_union_zero_fill_combines_vocabularies(self, tmp_path, caplog):
+        """Opting into union lets sources with different pattern columns
+        stack; absent patterns read as zero households, with a warning."""
+        geo = _make_geo(['SGU_001', 'SGU_002'])
+        hd = _make_distributor(geo, str(tmp_path))
+        _write_households_csv(
+            tmp_path / "nation_a.csv", ['1 0 0 0'], [('SGU_001', [3])]
+        )
+        _write_households_csv(
+            tmp_path / "nation_b.csv", ['0 0 2 0'], [('SGU_002', [5])]
+        )
+        with caplog.at_level(logging.WARNING, logger='stacked_input'):
+            hd.load_household_data(
+                ["nation_a.csv", "nation_b.csv"],
+                column_policy="union_zero_fill",
+            )
+
+        # Zero-filled cells create no counts; each unit keeps its own patterns.
+        assert hd.household_counts_by_geo_unit == {
+            'SGU_001': {'1 0 0 0': 3},
+            'SGU_002': {'0 0 2 0': 5},
+        }
+        # The vocabulary is the union, so strategy steps can target both.
+        assert hd.household_pattern_vocabulary == {'1 0 0 0', '0 0 2 0'}
+        assert any('zero-filling' in r.message for r in caplog.records)
+
+    def test_geo_unit_in_two_files_raises(self, tmp_path):
+        geo = _make_geo(['SGU_001'])
+        hd = _make_distributor(geo, str(tmp_path))
+        _write_households_csv(
+            tmp_path / "nation_a.csv", ['1 0 0 0'], [('SGU_001', [3])]
+        )
+        _write_households_csv(
+            tmp_path / "nation_b.csv", ['1 0 0 0'], [('SGU_001', [5])]
+        )
+        with pytest.raises(HouseholdError, match="already appear"):
+            hd.load_household_data(["nation_a.csv", "nation_b.csv"])

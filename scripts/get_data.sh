@@ -1,4 +1,4 @@
-data_release="data_may.zip"
-wget --user=access --password=d0wn10@d$  "https://june.phyip3.dur.ac.uk/downloads/$data_release"
-unzip $data_release
-rm $data_release
+#!/usr/bin/env bash
+# Runs get_data.py, which does the work.
+set -euo pipefail
+exec python3 "$(dirname "$0")/get_data.py" "$@"

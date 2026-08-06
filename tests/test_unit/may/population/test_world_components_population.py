@@ -5,7 +5,7 @@ from may.population.person import Person
 
 @pytest.fixture
 def loaded_geography():
-    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"])
+    geo = Geography(data_dir="tests/test_data/micro_world/geography", levels=["SGU", "MGU", "LGU"], hierarchy_file="hierarchy.csv")
     geo.load_from_csv()
     return geo
 

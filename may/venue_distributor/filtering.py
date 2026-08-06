@@ -2,6 +2,8 @@ import logging
 import numpy as np
 from typing import List, Dict, Any, Optional
 
+from .probability import ProbabilityConfigError, probability_cache_key
+
 logger = logging.getLogger(__name__)
 
 class FilteringManager:
@@ -181,26 +183,28 @@ class FilteringManager:
             return [p for p in people if np.random.random() < probability]
 
         if prob_config.get('type') == 'file':
-            file_path = prob_config.get('file_path')
-            prob_col = prob_config.get('probability_column')
             lookup_attr = prob_config.get('lookup_attribute', 'geographical_unit.name')
-            
-            cache_key = (file_path, prob_col)
+
+            cache_key = probability_cache_key(prob_config)
             cached_data = getattr(self.distributor, 'probability_cache', {}).get(cache_key)
 
             if not cached_data:
-                logger.warning(f"Group '{group_name}': No cached probabilities for {cache_key}")
-                default_prob = prob_config.get('default', 0.0)
-                return [p for p in people if np.random.random() < default_prob]
+                raise ProbabilityConfigError(
+                    f"Group '{group_name}': no probabilities cached for {cache_key}. "
+                    f"The file was never loaded — check probability_config."
+                )
 
             prob_lookup = cached_data['lookup']
-            default_prob = cached_data['default']
 
             selected = []
             for person in people:
                 lookup_value = self.distributor._get_person_attribute(lookup_attr, person)
-                probability = prob_lookup.get(lookup_value, default_prob) if lookup_value is not None else default_prob
-                if np.random.random() < probability:
+                if lookup_value not in prob_lookup:
+                    raise ProbabilityConfigError(
+                        f"Group '{group_name}': no probability for "
+                        f"{lookup_attr}={lookup_value!r}."
+                    )
+                if np.random.random() < prob_lookup[lookup_value]:
                     selected.append(person)
             return selected
 

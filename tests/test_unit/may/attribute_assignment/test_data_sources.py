@@ -30,7 +30,7 @@ from may.attribute_assignment.data_sources import (
 )
 
 
-# _ordered_key_columns — canonical key_columns mapping
+# _ordered_key_columns: canonical key_columns mapping
 
 class TestOrderedKeyColumns:
     def test_single_key_mapping(self):
@@ -148,7 +148,7 @@ class TestNormalizeProbabilities:
         assert abs(sum(result.values()) - 1.0) < 1e-10
 
     def test_all_zeros_raises(self):
-        """All-zero distribution can't be sampled — no fallbacks."""
+        """All-zero distribution can't be sampled, and there are no fallbacks."""
         probs = {"W": 0.0, "A": 0.0, "B": 0.0}
         with pytest.raises(ValueError, match="All-zero"):
             self._normalize(probs)
@@ -216,7 +216,7 @@ class TestNormalizeProbabilities:
     def test_mixed_negative_positive_summing_to_zero(self):
         """
         {A: -1, B: 1} → clamp → {A: 0, B: 1} → normalize → {A: 0, B: 1}
-        (Not uniform — B had a legitimate positive value.)
+        (Not uniform, because B had a legitimate positive value.)
         """
         probs = {"A": -1.0, "B": 1.0}
         result = self._normalize(probs)
@@ -285,6 +285,34 @@ class TestGeoDistributionSource:
             "files": [{"path": "/no/such/file.csv", "key_columns": {"geo_unit": None}}]
         })
         with pytest.raises(FileNotFoundError, match="not found"):
+            source.load_data()
+
+    @staticmethod
+    def _file_entry(path, rows):
+        path.write_text("geo_unit,W,A\n" + "\n".join(rows) + "\n")
+        return {
+            "path": str(path),
+            "key_columns": {"geo_unit": None},
+            "value_columns": {"W": "W", "A": "A"},
+        }
+
+    def test_multiple_files_merge_disjoint_keys(self, tmp_path):
+        """Per-nation files with disjoint geo units combine into one lookup."""
+        source = GeoDistributionSource("test_geo", {"files": [
+            self._file_entry(tmp_path / "a.csv", ["E00001,8,2"]),
+            self._file_entry(tmp_path / "b.csv", ["N00001,1,9"]),
+        ]})
+        source.load_data()
+        assert set(source._lookup) == {"E00001", "N00001"}
+        assert abs(source._lookup["N00001"]["A"] - 0.9) < 1e-9
+
+    def test_overlapping_keys_across_files_raise(self, tmp_path):
+        """The same geo unit in two files must fail loud, never last-file-wins."""
+        source = GeoDistributionSource("test_geo", {"files": [
+            self._file_entry(tmp_path / "a.csv", ["E00001,8,2"]),
+            self._file_entry(tmp_path / "b.csv", ["E00001,1,9"]),
+        ]})
+        with pytest.raises(ValueError, match="already loaded"):
             source.load_data()
 
     def test_parse_dataframe_with_total_column(self):
@@ -488,6 +516,123 @@ class TestOriginDestinationMatrixSource:
         )
         # Origin A has no destinations after exclusion
         assert result["A"] == []
+
+
+class TestOriginDestinationBoundaryLevel:
+    """Boundary membership is scoped to the declared `destination_level`.
+
+    Census O-D tables list whole-country catch-alls ("Wales") in the same
+    destination column as real LADs. Both are loaded geo unit names in a
+    multi-nation run, just at different levels, so an unscoped check calls the
+    catch-all in-boundary and hands a non-existent LAD downstream.
+    """
+
+    def _source(self, destination_level, out_of_boundary="outside"):
+        config = {
+            "files": [{"destination_level": destination_level}] if destination_level
+                     else [{}],
+            "out_of_boundary": out_of_boundary,
+            "outside_value": "OUTSIDE",
+        }
+        return OriginDestinationMatrixSource("test_od", config)
+
+    GEO_BY_LEVEL = {"LGU": {"Cardiff", "Glasgow City"}, "XLGU": {"Wales", "Scotland"}}
+    GEO_FLAT = {"Cardiff", "Glasgow City", "Wales", "Scotland"}
+
+    def test_country_name_at_wrong_level_is_out_of_boundary(self):
+        source = self._source("LGU")
+        source.geo_units_by_level = self.GEO_BY_LEVEL
+        source._lookup = {"Glasgow City": [("Cardiff", {}, 0.6), ("Wales", {}, 0.4)]}
+        source._apply_boundary_policy(self.GEO_FLAT)
+
+        dests = {d for d, _, _ in source._lookup["Glasgow City"]}
+        assert "Cardiff" in dests           # a real LGU stays
+        assert "Wales" not in dests         # the XLGU catch-all does not
+        assert "OUTSIDE" in dests
+
+    def test_out_of_boundary_mass_is_preserved_not_renormalised(self):
+        # The 0.4 must survive as OUTSIDE. Dropping it would renormalise
+        # Cardiff to 1.0 and silently move cross-border commuters in-country.
+        source = self._source("LGU")
+        source.geo_units_by_level = self.GEO_BY_LEVEL
+        source._lookup = {"Glasgow City": [("Cardiff", {}, 0.6), ("Wales", {}, 0.4)]}
+        source._apply_boundary_policy(self.GEO_FLAT)
+
+        by_dest = {d: lik for d, _, lik in source._lookup["Glasgow City"]}
+        assert by_dest["Cardiff"] == pytest.approx(0.6)
+        assert by_dest["OUTSIDE"] == pytest.approx(0.4)
+
+    def test_falls_back_to_flat_set_without_a_level_breakdown(self):
+        # Direct programmatic loads pass no level map; behaviour is unchanged.
+        source = self._source("LGU")
+        source.geo_units_by_level = None
+        source._lookup = {"Glasgow City": [("Wales", {}, 1.0)]}
+        source._apply_boundary_policy(self.GEO_FLAT)
+
+        assert source._lookup["Glasgow City"][0][0] == "Wales"
+
+    def test_unknown_destination_level_fails_loud(self):
+        source = self._source("NOT_A_LEVEL")
+        source.geo_units_by_level = self.GEO_BY_LEVEL
+        source._lookup = {"Glasgow City": [("Cardiff", {}, 1.0)]}
+        with pytest.raises(ValueError, match="not a level in the loaded geography"):
+            source._apply_boundary_policy(self.GEO_FLAT)
+
+    def test_sentinel_keeps_metadata_so_a_conditioned_draw_still_sees_it(self):
+        # The out-of-area mass must remain reachable under each work mode. If
+        # every out-of-boundary row collapsed onto one sentinel stamped
+        # "OUTSIDE", a draw restricted to travelling modes would find no
+        # sentinel and quietly renormalise that mass onto in-world destinations,
+        # turning out-of-area workers into local ones.
+        source = OriginDestinationMatrixSource("test_od", {
+            "files": [{"destination_level": "LGU",
+                       "metadata_columns": {"work_mode": "Place of work indicator"}}],
+            "out_of_boundary": "outside",
+            "outside_value": "OUTSIDE",
+        })
+        source.geo_units_by_level = {"LGU": {"Cardiff"}}
+        source._lookup = {"Cardiff": [
+            ("Cardiff", {"work_mode": "From_Home"}, 0.2),
+            ("Cardiff", {"work_mode": "Normal"}, 0.3),
+            ("Leeds", {"work_mode": "Normal"}, 0.4),
+            ("Leeds", {"work_mode": "Hybrid"}, 0.1),
+        ]}
+        source._apply_boundary_policy({"Cardiff"})
+
+        rows = source._lookup["Cardiff"]
+        outside = [(m["work_mode"], lik) for d, m, lik in rows if d == "OUTSIDE"]
+        assert dict(outside) == {"Normal": pytest.approx(0.4), "Hybrid": pytest.approx(0.1)}
+        assert sum(lik for _, _, lik in rows) == pytest.approx(1.0)
+
+    def test_sentinel_rows_merge_when_metadata_matches(self):
+        source = OriginDestinationMatrixSource("test_od", {
+            "files": [{"destination_level": "LGU",
+                       "metadata_columns": {"work_mode": "Place of work indicator"}}],
+            "out_of_boundary": "outside",
+            "outside_value": "OUTSIDE",
+        })
+        source.geo_units_by_level = {"LGU": {"Cardiff"}}
+        source._lookup = {"Cardiff": [
+            ("Cardiff", {"work_mode": "Normal"}, 0.4),
+            ("Leeds", {"work_mode": "Normal"}, 0.3),
+            ("York", {"work_mode": "Normal"}, 0.3),
+        ]}
+        source._apply_boundary_policy({"Cardiff"})
+
+        outside = [r for r in source._lookup["Cardiff"] if r[0] == "OUTSIDE"]
+        assert len(outside) == 1                       # Leeds and York merged
+        assert outside[0][2] == pytest.approx(0.6)
+
+    def test_files_disagreeing_on_level_fails_loud(self):
+        source = OriginDestinationMatrixSource("test_od", {
+            "files": [{"destination_level": "LGU"}, {"destination_level": "MGU"}],
+            "out_of_boundary": "outside",
+            "outside_value": "OUTSIDE",
+        })
+        source.geo_units_by_level = self.GEO_BY_LEVEL
+        source._lookup = {"Glasgow City": [("Cardiff", {}, 1.0)]}
+        with pytest.raises(ValueError, match="disagree on 'destination_level'"):
+            source._apply_boundary_policy(self.GEO_FLAT)
 
 
 # GUSamplerSource Tests
@@ -805,7 +950,7 @@ class TestDataSourceManagerRouting:
         config = self._make_config({
             "commuting_flows": ("csv_lookup", {
                 "format": "origin_destination_matrix",
-                # out_of_boundary must be explicit — no default, silence is never interpreted.
+                # out_of_boundary must be explicit. There is no default and silence is never interpreted.
                 "out_of_boundary": "error",
                 "files": [{"path": "/fake/path.csv", "key_columns": {"origin": "origin_col"}}],
             })

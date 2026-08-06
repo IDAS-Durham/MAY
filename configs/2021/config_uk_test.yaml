@@ -1,0 +1,202 @@
+# Four-nation commute world running the full pipeline over England, Wales, Scotland
+# and Northern Ireland at once, built from per-nation files stacked by the
+# engine (no pre-merged UK CSVs anywhere).
+#
+# It exists to exercise the paths that only appear once
+# more than one nation is loaded, and each LGU is here for a reason:
+#
+#   * Camden, Westminster    (England)  tube interchanges, multi-leg journeys
+#   * Newcastle upon Tyne    (England)  Tyne & Wear Metro, ECML rail
+#   * Cardiff                (Wales)    rail only, no tube network
+#   * Glasgow City           (Scotland) the Glasgow Subway, the only Scottish
+#                                       tube system in the routing table
+#   * City of Edinburgh      (Scotland) rail, and the known gap: Edinburgh Trams
+#                                       is absent from the metros source, so
+#                                       tram commuters here become route misses
+#   * Belfast                (N. Ireland) NI Railways is now in the routing
+#                                       table (52 lines out of Belfast Grand
+#                                       Central / Belfast Central to Bangor,
+#                                       Larne Harbour, Londonderry, Portadown,
+#                                       Newry and Lisburn), so NI train
+#                                       commuters route rather than falling back
+#                                       to car_solo as they did before. NI has
+#                                       no tube or tram network, so tube legs
+#                                       here are correctly zero.
+#
+# ~14.1K SGUs, about 5.9% of UK output areas.
+
+data_root: data
+
+# GEOGRAPHY
+
+geography:
+  data_dir: "${data_root}/geography"
+  levels: ["SGU", "MGU", "LGU", "XLGU"]
+  hierarchy_file:
+    - EW_hierarchy.csv
+    - SCT_hierarchy.csv
+    - NI_hierarchy.csv
+  coord_files:
+    SGU:
+      - EW_coord_sgu.csv
+      - SCT_coord_sgu.csv
+      - NI_coord_sgu.csv
+    MGU:
+      - EW_coord_mgu.csv
+      - SCT_coord_mgu.csv
+      - NI_coord_mgu.csv
+  load_all: false
+  filter:
+    level: LGU
+    codes:
+      - "Camden"
+      - "Westminster"
+      - "Newcastle upon Tyne"
+      - "Cardiff"
+      - "Glasgow City"
+      - "City of Edinburgh"
+      - "Belfast"
+
+# POPULATION
+
+population:
+  data_dir: "${data_root}/population"
+  demographics_male_file:
+    - EW_demographics_male.csv
+    - SCT_demographics_male.csv
+    - NI_demographics_male.csv
+  demographics_female_file:
+    - EW_demographics_female.csv
+    - SCT_demographics_female.csv
+    - NI_demographics_female.csv
+
+# VENUES
+
+venues:
+  data_dir: "${data_root}/venues"
+  config_file: "${config_root}/venues/venues_config.yaml"
+  export_file: "venue_allocations.csv"
+
+# HOUSEHOLDS
+
+households:
+  data_dir: "${data_root}/households"
+  data_file:
+    - EW_households.csv
+    - SCT_households.csv
+    - NI_households.csv
+  # NI's pattern vocabulary differs from EW/SCT (exactly-2 and >=3 where the
+  # others have >=2); union them, zeros elsewhere.
+  column_policy: union_zero_fill
+  config_file: "${config_root}/households/households_config.yaml"
+  rules_file: "${config_root}/households/relationship_rules.yaml"
+  export_file: "household_allocations.csv"
+
+# DEBUG OUTPUTS
+
+debug_outputs:
+  enabled: false
+
+# TIMELINE
+
+timeline:
+  enabled: true
+  steps:
+    - type: residence_allocation
+      config: "${config_root}/households/allocation_strategy.yaml"
+
+    # 1. Base attributes
+    - type: attribute
+      config: "${config_root}/attributes/attribute_assignment.yaml"
+
+    - type: attribute
+      config: "${config_root}/attributes/comorbidity_assignment.yaml"
+
+    # 2. Education
+    - type: distributor
+      config: "${config_root}/distributors/school_distributor.yaml"
+    - type: child_creator
+      config: "${config_root}/venue_child_creators/school_classrooms.yaml"
+    - type: distributor
+      config: "${config_root}/distributors/university_distributor.yaml"
+    - type: child_creator
+      config: "${config_root}/venue_child_creators/university_uni_years.yaml"
+
+    # 3. Employment attributes
+    # Employment gate first: workplace_assignment filters on economic_activity,
+    # so without this step every 18-64 adult would be sent to a workplace.
+    - type: attribute
+      config: "${config_root}/attributes/economic_activity_assignment.yaml"
+
+    # Commute/no-commute split at output-area resolution, before the workplace
+    # draw. This is what keeps an all-home-working OA from producing commuters.
+    - type: attribute
+      config: "${config_root}/attributes/commutes_assignment.yaml"
+
+    - type: attribute
+      config: "${config_root}/attributes/workplace_assignment.yaml"
+    - type: attribute
+      config: "${config_root}/attributes/workplace_mgu_assignment.yaml"
+    - type: attribute
+      config: "${config_root}/attributes/work_sector_assignment.yaml"
+
+    # 4. Specific workplaces
+    - type: distributor
+      config: "${config_root}/distributors/specific_workplace_hospitals_distributor.yaml"
+    - type: distributor
+      config: "${config_root}/distributors/specific_workplace_care_homes_distributor.yaml"
+    - type: distributor
+      config: "${config_root}/distributors/specific_workplace_classrooms_distributor.yaml"
+
+    # 5. General employment
+    - type: distributor
+      config: "${config_root}/distributors/company_distributor.yaml"
+    - type: child_creator
+      config: "${config_root}/venue_child_creators/company_offices.yaml"
+
+    # 6. Work mode correction
+    - type: attribute
+      config: "${config_root}/attributes/work_mode_correction.yaml"
+
+    # 7. Commute assignment. The mode source is UK-wide as of the harmonised
+    # per-nation build, so all four nations get a mode here. What differs by
+    # nation is whether the routing table can then serve it.
+    - type: attribute
+      config: "${config_root}/attributes/commute_mode_assignment.yaml"
+
+    # Bus MUST stay last. It derives its pools at runtime from MGU centroids so
+    # there is no table to read, and train and tube rewrite their misses to
+    # `bus`. Only a distributor running after them will pick those riders up.
+    - type: distributor
+      config: "${config_root}/distributors/route_commute_train.yaml"
+    - type: distributor
+      config: "${config_root}/distributors/route_commute_tube.yaml"
+    - type: distributor
+      config: "${config_root}/distributors/route_commute_bus.yaml"
+
+    # 8. Other services
+    - type: distributor
+      config: "${config_root}/distributors/hospital_distributor.yaml"
+    - type: distributor
+      config: "${config_root}/distributors/multi_venue_distributor.yaml"
+    - type: distributor
+      config: "${config_root}/distributors/care_home_visits_distributor.yaml"
+
+# RELATIONSHIPS
+
+relationship_pipeline:
+  enabled: true
+  relationships:
+    - config: "${config_root}/relationships/social_networks.yaml"
+
+romantic_relationships:
+  enabled: true
+  config: "${config_root}/relationships/romantic_relationships.yaml"
+
+# SERIALIZATION
+
+serialization:
+  enabled: true
+  config_file: "${config_root}/serialization_config.yaml"
+  output_dir: "${output_root}/commute_uk"
+  filename: "world_commute_uk.h5"

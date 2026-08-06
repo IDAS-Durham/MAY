@@ -15,7 +15,7 @@ eligibility:
       min: 18
       max: 64
 
-    - attribute: "properties.workplace_sgu"
+    - attribute: "properties.workplace_mgu"
       type: "categorical"
       description: "Geographical unit name for where they are supposed to work"
 
@@ -27,6 +27,11 @@ eligibility:
       type: "categorical"
       description: "Exclude people in care homes, prisons, and student dorms"
       values: ["household"]
+
+    - attribute: "properties.work_mode"
+      type: "categorical"
+      description: "Only on-site workers occupy a physical desk; From_Home workers have an employer but no company seat"
+      values: ["Normal", "Hybrid"]
 
   attributes:
     - name: "properties.work_sector"
@@ -61,22 +66,21 @@ eligibility:
       case_sensitive: false
 
 venue_selection:
-  # Use geographical hierarchy matching
-  # Person's workplace_location (SGU) → Company's geo_unit (MGU)
+  # Use geographical hierarchy matching.
+  # Person's workplace_mgu (MGU) → Company's geo_unit (MGU).
   consider_by: "geo_unit"
 
   # Companies are at MGU level
   venue_geo_level: "MGU"
 
-  # Use workplace_sgu instead of geographical_unit (residence)
-  # This matches people to companies near their WORK location, not home
-  # Note: workplace_sgu is the SGU code, stored in person.properties
-  locate_person_by: "properties.workplace_sgu"
+  # Match on the assigned workplace MGU (their WORK location, not home). The
+  # value is already an MGU code, so it matches company geo_unit directly.
+  locate_person_by: "properties.workplace_mgu"
 
   # Batch at SGU level (workplace) for better performance
   # Even though companies are at MGU level, we batch people by their specific workplace SGU
   # The system will still find companies in the parent MGU
-  batch_geo_level: "SGU"
+  batch_geo_level: "MGU"
 
   # Only consider companies in loaded geography with capacity
   filter_by_geography: true

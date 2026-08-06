@@ -16,7 +16,14 @@ from .fallbacks import FallbackManager
 from .matcher import VenueMatcher
 from .allocation_engine import AllocationEngine
 from .reporting import ReportingManager
+from .probability import (
+    GEO_UNIT_LOOKUP_ATTRIBUTE,
+    RETIRED_PROBABILITY_KEYS,
+    ProbabilityConfigError,
+    probability_cache_key,
+)
 from may.utils import path_resolver as pr
+from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 import logging
 import numpy as np
@@ -111,64 +118,103 @@ class VenueDistributor(BaseDistributor):
             if prob_config.get('type') != 'file':
                 continue
 
+            group_name = group.get('name')
+            label = f"group '{group_name}': probability_config"
+
+            retired = [k for k in RETIRED_PROBABILITY_KEYS if k in prob_config]
+            if retired:
+                raise ProbabilityConfigError(
+                    f"{label} has retired key(s) {retired}. Probability files must "
+                    f"cover the loaded geography; remove the key(s)."
+                )
+
             file_path = prob_config.get('file_path')
             lookup_column = prob_config.get('lookup_column', 'geo_unit')
             probability_column = prob_config.get('probability_column')
-            default_prob = prob_config.get('default', 0.0)
 
             if not file_path or not probability_column:
-                logger.warning(f"Group '{group.get('name')}': probability_config missing file_path or probability_column")
-                continue
+                raise ProbabilityConfigError(
+                    f"{label} needs both 'file_path' and 'probability_column'; got "
+                    f"file_path={file_path!r}, probability_column={probability_column!r}."
+                )
 
-            # Create cache key
-            cache_key = (file_path, probability_column)
-
-            # Skip if already loaded
+            cache_key = probability_cache_key(prob_config)
             if cache_key in self.probability_cache:
                 continue
 
-            # Load CSV file: resolve portable path tokens (${data_root} etc.),
-            # then try the path as-given (CWD-relative) first, falling back to
-            # resolving against the project root.
-            resolved = pr.resolve(file_path)
-            full_path = Path(resolved)
-            if not full_path.is_absolute() and not full_path.exists():
-                if self.config_path:
-                    # config_path is configs/<year>/distributors/xxx.yaml
-                    project_root = self.config_path.parent.parent.parent
-                    candidate = project_root / resolved
-                    if candidate.exists():
-                        full_path = candidate
-                else:
-                    logger.warning(f"Cannot resolve relative path '{file_path}' for probability file without a config_file path. Assuming absolute path.")
+            paths = [self._resolve_probability_path(p)
+                     for p in as_path_list(file_path, f"{label}.file_path")]
+            df = load_stacked_csv(
+                paths, label=label, key_column=lookup_column, column_policy="strict"
+            )
 
+            missing_columns = [c for c in (lookup_column, probability_column)
+                               if c not in df.columns]
+            if missing_columns:
+                raise ProbabilityConfigError(
+                    f"{label}: column(s) {missing_columns} not found in {paths}; "
+                    f"the files carry {list(df.columns)}."
+                )
 
-            try:
-                logger.info(f"Loading probability file: {full_path}")
-                df = pd.read_csv(full_path)
+            self.probability_cache[cache_key] = {
+                'lookup': dict(zip(df[lookup_column], df[probability_column])),
+                'lookup_attribute': prob_config.get(
+                    'lookup_attribute', GEO_UNIT_LOOKUP_ATTRIBUTE),
+                'label': label,
+            }
+            logger.info(
+                f"{label}: loaded {len(df)} probabilities from column "
+                f"'{probability_column}' across {len(paths)} file(s)"
+            )
 
-                # Validate columns exist
-                if lookup_column not in df.columns:
-                    logger.error(f"Column '{lookup_column}' not found in {file_path}")
-                    continue
+    def _resolve_probability_path(self, file_path):
+        """
+        Resolve portable path tokens (${data_root} etc.), then try the path
+        as-given (CWD-relative) before resolving against the project root.
+        """
+        resolved = pr.resolve(file_path)
+        full_path = Path(resolved)
+        if not full_path.is_absolute() and not full_path.exists():
+            if self.config_path:
+                # config_path is configs/<year>/distributors/xxx.yaml
+                project_root = self.config_path.parent.parent.parent
+                candidate = project_root / resolved
+                if candidate.exists():
+                    full_path = candidate
+            else:
+                logger.warning(
+                    f"Cannot resolve relative path '{file_path}' for a probability "
+                    f"file without a config_file path. Assuming absolute path."
+                )
+        return str(full_path)
 
-                if probability_column not in df.columns:
-                    logger.error(f"Column '{probability_column}' not found in {file_path}")
-                    continue
+    def _check_probability_coverage(self, world):
+        """
+        Every loaded SGU must have a row in each geography-keyed probability
+        table. A nation added to the geography but forgotten in a probability
+        file list would otherwise place none of its students, silently.
+        """
+        if not self.probability_cache or world.geography is None:
+            return
 
-                # Build lookup dict: {geo_unit_name: probability}
-                prob_dict = dict(zip(df[lookup_column], df[probability_column]))
+        sgu_level = world.geography.levels[0]
+        loaded_sgus = set(world.geography.get_units_by_level(sgu_level))
+        if not loaded_sgus:
+            return
 
-                # Store in cache
-                self.probability_cache[cache_key] = {
-                    'lookup': prob_dict,
-                    'default': default_prob
-                }
-
-                logger.info(f"Loaded {len(prob_dict)} probabilities from column '{probability_column}'")
-
-            except Exception as e:
-                logger.error(f"Failed to load probability file {full_path}: {e}")
+        for cached in self.probability_cache.values():
+            if cached['lookup_attribute'] != GEO_UNIT_LOOKUP_ATTRIBUTE:
+                # The lookup key is not the geography, so coverage is not a
+                # claim this check can make.
+                continue
+            missing = loaded_sgus - set(cached['lookup'])
+            if missing:
+                raise ProbabilityConfigError(
+                    f"{cached['label']}: {len(missing)} of {len(loaded_sgus)} loaded "
+                    f"{sgu_level}s have no row (e.g. {sorted(missing)[:5]}). Add the "
+                    f"missing file(s) to file_path, or scope the world with "
+                    f"geography.filter."
+                )
 
     def allocate(self, world):
         """Main entry point: Allocate people to venues."""
@@ -176,6 +222,8 @@ class VenueDistributor(BaseDistributor):
         self.allocated_this_run = 0
 
         logger.info(f"Starting allocation for {self.venue_type}")
+
+        self._check_probability_coverage(world)
 
         venues = world.venues_by_type(self.venue_type)
         if not venues:
@@ -230,7 +278,7 @@ class VenueDistributor(BaseDistributor):
                 native_unallocated = self._allocate_normal(native, venues) if native else []
                 flagged_unallocated = self._allocate_normal(flagged, venues) if flagged else []
                 # "Unplaced" = reached this step but found no in-boundary venue of this
-                # type — capacity full OR no eligible venue (e.g. no matching sector
+                # type, either capacity full or no eligible venue (e.g. no matching sector
                 # nearby). For a workplace distributor that is effectively unemployment.
                 logger.info(
                     f"  [capacity priority] '{vt}': "
@@ -472,7 +520,7 @@ class VenueDistributor(BaseDistributor):
             # so within any age the females (lower ids) precede the males. When a group
             # respects capacity (allow_overflow=False), processing in that order lets the
             # earlier sex claim scarce venue spots first and systematically excludes the
-            # other — a directional gender bias in capacity-limited cohorts (e.g. sixth
+            # other, a directional gender bias in capacity-limited cohorts (e.g. sixth
             # form, nurseries). Overflow groups place everyone regardless of order, so they
             # keep the cheap deterministic ordering.
             #

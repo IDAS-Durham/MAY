@@ -33,7 +33,7 @@ eligibility:
       min: 18
       max: 64
 
-    - attribute: "properties.workplace_sgu"
+    - attribute: "properties.workplace_mgu"
       type: "categorical"
       description: "Geographical unit name for where they are supposed to work"
 
@@ -46,6 +46,11 @@ eligibility:
       type: "categorical"
       description: "Exclude people in care homes, prisons, and student dorms"
       values: ["household"]
+
+    - attribute: "properties.work_mode"
+      type: "categorical"
+      description: "Only on-site workers take a seat here; From_Home workers have an employer but no on-site post"
+      values: ["Normal", "Hybrid"]
 
   attributes:
     - name: "properties.work_sector"
@@ -71,10 +76,10 @@ venue_selection:
 
   # Use workplace_sgu instead of geographical_unit (residence)
   # This matches people to classrooms near their WORK location, not home
-  locate_person_by: "properties.workplace_sgu"
+  locate_person_by: "properties.workplace_mgu"
 
   # Batch at SGU level (workplace) for better performance
-  batch_geo_level: "SGU"
+  batch_geo_level: "MGU"
 
   # Only consider classrooms in loaded geography with capacity
   filter_by_geography: true

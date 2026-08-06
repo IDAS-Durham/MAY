@@ -175,7 +175,7 @@ data_sources:
   geo_distribution:
     type: "csv_lookup"
     files:
-      - path: "data/population/ethnicity/ethnicity_5groups_by_OA.csv"
+      - path: "data/population/ethnicity/EW_ethnicity.csv"
         key_column: "geo_unit"
         value_columns:
           W: "W"

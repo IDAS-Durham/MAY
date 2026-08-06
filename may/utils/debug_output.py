@@ -117,7 +117,7 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
 
     # Collect residence data
     residence_data = []
-    all_venues = world.venues.get_all_venues().values()
+    all_venues = world.venues.get_all_venues_list()
 
     for venue in all_venues:
         # Check all subsets. Households use dynamic categories (Kids, Adults, etc).
@@ -143,6 +143,8 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
                     'HID': s_hid,
                     'BTCode': bt_code,
                     'VenueType': venue_type,
+                    'VenueID': venue.id,
+                    'GeoUnit': venue.geographical_unit.name if venue.geographical_unit else '',
                     'PersonID': person.id,
                     'AgeSex': age_sex
                 })
@@ -161,7 +163,8 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
 
         # Write to CSV
         with open(output_file, 'w', newline='') as f:
-            fieldnames = ['HID', 'BTCode', 'VenueType', 'PersonID', 'AgeSex']
+            fieldnames = ['HID', 'BTCode', 'VenueType', 'VenueID', 'GeoUnit',
+                          'PersonID', 'AgeSex']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(residence_data)
@@ -222,7 +225,7 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
 
         # Inspect commute legs (post-RouteDistributor). The activity_map shape
         # for shared-transport riders is: person.activity_map["commute"][
-        # "<mode>_line"] = [Subset, Subset, ...] — one subset per leg. Each
+        # "<mode>_line"] = [Subset, Subset, ...], one subset per leg. Each
         # route_commute_<mode>.yaml writes its own venue type, so we union
         # across train_line / tube_line / bus_line.
         commute = person.activity_map.get("commute", {})
@@ -390,6 +393,329 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
         "n_with_commute": n_with_commute,
         "nonworker_with_commute": nonworker_with_commute,
         "mode_counts": dict(mode_counts),
+    }
+
+
+def export_work_assignment_debug(
+    world,
+    output_file="work_assignment_debug.csv",
+    industry_sex_margin_file=None,
+):
+    """
+    Export per-worker work-assignment evidence and a summary of proof metrics.
+
+    Measures whether the workplace pipeline seats people in real jobs and
+    whether the location/sector draws are geographically self-consistent. Runs
+    unchanged on both the residence-basis pipeline (workplace_sgu) and the
+    workplace-basis pipeline (workplace_mgu): it resolves whichever workplace
+    property is present to its MGU, so a baseline run and a fixed run are
+    directly comparable.
+
+    Four metrics (written to a "<stem>_summary.txt" sibling):
+      (1) Company placement rate: company-eligible workers seated in a
+          company office / all company-eligible workers.
+      (2) Sector-location consistency: share of company-eligible workers
+          whose INTENDED workplace MGU actually contains >=1 company of their
+          drawn sector (capacity ignored). Isolates "wrong place" from "right
+          place but full".
+      (3) Spatial basis: Pearson correlation of assigned-workers-per-MGU with
+          company capacity per MGU (job supply) vs with resident-worker count
+          per MGU (residence density).
+      (4) Sex realism: assigned %female by sector vs the census (TS060)
+          LAD x sex margin, restricted to the world's LGUs. Skipped with a
+          warning if the margin file is absent.
+
+    Args:
+        world: built World object.
+        output_file: per-worker CSV path. A "<stem>_summary.txt" sibling holds
+            the aggregate proof tables.
+        industry_sex_margin_file: resolved path to EW_industry_sex_lad.csv (or
+            the nation's equivalent) for metric (4). None -> skip metric (4).
+    """
+    from collections import Counter, defaultdict
+
+    logger.info(f"Exporting work-assignment debug to {output_file}...")
+
+    levels = world.geography.levels
+    MGU_LEVEL = levels[1] if len(levels) > 1 else None
+    LGU_LEVEL = levels[2] if len(levels) > 2 else None
+
+    WORKPLACE_VENUES = {"office", "hospital", "care_home", "classroom"}
+    SPECIFIC_VENUES = {"hospital", "care_home", "classroom"}
+
+    # Canonical sector order + census column names (matches
+    # work_sector_assignment.yaml value_columns).
+    SECTOR_COLS = [
+        ("A", "Agriculture; Forestry; Fishing"),
+        ("B", "Mining and Quarrying"),
+        ("C", "Manufacturing"),
+        ("D", "Electricity, Gas, Steam and Air Conditioning Supply"),
+        ("E", "Water Supply; Sewage; Waste Management and Remediation activities"),
+        ("F", "Construction"),
+        ("G", "Wholesale and Retail trade; Repair of Motor Vehicles and Motorcycles"),
+        ("H", "Transport and Storage"),
+        ("I", "Accommodation and Food Service Activities"),
+        ("J", "Information and Communication"),
+        ("K", "Financial and Insurance Activities"),
+        ("L", "Real Estate Activities"),
+        ("M", "Professional Scientific and Technical Activities"),
+        ("N", "Administrative and Support Service Activities"),
+        ("O", "Public Administration and Defence; Compulsory Social Security"),
+        ("P", "Education"),
+        ("Q", "Human Health and Social Work Activities"),
+        ("Other", "Other"),
+    ]
+
+    def to_mgu_name(unit):
+        """Return the MGU-level name for a geographical unit, or None."""
+        if unit is None or MGU_LEVEL is None:
+            return None
+        if unit.level == MGU_LEVEL:
+            return unit.name
+        mgu = unit.get_ancestor_by_level(MGU_LEVEL)
+        return mgu.name if mgu else None
+
+    # ---- Company supply: presence + capacity by MGU x sector ---------------
+    sectors_by_mgu = defaultdict(set)        # mgu_name -> {sector, ...}
+    cap_by_mgu_sector = defaultdict(int)     # (mgu_name, sector) -> capacity
+    cap_by_mgu = defaultdict(int)            # mgu_name -> total capacity
+    company_venues = world.venues.get_venues_by_type("company")
+    for v in company_venues:
+        mgu_name = to_mgu_name(v.geographical_unit)
+        if mgu_name is None:
+            continue
+        sector = v.properties.get("industry_code")
+        cap = int(v.properties.get("employee_count", 0) or 0)
+        sectors_by_mgu[mgu_name].add(sector)
+        cap_by_mgu_sector[(mgu_name, sector)] += cap
+        cap_by_mgu[mgu_name] += cap
+
+    # ---- Walk workers ------------------------------------------------------
+    rows = []
+    assigned_by_mgu = Counter()      # intended workplace MGU -> company-eligible workers
+    home_by_mgu = Counter()          # home MGU -> company-eligible workers (residence proxy)
+    sector_sex_assigned = defaultdict(lambda: {"male": 0, "female": 0})
+
+    n_workers = 0                    # have work_sector
+    n_company_eligible = 0
+    n_placed_company = 0
+    n_placed_specific = 0
+    n_remote = 0                     # From_Home: employer but no physical desk
+    n_consistent = 0                 # intended MGU has >=1 company of the sector
+    n_intended_missing = 0
+    wm_eligible = Counter()          # work_mode among company-eligible
+    wm_unplaced = Counter()          # work_mode among company-eligible unplaced
+
+    for person in world.population.get_all_people():
+        sector = person.properties.get("work_sector")
+        if not sector:
+            continue
+        n_workers += 1
+        sex = (person.sex or "").lower()
+        work_mode = person.properties.get("work_mode")
+        if sex in ("male", "female"):
+            sector_sex_assigned[sector][sex] += 1
+
+        home_mgu = to_mgu_name(person.geographical_unit)
+
+        # Where did they actually land (worker subset in a workplace venue)?
+        placed_type = None
+        placed_mgu = None
+        primary = person.activity_map.get("primary_activity", {})
+        for vt, subsets in primary.items():
+            if vt in WORKPLACE_VENUES and any(
+                getattr(s, "subset_name", None) == "worker" for s in subsets
+            ):
+                placed_type = vt
+                placed_mgu = to_mgu_name(subsets[0].venue.geographical_unit)
+                break
+
+        is_specific = placed_type in SPECIFIC_VENUES
+        is_company = placed_type == "office"
+        # From_Home and 'Other' (no fixed workplace: farmers, construction,
+        # travelling) workers have an employer but occupy no physical company
+        # desk, so they are excluded from the company-placement denominator.
+        is_remote = (work_mode in ("From_Home", "Other")) and not is_specific
+        company_eligible = (not is_specific) and not is_remote
+        if is_specific:
+            n_placed_specific += 1
+        elif is_remote:
+            n_remote += 1
+
+        # Intended workplace MGU: placed venue if any, else the drawn attribute.
+        if placed_mgu is not None:
+            intended_mgu = placed_mgu
+        else:
+            wmgu = person.properties.get("workplace_mgu")
+            wsgu = person.properties.get("workplace_sgu")
+            if wmgu:
+                unit = world.geography.get_unit(wmgu)
+                intended_mgu = to_mgu_name(unit) if unit else wmgu
+            elif wsgu:
+                unit = world.geography.get_unit(wsgu)
+                intended_mgu = to_mgu_name(unit) if unit else None
+            else:
+                intended_mgu = None
+
+        consistent = None
+        if company_eligible:
+            n_company_eligible += 1
+            wm_eligible[work_mode] += 1
+            if is_company:
+                n_placed_company += 1
+            else:
+                wm_unplaced[work_mode] += 1
+            if intended_mgu:
+                assigned_by_mgu[intended_mgu] += 1
+            if home_mgu:
+                home_by_mgu[home_mgu] += 1
+            # Consistency: does the intended MGU host this sector at all?
+            if intended_mgu is None:
+                n_intended_missing += 1
+                consistent = False
+            else:
+                consistent = sector in sectors_by_mgu.get(intended_mgu, ())
+                if consistent:
+                    n_consistent += 1
+
+        rows.append({
+            "PersonID": person.id,
+            "Sex": person.sex,
+            "work_mode": work_mode,
+            "work_sector": sector,
+            "home_mgu": home_mgu,
+            "intended_workplace_mgu": intended_mgu,
+            "placed_venue_type": placed_type or "",
+            "company_eligible": company_eligible,
+            "placed_in_company": is_company,
+            "mgu_hosts_sector": consistent,
+        })
+
+    # ---- Metric (3): correlations over MGUs --------------------------------
+    all_mgus = sorted(set(cap_by_mgu) | set(assigned_by_mgu) | set(home_by_mgu))
+    r_capacity = r_residence = None
+    if len(all_mgus) >= 3:
+        assigned_vec = np.array([assigned_by_mgu.get(m, 0) for m in all_mgus], float)
+        cap_vec = np.array([cap_by_mgu.get(m, 0) for m in all_mgus], float)
+        home_vec = np.array([home_by_mgu.get(m, 0) for m in all_mgus], float)
+        if assigned_vec.std() > 0 and cap_vec.std() > 0:
+            r_capacity = float(np.corrcoef(assigned_vec, cap_vec)[0, 1])
+        if assigned_vec.std() > 0 and home_vec.std() > 0:
+            r_residence = float(np.corrcoef(assigned_vec, home_vec)[0, 1])
+
+    # ---- Metric (4): sex realism vs census margin --------------------------
+    sex_realism_rows = []   # (sector, assigned_pctF, census_pctF, n_assigned)
+    if industry_sex_margin_file and os.path.exists(industry_sex_margin_file):
+        try:
+            import pandas as pd
+            margin = pd.read_csv(industry_sex_margin_file)
+            world_lgus = set(world.geography.get_units_by_level(LGU_LEVEL).keys()) \
+                if LGU_LEVEL else set()
+            if world_lgus:
+                margin = margin[margin["LGU_name"].isin(world_lgus)]
+            census_pctF = {}
+            for code, col in SECTOR_COLS:
+                if col not in margin.columns:
+                    continue
+                f = margin.loc[margin["Sex"].str.lower() == "female", col].sum()
+                m = margin.loc[margin["Sex"].str.lower() == "male", col].sum()
+                tot = f + m
+                census_pctF[code] = (100.0 * f / tot) if tot > 0 else None
+            for code, _ in SECTOR_COLS:
+                a = sector_sex_assigned.get(code, {"male": 0, "female": 0})
+                n = a["male"] + a["female"]
+                assigned_pctF = (100.0 * a["female"] / n) if n > 0 else None
+                sex_realism_rows.append((code, assigned_pctF, census_pctF.get(code), n))
+        except Exception as e:
+            logger.warning(f"Sex-realism metric failed: {e}")
+    else:
+        logger.warning(
+            "Sex-realism metric skipped: no industry_sex_margin_file "
+            f"({industry_sex_margin_file})"
+        )
+
+    # ---- Emit summary ------------------------------------------------------
+    summary_lines = []
+    def emit(line=""):
+        summary_lines.append(line)
+        logger.info(line)
+
+    pr = lambda num, den: (100.0 * num / den) if den else 0.0
+    emit("=" * 64)
+    emit("WORK-ASSIGNMENT PIPELINE — EVIDENCE")
+    emit("=" * 64)
+    emit(f"Workers (have work_sector)      : {n_workers:,}")
+    emit(f"  placed in specific venue      : {n_placed_specific:,} "
+         f"(hospital/care_home/classroom)")
+    emit(f"  no fixed desk (WFH/Other)     : {n_remote:,}")
+    emit(f"  company-eligible (on-site)    : {n_company_eligible:,}")
+    emit("")
+    emit("(1) COMPANY PLACEMENT RATE")
+    emit(f"  placed in a company           : {n_placed_company:,}/{n_company_eligible:,} "
+         f"({pr(n_placed_company, n_company_eligible):.1f}%)")
+    emit(f"  unplaced (skipped)            : {n_company_eligible - n_placed_company:,} "
+         f"({pr(n_company_eligible - n_placed_company, n_company_eligible):.1f}%)")
+    emit("  work_mode of company-eligible (unplaced / eligible):")
+    for wm in sorted(wm_eligible, key=lambda k: str(k)):
+        emit(f"    {str(wm):<12}: {wm_unplaced.get(wm, 0):,} / {wm_eligible[wm]:,}")
+    emit("")
+    emit("(2) SECTOR-LOCATION CONSISTENCY  (intended MGU hosts the drawn sector)")
+    emit(f"  consistent                    : {n_consistent:,}/{n_company_eligible:,} "
+         f"({pr(n_consistent, n_company_eligible):.1f}%)")
+    emit(f"  intended MGU lacks sector     : {n_company_eligible - n_consistent - n_intended_missing:,}")
+    emit(f"  no intended MGU resolved      : {n_intended_missing:,}")
+    emit("")
+    emit("(3) SPATIAL BASIS  (assigned workers per MGU, Pearson r)")
+    emit(f"  vs company capacity (jobs)    : "
+         f"{'n/a' if r_capacity is None else f'{r_capacity:+.3f}'}")
+    emit(f"  vs resident workers (homes)   : "
+         f"{'n/a' if r_residence is None else f'{r_residence:+.3f}'}")
+    emit(f"  ({len(all_mgus):,} MGUs)")
+    emit("")
+    emit("(4) SEX REALISM  (assigned %F vs census %F, by sector)")
+    if sex_realism_rows:
+        emit(f"  {'sec':<6}{'assigned%F':>12}{'census%F':>12}{'diff':>10}{'n':>10}")
+        for code, aF, cF, n in sex_realism_rows:
+            a_str = "n/a" if aF is None else f"{aF:.1f}"
+            c_str = "n/a" if cF is None else f"{cF:.1f}"
+            d_str = "n/a" if (aF is None or cF is None) else f"{aF - cF:+.1f}"
+            emit(f"  {code:<6}{a_str:>12}{c_str:>12}{d_str:>10}{n:>10,}")
+    else:
+        emit("  (skipped — no census margin file)")
+    emit("=" * 64)
+
+    # ---- Write CSV ---------------------------------------------------------
+    if rows:
+        rows.sort(key=lambda r: (not r["company_eligible"], not r["placed_in_company"],
+                                 str(r["work_sector"]), r["PersonID"]))
+        with open(output_file, "w", newline="") as f:
+            fieldnames = [
+                "PersonID", "Sex", "work_mode", "work_sector", "home_mgu",
+                "intended_workplace_mgu", "placed_venue_type", "company_eligible",
+                "placed_in_company", "mgu_hosts_sector",
+            ]
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        logger.info(f"Exported {len(rows):,} work-assignment records to {output_file}")
+    else:
+        logger.warning("No workers found to export for work-assignment debug")
+
+    summary_path = os.path.splitext(output_file)[0] + "_summary.txt"
+    try:
+        with open(summary_path, "w") as f:
+            f.write("\n".join(summary_lines) + "\n")
+        logger.info(f"Wrote work-assignment summary to {summary_path}")
+    except Exception as e:
+        logger.warning(f"Failed to write work-assignment summary: {e}")
+
+    return {
+        "n_workers": n_workers,
+        "n_company_eligible": n_company_eligible,
+        "placement_rate": pr(n_placed_company, n_company_eligible),
+        "consistency_rate": pr(n_consistent, n_company_eligible),
+        "r_capacity": r_capacity,
+        "r_residence": r_residence,
     }
 
 

@@ -34,7 +34,7 @@ class VenueManager:
         # Store full venue type configurations from YAML
         self.venue_configs = {}         # {venue_type: full_config_dict}
 
-        # Capacity configurations per venue type — lazily populated by
+        # Capacity configurations per venue type, lazily populated by
         # allocation steps (residence venue_allocator) at runtime.
         self.capacity_configs = {}      # {venue_type: capacity_config_dict}
 
@@ -102,7 +102,7 @@ class VenueManager:
         Remove a venue from the VenueManager and its geographical_unit.
 
         Mirror of add_venue. The venue must be a leaf (no children) and must
-        have no remaining subsets — call migrate_subsets_to first if needed.
+        have no remaining subsets, so call migrate_subsets_to first if needed.
 
         Args:
             venue: Venue object to remove.
@@ -253,7 +253,7 @@ class VenueManager:
 
         has_coords = lat_col is not None and lon_col is not None
 
-        # Detect a 'name' column (case-insensitive) — only treat the column as the venue name
+        # Detect a 'name' column (case-insensitive), treating it as the venue name only
         # if it actually exists. Otherwise the venue keeps its auto-generated name.
         name_col = next((col for col in venue_df.columns if col.lower() == 'name'), None)
 
@@ -335,7 +335,9 @@ class VenueManager:
 
     def load_venue_type_from_csv(self, venue_type, filename, filter_column=None, filter_values=None):
         """
-        Load venues of a specific type from a CSV file (relative to data_dir).
+        Load venues of a specific type from CSV (relative to data_dir).
+        ``filename`` may be a single file or a list of files stacked into one
+        table; all files must share the same columns.
 
         Expected columns:
         - name (optional): Name of the venue
@@ -343,16 +345,25 @@ class VenueManager:
         - latitude / longitude (optional): coordinates
         - All other columns become properties specific to this venue type
 
-        A missing file is a hard error (VenueError) — callers that tolerate
+        A missing file is a hard error (VenueError), so callers that tolerate
         absent files (e.g. batch mode) must check existence before calling.
         """
-        venue_path = os.path.join(self.data_dir, filename)
+        from may.utils.stacked_input import as_path_list, load_stacked_csv
 
-        if not os.path.exists(venue_path):
-            raise VenueError(f"Venue file not found: {venue_path}")
+        venue_paths = [
+            os.path.join(self.data_dir, p)
+            for p in as_path_list(filename, f"venue type '{venue_type}'")
+        ]
 
-        venue_df = pd.read_csv(venue_path)
-        logger.info(f"Loading {venue_type} venues from {venue_path}")
+        # low_memory=False: chunked inference can give one column two Python
+        # types, which breaks the typed HDF5 property arrays on export.
+        try:
+            venue_df = load_stacked_csv(
+                venue_paths, label=f"{venue_type} venues", low_memory=False
+            )
+        except Exception as e:
+            raise VenueError(str(e)) from e
+        logger.info(f"Loading {venue_type} venues from {venue_paths}")
 
         self.load_venue_type_from_df(
             venue_type,
@@ -389,7 +400,7 @@ class VenueManager:
         """
         config_path = pr.resolve(config_file)
         if not os.path.isabs(config_path) and not os.path.exists(config_path):
-            # Relative path not found from CWD — try data_dir-relative.
+            # Relative path not found from CWD, so try data_dir-relative.
             config_path = os.path.join(self.data_dir, config_path)
         if not os.path.exists(config_path):
             raise VenueError(f"Venue config file not found: {config_path}")
@@ -445,6 +456,11 @@ class VenueManager:
                 # named by substituting {unit} into the filename. Absent per-unit
                 # files are skipped (partial geographies are routine), but an
                 # enabled batch type matching zero files is a hard error.
+                if not isinstance(filename, str):
+                    raise VenueError(
+                        f"Batch venue type '{venue_type}' takes a single "
+                        f"filename pattern, not a list; got {filename!r}."
+                    )
                 if '{unit}' not in filename:
                     raise VenueError(
                         f"Batch venue type '{venue_type}' filename must contain "

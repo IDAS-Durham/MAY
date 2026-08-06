@@ -1,6 +1,9 @@
 geography:
   data_dir: "1911_data/geography"
   levels: [SGU, MGU]
+  hierarchy_file: hierarchy.csv
+  coord_files:
+    SGU: coord_sgu.csv
   filter:
     level: MGU
     codes: ["DURHAM"]

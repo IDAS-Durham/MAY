@@ -24,6 +24,19 @@ def _write_csv(path, rows):
             f.write(",".join(str(c) for c in row) + "\n")
 
 
+def _make_geo(geo_dir, levels=LEVELS_4, coord_files=None, **kwargs):
+    """Geography wired to the fixture's conventional filenames."""
+    if coord_files is None:
+        coord_files = {"SGU": "coord_sgu.csv", "MGU": "coord_mgu.csv"}
+    return Geography(
+        data_dir=str(geo_dir),
+        levels=levels,
+        hierarchy_file="hierarchy.csv",
+        coord_files=coord_files,
+        **kwargs,
+    )
+
+
 @pytest.fixture
 def four_level_geo_dir(tmp_path):
     """
@@ -33,7 +46,7 @@ def four_level_geo_dir(tmp_path):
       - 2 MGUs per LGU
       - 2 SGUs per MGU
     Pre-filter totals: 12 SGU, 6 MGU, 3 LGU, 1 XLGU.
-    Coord files exist for SGU and MGU only (LGU/XLGU intentionally missing).
+    Coord files exist for SGU and MGU only (LGU/XLGU intentionally absent).
     """
     geo_dir = tmp_path / "geography"
     geo_dir.mkdir()
@@ -67,9 +80,8 @@ def four_level_geo_dir(tmp_path):
 
 def test_lgu_filter_reduces_hierarchy_and_per_level_counts(four_level_geo_dir):
     """LGU filter selects 2 of 3 LGUs; downstream level counts match exactly."""
-    geo = Geography(
-        data_dir=four_level_geo_dir,
-        levels=LEVELS_4,
+    geo = _make_geo(
+        four_level_geo_dir,
         filters={"level": "LGU", "codes": ["L_keep1", "L_keep2"]},
     )
     geo.load_from_csv()
@@ -85,9 +97,8 @@ def test_lgu_filter_reduces_hierarchy_and_per_level_counts(four_level_geo_dir):
 
 def test_total_units_equals_sum_of_levels(four_level_geo_dir):
     """units_by_id is the source of truth for total count; equals per-level sum."""
-    geo = Geography(
-        data_dir=four_level_geo_dir,
-        levels=LEVELS_4,
+    geo = _make_geo(
+        four_level_geo_dir,
         filters={"level": "LGU", "codes": ["L_keep1", "L_keep2"]},
     )
     geo.load_from_csv()
@@ -96,14 +107,22 @@ def test_total_units_equals_sum_of_levels(four_level_geo_dir):
     assert len(geo.units_by_id) == per_level == 15
 
 
+def test_missing_hierarchy_file_config_raises():
+    """A Geography without a configured hierarchy file must fail loud on load."""
+    geo = Geography(data_dir="x", levels=["SGU", "MGU"])
+    with pytest.raises(ValueError, match="hierarchy_file"):
+        geo.load_from_csv()
+
+
 def test_filter_level_not_in_hierarchy_raises(tmp_path):
     geo_dir = tmp_path / "geography"
     geo_dir.mkdir()
     _write_csv(geo_dir / "hierarchy.csv", [["SGU", "MGU"], ["a", "b"]])
 
-    geo = Geography(
-        data_dir=str(geo_dir),
+    geo = _make_geo(
+        geo_dir,
         levels=["SGU", "MGU"],
+        coord_files={},
         filters={"level": "LGU", "codes": ["x"]},
     )
     with pytest.raises(ValueError, match="LGU"):
@@ -112,9 +131,8 @@ def test_filter_level_not_in_hierarchy_raises(tmp_path):
 
 def test_empty_filter_codes_loads_everything(four_level_geo_dir):
     """An explicit empty codes list must not silently drop all rows."""
-    geo = Geography(
-        data_dir=four_level_geo_dir,
-        levels=LEVELS_4,
+    geo = _make_geo(
+        four_level_geo_dir,
         filters={"level": "LGU", "codes": []},
     )
     geo.load_from_csv()
@@ -122,7 +140,7 @@ def test_empty_filter_codes_loads_everything(four_level_geo_dir):
 
 
 def test_coordinates_assigned_for_levels_with_coord_files(four_level_geo_dir):
-    geo = Geography(data_dir=four_level_geo_dir, levels=LEVELS_4)
+    geo = _make_geo(four_level_geo_dir)
     geo.load_from_csv()
 
     for unit in geo.get_units_by_level("SGU").values():
@@ -132,28 +150,31 @@ def test_coordinates_assigned_for_levels_with_coord_files(four_level_geo_dir):
         assert unit.coordinates is not None
 
 
-def test_missing_coord_file_warns_and_leaves_coordinates_none(
-    four_level_geo_dir, caplog
-):
-    """LGU and XLGU have no coord file → one warning each, coords stay None."""
-    geo = Geography(data_dir=four_level_geo_dir, levels=LEVELS_4)
+def test_level_without_coord_entry_has_no_coordinates(four_level_geo_dir, caplog):
+    """A level absent from coord_files is a declaration: coords None, no warning."""
+    geo = _make_geo(four_level_geo_dir)
     with caplog.at_level(logging.WARNING, logger="geography"):
         geo.load_from_csv()
 
-    warning_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-    assert any("No coordinate file found for LGU" in m for m in warning_msgs)
-    assert any("No coordinate file found for XLGU" in m for m in warning_msgs)
-
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING]
     for unit in geo.get_units_by_level("LGU").values():
         assert unit.coordinates is None
     for unit in geo.get_units_by_level("XLGU").values():
         assert unit.coordinates is None
 
 
+def test_coord_files_with_unknown_level_raises(four_level_geo_dir):
+    geo = _make_geo(
+        four_level_geo_dir,
+        coord_files={"BLOCK": "coord_sgu.csv"},
+    )
+    with pytest.raises(ValueError, match="BLOCK"):
+        geo.load_from_csv()
+
+
 def test_ancestor_chain_spans_all_four_levels(four_level_geo_dir):
-    geo = Geography(
-        data_dir=four_level_geo_dir,
-        levels=LEVELS_4,
+    geo = _make_geo(
+        four_level_geo_dir,
         filters={"level": "LGU", "codes": ["L_keep1"]},
     )
     geo.load_from_csv()
@@ -165,7 +186,7 @@ def test_ancestor_chain_spans_all_four_levels(four_level_geo_dir):
 
 
 def test_roots_are_top_level_units_only(four_level_geo_dir):
-    geo = Geography(data_dir=four_level_geo_dir, levels=LEVELS_4)
+    geo = _make_geo(four_level_geo_dir)
     geo.load_from_csv()
 
     roots = geo.get_roots()
@@ -174,7 +195,7 @@ def test_roots_are_top_level_units_only(four_level_geo_dir):
 
 
 def test_unique_sequential_ids_across_all_levels(four_level_geo_dir):
-    geo = Geography(data_dir=four_level_geo_dir, levels=LEVELS_4)
+    geo = _make_geo(four_level_geo_dir)
     geo.load_from_csv()
 
     ids = [u.id for u in geo.units_by_id.values()]
@@ -191,7 +212,7 @@ def test_blank_or_nan_hierarchy_rows_are_dropped_with_warning(tmp_path, caplog):
         [["SGU", "MGU", "LGU"], ["A", "M1", "L1"], ["B", "", "L1"], ["C", "M2", ""]],
     )
 
-    geo = Geography(data_dir=str(geo_dir), levels=["SGU", "MGU", "LGU"])
+    geo = _make_geo(geo_dir, levels=["SGU", "MGU", "LGU"], coord_files={})
     with caplog.at_level(logging.WARNING, logger="geography"):
         geo.load_from_csv()
 
@@ -204,6 +225,20 @@ def test_blank_or_nan_hierarchy_rows_are_dropped_with_warning(tmp_path, caplog):
     )
 
 
+def test_child_with_two_parents_raises(tmp_path):
+    """The same unit under two different parents is a hard error, not first-wins."""
+    geo_dir = tmp_path / "geography"
+    geo_dir.mkdir()
+    _write_csv(
+        geo_dir / "hierarchy.csv",
+        [["SGU", "MGU", "LGU"], ["a", "M1", "L1"], ["b", "M1", "L2"]],
+    )
+
+    geo = _make_geo(geo_dir, levels=["SGU", "MGU", "LGU"], coord_files={})
+    with pytest.raises(ValueError, match="more than one LGU parent"):
+        geo.load_from_csv()
+
+
 def test_cross_level_name_collision_warns(tmp_path, caplog):
     """A name appearing at two levels must warn, not silently shadow."""
     geo_dir = tmp_path / "geography"
@@ -213,7 +248,7 @@ def test_cross_level_name_collision_warns(tmp_path, caplog):
         [["SGU", "MGU", "LGU"], ["foo", "bar", "baz"], ["bar", "bar", "baz"]],
     )
 
-    geo = Geography(data_dir=str(geo_dir), levels=["SGU", "MGU", "LGU"])
+    geo = _make_geo(geo_dir, levels=["SGU", "MGU", "LGU"], coord_files={})
     with caplog.at_level(logging.WARNING, logger="geography"):
         geo.load_from_csv()
 
@@ -227,7 +262,7 @@ def test_cross_level_name_collision_warns(tmp_path, caplog):
 
 def test_geography_is_hashable(four_level_geo_dir):
     """Geography is hashable even though its levels attribute is a list."""
-    geo = Geography(data_dir=four_level_geo_dir, levels=LEVELS_4)
+    geo = _make_geo(four_level_geo_dir)
     assert isinstance(hash(geo), int)
     assert {geo} == {geo}
 
@@ -240,12 +275,14 @@ def test_geography_equality_against_non_geography_is_false():
     assert (geo == 123) is False
 
 
-def test_setup_geography_passes_levels_and_filter_through(four_level_geo_dir):
-    """setup_geography passes the 4-level levels list and LGU filter through to Geography."""
+def test_setup_geography_passes_levels_filter_and_files_through(four_level_geo_dir):
+    """setup_geography passes levels, filter, and the explicit file keys through."""
     config = {
         "geography": {
             "data_dir": four_level_geo_dir,
             "levels": LEVELS_4,
+            "hierarchy_file": "hierarchy.csv",
+            "coord_files": {"SGU": "coord_sgu.csv", "MGU": "coord_mgu.csv"},
             "filter": {"level": "LGU", "codes": ["L_keep1", "L_keep2"]},
         }
     }
@@ -257,12 +294,14 @@ def test_setup_geography_passes_levels_and_filter_through(four_level_geo_dir):
     geo.load_from_csv()
     assert len(geo.get_units_by_level("LGU")) == 2
     assert len(geo.get_units_by_level("XLGU")) == 1
+    sgu = next(iter(geo.get_units_by_level("SGU").values()))
+    assert sgu.coordinates is not None
 
 
 def test_coord_loading_restricted_to_post_filter_names(tmp_path, caplog):
     """
     Coord rows for filtered-out units must not be loaded. Otherwise a 2-LGU
-    run reads 239k SGU coords for nothing — a real cost on the production
+    run reads 239k SGU coords for nothing, a real cost on the production
     dataset.
     """
     geo_dir = tmp_path / "geography"
@@ -276,9 +315,10 @@ def test_coord_loading_restricted_to_post_filter_names(tmp_path, caplog):
         [["SGU", "latitude", "longitude"], ["a", 1.0, 2.0], ["b", 3.0, 4.0]],
     )
 
-    geo = Geography(
-        data_dir=str(geo_dir),
+    geo = _make_geo(
+        geo_dir,
         levels=["SGU", "MGU", "LGU"],
+        coord_files={"SGU": "coord_sgu.csv"},
         filters={"level": "LGU", "codes": ["L_keep"]},
     )
     with caplog.at_level(logging.INFO, logger="geography"):
@@ -302,7 +342,9 @@ def test_coord_file_missing_required_columns_raises(tmp_path):
         [["SGU", "lat", "lon"], ["a", 1.0, 2.0]],  # wrong column names
     )
 
-    geo = Geography(data_dir=str(geo_dir), levels=["SGU", "MGU"])
+    geo = _make_geo(
+        geo_dir, levels=["SGU", "MGU"], coord_files={"SGU": "coord_sgu.csv"}
+    )
     with pytest.raises(ValueError, match="latitude.*longitude|longitude.*latitude"):
         geo.load_from_csv()
 

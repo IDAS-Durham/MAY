@@ -123,7 +123,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load_msoa_marginals():
-    path = REPO_ROOT / "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+    path = REPO_ROOT / "data/population/sexual_orientation/EW_orientation_by_mgu.csv"
     by_code = {}
     with path.open() as f:
         for row in csv.DictReader(f):
@@ -150,10 +150,10 @@ def test_romantic_distributor_handles_75plus_via_extrapolation():
         (REPO_ROOT / "configs/2021/relationships/romantic_relationships.yaml").read_text()
     )
     cfg["data_sources"]["demographic_distribution"]["path"] = str(
-        REPO_ROOT / "data/population/sexual_orientation/orientation_prevalence_extended.csv"
+        REPO_ROOT / "data/population/sexual_orientation/orientation_prevalence_synthetic.csv"
     )
     cfg["data_sources"]["geo_distribution"]["path"] = str(
-        REPO_ROOT / "data/population/sexual_orientation/orientation_by_msoa_normalized.csv"
+        REPO_ROOT / "data/population/sexual_orientation/EW_orientation_by_mgu.csv"
     )
 
     people = [
@@ -179,7 +179,7 @@ def test_romantic_distributor_handles_75plus_via_extrapolation():
 def test_relationship_rules_resolves_same_category_per_area(tmp_path):
     """The validator should look up P(same-category) per area when configured.
 
-    The mechanism is generic — it applies to any categorical attribute, not
+    The mechanism is generic and applies to any categorical attribute, not
     just `sex`. This test uses a synthetic religion source to prove the
     schema is domain-agnostic.
     """

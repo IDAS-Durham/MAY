@@ -1,23 +1,38 @@
 # MAY
 
-A high-performance, **configuration-driven** population simulation framework for building synthetic populations and distributing them across geography, residences, schools, workplaces, and other venues. Generic by design: works with any administrative hierarchy, any era, any country.
+MAY is a high-performance, configuration-driven framework for building synthetic
+populations and distributing them across geography, residences, schools,
+workplaces and other venues. Nothing in it assumes a particular country or era,
+so it works with any administrative hierarchy.
 
-The shipped configuration targets **modern-day UK** (e.g. England 2021).
+The shipped configuration targets the modern-day UK (England 2021). Out of the
+box it builds County Durham and Darlington, two local authorities sized to run on
+a laptop. Since the data covers all four nations, widening the build is a config
+change. The USER_GUIDE explains how.
 
 ## What it does
 
-Given census-style inputs — a geographical hierarchy, age × sex demographics per smallest unit, household composition counts, and venue inventories — `create_world.py` produces a single HDF5 file (`world_state.h5`) containing the full synthetic world: every person, where they live, where they go to school / work / receive care, and the friendship and romantic-partnership networks between them.
+You supply census-style inputs: a geographical hierarchy, age × sex demographics
+for the smallest unit, household composition counts, and venue inventories.
+`create_world.py` turns those into one HDF5 file, `world_state.h5`, holding the
+whole synthetic world. That means every person, where they live, where they go to
+school or work or receive care, and the friendship and romantic-partnership
+networks between them.
 
-The whole pipeline is driven by **YAML configuration files**. The Python code does not need to be edited to build a new world; users edit YAMLs and CSVs only.
+YAML configuration files drive the pipeline, so building a new world means
+editing YAMLs and CSVs rather than Python.
 
 ## Documentation
 
-- **[Docs Page](https://idas-durham.github.io/MAY/)** - Full documentation.
-- **[USER_GUIDE.md](USER_GUIDE.md)** — walkthrough of every YAML and CSV: how to configure geography filters, edit household allocation, swap census years, disable debug outputs, etc. Read this before changing any config.
+- [Docs page](https://idas-durham.github.io/MAY/) holds the full documentation.
+- [USER_GUIDE.md](USER_GUIDE.md) walks through every YAML and CSV: configuring
+  geography filters, editing household allocation, swapping census years, turning
+  debug outputs on. Read it before changing any config.
 
 ## Install
 
-Requires Python 3.13+. Use any environment manager you like — Conda is recommended:
+Requires Python 3.13+. Any environment manager will do, and Conda is the one we
+use:
 
 ```bash
 conda create -n MayEnv python=3.13 -y
@@ -36,13 +51,17 @@ pip install -r requirements.txt
 
 ## Get the data
 
-The repo ships without the bulky census/venue CSVs. Fetch them once with:
+The repo ships without the bulky census and venue CSVs. Fetch them once:
 
 ```bash
-bash scripts/get_data.sh
+python scripts/get_data.py
 ```
 
-This downloads and unpacks the dataset into `data/`.
+This downloads the archive and unpacks it into `data/`. It uses only the standard
+library, so it runs the same way on Windows, macOS and Linux. Pass `--force` to
+replace an existing `data/` directory.
+
+On macOS and Linux, `bash scripts/get_data.sh` does the same thing.
 
 ## Run
 
@@ -51,44 +70,50 @@ This downloads and unpacks the dataset into `data/`.
 python create_world.py
 
 # Custom config / output file
-python create_world.py --config configs/2021/config.yaml --filename world_state.h5
+python create_world.py --config configs/2021/config_uk_test.yaml --filename uk.h5
 ```
 
-Output: `world_state.h5` (HDF5) at the project root.
+The run writes `output/2021/world_state.h5`. Its directory comes from
+`serialization.output_dir` in the config and its name from
+`serialization.filename`, which `--filename` overrides.
 
 ## Project layout
 
 ```
 MAY/
 ├── create_world.py     # Main entry point
-├── configs/               # All user-facing configuration
-├── data/               # Input CSVs (census-style)
+├── configs/            # All user-facing configuration (2021, 1911)
+├── data/               # Input CSVs (census-style), fetched separately
 ├── may/                # Core engine (generic, world-agnostic)
-├── world_specific_code/# World-specific extensions (Modern_Day_UK, MedievalYaml, …)
-└── world_state.h5      # Output
+├── docs/               # Source for the documentation site
+├── scripts/            # get_data.py and get_data.sh
+├── tests/              # test_unit/, test_integration/
+└── output/             # Written by a run; world_state.h5 lands here
 ```
-
 
 ## Testing
 
 ```bash
 pytest                                          # all tests
-pytest tests/test_units/may/population/         # specific module
+pytest tests/test_unit/may/population/          # specific module
 ```
 
-Note: `pytest` is not in `requirements.txt`. Install separately if you want to run the suite.
+`pytest` is not in `requirements.txt`, so install it separately to run the suite.
 
 ## Viewing the world
-There are two codes that can be used for viewing the world.
-[MAY-viewer](https://github.com/mtcorread/MAY-viewer)
-[MAY-world-visualiser](https://github.com/gavdoubleu/may_world_visualiser)
+
+Two separate tools can display a finished world:
+
+- [MAY-viewer](https://github.com/mtcorread/MAY-viewer)
+- [MAY-world-visualiser](https://github.com/gavdoubleu/may_world_visualiser)
 
 ## Requirements
 
-Python 3.13+ and the packages pinned in `requirements.txt` (`numpy`, `pandas`, `scipy`, `numba`, `h5py`, `PyYAML`).
+Python 3.13+ and the packages pinned in `requirements.txt` (`numpy`, `pandas`,
+`scipy`, `numba`, `h5py`, `PyYAML`).
 
 ## License
 
-GNU General Public License v3.0 — see [LICENSE](LICENSE).
+GNU General Public License v3.0. See [LICENSE](LICENSE).
 
 Copyright (C) 2026 Martha Correa. This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.

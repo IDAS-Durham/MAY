@@ -1,7 +1,7 @@
 """
 Contract tests for PopulationManager loaders and generators.
 
-These cover the public load_* / generate_* surface of population.py — the
+These cover the public load_* / generate_* surface of population.py, the
 methods the create_world flow exercises end-to-end every run. They pin down
 the sad paths, the cross-method side effects, and the kwarg-independence
 guard for the Person constructor.
@@ -48,7 +48,7 @@ def _make_geo(level_units):
 
 @pytest.fixture
 def sgu_geo():
-    """Geography with three SGUs (the smallest level) — production shape."""
+    """Geography with three SGUs (the smallest level), matching production shape."""
     return _make_geo({'SGU': ['SGU_001', 'SGU_002', 'SGU_003']})
 
 
@@ -67,7 +67,7 @@ def two_level_geo():
     return geo
 
 
-# load_demographics_from_csv — sad paths and side effects the production
+# load_demographics_from_csv: sad paths and side effects the production
 # log relies on
 
 class TestLoadDemographicsFromCsv:
@@ -85,36 +85,75 @@ class TestLoadDemographicsFromCsv:
         bad = pd.DataFrame({'wrong_col': ['SGU_001'], '0': [1]})
         data_dir = self._write_demographics_pair(tmp_path, bad, bad)
         pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
-        with pytest.raises(ValueError, match="geo_unit"):
+        with pytest.raises(PopulationError, match="geo_unit"):
             pm.load_demographics_from_csv()
 
-    def test_rows_outside_geography_are_filtered_out(self, sgu_geo, tmp_path):
+    def test_rows_outside_geography_are_filtered_out(self, tmp_path):
         """Source CSVs cover the whole country; we should only retain the
         rows whose geo_unit is in the loaded geography."""
+        geo = _make_geo({'SGU': ['SGU_001']})
         in_geo = pd.DataFrame({
             'geo_unit': ['SGU_001', 'OUT_OF_GEO_999'],
             '0': [3, 99],
         })
         data_dir = self._write_demographics_pair(tmp_path, in_geo, in_geo)
-        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        pm = PopulationManager(geography=geo, data_dir=data_dir)
         pm.load_demographics_from_csv()
 
         assert set(pm.precise_demographics.keys()) == {'SGU_001'}
         assert pm.precise_demographics['SGU_001'][0]['male'] == 3
 
+    def test_uncovered_geo_unit_raises(self, sgu_geo, tmp_path):
+        """Every loaded geo unit needs a demographics row; a partial file
+        must fail loud rather than quietly build a world with people missing."""
+        df = pd.DataFrame({'geo_unit': ['SGU_001'], '0': [3]})
+        data_dir = self._write_demographics_pair(tmp_path, df, df)
+        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        with pytest.raises(PopulationError, match="SGU_002"):
+            pm.load_demographics_from_csv()
+
+    def test_stacked_files_cover_geography_together(self, sgu_geo, tmp_path):
+        """Demographics may come as several files whose rows stack; coverage
+        is judged on the stacked whole."""
+        df_a = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '0': [3, 1]})
+        df_b = pd.DataFrame({'geo_unit': ['SGU_003'], '0': [7]})
+        df_a.to_csv(tmp_path / "part_a.csv", index=False)
+        df_b.to_csv(tmp_path / "part_b.csv", index=False)
+        pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
+        pm.load_demographics_from_csv(
+            male_file=["part_a.csv", "part_b.csv"],
+            female_file=["part_a.csv", "part_b.csv"],
+        )
+        assert set(pm.precise_demographics.keys()) == {'SGU_001', 'SGU_002', 'SGU_003'}
+        assert pm.precise_demographics['SGU_003'][0]['male'] == 7
+
+    def test_stacked_files_with_different_ages_raise(self, sgu_geo, tmp_path):
+        """Age columns must match across stacked demographics files."""
+        df_a = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '0': [3, 1]})
+        df_b = pd.DataFrame({'geo_unit': ['SGU_003'], '1': [7]})
+        df_a.to_csv(tmp_path / "part_a.csv", index=False)
+        df_b.to_csv(tmp_path / "part_b.csv", index=False)
+        pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
+        with pytest.raises(PopulationError, match="column"):
+            pm.load_demographics_from_csv(
+                male_file=["part_a.csv", "part_b.csv"],
+                female_file=["part_a.csv", "part_b.csv"],
+            )
+
     def test_zero_count_cells_do_not_create_demographic_entries(
-        self, sgu_geo, tmp_path
+        self, tmp_path
     ):
-        """Zero counts must be filtered out — generate_population iterates
+        """Zero counts must be filtered out, because generate_population iterates
         every (age, sex, count) tuple, so leaving zeros in inflates the work
         with no observable effect."""
+        geo = _make_geo({'SGU': ['SGU_001']})
         df = pd.DataFrame({
             'geo_unit': ['SGU_001'],
             '0': [0],   # zero males age 0
             '1': [4],   # four males age 1
         })
         data_dir = self._write_demographics_pair(tmp_path, df, df)
-        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        pm = PopulationManager(geography=geo, data_dir=data_dir)
         pm.load_demographics_from_csv()
 
         sgu_data = pm.precise_demographics['SGU_001']
@@ -133,20 +172,21 @@ class TestLoadDemographicsFromCsv:
         assert pm.precise_demographics == {}
 
     def test_missing_files_raises(self, sgu_geo, tmp_path):
-        """A missing demographics file fails loud — the run must not
+        """A missing demographics file fails loud, so the run cannot
         continue toward a phantom (empty) population."""
         pm = PopulationManager(geography=sgu_geo, data_dir=str(tmp_path))
         with pytest.raises(PopulationError, match="not found"):
             pm.load_demographics_from_csv()
         assert pm.precise_demographics == {}
 
-    def test_second_load_replaces_first(self, sgu_geo, tmp_path):
+    def test_second_load_replaces_first(self, tmp_path):
         """Calling load_demographics_from_csv twice must not double-count the
         first load's data into the second's totals."""
-        df1 = pd.DataFrame({'geo_unit': ['SGU_001'], '0': [3]})
-        df2 = pd.DataFrame({'geo_unit': ['SGU_002'], '5': [7]})
+        geo = _make_geo({'SGU': ['SGU_001', 'SGU_002']})
+        df1 = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '0': [3, 2]})
+        df2 = pd.DataFrame({'geo_unit': ['SGU_001', 'SGU_002'], '5': [0, 7]})
         data_dir = self._write_demographics_pair(tmp_path, df1, df1)
-        pm = PopulationManager(geography=sgu_geo, data_dir=data_dir)
+        pm = PopulationManager(geography=geo, data_dir=data_dir)
         pm.load_demographics_from_csv()
         # Overwrite files with the second dataset
         self._write_demographics_pair(tmp_path, df2, df2)
@@ -155,21 +195,21 @@ class TestLoadDemographicsFromCsv:
         assert pm.precise_demographics['SGU_002'][5]['male'] == 7
 
 
-# load_explicit_from_df — sad paths and column-mapping semantics
+# load_explicit_from_df: sad paths and column-mapping semantics
 
 class TestLoadExplicitFromDf:
 
     def test_missing_geo_column_raises(self, sgu_geo):
         """An explicit-population frame with no recognised geographical
-        column is unloadable — must fail loudly, not produce zero people."""
+        column is unloadable and must fail loudly rather than produce zero people."""
         df = pd.DataFrame({'Age': [25], 'Gender': ['M']})
         pm = PopulationManager(geography=sgu_geo, data_dir='/tmp')
         with pytest.raises(ValueError, match="geographical column"):
             pm.load_explicit_from_df(df, column_mapping={'age': 'Age', 'sex': 'Gender'})
 
     def test_unknown_geo_unit_skips_row_with_warning(self, sgu_geo, caplog):
-        """A row whose geo_unit isn't in the loaded geography must be skipped
-        — silently producing a Person with geographical_unit=None corrupts
+        """A row whose geo_unit isn't in the loaded geography must be skipped,
+        because silently producing a Person with geographical_unit=None corrupts
         every downstream lookup."""
         df = pd.DataFrame({
             'Age': [25, 30],
@@ -213,7 +253,7 @@ class TestLoadExplicitFromDf:
 
     def test_unknown_sex_token_falls_back_to_unknown(self, sgu_geo):
         """An unrecognised sex string must not be silently dropped or
-        relabelled — it stays as the lower-cased original so downstream
+        relabelled, staying as the lower-cased original so downstream
         diagnostics can spot it."""
         df = pd.DataFrame({'Age': [25], 'Sex': ['nonbinary'], 'geo_unit': ['SGU_001']})
         pm = PopulationManager(geography=sgu_geo, data_dir='/tmp')
@@ -242,7 +282,7 @@ class TestLoadExplicitFromDf:
 
     def test_literal_geo_column_does_not_leak_into_properties(self, sgu_geo):
         """The geographical column drives `geographical_unit` and must not
-        also appear in `properties` — even when the caller didn't add a
+        also appear in `properties`, even when the caller didn't add a
         'geo_unit' entry to the column mapping. Duplicating the SGU name as a
         property would re-shadow downstream lookups that expect only domain
         attributes."""
@@ -279,7 +319,7 @@ class TestLoadExplicitFromDf:
 
     def test_mapped_csv_columns_do_not_appear_in_properties(self, sgu_geo):
         """Columns consumed by the mapping (Age/Sex/geo_unit) must not also
-        leak into properties — that would store the same datum twice and
+        leak into properties, which would store the same datum twice and
         let buggy callers diverge them."""
         df = pd.DataFrame({
             'Age': [25],
@@ -318,7 +358,7 @@ class TestLoadBatchExplicitFromCsv:
         self, two_level_geo, tmp_path
     ):
         """Production has one file per MGU. If a particular MGU's file is
-        missing, batch load must continue — there is no 'fail loudly' here
+        missing, batch load must continue, and there is no 'fail loudly' here
         because partial geographies are routine."""
         # Write only M_a's file; M_b's is intentionally absent.
         (tmp_path / "M_a_pop.csv").write_text(
@@ -370,7 +410,7 @@ class TestLoadBatchExplicitFromCsv:
         assert len(pm.people_by_id) == 2
 
 
-# generate_population — kwarg independence
+# generate_population: kwarg independence
 
 class TestGeneratePopulationKwargIndependence:
     """generate_population must give each Person its own properties /
@@ -408,7 +448,7 @@ class TestGeneratePopulationKwargIndependence:
         assert 'leisure' not in pm.people[1].activity_map
 
 
-# generate_population — observable side effects on geography
+# generate_population: observable side effects on geography
 
 class TestGeneratePopulationGeoLinkage:
 

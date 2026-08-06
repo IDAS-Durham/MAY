@@ -78,17 +78,19 @@ class PopulationManager:
         Columns = ages (1-year bins from 0 to 100)
 
         Args:
-            male_file (str): Filename for male demographics
-            female_file (str): Filename for female demographics
-        
+            male_file: Filename or list of filenames for male demographics
+            female_file: Filename or list of filenames for female demographics
         """
-        male_path = os.path.join(self.data_dir, male_file)
-        female_path = os.path.join(self.data_dir, female_file)
+        from may.utils.stacked_input import as_path_list, load_stacked_csv
 
-        if not os.path.exists(male_path) or not os.path.exists(female_path):
-            raise PopulationError(
-                f"Demographics files not found: {male_path} or {female_path}"
-            )
+        male_paths = [
+            os.path.join(self.data_dir, p)
+            for p in as_path_list(male_file, "population.demographics_male_file")
+        ]
+        female_paths = [
+            os.path.join(self.data_dir, p)
+            for p in as_path_list(female_file, "population.demographics_female_file")
+        ]
 
         # Get the smallest geographical level from the loaded geography
         # to filter demographics to only relevant geo units
@@ -104,22 +106,33 @@ class PopulationManager:
         valid_geo_units = set(smallest_units_dict.keys())
         logger.info(f"Filtering demographics to {len(valid_geo_units)} {smallest_level}s in loaded geography")
 
-        logger.info(f"Loading male demographics from {male_path}")
-        male_df = pd.read_csv(male_path)
-
-        logger.info(f"Loading female demographics from {female_path}")
-        female_df = pd.read_csv(female_path)
-
-        # Validate structure
-        if 'geo_unit' not in male_df.columns or 'geo_unit' not in female_df.columns:
-            raise ValueError("Demographics files must have 'geo_unit' column")
-
+        try:
+            male_df = load_stacked_csv(
+                male_paths, label="male demographics", key_column="geo_unit"
+            )
+            female_df = load_stacked_csv(
+                female_paths, label="female demographics", key_column="geo_unit"
+            )
+        except Exception as e:
+            raise PopulationError(str(e)) from e
 
         # Ignore index column if it exists
         for _df in [male_df, female_df]:
             if 'index' in _df.columns:
                 _df.drop(columns=['index'], inplace=True)
-        
+
+        # Every loaded geo unit must have a demographics row: a silent gap here
+        # would build a plausible-looking world with people quietly missing.
+        for sex_label, df in (("male", male_df), ("female", female_df)):
+            missing = valid_geo_units - set(df['geo_unit'].astype(str))
+            if missing:
+                examples = sorted(missing)[:10]
+                raise PopulationError(
+                    f"{len(missing)} {smallest_level}(s) in the loaded geography "
+                    f"have no {sex_label} demographics row, e.g. {examples}. "
+                    f"The geography filter is the only way to scope a world; "
+                    f"demographics must cover every loaded unit."
+                )
 
         # Filter to only geo units in our geography BEFORE processing
         male_df = male_df[male_df['geo_unit'].isin(valid_geo_units)]

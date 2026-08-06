@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Optional
 logger = logging.getLogger("may.attribute_assignment.strategies")
 
 
-# Config validation — assignment blocks accept only the keys the engine reads,
+# Config validation. Assignment blocks accept only the keys the engine reads,
 # failing loudly on any other.
 STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
     'probabilistic': {'strategy', 'data_source'},
@@ -14,7 +14,7 @@ STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
     'reverse_inheritance': {'strategy', 'inherit_from', 'logic', 'marginal_source'},
     'probabilistic_conditions': {'strategy', 'data_source', 'conditions',
                                  'selection_method'},
-    'commuting_likelihood': {'strategy', 'data_source', 'outputs'},
+    'commuting_likelihood': {'strategy', 'data_source', 'outputs', 'condition'},
     'geographical_unit_sampler': {'strategy', 'data_source'},
     'categorical_sampler': {'strategy', 'data_source'},
     'constant': {'strategy', 'value'},
@@ -26,8 +26,9 @@ _THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value', 'copy'}
 # Strategies whose `logic:` blocks use the declarative when/then schema.
 _LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
 
-# Tolerance for probability arithmetic (e.g. detecting a genuinely negative
-# P(exactly 1) vs floating-point noise) in the gated comorbidity sampler.
+# Tolerance for probability arithmetic in the gated comorbidity sampler, which
+# separates a negative P(exactly 1) that reflects inconsistent inputs from one
+# that is floating-point noise.
 _PROB_TOL = 1e-9
 
 # How `probabilistic_conditions` turns per-person probabilities into a set of
@@ -41,7 +42,7 @@ class _CompiledBlock:
     A logic block parsed once at strategy-construction time.
 
     Holds the predicate/action kinds (from `_classify_when`/`_classify_then`) and,
-    for a nested probabilistic `then`, a prebuilt strategy instance — so the
+    for a nested probabilistic `then`, a prebuilt strategy instance, so the
     per-person `assign` path reuses them directly.
     """
 
@@ -136,7 +137,7 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
 
     Raises:
         ValueError: naming the unknown keys, the strategy, and the allowed
-        set — so a stale key (e.g. `context`) breaks the build at load time.
+        set, so a stale key (e.g. `context`) breaks the build at load time.
     """
     if not isinstance(config, dict):
         raise ValueError(f"{where}: assignment must be a mapping, got {type(config).__name__}")
@@ -247,7 +248,7 @@ class AssignmentStrategy:
         The single weighted-draw code path shared by every draw-family strategy:
         clamp negative weights to zero, normalize, then `np.random.choice`. With
         `size=None` returns one value; with `size=n` returns n values (batch).
-        An empty or zero-total distribution fails loudly — no silent None.
+        An empty or zero-total distribution fails loudly rather than returning None.
         """
         if not probs:
             self._fail(person, "data source returned no distribution")
@@ -319,7 +320,7 @@ class DrawStrategy(AssignmentStrategy):
     Weighted single draw from a {value: weight} distribution.
 
     One strategy for every weighted-draw use. The split: the **data source** owns
-    key-resolution and weight computation — it receives (person, household,
+    key-resolution and weight computation. It receives (person, household,
     context) and returns the distribution; this **strategy** owns the sampling
     mechanics (sanitize + draw, via `_weighted_draw`). The `probabilistic`,
     `categorical_sampler` and `geographical_unit_sampler` strategies are aliases
@@ -446,7 +447,7 @@ class LogicBlockStrategy(AssignmentStrategy):
         self.inherit_config = config.get('inherit_from', {})
         self.logic_blocks = config.get('logic', [])
         # Precompile blocks once per strategy instance (instances are cached and
-        # reused across every person — see assigner._get_or_create_strategy), so
+        # reused across every person, see assigner._get_or_create_strategy), so
         # the per-call `assign` path only evaluates the precompiled blocks:
         # predicate classification, expression compilation, and nested-strategy
         # construction all happen here, once, up front.
@@ -540,7 +541,7 @@ class LogicBlockStrategy(AssignmentStrategy):
         concrete values by looking up the referenced role persons in context.
 
         A referenced role that is not yet in context (e.g. the first elder when
-        assigning the second) contributes nothing to exclude — there is no value
+        assigning the second) contributes nothing to exclude, because there is no value
         to differ from yet. That is primary logic, not a fallback.
 
         Args:
@@ -581,8 +582,8 @@ class LogicBlockStrategy(AssignmentStrategy):
         Sample from a probabilistic distribution while excluding specific values.
 
         Gets the full distribution, removes excluded values, re-normalizes, and
-        samples. If every value is excluded, that is a data/config contradiction —
-        fail loudly.
+        samples. If every value is excluded, that is a data/config contradiction
+        and the sampler fails loudly.
 
         Args:
             person: Person being assigned
@@ -685,8 +686,8 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
     - `independent_bernoulli`: each condition is an independent Bernoulli trial
       on its marginal probability, using the marginals only.
     - `gated_conditions`: gated hierarchical sampler that honors the
-      joint count structure — `no_condition` = P(0), `has_comorbidity` = P(>=1),
-      `multiple_morbidities` = P(>=2) — then draws which conditions from the
+      joint count structure (`no_condition` = P(0), `has_comorbidity` = P(>=1),
+      `multiple_morbidities` = P(>=2)), then draws which conditions from the
       per-condition marginals. See `_sample_gated_conditions`.
     """
 
@@ -720,7 +721,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         if not source:
             self._fail(person, f"data source '{data_source_name}' not found")
 
-        # Perform lookup (raises on a miss — no fallbacks)
+        # Perform lookup (raises on a miss, with no fallbacks)
         probabilities = source.lookup(person, household, context)
 
         if self.selection_method == 'independent_bernoulli':
@@ -772,7 +773,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
            >=2. The data fixes P(>=2) but not the upper tail, so this is the
            explicit modelling assumption for the tail shape.
 
-        Missing or contradictory data fails loudly — no fallbacks.
+        Missing or contradictory data fails loudly, with no fallbacks.
         """
         p_none = self._require_prob(probabilities, 'no_condition', person)
         p_any = self._require_prob(probabilities, 'has_comorbidity', person)
@@ -864,6 +865,39 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         super().__init__(config, data_manager)
         self.data_source_name = config.get('data_source')
         self.outputs = config.get('outputs', {})
+        # Optional: restrict the destination draw to O-D rows whose metadata
+        # matches an attribute already assigned to the person. Lets a coarser
+        # matrix answer only "where", once a finer source has answered "whether".
+        self.condition = config.get('condition')
+
+    def _condition_allowed(self, person) -> Optional[set]:
+        """Metadata values this person's destinations may carry, or None if unconditioned."""
+        if not self.condition:
+            return None
+        attribute = self.condition['attribute']
+        value = self._get_attribute_value(person, attribute)
+        mapping = self.condition['map']
+        if value not in mapping:
+            raise ValueError(
+                f"commuting_likelihood condition on '{attribute}': value {value!r} "
+                f"is not in the map ({sorted(mapping)}). No fallbacks."
+            )
+        return set(mapping[value])
+
+    def _filter_by_condition(self, destinations, allowed, origin_code):
+        """Keep O-D rows whose condition metadata is allowed, renormalised to 1.0."""
+        if allowed is None:
+            return destinations
+        key = self.condition['metadata_key']
+        kept = [(d, m, l) for (d, m, l) in destinations if m.get(key) in allowed]
+        total = sum(l for _, _, l in kept)
+        if not kept or total <= 0:
+            raise ValueError(
+                f"commuting_likelihood: origin '{origin_code}' has no destinations "
+                f"with {key} in {sorted(allowed)}. The O-D matrix and the "
+                "conditioning attribute disagree. No fallbacks."
+            )
+        return [(d, m, l / total) for (d, m, l) in kept]
 
     def _resolve_origin_code(self, person) -> Optional[str]:
         """
@@ -936,17 +970,23 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             return [self._fail(person, "no commuting-flow row for this origin")
                     for person, household, context in zip(people_list, households_list, contexts_list)]
 
+        # Group by origin and, when conditioning, by the condition value too:
+        # every member of a group then shares one filtered distribution.
         origin_groups = defaultdict(list)
 
         for i, person in enumerate(people_list):
             origin_code = self._resolve_origin_code(person)
             if origin_code:
-                origin_groups[origin_code].append(i)
+                allowed = self._condition_allowed(person)
+                origin_groups[(origin_code,
+                               frozenset(allowed) if allowed else None)].append(i)
 
         results = [None] * len(people_list)
 
-        for origin_code, indices in origin_groups.items():
+        for (origin_code, allowed), indices in origin_groups.items():
             destinations = source.lookup(origin_code)
+            if destinations:
+                destinations = self._filter_by_condition(destinations, allowed, origin_code)
             if not destinations:
                 logger.warning(f"No destinations found for origin {origin_code}")
                 for idx in indices:
@@ -982,7 +1022,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
 
         # Headcount of out-of-boundary assignments. Under the 'outside'
         # policy the sentinel is a normal destination value, so report how many
-        # people drew it — the per-step exclusion downstream reports the rest.
+        # people drew it, and the per-step exclusion downstream reports the rest.
         outside_value = getattr(source, '_outside_value', None)
         if outside_value:
             # The sentinel lands on whichever output is wired to 'destination'.
@@ -1026,6 +1066,10 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             return self._fail(person, "no commuting-flow row for this origin")
 
         destinations = source.lookup(origin_code)
+        if destinations:
+            destinations = self._filter_by_condition(
+                destinations, self._condition_allowed(person), origin_code
+            )
         if not destinations:
             logger.warning(f"No destinations found for origin {origin_code}")
             return self._fail(person, "no commuting-flow row for this origin")

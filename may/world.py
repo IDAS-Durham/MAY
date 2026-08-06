@@ -191,22 +191,34 @@ class World:
 
         # Get geo units from geography if not provided
         # Include all hierarchy levels (SGU, MGU, LGU) for efficient filtering across all data sources
+        geo_units_by_level = None
         if geo_units is None and self.geography:
             geo_units = set()
+            # Same names, kept split by level. A source that declares which level
+            # its values live at (an O-D matrix's `destination_level`) must be
+            # matched against that level alone: names are not unique across
+            # levels, so "Wales" as an XLGU would otherwise satisfy a check meant
+            # for LGUs and send a cross-border commuter to a non-existent LAD.
+            geo_units_by_level = {}
             for unit in self.geography.get_all_units_list():
                 # Add the unit's name/code
                 geo_units.add(unit.name)
+                geo_units_by_level.setdefault(unit.level, set()).add(unit.name)
                 # Also add parent names at all levels for O-D matrix filtering
                 current = unit
                 while current.parent:
                     geo_units.add(current.parent.name)
+                    geo_units_by_level.setdefault(
+                        current.parent.level, set()
+                    ).add(current.parent.name)
                     current = current.parent
 
         # Run attribute assignment
         stats = assign_attributes(
             venue_manager=self.venues,
             config_path=config_path,
-            geo_units=geo_units
+            geo_units=geo_units,
+            geo_units_by_level=geo_units_by_level
         )
 
         return stats
@@ -266,7 +278,7 @@ def setup_households(geo, population, venues, config, strategy_file=None):
         venues: VenueManager object
         config: Configuration dictionary
         strategy_file: Path to the allocation-strategy YAML to execute. This is
-            the `config:` of the timeline's `residence_allocation` step — the
+            the `config:` of the timeline's `residence_allocation` step, the
             single source of truth for which strategy runs and where it runs in
             the timeline. When ``None`` (e.g. a direct programmatic caller),
             falls back to ``config["households"]["strategy_file"]``.
@@ -287,9 +299,14 @@ def setup_households(geo, population, venues, config, strategy_file=None):
         rules_file=pr.resolve(household_config.get("rules_file")) if household_config.get("rules_file") else None,
     )
 
-    # Load household data
+    # Load household data. data_file may be a single file or a list of files
+    # to stack; column_policy: union_zero_fill lets sources with different
+    # composition vocabularies combine (absent pattern = zero households).
     household_data_file = household_config.get("data_file", "households.csv")
-    household_distributor.load_household_data(household_data_file)
+    household_distributor.load_household_data(
+        household_data_file,
+        column_policy=household_config.get("column_policy", "strict"),
+    )
 
     # Distribute households and venues based on configuration mode.
     # The strategy file comes from the residence_allocation timeline step;

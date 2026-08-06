@@ -23,25 +23,50 @@ venue_types:
     
   hospital:
     enabled: true
-    filename: medical/hospitals.csv
+    # One file per nation, stacked into one venue table. Coverage is disjoint
+    # and UK-complete: England+Wales, Scotland, Northern Ireland. Each row is a
+    # trust/board rather than a single site, so bed and staff counts are the
+    # aggregate for that body sited at its headquarters SGU.
+    filename:
+      - medical/hospitals/EW_hospitals.csv
+      - medical/hospitals/SCT_hospitals.csv
+      - medical/hospitals/NI_hospitals.csv
     description: "Healthcare facilities providing medical treatment"
     is_residence: false  # Not a place where people live
 
   school:
     enabled: true
-    filename: primary_activities/Schools_EW.csv
+    filename:
+      - primary_activities/schools/EW_Schools.csv
+      - primary_activities/schools/SCT_Schools.csv
+      - primary_activities/schools/NI_Schools.csv
     description: "Educational institutions for primary and secondary education"
     is_residence: false  # Not a place where people live
 
   university:
     enabled: true
-    filename: primary_activities/uk_universities.csv
+    # One file per nation, stacked into one venue table. Coverage is disjoint
+    # and UK-complete: England+Wales, Scotland, Northern Ireland. The four NI
+    # campuses are keyed on Small Area codes like every other NI venue file;
+    # before the split they carried 2011 ward labels that matched no geography
+    # row, so filter_by_geography silently dropped all of Northern Ireland.
+    filename:
+      - primary_activities/universities/EW_universities.csv
+      - primary_activities/universities/SCT_universities.csv
+      - primary_activities/universities/NI_universities.csv
     description: "Higher education institutions"
     is_residence: false  # Not a place where people live
 
   care_home:
     enabled: true
-    filename: residences/care_homes.csv
+    # Per-nation builds of homes for older adults, stacked into one venue table.
+    # Column policy stays strict (the default): the allocator reads a missing
+    # slot column as zero and carries on, so a zero-filled union would hand a
+    # whole nation's care homes no residents at all and raise nothing.
+    filename:
+      - residences/care_homes/EW_care_homes.csv
+      - residences/care_homes/SCT_care_homes.csv
+      - residences/care_homes/NI_care_homes.csv
     description: "Residential care facilities for elderly or disabled persons"
     is_residence: true  # People live here
 
@@ -53,48 +78,93 @@ venue_types:
 
   company:
     enabled: true
-    filename: primary_activities/companies.csv
+    # Calibrated per-nation employer stocks, stacked into one venue table
+    # (identical columns, geography-filtered like any venue file). These are
+    # the builds the workplace-capacity weighting is aggregated from, so
+    # location, sector and the company match all read the same employer
+    # stock. Coverage is disjoint and UK-complete: E+W, Scotland, Northern
+    # Ireland.
+    filename:
+      - primary_activities/companies/EW_companies.csv
+      - primary_activities/companies/SCT_companies.csv
+      - primary_activities/companies/NI_companies.csv
     description: "Commercial workplaces and businesses"
     is_residence: false  # Not a place where people live
 
   boarding_school:
     enabled: true
-    filename: residences/boarding_schools.csv
+    # One file per nation, stacked into one venue table. Coverage is disjoint
+    # and UK-complete: England+Wales, Scotland, Northern Ireland. Boarder counts
+    # are the school's own returns to the Independent Schools Council, split by
+    # sex. Every row's name and geo_unit match a row in the corresponding
+    # schools file, so a boarding residence always has a school counterpart.
+    # StatutoryLowAge/HighAge are the boarding age range, which is narrower than
+    # the school's overall age range wherever a school takes day pupils younger
+    # than its youngest boarder.
+    filename:
+      - residences/boarding_schools/EW_boarding_schools.csv
+      - residences/boarding_schools/SCT_boarding_schools.csv
+      - residences/boarding_schools/NI_boarding_schools.csv
     description: "Communal residence for school kids"
     is_residence: true  # People live here
 
   student_dorms:
     enabled: true
-    filename: residences/student_dorms.csv
+    # One file per nation, stacked into one venue table. Coverage is disjoint
+    # and UK-complete: England+Wales, Scotland, Northern Ireland. Counts are
+    # census residents in student communal establishments, not bed capacity.
+    # England & Wales isolates university halls specifically; Scotland and
+    # Northern Ireland publish only a broader category, so those two carry some
+    # students living in other kinds of establishment.
+    filename:
+      - residences/student_dorms/EW_student_dorms.csv
+      - residences/student_dorms/SCT_student_dorms.csv
+      - residences/student_dorms/NI_student_dorms.csv
     description: "Communal residence for university students"
     is_residence: true  # People live here
   
+  # The four leisure types are one file per nation, stacked into one venue
+  # table. Coverage is disjoint and UK-complete. Rows are individual premises
+  # located at an MGU with a lat/lon, so a nation's file repeats an MGU once
+  # per venue in it. Unlike the residence files, there is no per-row key.
   cinema:
     enabled: true
-    filename: leisure/cinemas.csv
+    filename:
+      - leisure/cinemas/EW_cinemas.csv
+      - leisure/cinemas/SCT_cinemas.csv
+      - leisure/cinemas/NI_cinemas.csv
     description: "Leisure location"
     is_residence: false
 
   grocery:
     enabled: true
-    filename: leisure/groceries.csv
+    filename:
+      - leisure/groceries/EW_groceries.csv
+      - leisure/groceries/SCT_groceries.csv
+      - leisure/groceries/NI_groceries.csv
     description: "Leisure location"
     is_residence: false
-  
+
   gym:
     enabled: true
-    filename: leisure/gyms.csv
+    filename:
+      - leisure/gyms/EW_gyms.csv
+      - leisure/gyms/SCT_gyms.csv
+      - leisure/gyms/NI_gyms.csv
     description: "Leisure location"
     is_residence: false
-  
+
   pub:
     enabled: true
-    filename: leisure/pubs.csv
+    filename:
+      - leisure/pubs/EW_pubs.csv
+      - leisure/pubs/SCT_pubs.csv
+      - leisure/pubs/NI_pubs.csv
     description: "Leisure location"
     is_residence: false
 
   # SPECIAL: Transport-line venues (created dynamically by RouteDistributor)
-  # Materialised lazily by RouteDistributor — one venue per train/tube/bus
+  # Materialised lazily by RouteDistributor, one venue per train/tube/bus
   # line_id, populated with `rider` subsets that carry per-membership
   # (t_board_min, t_alight_min) metadata (see Subset.member_metadata, and the
   # /activity_mappings/membership_metadata HDF5 side-table from Design B).
