@@ -110,6 +110,6 @@ fallback:
 # CSV reports generated after allocation completes.
 #   venue_summary:      Per-workplace stats (workers count, avg/min/max age, capacity, remaining).
 #   unallocated_report: Details of eligible people who were NOT allocated (geo unit, age, Occode).
-exports:
-  venue_summary: "output/1911/workplace_venue_summary.csv"
-  unallocated_report: "output/1911/workplace_unallocated.csv"
+# exports:
+  # venue_summary: "output/1911/workplace_venue_summary.csv"
+  # unallocated_report: "output/1911/workplace_unallocated.csv"

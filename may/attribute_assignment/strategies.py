@@ -31,6 +31,24 @@ _LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
 # that is floating-point noise.
 _PROB_TOL = 1e-9
 
+# Ceiling on distinct comorbidity data rows held by the gated sampler.
+_DISTRIBUTION_CACHE_LIMIT = 10000
+
+
+def _draw_cdf(probabilities: np.ndarray) -> np.ndarray:
+    """
+    Build the cumulative array a weighted draw searches.
+
+    This reproduces how ``np.random.choice`` turns weights into a lookup, so a
+    draw made against this array consumes the same value from the random stream
+    and lands on the same outcome. The gain is that the cumulative array is
+    built once per distribution rather than once per person, and the draw
+    itself becomes a single uniform sample plus a binary search.
+    """
+    cdf = probabilities.cumsum()
+    cdf /= cdf[-1]
+    return cdf
+
 # How `probabilistic_conditions` turns per-person probabilities into a set of
 # conditions. A config must pick one explicitly, so the modelling choice is
 # always visible (see ProbabilisticConditionsStrategy).
@@ -700,6 +718,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         # validate_assignment_config); the dispatch in assign() fails loudly if
         # an unknown value reaches it via direct construction.
         self.selection_method = config.get('selection_method')
+        self._distribution_cache = {}
 
     def assign(self, person, household, context: Dict[str, Any]) -> List[str]:
         """
@@ -775,6 +794,31 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
 
         Missing or contradictory data fails loudly, with no fallbacks.
         """
+        dist = self._distribution(probabilities, person)
+
+        drawn_tier = int(dist['tier_cdf'].searchsorted(np.random.random(), side='right'))
+        if drawn_tier == 0:
+            return []
+
+        margins, valid, weights, weights_cdf = self._condition_weights(
+            dist, probabilities, person
+        )
+
+        count = 1 if drawn_tier == 1 else self._sample_multi_count(person, dist, margins)
+        return self._pick_distinct_conditions(person, valid, weights, weights_cdf, count)
+
+    def _distribution(self, probabilities: Dict[str, float], person) -> Dict[str, Any]:
+        """
+        Count-tier distribution for one data row, shared by everyone that row covers.
+
+        The data manager hands back one cached dict per demographic key, so
+        keying on that dict's identity gives one entry per row. The dict itself
+        is held in the entry to keep its id valid.
+        """
+        entry = self._distribution_cache.get(id(probabilities))
+        if entry is not None:
+            return entry[1]
+
         p_none = self._require_prob(probabilities, 'no_condition', person)
         p_any = self._require_prob(probabilities, 'has_comorbidity', person)
         p_multi = self._require_prob(probabilities, 'multiple_morbidities', person)
@@ -793,9 +837,27 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             self._fail(person, "comorbidity count-tier probabilities sum to zero")
         tier /= total
 
-        drawn_tier = np.random.choice(3, p=tier)
-        if drawn_tier == 0:
-            return []
+        dist = {'tier_cdf': _draw_cdf(tier), 'weights': None, 'multi': None}
+
+        # A source that returns a fresh dict per person would otherwise grow
+        # this to one entry per person, so cap it. Sources that cache their
+        # rows stay well under the cap and keep hitting.
+        if len(self._distribution_cache) >= _DISTRIBUTION_CACHE_LIMIT:
+            self._distribution_cache.clear()
+        self._distribution_cache[id(probabilities)] = (probabilities, dist)
+        return dist
+
+    def _condition_weights(self, dist: Dict[str, Any],
+                           probabilities: Dict[str, float], person):
+        """
+        Per-condition marginals for one data row, resolved on first draw above tier 0.
+
+        Returns the marginals, the names carrying positive probability, and the
+        normalized weights over those names with their draw CDF.
+        """
+        cached = dist['weights']
+        if cached is not None:
+            return cached
 
         names = [c['name'] for c in self.conditions if c.get('name')]
         margins = np.clip(
@@ -803,8 +865,18 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             0.0, None,
         )
 
-        count = 1 if drawn_tier == 1 else self._sample_multi_count(person, margins)
-        return self._pick_distinct_conditions(person, names, margins, count)
+        positive = margins > 0
+        valid = [name for name, ok in zip(names, positive) if ok]
+
+        weights = weights_cdf = None
+        if valid:
+            weights = margins[positive]
+            weights = weights / weights.sum()
+            weights_cdf = _draw_cdf(weights)
+
+        cached = (margins, valid, weights, weights_cdf)
+        dist['weights'] = cached
+        return cached
 
     def _require_prob(self, probabilities: Dict[str, float], key: str, person) -> float:
         """Read a probability the gated sampler depends on, or fail loudly."""
@@ -812,40 +884,45 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             self._fail(person, f"gated_conditions requires '{key}' from the data source")
         return float(probabilities[key])
 
-    def _sample_multi_count(self, person, margins: np.ndarray) -> int:
+    def _sample_multi_count(self, person, dist: Dict[str, Any], margins: np.ndarray) -> int:
         """
         Draw a condition count >=2 from the Poisson-binomial of the per-condition
         marginals, conditioned on >=2.
         """
-        # Poisson-binomial PMF over the marginals: convolve each [1-p, p].
-        pmf = np.array([1.0])
-        for p in margins:
-            pmf = np.convolve(pmf, [1.0 - p, p])
+        cached = dist['multi']
+        if cached is None:
+            # Poisson-binomial PMF over the marginals: convolve each [1-p, p].
+            pmf = np.array([1.0])
+            for p in margins:
+                pmf = np.convolve(pmf, [1.0 - p, p])
 
-        tail = pmf[2:]
-        total = tail.sum()
-        if total <= 0:
-            self._fail(
-                person,
-                "data implies >=2 comorbidities but the per-condition marginals "
-                "cannot produce two or more",
-            )
-        counts = np.arange(2, len(pmf))
-        return int(np.random.choice(counts, p=tail / total))
+            tail = pmf[2:]
+            total = tail.sum()
+            if total <= 0:
+                self._fail(
+                    person,
+                    "data implies >=2 comorbidities but the per-condition marginals "
+                    "cannot produce two or more",
+                )
+            cached = (np.arange(2, len(pmf)), _draw_cdf(tail / total))
+            dist['multi'] = cached
 
-    def _pick_distinct_conditions(self, person, names: List[str],
-                                  margins: np.ndarray, count: int) -> List[str]:
+        counts, cdf = cached
+        return int(counts[cdf.searchsorted(np.random.random(), side='right')])
+
+    def _pick_distinct_conditions(self, person, valid: List[str], weights,
+                                  weights_cdf, count: int) -> List[str]:
         """Pick `count` distinct conditions weighted by their marginals, no replacement."""
-        positive = margins > 0
-        valid = [name for name, ok in zip(names, positive) if ok]
         if count > len(valid):
             self._fail(
                 person,
                 f"cannot draw {count} distinct conditions from {len(valid)} "
                 "with positive probability",
             )
-        weights = margins[positive]
-        weights = weights / weights.sum()
+
+        if count == 1:
+            return [valid[weights_cdf.searchsorted(np.random.rand(1), side='right')[0]]]
+
         chosen = np.random.choice(valid, size=count, replace=False, p=weights)
         return [str(c) for c in chosen]
 

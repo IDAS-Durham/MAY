@@ -2,7 +2,6 @@
 import cProfile
 import os
 import logging
-import pstats
 import sys
 import numpy as np
 import numba as nb
@@ -22,6 +21,7 @@ from may.utils.debug_output import (
     export_work_assignment_debug,
 )
 from may.utils import path_resolver as pr
+from may.utils import build_profile as bp
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 logger = logging.getLogger("create_world")
@@ -100,16 +100,17 @@ def setup_population(config, geo):
     return population
 
 
-def main():
-    """
-    Main entry point for world creation.
-    """
+def step_label(step_type, step_config):
+    """Name a timeline step after the config file it runs, so twelve
+    distributors read as twelve stages rather than one."""
+    if not step_config:
+        return step_type
+    return f"{step_type}:{os.path.splitext(os.path.basename(step_config))[0]}"
 
-    logger.info("=" * 60)
-    logger.info("MAY - World Creation")
-    logger.info("=" * 60)
 
-    # Load config file (support command-line argument)
+def parse_args(argv=None):
+    """Parse the CLI. Shared with the entry point below, which needs to know
+    whether cProfile was asked for before the build starts."""
     import argparse
     parser = argparse.ArgumentParser(description="Create a simulated world from configuration")
     parser.add_argument(
@@ -124,7 +125,25 @@ def main():
         default=None,
         help="Output HDF5 filename. Overrides serialization.filename in config. Defaults to world_state.h5 if neither is set."
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Also record function-level cProfile data. Slows the build and shifts the timings it reports, so it is off by default."
+    )
+    return parser.parse_args(argv)
+
+
+def main(args=None):
+    """
+    Main entry point for world creation.
+    """
+
+    logger.info("=" * 60)
+    logger.info("MAY - World Creation")
+    logger.info("=" * 60)
+
+    if args is None:
+        args = parse_args()
 
     logger.info(f"Loading configuration from: {args.config}")
     with open(args.config, "r") as f:
@@ -139,36 +158,47 @@ def main():
         output_root=config.get("output_root", str(_Path.cwd() / "output")),
     )
 
-    # Setup geography from config and command-line arguments
-    geo, _ = setup_geography(config=config)
+    # Every build records what its stages cost. The profile lands next to the
+    # world this run produces.
+    profile_output_dir = pr.resolve(config.get("serialization", {}).get("output_dir", "."))
+    bp.start(profile_output_dir, args.config, cprofile_enabled=getattr(args, "profile", False))
 
-    # Load the geography data
-    geo.load_from_csv()
+    # Setup geography from config and command-line arguments
+    with bp.stage("geography_load", "pipeline"):
+        geo, _ = setup_geography(config=config)
+
+        # Load the geography data
+        geo.load_from_csv()
+        bp.bind(geography=geo)
 
     # Load venues
     logger.info("")
     logger.info("Loading venues...")
-    venue_config = config.get("venues", {})
-    venues = VenueManager(
-        geography=geo,
-        data_dir=pr.resolve(venue_config.get("data_dir", "data/venues"))
-    )
+    with bp.stage("venues_load", "pipeline"):
+        venue_config = config.get("venues", {})
+        venues = VenueManager(
+            geography=geo,
+            data_dir=pr.resolve(venue_config.get("data_dir", "data/venues"))
+        )
 
-    yaml_config_file = pr.resolve(venue_config.get("config_file", "venues_config.yaml"))
-    try:
-        venues.load_from_yaml_config(yaml_config_file)
-    except VenueError as e:
-        logger.error(f"Venue loading failed: {e}")
-        sys.exit(1)
+        yaml_config_file = pr.resolve(venue_config.get("config_file", "venues_config.yaml"))
+        try:
+            venues.load_from_yaml_config(yaml_config_file)
+        except VenueError as e:
+            logger.error(f"Venue loading failed: {e}")
+            sys.exit(1)
+        bp.bind(venues=venues)
 
     # Load population
     logger.info("")
     logger.info("Loading population...")
-    try:
-        population = setup_population(config, geo)
-    except PopulationError as e:
-        logger.error(f"Population loading failed: {e}")
-        sys.exit(1)
+    with bp.stage("population_load", "pipeline"):
+        try:
+            population = setup_population(config, geo)
+        except PopulationError as e:
+            logger.error(f"Population loading failed: {e}")
+            sys.exit(1)
+        bp.bind(population=population)
 
     # Households are allocated by the explicit `residence_allocation` timeline
     # step (see the timeline loop below), not implicitly before the timeline.
@@ -179,6 +209,7 @@ def main():
     logger.info("")
     logger.info("Creating World object...")
     world = World(geography=geo, population=population, venues=venues, household_distributor=household_distributor)
+    bp.bind(world=world)
     logger.info(world)
 
     # TIMELINE - Unified Event Processing
@@ -207,81 +238,84 @@ def main():
             step_type = step.get("type")
             step_config = pr.resolve(step.get("config"))
 
-            if step_type == "residence_allocation":
-                # Runs the full household + residence-venue allocation strategy
-                # at this point in the timeline. The step's `config:` points at
-                # the allocation-strategy YAML (any filename, must follow that
-                # format), the single source of truth for which strategy runs.
-                # Placing attribute steps before it lets residence allocation
-                # read those attributes.
-                logger.info("")
-                logger.info(f"[RESIDENCE ALLOCATION] {step_config}")
-                if not step_config:
-                    raise ValueError(
-                        "A `residence_allocation` timeline step must set "
-                        "`config:` to an allocation-strategy YAML file "
-                        "(e.g. configs/<scenario>/households/allocation_strategy.yaml)."
-                    )
-                try:
-                    world.household_distributor = setup_households(
-                        geo, population, venues, config, strategy_file=step_config
-                    )
-                except HouseholdError as e:
-                    logger.error(f"Household allocation failed: {e}")
-                    sys.exit(1)
+            # Steps of one type are told apart by their config file, since a
+            # timeline runs a dozen distributors through the same code path.
+            with bp.stage(step_label(step_type, step_config), step_type, detail=step_config):
+                if step_type == "residence_allocation":
+                    # Runs the full household + residence-venue allocation strategy
+                    # at this point in the timeline. The step's `config:` points at
+                    # the allocation-strategy YAML (any filename, must follow that
+                    # format), the single source of truth for which strategy runs.
+                    # Placing attribute steps before it lets residence allocation
+                    # read those attributes.
+                    logger.info("")
+                    logger.info(f"[RESIDENCE ALLOCATION] {step_config}")
+                    if not step_config:
+                        raise ValueError(
+                            "A `residence_allocation` timeline step must set "
+                            "`config:` to an allocation-strategy YAML file "
+                            "(e.g. configs/<scenario>/households/allocation_strategy.yaml)."
+                        )
+                    try:
+                        world.household_distributor = setup_households(
+                            geo, population, venues, config, strategy_file=step_config
+                        )
+                    except HouseholdError as e:
+                        logger.error(f"Household allocation failed: {e}")
+                        sys.exit(1)
 
-                # Who ended up living where, for every residence venue type.
-                if config.get("debug_outputs", {}).get("enabled", False):
-                    output_dir = pr.resolve(config.get("serialization", {}).get("output_dir", "."))
-                    os.makedirs(output_dir, exist_ok=True)
-                    export_residence_venues(
-                        world, os.path.join(output_dir, "residence_venues.csv")
-                    )
+                    # Who ended up living where, for every residence venue type.
+                    if config.get("debug_outputs", {}).get("enabled", False):
+                        output_dir = pr.resolve(config.get("serialization", {}).get("output_dir", "."))
+                        os.makedirs(output_dir, exist_ok=True)
+                        export_residence_venues(
+                            world, os.path.join(output_dir, "residence_venues.csv")
+                        )
 
-            elif step_type == "attribute":
-                logger.info("")
-                logger.info(f"[ATTRIBUTE] {step_config}")
-                try:
-                    world.assign_attributes(step_config)
-                except AttributeAssignmentError as e:
-                    logger.error(f"Attribute assignment failed: {e}")
-                    sys.exit(1)
+                elif step_type == "attribute":
+                    logger.info("")
+                    logger.info(f"[ATTRIBUTE] {step_config}")
+                    try:
+                        world.assign_attributes(step_config)
+                    except AttributeAssignmentError as e:
+                        logger.error(f"Attribute assignment failed: {e}")
+                        sys.exit(1)
 
-            elif step_type == "distributor":
-                logger.info("")
-                logger.info(f"[DISTRIBUTOR] {step_config}")
-                try:
-                    distributor = VenueDistributor.from_yaml(step_config)
-                    distributor.allocate(world)
-                    
-                    # If this is the residence distributor, optionally export detailed allocations
-                    # Skipped by default for large worlds (build a DataFrame over every person).
-                    if (
-                        getattr(distributor, 'activity_name', None) == "residence"
-                        and config.get("debug_outputs", {}).get("enabled", False)
-                    ):
-                        serial_config = config.get("serialization", {})
-                        output_dir = pr.resolve(serial_config.get("output_dir", "."))
-                        res_export_file = os.path.join(output_dir, "residence_venues.csv")
-                        export_residence_venues(world, res_export_file)
-                except Exception as e:
-                    logger.error(f"Failed to run distributor {step_config}: {e}")
-                    logger.exception(e)
-                    sys.exit(1)
+                elif step_type == "distributor":
+                    logger.info("")
+                    logger.info(f"[DISTRIBUTOR] {step_config}")
+                    try:
+                        distributor = VenueDistributor.from_yaml(step_config)
+                        distributor.allocate(world)
 
-            elif step_type == "child_creator":
-                logger.info("")
-                logger.info(f"[CHILD CREATOR] {step_config}")
-                try:
-                    creator = VenueChildCreator.from_yaml(step_config)
-                    creator.create_children(world)
-                except Exception as e:
-                    logger.error(f"Failed to run child creator {step_config}: {e}")
-                    logger.exception(e)
-                    sys.exit(1)
+                        # If this is the residence distributor, optionally export detailed allocations
+                        # Skipped by default for large worlds (build a DataFrame over every person).
+                        if (
+                            getattr(distributor, 'activity_name', None) == "residence"
+                            and config.get("debug_outputs", {}).get("enabled", False)
+                        ):
+                            serial_config = config.get("serialization", {})
+                            output_dir = pr.resolve(serial_config.get("output_dir", "."))
+                            res_export_file = os.path.join(output_dir, "residence_venues.csv")
+                            export_residence_venues(world, res_export_file)
+                    except Exception as e:
+                        logger.error(f"Failed to run distributor {step_config}: {e}")
+                        logger.exception(e)
+                        sys.exit(1)
 
-            else:
-                logger.warning(f"Unknown timeline step type: {step_type}")
+                elif step_type == "child_creator":
+                    logger.info("")
+                    logger.info(f"[CHILD CREATOR] {step_config}")
+                    try:
+                        creator = VenueChildCreator.from_yaml(step_config)
+                        creator.create_children(world)
+                    except Exception as e:
+                        logger.error(f"Failed to run child creator {step_config}: {e}")
+                        logger.exception(e)
+                        sys.exit(1)
+
+                else:
+                    logger.warning(f"Unknown timeline step type: {step_type}")
 
         # Commute-mode verification dump (after all assignments/distributors)
         if config.get("debug_outputs", {}).get("enabled", False):
@@ -292,18 +326,11 @@ def main():
                 world, os.path.join(output_dir, "commute_mode_debug.csv")
             )
             # Work-assignment evidence (placement rate, sector-location
-            # consistency, spatial basis, sex realism). Comparable across the
+            # consistency, spatial basis). Comparable across the
             # residence-basis and workplace-basis pipelines.
-            margin_file = pr.resolve(
-                os.path.join(
-                    config.get("data_root", "data"),
-                    "activities/work/EW_industry_sex_lad.csv",
-                )
-            )
             export_work_assignment_debug(
                 world,
                 os.path.join(output_dir, "work_assignment_debug.csv"),
-                industry_sex_margin_file=margin_file,
             )
 
     else:
@@ -334,14 +361,15 @@ def main():
             logger.info("")
             logger.info(f"[RELATIONSHIP] {config_path}")
 
-            try:
-                builder = SocialNetworkBuilder.from_yaml(world, config_path)
-                builder.build_all()
+            with bp.stage(step_label("relationship", config_path), "relationship", detail=config_path):
+                try:
+                    builder = SocialNetworkBuilder.from_yaml(world, config_path)
+                    builder.build_all()
 
-            except Exception as e:
-                logger.error(f"Failed to build relationships from {config_path}: {e}")
-                logger.exception(e)
-                sys.exit(1)
+                except Exception as e:
+                    logger.error(f"Failed to build relationships from {config_path}: {e}")
+                    logger.exception(e)
+                    sys.exit(1)
 
     # ROMANTIC RELATIONSHIPS - Sexual orientation and partnerships
     romantic_config = config.get("romantic_relationships", {})
@@ -354,15 +382,16 @@ def main():
 
         config_path = pr.resolve(romantic_config.get("config", "configs/2021/relationships/romantic_relationships.yaml"))
 
-        try:
-            from may.relationships.romantic_relationships import RomanticDistributor
-            distributor = RomanticDistributor(world, config_path)
-            distributor.distribute_all()
+        with bp.stage("romantic_relationships", "romantic", detail=config_path):
+            try:
+                from may.relationships.romantic_relationships import RomanticDistributor
+                distributor = RomanticDistributor(world, config_path)
+                distributor.distribute_all()
 
-        except Exception as e:
-            logger.error(f"Failed to distribute romantic relationships: {e}")
-            logger.exception(e)
-            sys.exit(1)
+            except Exception as e:
+                logger.error(f"Failed to distribute romantic relationships: {e}")
+                logger.exception(e)
+                sys.exit(1)
 
     logger.info("")
     logger.info("=" * 60)
@@ -377,25 +406,31 @@ def main():
     if serial_config.get("enabled", True):
         logger.info("")
         logger.info("Exporting world to HDF5...")
-        try:
-            config_file = serial_config.get("config_file")
-            if not config_file:
-                raise ValueError(
-                    "serialization.enabled is true but serialization.config_file "
-                    "is missing — a serialization schema is required."
-                )
-            output_dir = pr.resolve(serial_config.get("output_dir", "."))
-            filename = args.filename or serial_config.get("filename", "world_state.h5")
+        with bp.stage("hdf5_export", "pipeline"):
+            try:
+                config_file = serial_config.get("config_file")
+                if not config_file:
+                    raise ValueError(
+                        "serialization.enabled is true but serialization.config_file "
+                        "is missing — a serialization schema is required."
+                    )
+                output_dir = pr.resolve(serial_config.get("output_dir", "."))
+                filename = args.filename or serial_config.get("filename", "world_state.h5")
 
-            if output_dir != ".":
-                os.makedirs(output_dir, exist_ok=True)
+                if output_dir != ".":
+                    os.makedirs(output_dir, exist_ok=True)
 
-            export_path = os.path.join(output_dir, filename)
-            world.export_to_hdf5(export_path, config_file=pr.resolve(config_file))
-        except Exception as e:
-            logger.error(f"Failed to serialize world to HDF5: {e}")
-            logger.exception(e)
-            sys.exit(1)
+                export_path = os.path.join(output_dir, filename)
+                world.export_to_hdf5(export_path, config_file=pr.resolve(config_file))
+            except Exception as e:
+                logger.error(f"Failed to serialize world to HDF5: {e}")
+                logger.exception(e)
+                sys.exit(1)
+
+    recorder = bp.active()
+    if recorder is not None:
+        recorder.finish()
+        recorder.log_summary(logger)
 
     return world
 
@@ -408,16 +443,17 @@ if __name__ == "__main__":
         os.environ['PYTHONHASHSEED'] = '0'
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
-    profiler = cProfile.Profile()
-    profiler.enable()
+    cli_args = parse_args()
 
-    world = main()
+    profiler = None
+    if cli_args.profile:
+        profiler = cProfile.Profile()
+        profiler.enable()
 
-    try:
+    world = main(cli_args)
+
+    if profiler is not None:
         profiler.disable()
-        stats = pstats.Stats(profiler).sort_stats('cumulative')
-        profile_filename = 'simulation_profile.stats'
-        stats.dump_stats(profile_filename)
-        logger.info(f"Performance profiling data saved to {profile_filename}")
-    except Exception as e:
-        logger.error(f"Failed to save profiling data: {e}")
+        recorder = bp.active()
+        if recorder is not None:
+            profiler.dump_stats(recorder.stats_path)

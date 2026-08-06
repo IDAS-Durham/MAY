@@ -524,9 +524,7 @@ class MultiKeyLookupSource(DataSource):
         self._value_columns = {}
         self._key_columns_config = None  # Cache key columns config for fast lookup
 
-        # Cache for lookup results and key resolution
         self._lookup_cache = {}  # Cache for lookup() results by tuple key
-        self._key_value_cache = {}  # Cache for _resolve_key_value() results
 
     def load_data(self, geo_units: Optional[set] = None):
         """Load CSV data and convert to dictionary for fast lookups."""
@@ -563,15 +561,20 @@ class MultiKeyLookupSource(DataSource):
                     # Build dictionary: {(key1, key2, ...): {col1: val1, col2: val2, ...}}
                     logger.info(f"  Building lookup dictionary from {len(df)} rows...")
 
-                    file_lookup = {}
-                    for _, row in df.iterrows():
-                        # Build key tuple
-                        key = tuple(row[col] for col in self._key_columns)
+                    # Read the frame column-wise. Row-wise iteration costs a
+                    # Series object and a boxed scalar lookup per cell, which
+                    # dominates load time on the larger sources.
+                    key_cols = [df[col].tolist() for col in self._key_columns]
+                    value_names = list(self._value_columns.keys())
+                    value_cols = [
+                        df[csv_col].astype(float).tolist()
+                        for csv_col in self._value_columns.values()
+                    ]
 
-                        # Build value dict
-                        values = {name: float(row[csv_col]) for name, csv_col in self._value_columns.items()}
-
-                        file_lookup[key] = values
+                    file_lookup = {
+                        key: dict(zip(value_names, values))
+                        for key, values in zip(zip(*key_cols), zip(*value_cols))
+                    }
 
                     logger.info(f"  ✓ Loaded {len(file_lookup)} rows from {file_path.name} into dictionary")
                 except Exception as e:
@@ -610,7 +613,7 @@ class MultiKeyLookupSource(DataSource):
         # Build key tuple directly (faster than building intermediate dict)
         key_values = []
         for csv_col_name, col_config in self._key_columns_config.items():
-            value = self._resolve_key_value_cached(col_config, person, household, context)
+            value = self._resolve_key_value(col_config, person, household, context)
             if value is None:
                 raise KeyError(
                     f"Source '{self.name}': could not resolve key column "
@@ -648,39 +651,6 @@ class MultiKeyLookupSource(DataSource):
 
         # Cache the normalized result
         self._lookup_cache[lookup_key] = result
-
-        return result
-
-    def _resolve_key_value_cached(self, col_config, person, household, context):
-        """
-        Caches results for person attributes that don't change.
-
-        Args:
-            col_config: Column configuration dict
-            person: Person object
-            household: Optional household object
-            context: Optional context dict
-
-        Returns:
-            Resolved value or None if can't resolve
-        """
-        attr_name = col_config.get('attribute')
-        col_type = col_config.get('type', 'direct')
-
-        # Create cache key based on person ID, attribute name, and type
-        # For person-level attributes (sex, age), these are immutable so we can cache
-        if col_type == 'direct':
-            cache_key = (person.id, attr_name, 'direct')
-            if cache_key in self._key_value_cache:
-                return self._key_value_cache[cache_key]
-
-        # Call the actual resolution
-        result = self._resolve_key_value(col_config, person, household, context)
-
-        # Cache the result (only for direct lookups to avoid complexity)
-        if col_type == 'direct':
-            cache_key = (person.id, attr_name, 'direct')
-            self._key_value_cache[cache_key] = result
 
         return result
 

@@ -14,6 +14,7 @@ from .venue_allocator import _allocate_to_venue_type
 from .household_distributor import HouseholdError
 from .composition_pattern import CompositionPattern
 from may.utils import path_resolver as pr
+from may.utils import build_profile as bp
 
 logger = logging.getLogger("allocation_strategy")
 
@@ -98,16 +99,17 @@ def execute_allocation_strategy(population,
             logger.info("")
 
         # Execute based on type
-        if step_type == 'household':
-            stats = _execute_household_step(step_config, household_distributor)
-        elif step_type == 'venue':
-            stats = _execute_venue_step(step_config, population, venues, household_distributor)
-        elif step_type == 'household_excess':
-            stats = _execute_household_excess_step(step_config, household_distributor)
-        elif step_type == 'household_overflow':
-            stats = _execute_household_overflow_step(step_config, household_distributor)
-        elif step_type == 'household_promotion':
-            stats = _execute_household_promotion_step(step_config, household_distributor)
+        with bp.stage(step_name, step_type):
+            if step_type == 'household':
+                stats = _execute_household_step(step_config, household_distributor)
+            elif step_type == 'venue':
+                stats = _execute_venue_step(step_config, population, venues, household_distributor)
+            elif step_type == 'household_excess':
+                stats = _execute_household_excess_step(step_config, household_distributor)
+            elif step_type == 'household_overflow':
+                stats = _execute_household_overflow_step(step_config, household_distributor)
+            elif step_type == 'household_promotion':
+                stats = _execute_household_promotion_step(step_config, household_distributor)
 
         all_stats[step_name] = {
             'type': step_type,

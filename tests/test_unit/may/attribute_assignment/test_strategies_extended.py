@@ -27,6 +27,7 @@ from may.attribute_assignment.strategies import (
     InheritanceStrategy,
     ReverseInheritanceStrategy,
     ProbabilisticConditionsStrategy,
+    _draw_cdf,
 )
 
 
@@ -1130,3 +1131,56 @@ class TestConstantStrategyBatchConsistency:
         contexts = [{"attribute_name": "attr"} for _ in range(3)]
         with pytest.raises(RuntimeError, match="constant strategy has no 'value'"):
             strategy.assign_batch(people, venues, contexts)
+
+
+class TestWeightedDrawMatchesNumpy:
+    """
+    The gated sampler draws against a cumulative array built by `_draw_cdf`
+    instead of calling `np.random.choice` per person. That is only sound while
+    the two consume the random stream the same way, so pin the equivalence
+    here: if a numpy release changes the algorithm, these fail rather than
+    quietly shifting every sampled comorbidity.
+    """
+
+    def test_scalar_choice_over_index(self):
+        probs = np.array([0.55, 0.31, 0.14])
+
+        np.random.seed(7)
+        expected = [int(np.random.choice(3, p=probs)) for _ in range(500)]
+
+        np.random.seed(7)
+        cdf = _draw_cdf(probs.copy())
+        actual = [int(cdf.searchsorted(np.random.random(), side='right')) for _ in range(500)]
+
+        assert actual == expected
+
+    def test_scalar_choice_over_values(self):
+        counts = np.arange(2, 7)
+        probs = np.array([0.5, 0.28, 0.14, 0.06, 0.02])
+        probs = probs / probs.sum()
+
+        np.random.seed(3)
+        expected = [int(np.random.choice(counts, p=probs)) for _ in range(500)]
+
+        np.random.seed(3)
+        cdf = _draw_cdf(probs.copy())
+        actual = [int(counts[cdf.searchsorted(np.random.random(), side='right')])
+                  for _ in range(500)]
+
+        assert actual == expected
+
+    def test_single_draw_without_replacement(self):
+        names = ["cvd", "crd", "ckd", "cld", "obe", "dia"]
+        weights = np.array([0.12, 0.09, 0.04, 0.03, 0.20, 0.08])
+        weights = weights / weights.sum()
+
+        np.random.seed(11)
+        expected = [str(np.random.choice(names, size=1, replace=False, p=weights)[0])
+                    for _ in range(500)]
+
+        np.random.seed(11)
+        cdf = _draw_cdf(weights.copy())
+        actual = [names[cdf.searchsorted(np.random.rand(1), side='right')[0]]
+                  for _ in range(500)]
+
+        assert actual == expected

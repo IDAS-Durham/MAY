@@ -1,8 +1,4 @@
 import logging
-import random
-import os
-import pandas as pd
-import numpy as np
 from typing import Dict, List, Optional, Any
 from .base_distributor import BaseDistributor
 from .reporting import ReportingManager
@@ -90,7 +86,6 @@ class PropertyMatchingDistributor(BaseDistributor):
         matched_count = 0
         missed_count = 0
         missed_keys = set()
-        unassigned_people = []
         
         people = world.population.people
         
@@ -121,30 +116,12 @@ class PropertyMatchingDistributor(BaseDistributor):
                 else:
                     missed_count += 1
                     missed_keys.add(norm_val)
-                    unassigned_people.append({
-                        "person_id": person.id,
-                        "mapping_key": norm_val
-                    })
-            
+
         if missed_count > 0:
             logger.warning(f"  Failed to find a venue for {missed_count:,} people with a mapping key")
             sample_keys = list(missed_keys)[:10]
             logger.warning(f"  Sample of missing keys ({len(missed_keys)} unique): {sample_keys}")
 
-            # Export unassigned people to CSV
-            try:
-                # Try to infer output directory
-                output_dir = "output/1911"
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir, exist_ok=True)
-                
-                export_file = os.path.join(output_dir, "unassigned_residences.csv")
-                df = pd.DataFrame(unassigned_people)
-                df.to_csv(export_file, index=False)
-                logger.info(f"  Exported {len(unassigned_people)} unassigned people to {export_file}")
-            except Exception as e:
-                logger.error(f"  Failed to export unassigned people: {e}")
-            
         return {"matched_count": matched_count, "missed_count": missed_count}
 
     def _get_subset_key(self, venue, person):

@@ -399,7 +399,6 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
 def export_work_assignment_debug(
     world,
     output_file="work_assignment_debug.csv",
-    industry_sex_margin_file=None,
 ):
     """
     Export per-worker work-assignment evidence and a summary of proof metrics.
@@ -411,7 +410,7 @@ def export_work_assignment_debug(
     property is present to its MGU, so a baseline run and a fixed run are
     directly comparable.
 
-    Four metrics (written to a "<stem>_summary.txt" sibling):
+    Three metrics (written to a "<stem>_summary.txt" sibling):
       (1) Company placement rate: company-eligible workers seated in a
           company office / all company-eligible workers.
       (2) Sector-location consistency: share of company-eligible workers
@@ -421,16 +420,11 @@ def export_work_assignment_debug(
       (3) Spatial basis: Pearson correlation of assigned-workers-per-MGU with
           company capacity per MGU (job supply) vs with resident-worker count
           per MGU (residence density).
-      (4) Sex realism: assigned %female by sector vs the census (TS060)
-          LAD x sex margin, restricted to the world's LGUs. Skipped with a
-          warning if the margin file is absent.
 
     Args:
         world: built World object.
         output_file: per-worker CSV path. A "<stem>_summary.txt" sibling holds
             the aggregate proof tables.
-        industry_sex_margin_file: resolved path to EW_industry_sex_lad.csv (or
-            the nation's equivalent) for metric (4). None -> skip metric (4).
     """
     from collections import Counter, defaultdict
 
@@ -442,29 +436,6 @@ def export_work_assignment_debug(
 
     WORKPLACE_VENUES = {"office", "hospital", "care_home", "classroom"}
     SPECIFIC_VENUES = {"hospital", "care_home", "classroom"}
-
-    # Canonical sector order + census column names (matches
-    # work_sector_assignment.yaml value_columns).
-    SECTOR_COLS = [
-        ("A", "Agriculture; Forestry; Fishing"),
-        ("B", "Mining and Quarrying"),
-        ("C", "Manufacturing"),
-        ("D", "Electricity, Gas, Steam and Air Conditioning Supply"),
-        ("E", "Water Supply; Sewage; Waste Management and Remediation activities"),
-        ("F", "Construction"),
-        ("G", "Wholesale and Retail trade; Repair of Motor Vehicles and Motorcycles"),
-        ("H", "Transport and Storage"),
-        ("I", "Accommodation and Food Service Activities"),
-        ("J", "Information and Communication"),
-        ("K", "Financial and Insurance Activities"),
-        ("L", "Real Estate Activities"),
-        ("M", "Professional Scientific and Technical Activities"),
-        ("N", "Administrative and Support Service Activities"),
-        ("O", "Public Administration and Defence; Compulsory Social Security"),
-        ("P", "Education"),
-        ("Q", "Human Health and Social Work Activities"),
-        ("Other", "Other"),
-    ]
 
     def to_mgu_name(unit):
         """Return the MGU-level name for a geographical unit, or None."""
@@ -494,7 +465,6 @@ def export_work_assignment_debug(
     rows = []
     assigned_by_mgu = Counter()      # intended workplace MGU -> company-eligible workers
     home_by_mgu = Counter()          # home MGU -> company-eligible workers (residence proxy)
-    sector_sex_assigned = defaultdict(lambda: {"male": 0, "female": 0})
 
     n_workers = 0                    # have work_sector
     n_company_eligible = 0
@@ -511,10 +481,7 @@ def export_work_assignment_debug(
         if not sector:
             continue
         n_workers += 1
-        sex = (person.sex or "").lower()
         work_mode = person.properties.get("work_mode")
-        if sex in ("male", "female"):
-            sector_sex_assigned[sector][sex] += 1
 
         home_mgu = to_mgu_name(person.geographical_unit)
 
@@ -603,37 +570,6 @@ def export_work_assignment_debug(
         if assigned_vec.std() > 0 and home_vec.std() > 0:
             r_residence = float(np.corrcoef(assigned_vec, home_vec)[0, 1])
 
-    # ---- Metric (4): sex realism vs census margin --------------------------
-    sex_realism_rows = []   # (sector, assigned_pctF, census_pctF, n_assigned)
-    if industry_sex_margin_file and os.path.exists(industry_sex_margin_file):
-        try:
-            import pandas as pd
-            margin = pd.read_csv(industry_sex_margin_file)
-            world_lgus = set(world.geography.get_units_by_level(LGU_LEVEL).keys()) \
-                if LGU_LEVEL else set()
-            if world_lgus:
-                margin = margin[margin["LGU_name"].isin(world_lgus)]
-            census_pctF = {}
-            for code, col in SECTOR_COLS:
-                if col not in margin.columns:
-                    continue
-                f = margin.loc[margin["Sex"].str.lower() == "female", col].sum()
-                m = margin.loc[margin["Sex"].str.lower() == "male", col].sum()
-                tot = f + m
-                census_pctF[code] = (100.0 * f / tot) if tot > 0 else None
-            for code, _ in SECTOR_COLS:
-                a = sector_sex_assigned.get(code, {"male": 0, "female": 0})
-                n = a["male"] + a["female"]
-                assigned_pctF = (100.0 * a["female"] / n) if n > 0 else None
-                sex_realism_rows.append((code, assigned_pctF, census_pctF.get(code), n))
-        except Exception as e:
-            logger.warning(f"Sex-realism metric failed: {e}")
-    else:
-        logger.warning(
-            "Sex-realism metric skipped: no industry_sex_margin_file "
-            f"({industry_sex_margin_file})"
-        )
-
     # ---- Emit summary ------------------------------------------------------
     summary_lines = []
     def emit(line=""):
@@ -671,17 +607,6 @@ def export_work_assignment_debug(
     emit(f"  vs resident workers (homes)   : "
          f"{'n/a' if r_residence is None else f'{r_residence:+.3f}'}")
     emit(f"  ({len(all_mgus):,} MGUs)")
-    emit("")
-    emit("(4) SEX REALISM  (assigned %F vs census %F, by sector)")
-    if sex_realism_rows:
-        emit(f"  {'sec':<6}{'assigned%F':>12}{'census%F':>12}{'diff':>10}{'n':>10}")
-        for code, aF, cF, n in sex_realism_rows:
-            a_str = "n/a" if aF is None else f"{aF:.1f}"
-            c_str = "n/a" if cF is None else f"{cF:.1f}"
-            d_str = "n/a" if (aF is None or cF is None) else f"{aF - cF:+.1f}"
-            emit(f"  {code:<6}{a_str:>12}{c_str:>12}{d_str:>10}{n:>10,}")
-    else:
-        emit("  (skipped — no census margin file)")
     emit("=" * 64)
 
     # ---- Write CSV ---------------------------------------------------------

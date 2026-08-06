@@ -128,7 +128,6 @@ data_sources:
         likelihood_column: "Likelihood"
         metadata_columns:
           work_mode: "Place of work indicator"
-          destination_code: "LGU_destination_code"
           count: "Count"
         exclude_destinations:
           - "888888888"
@@ -177,22 +176,18 @@ data_sources:
   workplace_industry_by_sex:
     type: "csv_lookup"
     files:
-      - path: "data/activities/work/EW_industry_sex_lad.csv"
+      - path: "${data_root}/activities/work/EW_workplace_capacity_by_mgu_sex.csv"
         key_columns:
-          LGU_name:
-            attribute: "workplace_location"
+          MGU:
+            attribute: "workplace_mgu"
             type: "direct"
           Sex:
             attribute: "sex"
             type: "direct"
         value_columns:
-          A: "Agriculture; Forestry; Fishing"
-          P: "Education"
-          Q: "Human Health and Social Work Activities"
-    fallback:
-      A: 0.01
-      P: 0.09
-      Q: 0.13
+          A: "A"
+          P: "P"
+          Q: "Q"
 ```
 
 `type: "direct"` reads the attribute value from `person.properties` without any hierarchy traversal or category mapping.
