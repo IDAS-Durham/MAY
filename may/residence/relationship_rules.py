@@ -116,7 +116,7 @@ class RelationshipRulesValidator:
 
     def _load_config(self, config_file: str):
         """Load configuration from YAML file."""
-        with open(pr.resolve(config_file), 'r') as f:
+        with open(pr.resolve(config_file), 'r', encoding='utf-8-sig') as f:
             config = yaml.safe_load(f)
 
         # An empty YAML body parses to None. Treat it the same as a missing

@@ -50,7 +50,7 @@ def distributor_from_yaml(yaml_path: str):
     """
     # Read YAML to check distributor_type
     yaml_path = Path(pr.resolve(str(yaml_path)))
-    with open(yaml_path, 'r') as f:
+    with open(yaml_path, 'r', encoding='utf-8-sig') as f:
         config = yaml.safe_load(f)
 
     distributor_type = config.get('distributor_type', 'single_venue')

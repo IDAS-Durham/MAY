@@ -152,7 +152,7 @@ class VenueChildCreator:
         yaml_file = pr.resolve(str(yaml_file))
         logger.info(f"Loading VenueChildCreator config from {yaml_file}")
 
-        with open(yaml_file, 'r') as f:
+        with open(yaml_file, 'r', encoding='utf-8-sig') as f:
             config = yaml.safe_load(f)
 
         instance = cls(

@@ -110,7 +110,7 @@ class RomanticDistributor:
     @staticmethod
     def _load_config(config) -> dict:
         if isinstance(config, str):
-            with open(pr.resolve(config), 'r') as f:
+            with open(pr.resolve(config), 'r', encoding='utf-8-sig') as f:
                 return yaml.safe_load(f)
         return config
 
@@ -150,7 +150,7 @@ class RomanticDistributor:
 
         # National prior
         rows: List[Dict] = []
-        with open(prev_path) as f:
+        with open(prev_path, encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
                 rows.append(row)
 

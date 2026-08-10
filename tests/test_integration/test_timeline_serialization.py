@@ -220,3 +220,42 @@ class TestWorldHDF5PayloadIntegrity:
             assert "Region" in geo_levels_binary
             assert "MGU" in geo_levels_binary
             assert "SGU" in geo_levels_binary
+
+
+class TestExportRejectsUnwritableProperties:
+    """
+    A property whose values span more than one column type is a build-time
+    defect the export is the first step to see. It names every such property in
+    one run and removes the partial file it wrote.
+    """
+
+    def test_all_offending_properties_are_named_in_one_error(
+        self, minimal_world, tmp_path
+    ):
+        people = minimal_world.population.get_all_people()
+        # Two properties, each holding the mix of types that stacked files and
+        # runtime assignment can produce.
+        for index, person in enumerate(people):
+            person.properties["ethnicity"] = "white" if index else 5
+            person.properties["work_mode"] = 1.5 if index else 3
+
+        export_path = str(tmp_path / "rejected.h5")
+        with pytest.raises(Exception) as excinfo:
+            minimal_world.export_to_hdf5(
+                export_path, config_file="configs/2021/serialization_config.yaml"
+            )
+
+        message = str(excinfo.value)
+        assert "ethnicity" in message, "the first offending property is named"
+        assert "work_mode" in message, "the export continues past the first"
+        assert not os.path.exists(export_path), "the partial file is removed"
+
+    def test_a_clean_world_still_exports(self, minimal_world, tmp_path):
+        export_path = str(tmp_path / "clean.h5")
+        for person in minimal_world.population.get_all_people():
+            person.properties["ethnicity"] = "white"
+        stats = minimal_world.export_to_hdf5(
+            export_path, config_file="configs/2021/serialization_config.yaml"
+        )
+        assert stats["num_people"] == 10
+        assert os.path.exists(export_path)

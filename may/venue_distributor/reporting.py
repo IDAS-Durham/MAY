@@ -65,7 +65,7 @@ class ReportingManager:
         
         os.makedirs(os.path.dirname(output_path), exist_ok=True) if os.path.dirname(output_path) else None
         
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             subset_label = self.distributor.subset_key or 'person'
             writer.writerow([
@@ -172,7 +172,7 @@ class ReportingManager:
         os.makedirs(os.path.dirname(output_path), exist_ok=True) if os.path.dirname(output_path) else None
         
         # Write individual unallocated people
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(['person_id', 'age', 'sex', 'geo_unit', 'Occode'])
             
@@ -213,7 +213,7 @@ class ReportingManager:
     def export_allocations(self, world, output_path: str):
         """Export allocations to CSV file."""
         logger.info(f"Exporting allocations to {output_path}")
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             sample_venues = world.venues_by_type(self.distributor.venue_type)
             first_venue = next(iter(sample_venues), None)

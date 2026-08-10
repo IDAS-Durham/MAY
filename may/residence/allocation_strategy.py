@@ -52,7 +52,7 @@ def execute_allocation_strategy(population,
 
     # Load strategy configuration
     logger.info(f"Loading allocation strategy from {strategy_file}")
-    with open(strategy_file, 'r') as f:
+    with open(strategy_file, 'r', encoding='utf-8-sig') as f:
         strategy = yaml.safe_load(f)
 
     # Check if enabled
@@ -332,7 +332,7 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
         )
 
     shares: Dict[tuple, Dict[str, float]] = {}
-    with open(path, newline='', encoding='utf-8') as f:
+    with open(path, newline='', encoding='utf-8-sig') as f:
         for row in csv.DictReader(f):
             key = (row['geo_unit'], row['pattern'])
             shares.setdefault(key, {})[row['interpretation']] = float(row['share'])

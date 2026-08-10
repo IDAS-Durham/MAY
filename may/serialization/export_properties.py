@@ -11,7 +11,7 @@ def export_relationships(world, property_key, output_file):
     """Export relationships to CSV for inspection."""
     logger.info(f"Exporting relationships to {output_file}...")
 
-    with open(output_file, 'w', newline='') as f:
+    with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['person_id', 'age', 'sex', 'sgu', 'subset_name', 'n_connections', 'connection_ids'])
 

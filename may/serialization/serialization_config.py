@@ -53,7 +53,7 @@ class SerializationConfig:
 
         logger.info(f"Loading serialization config from {self.config_file}")
 
-        with open(self.config_file, 'r') as f:
+        with open(self.config_file, 'r', encoding='utf-8-sig') as f:
             self.config = yaml.safe_load(f)
 
         if not self.config:

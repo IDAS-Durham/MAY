@@ -92,7 +92,7 @@ class SocialNetworkBuilder:
 
     @classmethod
     def from_yaml(cls, world, yaml_path: str) -> "SocialNetworkBuilder":
-        with open(pr.resolve(yaml_path)) as f:
+        with open(pr.resolve(yaml_path), encoding="utf-8-sig") as f:
             config = yaml.safe_load(f)
         return cls(world, config)
 

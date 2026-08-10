@@ -58,7 +58,8 @@ def load_stacked_csv(paths, *, label, key_column=None, column_policy="strict",
         column_policy: "strict" means all files must have the same column set.
             "union_zero_fill" means columns are unioned and a column absent from
             a file is zero-filled for that file's rows, with a warning.
-        **read_csv_kwargs: Passed through to pandas.read_csv.
+        **read_csv_kwargs: Passed through to pandas.read_csv. low_memory
+            defaults to False, giving each file one dtype per column.
 
     Returns:
         The concatenated DataFrame, columns in first-file order (strict) or
@@ -73,6 +74,15 @@ def load_stacked_csv(paths, *, label, key_column=None, column_policy="strict",
     missing_files = [p for p in paths if not os.path.exists(p)]
     if missing_files:
         raise StackedInputError(f"{label}: file(s) not found: {missing_files}")
+
+    # pandas infers a column's type per block by default, so a file of a few
+    # million rows can give one column two Python types on its own, reading
+    # numbers in the early blocks and text in a later one. Whole-file inference
+    # holds the column in memory while it decides, and settles on one type for
+    # every row of the file, so each file arrives internally consistent and the
+    # comparison below is left with the differences between files.
+    if read_csv_kwargs.get("engine", "c") == "c":
+        read_csv_kwargs.setdefault("low_memory", False)
 
     frames = []
     for path in paths:
@@ -136,9 +146,80 @@ def load_stacked_csv(paths, *, label, key_column=None, column_policy="strict",
         _check_key_uniqueness(normalized, key_column, label)
 
     stacked = pd.concat([df for _, df in normalized], ignore_index=True)
+    if len(normalized) > 1:
+        _check_column_types(normalized, stacked, label)
     if len(paths) > 1:
         logger.info(f"{label}: stacked {len(paths)} files into {len(stacked)} rows")
     return stacked
+
+
+def _value_type_name(value):
+    """
+    Python type name of a value, unwrapping numpy scalars so that a numpy
+    int64 and a Python int both report as 'int'.
+    """
+    if hasattr(value, "item"):
+        value = value.item()
+    return type(value).__name__
+
+
+def _first_value_type(series):
+    """
+    Type name of the first non-null value, or None for an all-null column.
+    """
+    non_null = series.dropna()
+    if non_null.empty:
+        return None
+    return _value_type_name(non_null.iloc[0])
+
+
+def _check_column_types(frames, stacked, label):
+    """
+    Raise where stacking left a column holding more than one Python type.
+
+    pandas infers dtypes per file, so a column read as text in one file (an
+    industry code such as '31-33') and as a number in another ('11') arrives
+    from the concatenation as one object column holding both str and int. A
+    consumer that fixes one type per column from a sample value then meets the
+    other type partway through, a long way from the file that supplied it, and
+    the typed HDF5 property arrays consume these columns that way.
+
+    A column reaches the value-level scan when its per-file dtypes disagree and
+    the concatenation lands on object. Every other result means numpy has
+    already promoted the values to one type, so where the files agree the check
+    is a comparison of dtypes.
+    """
+    offenders = []
+    for column in stacked.columns:
+        dtypes = {str(df[column].dtype) for _, df in frames}
+        if len(dtypes) == 1 or stacked[column].dtype != object:
+            continue
+        values = stacked[column].dropna()
+        # One example per type, so the message shows both sides.
+        examples = {}
+        for value in values:
+            examples.setdefault(_value_type_name(value), value)
+        if len(examples) < 2:
+            continue
+        per_file = [
+            f"{path} -> {_first_value_type(df[column]) or 'all null'}"
+            for path, df in frames
+        ]
+        shown = ", ".join(
+            f"{name} {examples[name]!r}" for name in sorted(examples)
+        )
+        offenders.append(
+            f"column {column!r} holds {sorted(examples)} ({shown}); "
+            f"{'; '.join(per_file)}"
+        )
+    if offenders:
+        raise StackedInputError(
+            f"{label}: stacking produced column(s) holding more than one value "
+            f"type, which one output type would have to alter to represent. "
+            f"Give the column the same type in every file, or read it as text "
+            f"throughout with dtype=. "
+            + " | ".join(offenders)
+        )
 
 
 def _check_key_uniqueness(frames, key_column, label):

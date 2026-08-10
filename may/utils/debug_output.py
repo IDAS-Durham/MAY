@@ -73,7 +73,7 @@ def export_venue_allocations(world, output_file="venue_allocations.csv"):
 
     # Write to CSV
     if venue_data:
-        with open(output_file, 'w', newline='') as f:
+        with open(output_file, 'w', newline='', encoding='utf-8') as f:
             fieldnames = ['venue_id', 'venue_name', 'venue_type', 'geographical_unit',
                          'geographical_level', 'capacity', 'people_allocated', 'utilization_pct',
                          'latitude', 'longitude']
@@ -162,7 +162,7 @@ def export_residence_venues(world, output_file="residence_venues.csv"):
             logger.warning(f"Failed to sort residence data: {e}")
 
         # Write to CSV
-        with open(output_file, 'w', newline='') as f:
+        with open(output_file, 'w', newline='', encoding='utf-8') as f:
             fieldnames = ['HID', 'BTCode', 'VenueType', 'VenueID', 'GeoUnit',
                           'PersonID', 'AgeSex']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -366,7 +366,7 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
     # ---- Write CSV ----------------------------------------------------------
     if rows:
         rows.sort(key=lambda r: (not r["is_workplace_worker"], r["PersonID"]))
-        with open(output_file, "w", newline="") as f:
+        with open(output_file, "w", newline="", encoding="utf-8") as f:
             fieldnames = [
                 "PersonID", "Age", "Sex", "work_mode", "work_sector",
                 "primary_activity_venues", "is_workplace_worker", "commute_mode",
@@ -382,7 +382,7 @@ def export_commute_mode_debug(world, output_file="commute_mode_debug.csv"):
     # ---- Write summary sibling ---------------------------------------------
     summary_path = os.path.splitext(output_file)[0] + "_summary.txt"
     try:
-        with open(summary_path, "w") as f:
+        with open(summary_path, "w", encoding="utf-8") as f:
             f.write("\n".join(summary_lines) + "\n")
         logger.info(f"Wrote commute-mode summary to {summary_path}")
     except Exception as e:
@@ -613,7 +613,7 @@ def export_work_assignment_debug(
     if rows:
         rows.sort(key=lambda r: (not r["company_eligible"], not r["placed_in_company"],
                                  str(r["work_sector"]), r["PersonID"]))
-        with open(output_file, "w", newline="") as f:
+        with open(output_file, "w", newline="", encoding="utf-8") as f:
             fieldnames = [
                 "PersonID", "Sex", "work_mode", "work_sector", "home_mgu",
                 "intended_workplace_mgu", "placed_venue_type", "company_eligible",
@@ -628,7 +628,7 @@ def export_work_assignment_debug(
 
     summary_path = os.path.splitext(output_file)[0] + "_summary.txt"
     try:
-        with open(summary_path, "w") as f:
+        with open(summary_path, "w", encoding="utf-8") as f:
             f.write("\n".join(summary_lines) + "\n")
         logger.info(f"Wrote work-assignment summary to {summary_path}")
     except Exception as e:
@@ -757,7 +757,7 @@ def export_people(world, output_file="people.csv"):
     fieldnames = basic_columns + residence_columns + activity_columns + prop_columns + activity_venue_columns
 
     # Write to CSV
-    with open(output_file, 'w', newline='') as f:
+    with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
         writer.writeheader()
         writer.writerows(person_data)
@@ -992,7 +992,7 @@ def export_resident_linked_connections(world, output_file="outputs/resident_link
         return
 
     # Write to CSV
-    with open(output_file, 'w', newline='') as f:
+    with open(output_file, 'w', newline='', encoding='utf-8') as f:
         fieldnames = ['person_id', 'age', 'sex', 'household_id', 'geo_unit', 
                      'linked_venue_id', 'linked_venue_name', 'visitor_to_resident_id', 
                      'resident_age', 'resident_sex', 'linked_venue_geo']

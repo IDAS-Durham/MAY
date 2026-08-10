@@ -693,7 +693,7 @@ class MultiVenueDistributor(BaseDistributor):
         """
         import csv
 
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
 
             # Write header

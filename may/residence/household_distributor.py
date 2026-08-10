@@ -80,7 +80,7 @@ class HouseholdDistributor:
             config_path = os.path.join(data_dir, config_file)
 
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, 'r', encoding='utf-8-sig') as f:
                 self.config = yaml.safe_load(f)
         except FileNotFoundError:
             raise HouseholdError(f"Household config file not found: {config_path}")

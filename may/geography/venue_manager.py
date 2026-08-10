@@ -355,11 +355,9 @@ class VenueManager:
             for p in as_path_list(filename, f"venue type '{venue_type}'")
         ]
 
-        # low_memory=False: chunked inference can give one column two Python
-        # types, which breaks the typed HDF5 property arrays on export.
         try:
             venue_df = load_stacked_csv(
-                venue_paths, label=f"{venue_type} venues", low_memory=False
+                venue_paths, label=f"{venue_type} venues"
             )
         except Exception as e:
             raise VenueError(str(e)) from e
@@ -406,7 +404,7 @@ class VenueManager:
             raise VenueError(f"Venue config file not found: {config_path}")
 
         logger.info(f"Loading venue configuration from {config_path}")
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8-sig') as f:
             config = yaml.safe_load(f)
 
         if not config:

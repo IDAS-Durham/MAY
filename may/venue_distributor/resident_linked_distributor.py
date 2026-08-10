@@ -384,7 +384,7 @@ class ResidentLinkedDistributor(BaseDistributor):
             return
 
         # Write to CSV
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, 'w', newline='', encoding='utf-8') as f:
             fieldnames = ['person_id', 'age', 'sex', 'household_id', 'geo_unit', 
                          'linked_venue_id', 'linked_venue_name', 'linked_venue_type', 'linked_venue_geo']
             writer = csv.DictWriter(f, fieldnames=fieldnames)
