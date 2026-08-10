@@ -79,7 +79,7 @@ class SocialContactVisitDistributor:
 
     def _load_config(self, config_path: str) -> Dict:
         """Load and parse YAML configuration file."""
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8-sig') as f:
             config = yaml.safe_load(f)
         return config
 

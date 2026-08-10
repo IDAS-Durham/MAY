@@ -4,6 +4,7 @@ exactly like the equivalent single file or fails loudly with a message that
 names the offending files, columns, or keys.
 """
 
+import pandas as pd
 import pytest
 
 from may.utils.stacked_input import (
@@ -153,3 +154,123 @@ class TestUnionZeroFill:
                 [p1, p2], label="t", key_column="geo_unit",
                 column_policy="union_zero_fill",
             )
+
+
+class TestMixedValueTypes:
+    """
+    pandas infers dtypes per file, so one column can arrive as text from one
+    file and as numbers from another. The stacked column then holds two Python
+    types at once, and one output type would have to alter a value to store
+    them together.
+    """
+
+    def test_text_and_int_in_one_column_raises(self, tmp_path):
+        p1 = _write(tmp_path / "a.csv", "geo_unit,industry_code\nA,31-33\n")
+        p2 = _write(tmp_path / "b.csv", "geo_unit,industry_code\nB,11\n")
+        with pytest.raises(StackedInputError, match="more than one value type"):
+            load_stacked_csv([p1, p2], label="company venues",
+                             key_column="geo_unit")
+
+    def test_message_names_column_files_and_both_types(self, tmp_path):
+        p1 = _write(tmp_path / "a.csv", "geo_unit,industry_code\nA,31-33\n")
+        p2 = _write(tmp_path / "b.csv", "geo_unit,industry_code\nB,11\n")
+        with pytest.raises(StackedInputError) as excinfo:
+            load_stacked_csv([p1, p2], label="company venues",
+                             key_column="geo_unit")
+        message = str(excinfo.value)
+        assert "industry_code" in message
+        assert "a.csv" in message and "b.csv" in message
+        assert "'31-33'" in message and "11" in message
+
+    def test_text_and_float_in_one_column_raises(self, tmp_path):
+        p1 = _write(tmp_path / "a.csv", "geo_unit,size\nA,large\n")
+        p2 = _write(tmp_path / "b.csv", "geo_unit,size\nB,1.5\n")
+        with pytest.raises(StackedInputError, match="more than one value type"):
+            load_stacked_csv([p1, p2], label="t", key_column="geo_unit")
+
+    def test_int_and_float_stay_allowed(self, tmp_path):
+        """numpy promotes these to one float column of Python floats."""
+        p1 = _write(tmp_path / "a.csv", "geo_unit,pupils\nA,10\n")
+        p2 = _write(tmp_path / "b.csv", "geo_unit,pupils\nB,12.5\n")
+        df = load_stacked_csv([p1, p2], label="t", key_column="geo_unit")
+        assert list(df["pupils"]) == [10.0, 12.5]
+
+    def test_int_and_bool_stay_allowed(self, tmp_path):
+        """Concatenating these gives an object column holding ints."""
+        p1 = _write(tmp_path / "a.csv", "geo_unit,flag\nA,1\n")
+        p2 = _write(tmp_path / "b.csv", "geo_unit,flag\nB,True\n")
+        df = load_stacked_csv([p1, p2], label="t", key_column="geo_unit")
+        assert len(df) == 2
+
+    def test_text_column_beside_an_empty_one_stays_allowed(self, tmp_path):
+        """An all-blank column contributes nulls, and the scan reads the
+        values that remain."""
+        p1 = _write(tmp_path / "a.csv", "geo_unit,name\nA,alpha\n")
+        p2 = _write(tmp_path / "b.csv", "geo_unit,name\nB,\n")
+        df = load_stacked_csv([p1, p2], label="t", key_column="geo_unit")
+        assert list(df["name"])[0] == "alpha"
+
+    def test_single_file_is_not_checked(self, tmp_path):
+        """The comparison comes from differences between files, and a single
+        file settles its own dtypes under whole-file inference."""
+        p1 = _write(tmp_path / "a.csv", "geo_unit,industry_code\nA,31-33\nB,11\n")
+        df = load_stacked_csv([p1], label="t", key_column="geo_unit")
+        assert len(df) == 2
+
+    def test_zero_filling_a_text_column_raises(self, tmp_path):
+        """union_zero_fill writes int 0 into a text column the file omits,
+        which is the same mix arriving by another route."""
+        p1 = _write(tmp_path / "a.csv", "geo_unit,sector\nA,31-33\n")
+        p2 = _write(tmp_path / "b.csv", "geo_unit\nB\n")
+        with pytest.raises(StackedInputError, match="more than one value type"):
+            load_stacked_csv([p1, p2], label="t", key_column="geo_unit",
+                             column_policy="union_zero_fill")
+
+
+class TestWholeFileTypeInference:
+    """
+    pandas infers a column's type per block by default, so a single large file
+    can give one column two Python types on its own. The loader asks for
+    whole-file inference, which settles each file on one type per column.
+    """
+
+    def test_low_memory_is_off_by_default(self, tmp_path, monkeypatch):
+        seen = {}
+        real = pd.read_csv
+
+        def spy(path, **kwargs):
+            seen.update(kwargs)
+            return real(path, **kwargs)
+
+        monkeypatch.setattr(pd, "read_csv", spy)
+        p = _write(tmp_path / "a.csv", "geo_unit,x\nA,1\n")
+        load_stacked_csv([p], label="t", key_column="geo_unit")
+        assert seen.get("low_memory") is False
+
+    def test_a_caller_can_still_override_it(self, tmp_path, monkeypatch):
+        seen = {}
+        real = pd.read_csv
+
+        def spy(path, **kwargs):
+            seen.update(kwargs)
+            return real(path, **kwargs)
+
+        monkeypatch.setattr(pd, "read_csv", spy)
+        p = _write(tmp_path / "a.csv", "geo_unit,x\nA,1\n")
+        load_stacked_csv([p], label="t", key_column="geo_unit", low_memory=True)
+        assert seen.get("low_memory") is True
+
+    def test_the_python_engine_is_left_alone(self, tmp_path, monkeypatch):
+        """pandas accepts low_memory with the C engine, so the default is
+        applied there and the python engine keeps its own kwargs."""
+        seen = {}
+        real = pd.read_csv
+
+        def spy(path, **kwargs):
+            seen.update(kwargs)
+            return real(path, **kwargs)
+
+        monkeypatch.setattr(pd, "read_csv", spy)
+        p = _write(tmp_path / "a.csv", "geo_unit,x\nA,1\n")
+        load_stacked_csv([p], label="t", key_column="geo_unit", engine="python")
+        assert "low_memory" not in seen

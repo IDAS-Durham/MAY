@@ -69,7 +69,12 @@ venues:
 
     company:
       properties:
-        - work_sector        # "A", "Q", etc. - might affect workplace dynamics
+        # SIC section letter of the establishment, where "A" is agriculture and
+        # "Q" is health. This column holds the venue's own sector as the
+        # companies files record it. The person-side attribute carrying the same
+        # alphabet is work_sector, which the company distributors match against
+        # this column when they place a worker.
+        - industry_code
         # - employee_count   # Don't need - use actual worker count
 
     boarding_school:

@@ -293,7 +293,7 @@ class BuildProfileRecorder:
 
     def write(self):
         os.makedirs(self.output_dir, exist_ok=True)
-        with open(self.json_path, "w") as f:
+        with open(self.json_path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
     def finish(self):

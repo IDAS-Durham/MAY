@@ -25,7 +25,7 @@ def load_config(config_path="config.yaml"):
         logger.warning(f"Config file not found: {config_path}, using defaults")
         return {}
 
-    with open(config_path, 'r') as f:
+    with open(config_path, 'r', encoding='utf-8-sig') as f:
         config = yaml.safe_load(f)
 
     logger.info(f"Loaded configuration from {config_path}")

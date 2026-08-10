@@ -72,7 +72,7 @@ class BaseDistributor:
 
     def _load_config(self, config_path: str) -> Dict:
         """Load and parse YAML configuration file."""
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8-sig') as f:
             return yaml.safe_load(f)
 
     def _get_person_location(self, person) -> Optional[Tuple[float, float]]:

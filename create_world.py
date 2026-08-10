@@ -15,6 +15,7 @@ from may.attribute_assignment import AttributeAssignmentError
 from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
+from may.serialization.preflight import warn_about_venue_property_gaps
 from may.utils.debug_output import (
     export_residence_venues,
     export_commute_mode_debug,
@@ -146,7 +147,7 @@ def main(args=None):
         args = parse_args()
 
     logger.info(f"Loading configuration from: {args.config}")
-    with open(args.config, "r") as f:
+    with open(args.config, "r", encoding="utf-8-sig") as f:
         config = yaml.safe_load(f)
 
     # Initialise path resolver from roots declared in config.yaml
@@ -188,6 +189,20 @@ def main(args=None):
             logger.error(f"Venue loading failed: {e}")
             sys.exit(1)
         bp.bind(venues=venues)
+
+        # Compare the export schema with the venue files here, at the point
+        # where acting on a mismatch still costs one restart.
+        serial_settings = config.get("serialization", {})
+        if serial_settings.get("enabled", True) and serial_settings.get("config_file"):
+            with open(pr.resolve(serial_settings["config_file"]), "r",
+                      encoding="utf-8-sig") as f:
+                serial_schema = yaml.safe_load(f) or {}
+            with open(yaml_config_file, "r", encoding="utf-8-sig") as f:
+                venues_schema = yaml.safe_load(f) or {}
+            warn_about_venue_property_gaps(
+                serial_schema, venues_schema,
+                pr.resolve(venue_config.get("data_dir", "data/venues")),
+            )
 
     # Load population
     logger.info("")

@@ -359,7 +359,7 @@ class AttributeAssignmentConfig:
         """Load configuration from YAML."""
         self.config_path = Path(pr.resolve(str(config_path)))
 
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path, 'r', encoding='utf-8-sig') as f:
             self.raw_config = yaml.safe_load(f)
 
         # Parse sections

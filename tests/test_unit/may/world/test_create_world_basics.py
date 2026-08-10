@@ -60,7 +60,9 @@ def test_main_cli_arg_parsing(mock_setup_geography):
         with patch('builtins.open', side_effect=FileNotFoundError) as mock_open:
             with pytest.raises(FileNotFoundError):
                 main()
-            mock_open.assert_called_with("configs/2021/config.yaml", "r")
+            mock_open.assert_called_with(
+                "configs/2021/config.yaml", "r", encoding="utf-8-sig"
+            )
 
     # Second, test custom command line arguments.
     with patch('sys.argv', ['create_world.py', '--config', test_config_path, '--filename', 'test_out.h5']):
@@ -84,7 +86,7 @@ def test_main_cli_arg_parsing(mock_setup_geography):
                                 pass # We only care that config was read
                                 
             # Assert config was attempted to be opened
-            mock_open.assert_any_call(test_config_path, "r")
+            mock_open.assert_any_call(test_config_path, "r", encoding="utf-8-sig")
 
 
 def test_unknown_population_type_rejected():

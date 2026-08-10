@@ -5,14 +5,42 @@ Exports world state (geography, population, venues) to HDF5 file
 for loading in C++ simulation engine.
 """
 
+import json
 import logging
+import os
 import h5py
 import numpy as np
 from datetime import datetime
 from collections import defaultdict
 from .serialization_config import SerializationConfig
+from .property_types import (
+    PropertyTypeError,
+    describe_problems,
+    output_kind,
+    value_problem,
+)
 
 logger = logging.getLogger("world_serializer")
+
+
+def _encode_json(value):
+    """
+    Encode a set, list or dict as the JSON text a text column stores.
+
+    A set holds objects carrying ids, such as a person's partners, and is
+    stored as those ids. Returns (text, None) for a value JSON represents, and
+    (None, problem) for one it rejects.
+    """
+    try:
+        if isinstance(value, set):
+            return json.dumps([item.id for item in value]), None
+        return json.dumps(value), None
+    except (AttributeError, TypeError, ValueError) as exc:
+        return None, (
+            f"a {type(value).__name__} of "
+            f"{type(next(iter(value), None)).__name__} cannot be encoded as "
+            f"JSON ({exc})"
+        )
 
 
 class WorldSerializer:
@@ -42,6 +70,8 @@ class WorldSerializer:
         self._venue_to_global_id = {}
         self._venue_type_id_map = {}
         self._people_sorted = None
+        self._property_problems = []
+        self._absent_properties = []
         logger.info("=" * 60)
         logger.info("Exporting World to HDF5")
         logger.info("=" * 60)
@@ -81,8 +111,27 @@ class WorldSerializer:
             logger.info("Writing string registries...")
             self._write_registries(f)
 
+        # Every configured property has been attempted by this point, so the
+        # report covers all of them together. The partial file is removed, and
+        # the error names the properties to fix.
+        if self._property_problems:
+            os.remove(output_file)
+            raise PropertyTypeError(
+                f"{len(self._property_problems)} configured propert"
+                f"{'y needs' if len(self._property_problems) == 1 else 'ies need'} "
+                f"a fix in the serialization config or in the data feeding "
+                f"{'it' if len(self._property_problems) == 1 else 'them'}:\n  - "
+                + "\n  - ".join(self._property_problems)
+            )
+
         logger.info("")
         logger.info("Export complete!")
+        if self._absent_properties:
+            logger.warning(
+                f"  {len(self._absent_properties)} configured propert"
+                f"{'y is' if len(self._absent_properties) == 1 else 'ies are'} "
+                f"missing from the file: {', '.join(self._absent_properties)}"
+            )
         logger.info(f"  Geography units: {stats['num_geo_units']:,}")
         logger.info(f"  People: {stats['num_people']:,}")
         logger.info(f"  Venues: {stats['num_venues']:,}")
@@ -188,7 +237,8 @@ class WorldSerializer:
         if properties_to_include:
             props_group = geo_group.create_group('properties')
             for prop_name in properties_to_include:
-                self._write_property_array(props_group, prop_name, units_list)
+                self._write_property_array(props_group, prop_name, units_list,
+                                           owner="geography")
 
         logger.info(f"  Wrote {num_units} geographical units")
 
@@ -259,7 +309,8 @@ class WorldSerializer:
 
             for prop_idx, prop_name in enumerate(properties_to_include, 1):
                 logger.info(f"    Writing property {prop_idx}/{len(properties_to_include)}: {prop_name}...")
-                self._write_property_array(props_group, prop_name, people_sorted)
+                self._write_property_array(props_group, prop_name, people_sorted,
+                                           owner="population")
 
         logger.info(f"  Wrote {num_people:,} people")
         if properties_to_include:
@@ -748,7 +799,8 @@ class WorldSerializer:
 
             for prop_name in properties_to_include:
                 # Create array for this property across all venues of this type
-                self._write_property_array(type_group, prop_name, venues)
+                self._write_property_array(type_group, prop_name, venues,
+                                           owner=f"venue type {venue_type!r}")
 
             logger.info(f"    {venue_type}: {len(properties_to_include)} properties ({len(venues)} venues)")
 
@@ -1068,7 +1120,12 @@ class WorldSerializer:
             f"{len(field_names)} fields {field_names}"
         )
 
-    def _write_property_array(self, group, prop_name, objects):
+    def _record_property_problem(self, message):
+        """Keep a property's failure for the report at the end of the export."""
+        logger.error(message)
+        self._property_problems.append(message)
+
+    def _write_property_array(self, group, prop_name, objects, owner):
         """
         Write a property array for a list of objects in chunks.
         Supports different property types (int, float, str, bool, list, dict).
@@ -1089,13 +1146,21 @@ class WorldSerializer:
                 break
         
         if sample_val is None:
-            logger.debug(f"Skipping property '{prop_name}' (all None)")
+            # A run with a pipeline stage switched off, or a cut-down world,
+            # leaves some properties unset, and a schema naming a property no
+            # stage produces arrives here the same way. The warning carries the
+            # name so the log tells the two apart.
+            self._absent_properties.append(f"{owner} property {prop_name!r}")
+            logger.warning(
+                f"{owner} property {prop_name!r} is unset on every object, so "
+                f"the exported file omits this column"
+            )
             return
 
         # Step 2: Determine dtype and create dataset
         dtype = None
         fill_value = None
-        
+
         if isinstance(sample_val, bool):
             dtype = np.bool_
             fill_value = False
@@ -1110,27 +1175,49 @@ class WorldSerializer:
             dtype = h5py.string_dtype()
             fill_value = ""
 
+        kind = output_kind(sample_val)
         ds = self._create_empty_dataset(group, prop_name, dtype, (num_objects,))
 
-        # Step 3: Write in chunks
-        import json
+        # Step 3: Write in chunks, checking each value against the column type
+        # as it is collected. Where a value would fail or change, the column is
+        # dropped and recorded, and the export moves to the next property, so a
+        # single run collects the whole list.
+        problems = []
+        total_bad = 0
         for i in range(0, num_objects, chunk_size):
             end = min(i + chunk_size, num_objects)
             chunk = objects[i:end]
-            
+
             # get values once per object
             chunk_vals = []
             for obj in chunk:
                 val = obj.properties.get(prop_name)
                 if val is None:
                     chunk_vals.append(fill_value)
-                elif isinstance(val, set):
-                    chunk_vals.append(json.dumps([p.id for p in val]))
-                elif isinstance(val, (list, dict)):
-                    chunk_vals.append(json.dumps(val))
+                    continue
+                if isinstance(val, (set, list, dict)):
+                    val, failure = _encode_json(val)
                 else:
-                    chunk_vals.append(val)
-            
+                    failure = None
+                # The JSON text is then held to the column type as well, so a
+                # list arriving at a numeric column is recorded like any other
+                # value that type would reject.
+                if failure is None:
+                    failure = value_problem(kind, val)
+                if failure is not None:
+                    total_bad += 1
+                    if failure not in problems and len(problems) < 3:
+                        problems.append(failure)
+                    continue
+                chunk_vals.append(val)
+
+            if problems:
+                del group[prop_name]
+                self._record_property_problem(
+                    describe_problems(owner, prop_name, kind, problems, total_bad)
+                )
+                return
+
             ds[i:end] = np.array(chunk_vals, dtype=dtype)
 
     def _create_empty_dataset(self, group, name, dtype, shape):
