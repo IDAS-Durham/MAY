@@ -187,7 +187,7 @@ class HouseholdDistributor:
             categories.append(cat)
         return categories
 
-    def load_household_data(self, filename="households.csv",
+    def load_household_data(self, filename,
                             column_policy: str = "strict"):
         """
         Load household composition data from CSV.

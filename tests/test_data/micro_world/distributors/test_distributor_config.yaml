@@ -35,7 +35,7 @@ standard_distributor:
 
   # Fallback to nearest alternative if full
   allocation:
-    strategy: "closest_available"
+    strategy: "closest"
     # Ensure venues get at least 1 person
     enforce_no_empty_venues: true
 

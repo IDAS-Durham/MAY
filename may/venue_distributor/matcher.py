@@ -4,6 +4,12 @@ from typing import List, Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Strategies this module can honour. `capacity_proportional` is deliberately absent:
+# it is a per-cohort batch draw, which a per-person path cannot give.
+SELECT_VENUE_STRATEGIES = {
+    'random', 'closest', 'proportional', 'closest_balanced', 'largest_capacity',
+}
+
 class VenueMatcher:
     """
     Manages venue-side matching logic, including attribute checks,
@@ -170,22 +176,6 @@ class VenueMatcher:
     def filter_venues_by_person(self, person, venues: List, person_attrs: Optional[Dict] = None) -> List:
         """Filter venues based on person's attributes (age, gender, etc.)."""
         match_attrs = getattr(self.distributor, '_pre_processed_match_attrs', [])
-        
-        # Pre-fetch attributes for this person to avoid repeated slow lookups
-        if person_attrs is None:
-            person_attrs = {}
-            for rule in match_attrs:
-                attr = rule['attribute']
-                if attr not in person_attrs:
-                    if rule.get('is_residence'):
-                        res = person.residence
-                        val = self.distributor._get_nested_value_with_dict_support(res, rule['residence_parts']) if res else None
-                    elif rule.get('is_nested'):
-                        val = self.distributor._get_nested_value_with_dict_support(person, rule['path_parts'])
-                    else:
-                        # Direct attribute
-                        val = getattr(person, attr, None)
-                    person_attrs[attr] = val
 
         # Step 1: Pre-filter using categorical index
         venues = self.prefilter_venues_by_categorical(person, venues, person_attrs=person_attrs)
@@ -298,7 +288,11 @@ class VenueMatcher:
             return np.random.choice(venues)
         elif strategy == 'closest':
             valid_venues = [v for v in venues if v.coordinates]
-            if not valid_venues: return venues[0]
+            if not valid_venues:
+                raise ValueError(
+                    f"allocation.strategy 'closest' needs venue coordinates, and none "
+                    f"of the {len(venues)} candidate venues has any."
+                )
             
             # Use scalar math for small sets, vectorized for large sets
             if len(valid_venues) < 50:
@@ -309,7 +303,11 @@ class VenueMatcher:
                 return valid_venues[np.argmin(dists)]
         elif strategy == 'proportional':
             valid = [v for v in venues if v.coordinates]
-            if not valid: return venues[0]
+            if not valid:
+                raise ValueError(
+                    f"allocation.strategy 'proportional' needs venue coordinates, and "
+                    f"none of the {len(venues)} candidate venues has any."
+                )
             
             # Use scalar math for small sets, vectorized for large sets
             if len(valid) < 50:
@@ -352,7 +350,12 @@ class VenueMatcher:
         elif strategy == 'largest_capacity':
             return max(venues, key=lambda v: self.distributor._get_venue_capacity(v))
 
-        return venues[0]
+        raise ValueError(
+            f"allocation.strategy {strategy!r} is not available on this allocation "
+            f"path; expected one of {sorted(SELECT_VENUE_STRATEGIES)}. "
+            f"'capacity_proportional' is implemented only for batched allocation "
+            f"by geo unit."
+        )
 
     def find_eligible_venues_for_location(self, location: Tuple[float, float], venues: List) -> List:
         """Find candidate venues based on distance/count config."""

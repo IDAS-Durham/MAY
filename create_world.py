@@ -61,6 +61,39 @@ set_random_seed(0)
 
 VALID_POPULATION_TYPES = {"matrix", "explicit", "explicit_batch"}
 
+VALID_TIMELINE_STEP_TYPES = {
+    "residence_allocation", "attribute", "distributor", "child_creator",
+}
+
+# What a step's `config:` should point at, where the step name does not say it.
+STEP_CONFIG_HINT = {
+    "residence_allocation":
+        " (e.g. configs/<scenario>/households/allocation_strategy.yaml)",
+}
+
+
+def require_config_path(owner, block, hint=""):
+    """Resolve a `config:` pointer, refusing to invent one that is not written.
+
+    A default here points every scenario at one scenario's file, and the loader then
+    reports a missing file the author never named."""
+    if not block.get("config"):
+        raise ValueError(f"{owner} must set `config:` to a YAML file{hint}.")
+    return pr.resolve(block["config"])
+
+
+def resolve_timeline_step(step):
+    """Validate one timeline step, returning its type and resolved config path."""
+    step_type = step.get("type")
+    if step_type not in VALID_TIMELINE_STEP_TYPES:
+        raise ValueError(
+            f"Unknown timeline step type {step_type!r}; expected one of "
+            f"{sorted(VALID_TIMELINE_STEP_TYPES)}."
+        )
+    return step_type, require_config_path(
+        f"A `{step_type}` timeline step", step, STEP_CONFIG_HINT.get(step_type, "")
+    )
+
 
 def setup_population(config, geo):
     """Build the PopulationManager, failing loud on bad config or missing data.
@@ -250,8 +283,7 @@ def main(args=None):
             )
 
         for step in timeline_config.get("steps", []):
-            step_type = step.get("type")
-            step_config = pr.resolve(step.get("config"))
+            step_type, step_config = resolve_timeline_step(step)
 
             # Steps of one type are told apart by their config file, since a
             # timeline runs a dozen distributors through the same code path.
@@ -265,12 +297,6 @@ def main(args=None):
                     # read those attributes.
                     logger.info("")
                     logger.info(f"[RESIDENCE ALLOCATION] {step_config}")
-                    if not step_config:
-                        raise ValueError(
-                            "A `residence_allocation` timeline step must set "
-                            "`config:` to an allocation-strategy YAML file "
-                            "(e.g. configs/<scenario>/households/allocation_strategy.yaml)."
-                        )
                     try:
                         world.household_distributor = setup_households(
                             geo, population, venues, config, strategy_file=step_config
@@ -330,7 +356,10 @@ def main(args=None):
                         sys.exit(1)
 
                 else:
-                    logger.warning(f"Unknown timeline step type: {step_type}")
+                    raise ValueError(
+                        f"Timeline step type {step_type!r} is accepted by "
+                        f"VALID_TIMELINE_STEP_TYPES but has no branch here."
+                    )
 
         # Commute-mode verification dump (after all assignments/distributors)
         if config.get("debug_outputs", {}).get("enabled", False):
@@ -371,7 +400,9 @@ def main(args=None):
         relationship_configs = relationship_config.get("relationships", [])
 
         for rel_config in relationship_configs:
-            config_path = pr.resolve(rel_config.get("config"))
+            config_path = require_config_path(
+                "Every `relationship_pipeline.relationships` entry", rel_config
+            )
 
             logger.info("")
             logger.info(f"[RELATIONSHIP] {config_path}")
@@ -395,7 +426,10 @@ def main(args=None):
         logger.info("ROMANTIC RELATIONSHIPS")
         logger.info("=" * 60)
 
-        config_path = pr.resolve(romantic_config.get("config", "configs/2021/relationships/romantic_relationships.yaml"))
+        config_path = require_config_path(
+            "`romantic_relationships.enabled: true`", romantic_config,
+            " naming this scenario's romantic-relationships YAML",
+        )
 
         with bp.stage("romantic_relationships", "romantic", detail=config_path):
             try:

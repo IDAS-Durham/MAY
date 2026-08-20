@@ -4,6 +4,8 @@ from typing import List, Dict, Tuple, Optional, Any
 
 logger = logging.getLogger(__name__)
 
+SPECIAL_CASE_STRATEGIES = {'closest', 'random'}
+
 class SpecialCaseManager:
     """
     Handles special case allocations (e.g., boarding schools).
@@ -84,6 +86,19 @@ class SpecialCaseManager:
         strategy = rule.get('strategy')
         match_by = rule.get('match_by', [])
 
+        # The chain below reads `strategy` OR `match_by`, never both, so a rule
+        # setting both would have had its `match_by` dropped without a word.
+        if strategy and match_by:
+            raise ValueError(
+                f"Special-case allocation_rule {case.get('name', '')!r} sets both "
+                f"'strategy' and 'match_by'; only one is applied. Choose one."
+            )
+        if strategy and strategy not in SPECIAL_CASE_STRATEGIES:
+            raise ValueError(
+                f"Unknown special-case allocation strategy {strategy!r}; expected "
+                f"one of {sorted(SPECIAL_CASE_STRATEGIES)}."
+            )
+
         selected_venue = None
 
         if strategy:
@@ -155,10 +170,17 @@ class SpecialCaseManager:
             source = criterion.get('source')
             target = criterion.get('target')
             match_type = criterion.get('match_type', 'exact')
+            # Guarding the comparison on the match type meant any other value
+            # compared nothing, so every venue satisfied the criterion.
+            if match_type != 'exact':
+                raise ValueError(
+                    f"Unknown match_by match_type {match_type!r}; 'exact' is the only "
+                    f"comparison implemented."
+                )
 
             src_val = self.distributor._get_person_attribute(source.replace('person.', ''), person)
             tgt_val = self.distributor._get_nested_value(venue, target.replace('venue.', ''))
 
-            if match_type == 'exact' and src_val != tgt_val:
+            if src_val != tgt_val:
                 return False
         return True
