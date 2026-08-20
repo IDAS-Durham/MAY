@@ -63,9 +63,8 @@ venues:
       properties: []         # Keep minimal - just core attributes
 
     care_home:
-      properties:
-        # Uses actual resident counts; slot capacities derive from residents.
-        []
+      # Uses actual resident counts; slot capacities derive from residents.
+      properties: []
 
     company:
       properties:

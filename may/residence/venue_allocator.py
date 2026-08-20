@@ -300,7 +300,7 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
                 variation_values = criterion['value_by_attribute'].get('values', {})
 
                 if variation_attr:
-                    variation_value = getattr(person, variation_attr, None)
+                    variation_value = get_person_attribute(person, variation_attr)
                     expected_value = variation_values.get(variation_value)
 
                     if expected_value is not None and person_value != expected_value:

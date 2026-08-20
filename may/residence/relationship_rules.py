@@ -161,10 +161,14 @@ class RelationshipRulesValidator:
                             f"Rule '{rule.name}': pair_matching takes 'role' or "
                             f"'roles', not both."
                         )
-                    if len(roles) != 2 or not set(roles) <= set(rule.roles):
+                    # len(roles) == 2 passes for [role_A, role_A], and so does the
+                    # subset test, but allocation then looks for "the other role"
+                    # and raises StopIteration mid-build.
+                    if (len(roles) != 2 or len(set(roles)) != 2
+                            or not set(roles) <= set(rule.roles)):
                         raise ValueError(
                             f"Rule '{rule.name}': pair_matching 'roles' must name "
-                            f"exactly 2 of the rule's roles {sorted(rule.roles)}, "
+                            f"exactly 2 different roles from {sorted(rule.roles)}, "
                             f"got {roles}."
                         )
 

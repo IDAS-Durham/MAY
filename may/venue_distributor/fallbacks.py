@@ -3,6 +3,10 @@ from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
+FALLBACK_STRATEGIES = {
+    'skip', 'relax_distance', 'relax_capacity', 'assign_closest',
+}
+
 class FallbackManager:
     """
     Handles fallback allocation strategies when normal allocation fails.
@@ -29,8 +33,10 @@ class FallbackManager:
         elif strategy == 'assign_closest':
             return self._assign_closest(unallocated_people, venues)
         else:
-            logger.warning(f"Unknown fallback strategy: {strategy}")
-            return unallocated_people
+            raise ValueError(
+                f"Unknown fallback.strategy {strategy!r}; expected one of "
+                f"{sorted(FALLBACK_STRATEGIES)}."
+            )
 
     def _relax_distance(self, people: List, venues: List, config: Dict) -> List:
         """Retry allocation with progressively relaxed distance constraints."""

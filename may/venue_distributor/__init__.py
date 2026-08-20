@@ -24,7 +24,16 @@ from .resident_linked_distributor import ResidentLinkedDistributor
 from .property_matching_distributor import PropertyMatchingDistributor
 from .route_distributor import RouteDistributor
 
-__all__ = ['VenueDistributor', 'MultiVenueDistributor', 'SocialContactVisitDistributor', 'ResidentLinkedDistributor', 'PropertyMatchingDistributor', 'RouteDistributor', 'distributor_from_yaml']
+DISTRIBUTOR_TYPES = {
+    'single_venue': VenueDistributor,
+    'multi_venue': MultiVenueDistributor,
+    'social_contact_visit': SocialContactVisitDistributor,
+    'resident_linked': ResidentLinkedDistributor,
+    'property_matching': PropertyMatchingDistributor,
+    'route': RouteDistributor,
+}
+
+__all__ = ['VenueDistributor', 'MultiVenueDistributor', 'SocialContactVisitDistributor', 'ResidentLinkedDistributor', 'PropertyMatchingDistributor', 'RouteDistributor', 'distributor_from_yaml', 'DISTRIBUTOR_TYPES']
 
 
 def distributor_from_yaml(yaml_path: str):
@@ -55,17 +64,11 @@ def distributor_from_yaml(yaml_path: str):
 
     distributor_type = config.get('distributor_type', 'single_venue')
 
-    # Instantiate appropriate class
-    if distributor_type == 'multi_venue':
-        return MultiVenueDistributor(yaml_path)
-    elif distributor_type == 'social_contact_visit':
-        return SocialContactVisitDistributor(yaml_path)
-    elif distributor_type == 'resident_linked':
-        return ResidentLinkedDistributor(yaml_path)
-    elif distributor_type == 'property_matching':
-        return PropertyMatchingDistributor(yaml_path)
-    elif distributor_type == 'route':
-        return RouteDistributor(yaml_path)
-    else:
-        # Default to single-venue distributor
-        return VenueDistributor(yaml_path)
+    # `distributor_type` decides which of six config schemas the rest of the file is
+    # written in, so an unrecognised one is a mistake rather than an instruction.
+    if distributor_type not in DISTRIBUTOR_TYPES:
+        raise ValueError(
+            f"Unknown distributor_type {distributor_type!r} in {yaml_path}; "
+            f"expected one of {sorted(DISTRIBUTOR_TYPES)}."
+        )
+    return DISTRIBUTOR_TYPES[distributor_type](yaml_path)

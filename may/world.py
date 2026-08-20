@@ -7,7 +7,7 @@ This module also contains setup functions for orchestrating world creation.
 
 import logging
 from typing import Optional, Set
-from may.residence.household_distributor import HouseholdDistributor
+from may.residence.household_distributor import HouseholdDistributor, HouseholdError
 from may.residence.allocation_strategy import execute_allocation_strategy
 from may.utils import path_resolver as pr
 from random import sample
@@ -290,19 +290,30 @@ def setup_households(geo, population, venues, config, strategy_file=None):
     logger.info("Distributing households...")
     household_config = config.get("households", {})
 
+    # Defaulting these pointed every scenario at one scenario's layout, and the
+    # loader then reported a missing file the config never named. The defect is
+    # the absent key, so say that instead.
+    missing = [k for k in ("data_dir", "config_file", "data_file")
+               if not household_config.get(k)]
+    if missing:
+        raise HouseholdError(
+            f"households: block is missing {missing}. Each must name a path; the "
+            f"engine does not guess one."
+        )
+
     household_distributor = HouseholdDistributor(
         geography=geo,
         population=population,
         venue_manager=venues,
-        data_dir=pr.resolve(household_config.get("data_dir", "data/households")),
-        config_file=pr.resolve(household_config.get("config_file", "households_config.yaml")),
+        data_dir=pr.resolve(household_config["data_dir"]),
+        config_file=pr.resolve(household_config["config_file"]),
         rules_file=pr.resolve(household_config.get("rules_file")) if household_config.get("rules_file") else None,
     )
 
     # Load household data. data_file may be a single file or a list of files
     # to stack; column_policy: union_zero_fill lets sources with different
     # composition vocabularies combine (absent pattern = zero households).
-    household_data_file = household_config.get("data_file", "households.csv")
+    household_data_file = household_config["data_file"]
     household_distributor.load_household_data(
         household_data_file,
         column_policy=household_config.get("column_policy", "strict"),
