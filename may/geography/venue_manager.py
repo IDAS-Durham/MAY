@@ -333,7 +333,7 @@ class VenueManager:
         logger.info(f"Created {venues_created} {venue_type} venues")
         
 
-    def load_venue_type_from_csv(self, venue_type, filename, filter_column=None, filter_values=None):
+    def load_venue_type_from_csv(self, venue_type, filename, filter_column=None, filter_values=None, dtype=None):
         """
         Load venues of a specific type from CSV (relative to data_dir).
         ``filename`` may be a single file or a list of files stacked into one
@@ -347,6 +347,11 @@ class VenueManager:
 
         A missing file is a hard error (VenueError), so callers that tolerate
         absent files (e.g. batch mode) must check existence before calling.
+
+        ``dtype`` maps a column to the type it is read as in every file. Pandas
+        infers per file, so a column whose values happen to be numeric in one
+        file and mixed in another arrives with two types and fails the stacking
+        check; naming the type here settles it for the whole stack.
         """
         from may.utils.stacked_input import as_path_list, load_stacked_csv
 
@@ -356,8 +361,9 @@ class VenueManager:
         ]
 
         try:
+            read_kwargs = {"dtype": dtype} if dtype else {}
             venue_df = load_stacked_csv(
-                venue_paths, label=f"{venue_type} venues"
+                venue_paths, label=f"{venue_type} venues", **read_kwargs
             )
         except Exception as e:
             raise VenueError(str(e)) from e
@@ -448,6 +454,7 @@ class VenueManager:
                 )
             filter_column = type_config.get('filter_column')
             filter_values = type_config.get('filter_values')
+            dtype = type_config.get('dtype')
 
             if type_config.get('batch_mode', False):
                 # One file per batch-partition-level (levels[1]) unit,
@@ -473,6 +480,7 @@ class VenueManager:
                     self.load_venue_type_from_csv(
                         venue_type, unit_filename,
                         filter_column=filter_column, filter_values=filter_values,
+                        dtype=dtype,
                     )
                     matched += 1
                 if matched == 0:
@@ -484,6 +492,7 @@ class VenueManager:
                 self.load_venue_type_from_csv(
                     venue_type, filename,
                     filter_column=filter_column, filter_values=filter_values,
+                    dtype=dtype,
                 )
 
         self._log_total_created()

@@ -98,6 +98,38 @@ class MultiVenueDistributor(BaseDistributor):
         self.default_venue_count = venue_selection.get('count', 5)
         self.distance_metric = venue_selection.get('distance_metric', 'haversine')
 
+        # How the candidate pool is defined:
+        #   'count'    — the N venues nearest the geo unit's coordinates. Every
+        #                person in the unit is at those coordinates, so all of
+        #                them receive the same N.
+        #   'geo_unit' — every venue of that type in the unit, from which each
+        #                person draws their own set of `count`.
+        self.consider_by = venue_selection.get('consider_by', 'count')
+        if self.consider_by not in ('count', 'geo_unit'):
+            raise ValueError(
+                f"{self.config.get('distributor_name', 'multi_venue_distributor')}: "
+                f"venue_selection.consider_by must be 'count' or 'geo_unit', "
+                f"got {self.consider_by!r}."
+            )
+
+        self.selection_strategy = self.config.get('allocation', {}).get('strategy')
+        if self.consider_by == 'geo_unit':
+            if self.selection_strategy not in ('random', 'closest_balanced'):
+                raise ValueError(
+                    f"{self.config.get('distributor_name', 'multi_venue_distributor')}: "
+                    f"venue_selection.consider_by 'geo_unit' requires "
+                    f"allocation.strategy 'random' (uniform over the unit's venues) "
+                    f"or 'closest_balanced' (weighted by inverse distance from the "
+                    f"unit's coordinates); got {self.selection_strategy!r}."
+                )
+        elif self.selection_strategy is not None:
+            raise ValueError(
+                f"{self.config.get('distributor_name', 'multi_venue_distributor')}: "
+                f"allocation.strategy applies only when venue_selection.consider_by "
+                f"is 'geo_unit'; got strategy {self.selection_strategy!r} with "
+                f"consider_by {self.consider_by!r}."
+            )
+
         # Per-venue-type configuration
         self.venue_type_config = self.config.get('venue_type_config', {})
 
@@ -126,6 +158,8 @@ class MultiVenueDistributor(BaseDistributor):
         logger.info(f"  venue_types: {self.venue_types}")
         logger.info(f"  subset_key: '{self.subset_key}'")
         logger.info(f"  default_venue_count: {self.default_venue_count}")
+        logger.info(f"  consider_by: '{self.consider_by}'"
+                    + (f", strategy: '{self.selection_strategy}'" if self.selection_strategy else ""))
 
         # Log per-venue-type overrides
         for venue_type in self.venue_types:
@@ -528,6 +562,162 @@ class MultiVenueDistributor(BaseDistributor):
 
         return eligible
 
+    def _build_geo_unit_pools(self, world, venue_type: str) -> Dict[str, List]:
+        """Group every venue of one type by the unit it sits in.
+
+        Keyed by unit name at ``venue_geo_level``, so a venue recorded at a
+        finer level is counted against its ancestor there.
+        """
+        level = self._require_venue_geo_level()
+        pools = {}
+        for venue in world.venues_by_type(venue_type):
+            unit = venue.geographical_unit
+            if unit is None:
+                continue
+            if unit.level != level:
+                unit = unit.get_ancestor_by_level(level)
+            if unit is None:
+                continue
+            pools.setdefault(unit.name, []).append(venue)
+        return pools
+
+    def _pool_weights(self, coords, pool: List) -> Optional[np.ndarray]:
+        """Draw weights for one unit's pool, or None for a uniform draw.
+
+        ``closest_balanced`` weights by inverse distance from the unit's own
+        coordinates. Every person in the unit sits at those coordinates, so the
+        weights are shared; what differs between people is the draw, not the
+        distribution it is drawn from.
+        """
+        if self.selection_strategy != 'closest_balanced':
+            return None
+        dists = np.array([
+            self._haversine_distance(coords, self._get_venue_location(v)) for v in pool
+        ])
+        return 1.0 / (dists + 0.1)
+
+    def _sample_option_sets(self, pool_size: int, weights, n_people: int, count: int):
+        """Draw ``count`` distinct venue indices for each person, independently.
+
+        Returns ``(picked, valid)``, where ``picked`` is (n_people, count)
+        indices into the pool and ``valid`` masks the positions actually filled;
+        or None when the pool is no larger than count and everyone should simply
+        get all of it.
+
+        Cost is O(count) per person rather than O(pool_size). The distribution
+        is shared across the unit, so it is turned into a CDF once and sampled
+        by binary search. Walking the pool per person would be 4e9 pairs for a
+        unit of a million people against a pool of four thousand.
+        """
+        if pool_size <= count:
+            return None
+
+        if weights is None:
+            cdf = np.arange(1, pool_size + 1, dtype=np.float64) / pool_size
+        else:
+            cdf = np.cumsum(weights, dtype=np.float64)
+            cdf /= cdf[-1]
+        cdf[-1] = 1.0
+
+        # Over-draw, then keep the distinct values. Duplicates are what the
+        # margin is for: drawing exactly `count` would leave most people short.
+        draws = max(3 * count, count + 8)
+        idx = np.searchsorted(cdf, np.random.random((n_people, draws)))
+        np.clip(idx, 0, pool_size - 1, out=idx)
+
+        # Keep the first occurrence of each value in the order it was drawn.
+        # Deduplicating on a sorted row instead would keep whichever duplicates
+        # sort lowest, which is a bias toward low pool indices, not a sample:
+        # over 133k people against 450 venues it gave the first venues ~4,400
+        # people each and the last ones 1.
+        order = np.argsort(idx, axis=1, kind='stable')
+        by_value = np.take_along_axis(idx, order, axis=1)
+        first_sorted = np.ones(idx.shape, dtype=bool)
+        first_sorted[:, 1:] = by_value[:, 1:] != by_value[:, :-1]
+        is_first = np.zeros(idx.shape, dtype=bool)
+        np.put_along_axis(is_first, order, first_sorted, axis=1)
+
+        # A stable argsort on the negated mask brings each row's distinct
+        # entries to the front, still in draw order.
+        rank = np.argsort(~is_first, axis=1, kind='stable')
+        picked = np.take_along_axis(idx, rank[:, :count], axis=1)
+        n_unique = is_first.sum(axis=1)
+        valid = np.arange(count)[None, :] < n_unique[:, None]
+        return picked, valid
+
+    def _allocate_venues_by_geo_unit(self, people: List, world):
+        """Give each person their own draw from their unit's venues.
+
+        The alternative, ``consider_by: count``, hands every person in a unit
+        the same N venues, because a person carries no position finer than their
+        unit and so every one of them resolves to the same nearest N.
+        """
+        level = self._require_venue_geo_level()
+        people_by_unit = {}
+        for person in people:
+            unit = self._get_geo_unit_at_level(person, world, target_level=level)
+            if unit is None:
+                continue
+            people_by_unit.setdefault(unit, []).append(person)
+
+        logger.info(f"Batching {len(people)} people into {len(people_by_unit)} "
+                    f"unique {level} units (per-person draws)")
+
+        pools_by_type = {vt: self._build_geo_unit_pools(world, vt) for vt in self.venue_types}
+
+        venue_dicts = {}
+        for unit, unit_people in people_by_unit.items():
+            coords = unit.coordinates if (unit.coordinates and len(unit.coordinates) == 2) else None
+
+            for venue_type in self.venue_types:
+                pool = pools_by_type[venue_type].get(unit.name, [])
+                if not pool:
+                    continue
+
+                takers = [p for p in unit_people if self._should_allocate_venue_type(p, venue_type)]
+                if not takers:
+                    continue
+
+                count = self._get_venue_count_for_type(venue_type)
+                weights = self._pool_weights(coords, pool) if coords else None
+                sampled = self._sample_option_sets(len(pool), weights, len(takers), count)
+
+                subset_cache = {}
+
+                def subset_for(j, _pool=pool, _cache=subset_cache):
+                    hit = _cache.get(j)
+                    if hit is None:
+                        hit = self._get_or_create_subset(_pool[j])
+                        _cache[j] = hit
+                    return hit
+
+                if sampled is None:
+                    shared = [subset_for(j) for j in range(len(pool))]
+                    for person in takers:
+                        for subset in shared:
+                            subset.add_member(person)
+                        venue_dicts.setdefault(person, {})[venue_type] = list(shared)
+                    continue
+
+                picked, valid = sampled
+                for row, person in enumerate(takers):
+                    subsets = []
+                    for slot in range(count):
+                        if not valid[row, slot]:
+                            break
+                        subset = subset_for(int(picked[row, slot]))
+                        subset.add_member(person)
+                        subsets.append(subset)
+                    if subsets:
+                        venue_dicts.setdefault(person, {})[venue_type] = subsets
+
+        for person, venue_dict in venue_dicts.items():
+            person.activity_map[self.activity_map_key] = venue_dict
+            if self.activity_map_key not in person.activities:
+                person.add_activity(self.activity_map_key)
+
+        logger.info(f"Allocated venues to {len(venue_dicts)} people")
+
     def _allocate_venues(self, people: List, world):
         """
         Allocate venues to each person using geo_unit batching for performance.
@@ -538,6 +728,10 @@ class MultiVenueDistributor(BaseDistributor):
             people: List of eligible people
             world: World object
         """
+        if self.consider_by == 'geo_unit':
+            self._allocate_venues_by_geo_unit(people, world)
+            return
+
         # Step 1: Group people by geographical_unit
         people_by_geo_unit = {}
         for person in people:
