@@ -75,7 +75,6 @@ population:
 venues:
   data_dir: "${data_root}/venues"
   config_file: "${config_root}/venues/venues_config.yaml"
-  export_file: "venue_allocations.csv"
 
 # HOUSEHOLDS
 
@@ -90,13 +89,6 @@ households:
   column_policy: union_zero_fill
   config_file: "${config_root}/households/households_config.yaml"
   rules_file: "${config_root}/households/relationship_rules.yaml"
-  export_file: "household_allocations.csv"
-
-# DEBUG OUTPUTS
-
-debug_outputs:
-  enabled: false
-
 # TIMELINE
 
 timeline:

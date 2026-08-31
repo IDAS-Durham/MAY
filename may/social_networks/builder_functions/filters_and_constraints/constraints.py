@@ -11,6 +11,8 @@ Supported types:
     numerical_attribute_difference:
         attribute     – person attribute to compare (e.g. 'age')
         max_difference – maximum allowed absolute difference
+    categorical_attribute_match:
+        attribute     – person attribute both ends of the edge must share
 """
 
 from .filters import ConnectionFilter
@@ -31,9 +33,16 @@ def parse_constraints(constraints: list) -> list:
                 match="range",
                 range=entry["max_difference"],
             ))
+        elif constraint_type == "categorical_attribute_match":
+            result.append(ConnectionFilter(
+                attribute=entry["attribute"],
+                match="same",
+                range=None,
+            ))
         else:
             raise ValueError(
                 f"Unknown constraint type '{constraint_type}'. "
-                f"Supported: numerical_attribute_difference"
+                f"Supported: numerical_attribute_difference, "
+                f"categorical_attribute_match"
             )
     return result

@@ -22,7 +22,6 @@ Allocation proceeds in phases:
 
 | Key | Description |
 |---|---|
-| `distributor_name` | Arbitrary label used in logs |
 | `venue_type` | Must match a key in `venues_config.yaml` |
 | `activity_map_key` | Key written to `person.activity_map` on assignment |
 | `subset_key` | Subset the agent is added to within the venue |
@@ -30,17 +29,16 @@ Allocation proceeds in phases:
 | `eligibility` | Who is eligible and how they are prioritised |
 | `venue_selection` | How candidate venues are found for each agent |
 | `allocation` | How a venue is chosen from candidates and capacity managed |
-| `settings` | Execution order, logging, performance |
+| `settings` | Logging and performance |
 | `fallback` | Behaviour when no eligible venue is found |
 | `validation` | Required attributes checked before allocation |
 | `exports` | Optional CSV reports written after allocation |
 
 ---
 
-## `distributor_name`, `venue_type`, `activity_map_key`, `subset_key`
+## `venue_type`, `activity_map_key`, `subset_key`
 
 ```yaml
-distributor_name: "school_distributor"
 venue_type: "school"
 activity_map_key: "primary_activity"
 subset_key: "student"
@@ -55,7 +53,6 @@ subset_key: "student"
 ```yaml
 special_cases:
   - name: "boarding_school_students"
-    priority: 1
     condition:
       person_residence_type: "boarding_school"
     allocation_rule:
@@ -64,11 +61,10 @@ special_cases:
           source: "person.residence.name"
           target: "venue.name"
           match_type: "exact"
-      mandatory: true
-      if_no_match: "error"   # "error" | "warn" | "skip" | "fallback_to_normal"
+      if_no_match: "error"   # "error" | "warn" | "skip"
 ```
 
-Special cases are checked before any eligibility filter. A matched agent bypasses the normal pipeline entirely. `mandatory: true` means the match must succeed; `if_no_match` controls what happens when no venue matches the rule — `"error"` halts, `"warn"` logs and continues, `"skip"` silently leaves the agent unassigned, `"fallback_to_normal"` re-enters the agent into normal allocation.
+Special cases are checked before any eligibility filter and are tried in list order. A matched agent bypasses the normal pipeline. `if_no_match` controls what happens when no venue matches: `"error"` halts, `"warn"` logs and leaves the person unassigned, and `"skip"` leaves the person unassigned silently. There is no automatic retry through normal allocation.
 
 ---
 
@@ -96,7 +92,6 @@ eligibility:
         "Mixed": ["male", "female"]
         "Boys": ["male"]
         "Girls": ["female"]
-      assume_if_missing: "Mixed"
       case_sensitive: false
   priority_allocation:
     enabled: true
@@ -128,7 +123,7 @@ eligibility:
 
 `exclude.households.original_pattern` removes agents from households whose `original_pattern` property matches the given string.
 
-`attributes` matches agent properties against venue CSV columns. Each entry names a `venue_column` and a `matching_rules` dict mapping CSV values to lists of valid agent values. `assume_if_missing` supplies a default if the column is absent from the venue data.
+`attributes` matches agent properties against venue CSV columns. Each entry names a `venue_column` and a `matching_rules` dict mapping CSV values to lists of valid agent values. Missing categorical venue values use the engine's fixed `Mixed` fallback; missing numerical bound columns impose no constraint.
 
 `priority_allocation.groups` are processed in `priority` order before normal allocation. `allow_overflow: true` permits the group to exceed venue capacity whilst still respecting `attributes` constraints. `search_limits` is a list of candidate counts tried in sequence (e.g. `[20, 70]` — try 20 closest, then 70). `probability_config` optionally samples agents stochastically: `type: "file"` loads a CSV, matching rows by `lookup_column` against the agent attribute named by `lookup_attribute`, and reads allocation probability from `probability_column`; `default` is used when the agent's geo unit is not found in the file. `priority_order: "age_desc"` processes older agents first within each group.
 
@@ -140,25 +135,21 @@ eligibility:
 venue_selection:
   consider_by: "count"       # "count" | "distance" | "geo_unit"
   count: 10
-  criteria: "closest"        # "closest" | "random" | "largest_capacity"
   search_limits: [20, 50]
   max_distance: 10
   max_distance_unit: "km"    # "km" | "miles" | "meters"
   venue_geo_level: "SGU"     # "SGU" | "MGU" | "LGU"
   person_location_source: "geographical_unit.coordinates"
-  venue_location_source: "coordinates"
-  distance_metric: "haversine"  # "haversine" | "euclidean"
-  filter_by_geography: true
   respect_capacity: true
 ```
 
-`consider_by` controls how candidate venues are identified. `"count"` selects the `count` closest venues matching `criteria`. `"distance"` selects all venues within `max_distance`. `"geo_unit"` restricts to venues sharing the agent's geo unit (used by the company distributor, which matches by `workplace_sgu` rather than residence).
+`consider_by` controls how candidate venues are identified. `"count"` selects the `count` closest venues. `"distance"` selects all venues within `max_distance`. `"geo_unit"` restricts to venues sharing the agent's geo unit (used by the company distributor, which matches by `workplace_sgu` rather than residence).
 
 `venue_geo_level` declares the geography level at which venue coordinates are stored; the engine traverses the hierarchy when agent and venue levels differ.
 
 `person_location_source` is the attribute path used to read the agent's location. The company distributor sets this to `"properties.workplace_sgu"` to match agents to companies near their work location rather than their home.
 
-`distance_metric: "haversine"` computes great-circle distance from (latitude, longitude) pairs; `"euclidean"` uses projected coordinates.
+Distances are computed using haversine distance from latitude/longitude pairs.
 
 `search_limits` gives a fallback candidate sequence for the global pipeline (individual priority groups may specify their own).
 
@@ -176,12 +167,8 @@ allocation:
     if_zero: "ignore"       # "ignore" | "skip"
   track_capacity: true
   when_full: "exclude"      # "exclude" | "overflow"
-  overflow_behavior:
-    distribute_evenly: true
-    max_overflow_per_venue: null
   enforce_no_empty_venues: false
   batch_by: "geo_unit"      # "geo_unit" | "none"
-  batch_location_source: "centroid"
 ```
 
 `strategy` selects from the candidate set: `"random"` picks uniformly; `"closest"` always picks the nearest; `"proportional"` weights by inverse distance.
@@ -198,10 +185,7 @@ allocation:
 
 ```yaml
 settings:
-  priority: 10
-  max_allocations: null
   verbose: true
-  log_summary: true
   use_spatial_index: true
 ```
 
@@ -232,28 +216,11 @@ validation:
   required_person_attributes:
     - "age"
     - "geographical_unit"
-  required_venue_columns:
-    - "geo_unit"
-    - "Latitude"
-    - "Longitude"
-  optional_venue_columns:
-    - "StatutoryLowAge"
-    - "StatutoryHighAge"
 ```
 
-`required_person_attributes` — agents missing any of these are skipped before allocation. `required_venue_columns` — venues missing these raise an error. `optional_venue_columns` — missing values trigger a warning only.
+`required_person_attributes` — agents missing any of these are skipped before allocation.
 
 ---
-
-## `exports`
-
-```yaml
-exports:
-  venue_summary: "output/school_summary.csv"
-  unallocated_report: "output/school_unallocated.csv"
-```
-
-Optional post-allocation CSV reports. `venue_summary` writes per-venue occupancy statistics. `unallocated_report` lists agents that remained unassigned after fallback.
 
 ---
 

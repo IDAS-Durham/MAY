@@ -24,7 +24,6 @@ step:
 attributes:
   - name: "economic_activity"
     description: "employed, unemployed, or inactive"
-    data_type: "categorical"
 
 # Working-age population, the same window workplace_assignment gates on.
 filters:

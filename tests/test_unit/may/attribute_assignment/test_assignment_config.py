@@ -388,7 +388,6 @@ class TestHouseholdStructure:
         structure = HouseholdStructure(
             name="Family",
             description="",
-            inheritance=True,
             matching_rules=[
                 MatchingRule(actual_patterns=[">=1 >=0 >=0 >=0"]),
                 MatchingRule(actual_patterns=["0 >=1 1 <=2"]),
@@ -401,7 +400,6 @@ class TestHouseholdStructure:
         structure = HouseholdStructure(
             name="Family",
             description="",
-            inheritance=True,
             matching_rules=[
                 MatchingRule(actual_patterns=[">=1 >=0 >=0 >=0"]),
                 MatchingRule(
@@ -418,7 +416,6 @@ class TestHouseholdStructure:
         structure = HouseholdStructure(
             name="Couple",
             description="",
-            inheritance=False,
             matching_rules=[
                 MatchingRule(actual_patterns=["0 0 2 0"]),
             ],
@@ -430,7 +427,6 @@ class TestHouseholdStructure:
         structure = HouseholdStructure(
             name="Empty",
             description="",
-            inheritance=False,
             matching_rules=[],
         )
         h = make_household_with_actual_pattern("0 0 1 0")
@@ -731,13 +727,13 @@ class TestGetHouseholdStructure:
         config = _MinimalConfig()
         config.household_structures = {
             "Family": HouseholdStructure(
-                name="Family", description="", inheritance=True,
+                name="Family", description="",
                 matching_rules=[
                     MatchingRule(actual_patterns=[">=1 >=0 >=0 >=0"]),
                 ],
             ),
             "Couple": HouseholdStructure(
-                name="Couple", description="", inheritance=False,
+                name="Couple", description="",
                 matching_rules=[
                     MatchingRule(
                         actual_patterns=["0 0 2 0"],
@@ -746,7 +742,7 @@ class TestGetHouseholdStructure:
                 ],
             ),
             "Independents": HouseholdStructure(
-                name="Independents", description="", inheritance=False,
+                name="Independents", description="",
                 matching_rules=[
                     MatchingRule(actual_patterns=["0 >=0 >=0 >=0"]),
                 ],
@@ -958,8 +954,8 @@ class TestRoleDependencyValidation:
 
 class TestParseAttributes:
     def test_single_output_list(self):
-        obj = _RawOnly({"attributes": [{"name": "ethnicity", "data_type": "categorical"}]})
-        assert obj._parse_attributes() == [{"name": "ethnicity", "data_type": "categorical"}]
+        obj = _RawOnly({"attributes": [{"name": "ethnicity"}]})
+        assert obj._parse_attributes() == [{"name": "ethnicity"}]
 
     def test_multi_output_list_preserves_order(self):
         obj = _RawOnly({"attributes": [{"name": "workplace_location"}, {"name": "work_mode"}]})
@@ -976,7 +972,7 @@ class TestParseAttributes:
 
     def test_entry_without_name_raises(self):
         with pytest.raises(ValueError, match="needs a 'name'"):
-            _RawOnly({"attributes": [{"data_type": "categorical"}]})._parse_attributes()
+            _RawOnly({"attributes": [{"description": "missing name"}]})._parse_attributes()
 
 
 class TestParseRequiredAttributes:

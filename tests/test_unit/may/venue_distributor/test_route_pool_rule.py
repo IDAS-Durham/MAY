@@ -58,7 +58,6 @@ def world(tmp_path):
 def pool_config(tmp_path):
     cfg = {
         "distributor_type": "route",
-        "distributor_name": "test_pool",
         "leg_venue_type": "bus_line",
         "leg_subset_key": "rider",
         "class_source": "properties.commute_mode",
@@ -167,7 +166,6 @@ def test_pool_rule_does_not_load_a_legs_table(dist):
 def catchment_dist(tmp_path):
     cfg = {
         "distributor_type": "route",
-        "distributor_name": "test_catchment",
         "leg_venue_type": "train_line",
         "leg_subset_key": "rider",
         "class_source": "properties.commute_mode",

@@ -1,4 +1,3 @@
-distributor_name: "hospital_distributor"
 venue_type: "hospital"
 description: "Assign which medical facility a person will attend to when they need it"
 
@@ -17,7 +16,6 @@ venue_selection:
 
   # Count-based parameters (when consider_by = "count")
   count: 1
-  criteria: "closest"  # "closest", "random", "largest_capacity"
 
   max_distance: 100
   max_distance_unit: "km"  # "km", "miles", "meters"
@@ -26,11 +24,6 @@ venue_selection:
 
   locate_person_by: "geographical_unit.coordinates"
 
-  venue_location_source: "coordinates"
-
-  distance_metric: "haversine"  # "haversine" (great-circle), "euclidean"
-
-  filter_by_geography: true  # Already enforced by venues_config.yaml
 
   # Only consider venues with available capacity
   respect_capacity: false
@@ -53,24 +46,11 @@ allocation:
 
   when_full: "overflow"  # "exclude" (remove from options), "overflow" (allow over-capacity)
 
-  overflow_behavior:
-    distribute_evenly: true  # Spread overflow across all venues proportionally
-    max_overflow_per_venue: null  # null = unlimited, or set a max (e.g., 1.5x capacity)
-
   batch_by: "geo_unit"  # "geo_unit", "none"
 
-  batch_location_source: "centroid"
-
 settings:
-  # Execution order (higher = earlier)
-  priority: 1
-
-  # Limit number of allocations (null = no limit)
-  max_allocations: null
-
   # Logging
   verbose: true
-  log_summary: true  # Print allocation statistics
 
   # Performance
   use_spatial_index: true  # Use KDTree for distance queries
@@ -98,9 +78,3 @@ validation:
   required_person_attributes:
     - "age"
     - "geographical_unit"  # Person's location (at smallest level, will traverse up if needed)
-
-  # Ensure venues have required columns
-  required_venue_columns:
-    - "geo_unit"
-    - "latitude"
-    - "longitude"

@@ -33,7 +33,6 @@ step:
 attributes:
   - name: "work_mode"
     description: "Force Normal for workers in on-site venues (hospital/care_home/classroom)"
-    data_type: "categorical"
 
 # Filters
 # Working age + must be a *worker* in one of the on-site venue types. The

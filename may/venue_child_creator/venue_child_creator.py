@@ -490,53 +490,6 @@ class VenueChildCreator:
                     if person in subset.members:
                         subset.members.remove(person)
 
-    def export_allocations(self, world, output_file):
-        """
-        Export child venue allocations to CSV.
-
-        Args:
-            world: World object
-            output_file: Path to output CSV file
-        """
-        import pandas as pd
-
-        logger.info(f"Exporting {self.child_venue_type} allocations to {output_file}")
-
-        rows = []
-        child_venues = world.venues.get_venues_by_type(self.child_venue_type)
-
-        for child_venue in child_venues:
-            members = child_venue.get_all_members()
-
-            parent = child_venue.parent
-            parent_name = parent.name if parent else "None"
-
-            group_key = child_venue.properties.get('group_key', 'N/A')
-
-            row = {
-                'child_venue_id': child_venue.id,
-                'child_venue_name': child_venue.name,
-                'child_venue_type': child_venue.type,
-                'parent_venue_name': parent_name,
-                'group_key': group_key,
-                'num_members': len(members),
-                'child_max_size': self.child_max_size,
-                'utilization_pct': f"{(len(members) / self.child_max_size * 100):.1f}" if self.child_max_size > 0 else "0.0",
-            }
-
-            if self.group_by_attribute:
-                row[self.group_by_attribute] = child_venue.properties.get(self.group_by_attribute, 'N/A')
-
-            rows.append(row)
-
-        df = pd.DataFrame(rows)
-
-        if not df.empty:
-            df = df.sort_values(['parent_venue_name', 'group_key', 'child_venue_id'])
-
-        df.to_csv(output_file, index=False)
-        logger.info(f"Exported {len(rows)} {self.child_venue_type}s to {output_file}")
-
     def __repr__(self):
         filter_info = f", filters={len(self.member_filters)}" if self.member_filters else ""
         return (

@@ -58,7 +58,6 @@ population:
 venues:
   data_dir: "${data_root}/venues"
   config_file: "${config_root}/venues/venues_config.yaml"
-  export_file: "venue_allocations.csv"
 
 # HOUSEHOLDS
 
@@ -81,14 +80,6 @@ households:
 
   config_file: "${config_root}/households/households_config.yaml"
   rules_file: "${config_root}/households/relationship_rules.yaml"
-  # The allocation strategy lives on the timeline's residence_allocation step.
-  export_file: "household_allocations.csv"
-
-# DEBUG OUTPUTS (keep ON for commute verification)
-
-debug_outputs:
-  enabled: true
-
 # TIMELINE, same order as config.yaml and config_commute_uk.yaml.
 #
 # The three configs differ only in which geography they load. The step order is

@@ -122,14 +122,6 @@ while `output_dir` always comes from the config.
 When the run finishes you will have:
 
 - `output/2021/world_state.h5`, holding the serialized world: people, geography, venues and relationships. Everything else is derived from this file.
-- Optional debug files, written only when `debug_outputs.enabled: true` in `configs/2021/config.yaml`. They stay off by default because each one builds a DataFrame the size of the population or venue set, which can exhaust memory on a country-scale run. Turn them on for small worlds only.
-
-  | File | Where | What it holds |
-  |---|---|---|
-  | `residence_venues.csv` | `output_dir` | One row per residence assignment, across every residence venue type. |
-  | `commute_mode_debug.csv` / `.txt` | `output_dir` | Mode per worker, plus route-leg verification. |
-  | `work_assignment_debug.csv` / `.txt` | `output_dir` | Placement rate, sector-location consistency, spatial basis, sex realism. |
-  | `unallocated_people.csv` | working directory | One row per person not placed in a household. |
 
 ---
 
@@ -364,15 +356,6 @@ serialization:
   output_dir: "${output_root}/2021"
   filename: "world_state.h5"
 ```
-
-### 4.7 `debug_outputs:` toggles the opt-in CSVs
-
-```yaml
-debug_outputs:
-  enabled: false
-```
-
-Off by default. See §2 for the four files this controls and where each lands.
 
 ---
 
@@ -1038,7 +1021,6 @@ You do **not** need to change YAML structure unless you change column names or c
 | Add a new attribute to HDF5 export | `configs/2021/serialization_config.yaml` → `population.properties` |
 | Turn off romantic relationships | `configs/2021/config.yaml` → `romantic_relationships.enabled: false` |
 | Turn off friendships | `configs/2021/config.yaml` → `relationship_pipeline.enabled: false` |
-| Re-enable the debug CSV outputs (small worlds only) | `configs/2021/config.yaml` → `debug_outputs.enabled: true` |
 | Change number of friend connections | `configs/2021/relationships/social_networks.yaml` → `mean_count` on the relevant network entry |
 | Filter who can go to leisure venues | `configs/2021/distributors/multi_venue_distributor.yaml` → `eligibility.global_filters` |
 
@@ -1050,7 +1032,7 @@ After `python create_world.py` finishes, sanity-check:
 
 1. The console summary, where the script logs counts of people, venues and allocations, including the household allocation rate and the number left unallocated.
 2. `output/2021/world_state.h5`, which you can open in Python with `h5py` to inspect the exported groups: `population`, `geography`, `venues`, `relationships`. A default run produces this file and nothing else.
-3. The debug files, if you set `debug_outputs.enabled: true`. Look for `residence_venues.csv`, `commute_mode_debug.csv` and `work_assignment_debug.csv` in `output_dir`, plus `unallocated_people.csv` in the working directory. See the table in §2.
+3. The specialised world viewers, using the generated `world_state.h5`.
 
 A run writes everything into `output_dir` and leaves `data/` untouched.
 

@@ -1,6 +1,6 @@
 # Distributors
 
-Each file assigns agents to a venue type by setting an entry in their `activity_map`. Distributors run in the order specified by `settings.priority`; order matters because `require_unassigned: true` skips agents already placed.
+Each file assigns agents to a venue type by setting an entry in their `activity_map`. Distributors run in timeline order; order matters because `require_unassigned: true` skips agents already placed.
 
 | File | Covers | Notes |
 |---|---|---|

@@ -80,8 +80,6 @@ venues:
 ## `subsets`
 
 ```yaml
-subsets:
-  properties: []
 ```
 
 Additional properties to write for each venue subset. Core attributes (venue reference, subset index, subset name, member list) are always written. This list is almost always empty.
@@ -93,11 +91,9 @@ Additional properties to write for each venue subset. Core attributes (venue ref
 ```yaml
 relationships:
   include_activity_map: true
-  include_venue_hierarchy: true
-  include_geography_hierarchy: true
 ```
 
-`include_activity_map` — writes each person's `activity_map` entries (person → venue links for each activity key). `include_venue_hierarchy` — writes parent → child venue links. `include_geography_hierarchy` — writes parent → child geography links. All three default to `true`; set `false` to reduce output size.
+`include_activity_map` — writes each person's `activity_map` entries (person → venue links for each activity key). Geography parent → child links are always written.
 
 ---
 

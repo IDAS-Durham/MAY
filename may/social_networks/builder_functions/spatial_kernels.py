@@ -10,8 +10,6 @@ from .graph.graph_relationship_builder import GraphRelationshipBuilder
 from .geo.geo_neighbors import find_neighbours, _extract_coordinates, _km_to_degrees_adjusted, EARTH_RADIUS_KM
 from .store import store_contacts
 
-from may.utils.debug_output import export_relationships
-
 import random
 import numpy as np
 import numba as nb

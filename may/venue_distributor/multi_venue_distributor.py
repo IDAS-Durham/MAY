@@ -82,7 +82,6 @@ class MultiVenueDistributor(BaseDistributor):
         super().__init__(config_file=config_path, config_dict=config_dict)
 
         # Extract configuration
-        self.distributor_name = self.config.get('distributor_name', 'multi_venue_distributor')
         self.activity_map_key = self.config.get('activity_map_key')
         self.subset_key = self.config.get('subset_key', 'default')
         self.venue_types = self.config.get('venue_types', [])
@@ -96,7 +95,6 @@ class MultiVenueDistributor(BaseDistributor):
         # Venue selection config
         venue_selection = self.config.get('venue_selection', {})
         self.default_venue_count = venue_selection.get('count', 5)
-        self.distance_metric = venue_selection.get('distance_metric', 'haversine')
 
         # How the candidate pool is defined:
         #   'count'    — the N venues nearest the geo unit's coordinates. Every
@@ -107,7 +105,7 @@ class MultiVenueDistributor(BaseDistributor):
         self.consider_by = venue_selection.get('consider_by', 'count')
         if self.consider_by not in ('count', 'geo_unit'):
             raise ValueError(
-                f"{self.config.get('distributor_name', 'multi_venue_distributor')}: "
+                "MultiVenueDistributor: "
                 f"venue_selection.consider_by must be 'count' or 'geo_unit', "
                 f"got {self.consider_by!r}."
             )
@@ -116,7 +114,7 @@ class MultiVenueDistributor(BaseDistributor):
         if self.consider_by == 'geo_unit':
             if self.selection_strategy not in ('random', 'closest_balanced'):
                 raise ValueError(
-                    f"{self.config.get('distributor_name', 'multi_venue_distributor')}: "
+                    "MultiVenueDistributor: "
                     f"venue_selection.consider_by 'geo_unit' requires "
                     f"allocation.strategy 'random' (uniform over the unit's venues) "
                     f"or 'closest_balanced' (weighted by inverse distance from the "
@@ -124,7 +122,7 @@ class MultiVenueDistributor(BaseDistributor):
                 )
         elif self.selection_strategy is not None:
             raise ValueError(
-                f"{self.config.get('distributor_name', 'multi_venue_distributor')}: "
+                "MultiVenueDistributor: "
                 f"allocation.strategy applies only when venue_selection.consider_by "
                 f"is 'geo_unit'; got strategy {self.selection_strategy!r} with "
                 f"consider_by {self.consider_by!r}."
@@ -143,8 +141,6 @@ class MultiVenueDistributor(BaseDistributor):
         eligibility = self.config.get('eligibility', {})
         self.min_age = None
         self.max_age = None
-        self.require_residence = eligibility.get('require_residence', True)
-
         # Extract age filters from global filters
         global_filters = eligibility.get('global_filters', [])
         for filter_rule in global_filters:
@@ -153,7 +149,7 @@ class MultiVenueDistributor(BaseDistributor):
                 self.max_age = filter_rule.get('max')
                 break
 
-        logger.info(f"Initialized {self.distributor_name}")
+        logger.info("Initialized MultiVenueDistributor")
         logger.info(f"  activity_map_key: '{self.activity_map_key}'")
         logger.info(f"  venue_types: {self.venue_types}")
         logger.info(f"  subset_key: '{self.subset_key}'")
@@ -509,7 +505,7 @@ class MultiVenueDistributor(BaseDistributor):
         Args:
             world: World object containing people, venues, geography
         """
-        logger.info(f"Starting {self.distributor_name} allocation")
+        logger.info("Starting MultiVenueDistributor allocation")
         logger.info(f"Processing venue types: {self.venue_types}")
 
         # Build spatial indices for each venue type using base class method
@@ -526,9 +522,8 @@ class MultiVenueDistributor(BaseDistributor):
         # Allocate venues to each person
         self._allocate_venues(eligible_people, world)
 
-        # Log summary
-        if self.config.get('settings', {}).get('log_summary', True):
-            self._log_summary(world)
+        # Always log the allocation summary; all valid MAY worlds use this diagnostic.
+        self._log_summary(world)
 
 
     def _get_eligible_people(self, world) -> List:
@@ -548,10 +543,6 @@ class MultiVenueDistributor(BaseDistributor):
             if self.min_age is not None and person.age < self.min_age:
                 continue
             if self.max_age is not None and person.age > self.max_age:
-                continue
-
-            # Check residence if required
-            if self.require_residence and not person.has_residence():
                 continue
 
             # Check geographical unit
@@ -853,7 +844,7 @@ class MultiVenueDistributor(BaseDistributor):
                         type_counts[vtype] += 1
                         venue_count_stats[vtype].append(len(venue_dict[vtype]))
 
-        logger.info(f"=== {self.distributor_name} Summary ===")
+        logger.info("=== MultiVenueDistributor Summary ===")
         logger.info(f"Total people allocated: {total_allocated}")
         logger.info(f"Breakdown by venue type:")
         for vtype, count in type_counts.items():
@@ -865,75 +856,5 @@ class MultiVenueDistributor(BaseDistributor):
 
     @property
     def venue_type(self):
-        """
-        Return activity_map_key as venue_type for compatibility with export code.
-
-        This allows the export code to use distributor.venue_type consistently.
-        """
+        """Return the activity map key as this distributor's venue type."""
         return self.activity_map_key
-
-    def export_allocations(self, world, output_path: str):
-        """
-        Export multi-venue allocations to CSV.
-
-        Creates a CSV with columns:
-        - person_id, person_sex, person_age, person_geo_unit
-        - venue_type, venue_id, venue_name, venue_geo_unit
-        - venue_lat, venue_lon
-
-        Args:
-            world: World object
-            output_path: Path to output CSV file
-        """
-        import csv
-
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-
-            # Write header
-            writer.writerow([
-                'person_id',
-                'person_sex',
-                'person_age',
-                'person_geo_unit',
-                'venue_type',
-                'venue_id',
-                'venue_name',
-                'venue_geo_unit',
-                'venue_lat',
-                'venue_lon'
-            ])
-
-            # Write data
-            allocated_count = 0
-            for person in world.people:
-                if self.activity_map_key not in person.activity_map:
-                    continue
-
-                venue_dict = person.activity_map[self.activity_map_key]
-
-                # For each venue type, export all venues
-                for venue_type, subsets in venue_dict.items():
-                    for subset in subsets:
-                        venue = subset.venue
-
-                        # Get venue coordinates
-                        lat, lon = None, None
-                        if venue.coordinates:
-                            lat, lon = venue.coordinates
-
-                        writer.writerow([
-                            person.id,
-                            person.sex,
-                            person.age,
-                            person.geographical_unit.name if person.geographical_unit else '',
-                            venue_type,
-                            venue.id,
-                            venue.name,
-                            venue.geographical_unit.name if venue.geographical_unit else '',
-                            lat,
-                            lon
-                        ])
-                        allocated_count += 1
-
-        logger.info(f"Exported {allocated_count} venue allocations to {output_path}")

@@ -17,14 +17,13 @@ All three share an identical schema. The only meaningful differences are the tar
 
 | Key | Description |
 |---|---|
-| `distributor_name` | Arbitrary label used in logs |
 | `venue_type` | Venue type to assign workers to |
 | `activity_map_key` | Key written to `person.activity_map`; `"primary_activity"` for all three |
 | `subset_key` | Subset within the venue; `"worker"` for all three |
 | `eligibility` | Age, sector, and residence filters |
 | `venue_selection` | Geo-unit matching using workplace location |
 | `allocation` | Strategy and capacity column |
-| `settings` | Execution priority and logging |
+| `settings` | Logging and performance |
 | `fallback` | Behaviour when no eligible venue found |
 
 ---
@@ -69,7 +68,6 @@ venue_selection:
   venue_geo_level: "LGU"
   person_location_attribute: "properties.workplace_sgu"
   batch_geo_level: "SGU"
-  filter_by_geography: true
   respect_capacity: true
 ```
 
@@ -106,9 +104,9 @@ allocation:
 
 ## Key differences by config
 
-| Config | `venue_type` | `work_sector` | Capacity source | `settings.priority` |
+| Config | `venue_type` | `work_sector` | Capacity source |
 |---|---|---|---|---|
-| `specific_workplace_hospitals_distributor` | `hospital` | `Q` | `estimated_staff` column | 4 |
+| `specific_workplace_hospitals_distributor` | `hospital` | `Q` | `estimated_staff` column |
 | `specific_workplace_care_homes_distributor` | `care_home` | `Q` | `number_staff` column | 3 |
 | `specific_workplace_classrooms_distributor` | `classroom` | `P` | `fixed_capacity: 1` | 3 |
 

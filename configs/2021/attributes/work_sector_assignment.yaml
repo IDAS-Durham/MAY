@@ -13,7 +13,7 @@
 # (companies.csv carries no sex), so within a sector the assigned sex ratio
 # reflects the local workforce rather than the sector-specific ratio. The
 # planned remedy is IPF raking of these MGU sector shares to the TS060 LAD x sex
-# margins; the sex-realism metric in export_work_assignment_debug quantifies the
+# margins; the sex-realism metric in the specialized viewers quantifies the
 # gap in the meantime.
 #
 # Assignment Level: person
@@ -25,7 +25,6 @@ step:
 attributes:
   - name: "work_sector"
     description: "Assigns industry sector from the workplace MGU's job mix"
-    data_type: "categorical"
 
 # Filters - Only assign to working-age people (18-65)
 filters:

@@ -5,7 +5,6 @@
 # of their journey as a `train_line.rider`, attaching (t_board_min,
 # t_alight_min) as per-membership metadata. Misses fall back to car_solo.
 distributor_type: "route"
-distributor_name: "route_commute_train"
 
 activity_map_key: "commute"
 leg_venue_type: "train_line"
@@ -77,6 +76,3 @@ leg_metadata:
 on_miss:
   set:
     commute_mode: "bus"
-
-settings:
-  verbose: true

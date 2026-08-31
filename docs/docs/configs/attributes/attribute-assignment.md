@@ -20,7 +20,7 @@ All keys are parsed by the same `AttributeAssignmentConfig` class; keys irreleva
 
 | Key | Description |
 |---|---|
-| `attribute` | Attribute name, data type, and assignment mode |
+| `attribute` | Retired singular form; use `attributes` and `step` |
 | `required_attributes` | Attributes that must already be assigned before this runs |
 | `region_mapping` | Maps geo unit names to names used in data files |
 | `categories` | Value bands (e.g. age ranges) used for data lookups |
@@ -39,18 +39,16 @@ All keys are parsed by the same `AttributeAssignmentConfig` class; keys irreleva
 # Person-by-residence mode (attribute_assignment.yaml)
 attribute:
   name: "ethnicity"
-  data_type: "categorical"
   assignment_level: "person_by_residence"
   household_venue_types: ["household"]
 
 # Person mode (comorbidity_assignment.yaml)
 attribute:
   name: "comorbidities"
-  data_type: "list"
   assignment_level: "person"
 ```
 
-`name` is the key written to `person.properties`. `data_type` is `"categorical"` for a single value or `"list"` for multiple conditions assigned simultaneously.
+`name` is the key written to `person.properties`.
 
 `assignment_level: "person_by_residence"` enables the household structure and role pipeline. `household_venue_types` lists which residence venue types are processed through that pipeline; residents of other venue types (e.g. `care_home`, `boarding_school`) are handled by `venue_assignment_rules` instead.
 
@@ -143,7 +141,6 @@ A role may list multiple `subsets`. Roles are defined globally and referenced by
 household_structures:
   Family:
     description: "Households with children"
-    inheritance: true
     matching_rules:
       - actual:
           - ">=1 >=0 >=0 >=0"
@@ -155,14 +152,13 @@ household_structures:
         description: "Demoted family"
 
   Independents:
-    inheritance: false
     matching_rules:
       - actual:
           - "0 >=0 >=0 >=0"
         description: "Catch-all for no-kid households"
 ```
 
-Each named structure is tested in definition order; the first match wins. `inheritance: true` enables child-inherits-from-parent logic in the `inheritance` and `reverse_inheritance` strategies.
+Each named structure is tested in definition order; the first match wins. Child and parent value derivation is selected by the role-level `inheritance` and `reverse_inheritance` strategies.
 
 Pattern format is `"Kids YoungAdults Adults OldAdults"` with operators `N` (exact), `>=N`, `<=N`. When a rule specifies both `actual` and `original`, both must match. When only one is given, only that is checked.
 

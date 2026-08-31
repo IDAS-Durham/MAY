@@ -25,7 +25,6 @@ step:
 attributes:
   - name: "commutes"
     description: "Whether an employed person travels to a workplace or works from home"
-    data_type: "categorical"
 
 # Filters. The same working-age and employment gates the rest of the work
 # pipeline uses, so that `commutes` exists for exactly the people who will go on

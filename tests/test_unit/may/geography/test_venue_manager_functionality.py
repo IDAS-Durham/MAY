@@ -8,8 +8,6 @@ test_venue_loader.py; this file is the contract.
 """
 
 import logging
-import os
-
 import pandas as pd
 import pytest
 
@@ -340,98 +338,6 @@ class TestResidenceHelpers:
         # Two care_homes; the grocery is excluded.
         assert {v.name for v in residences} == {'HomeA', 'HomeB'}
         assert all(v.type == 'care_home' for v in residences)
-
-
-class TestExportVenuesToCsv:
-
-    def test_export_writes_one_row_per_venue_with_expected_columns(
-        self, loaded_geography, tmp_path
-    ):
-        venues_dir = tmp_path / "out"
-        venues_dir.mkdir()
-        vm = VenueManager(
-            geography=loaded_geography,
-            data_dir=str(venues_dir),
-            filter_by_geography=False,
-        )
-        df = pd.DataFrame({
-            'name': ['Gen', 'St Mary'],
-            'geo_unit': ['SGU_001', 'SGU_002'],
-            'capacity': [100, 200],
-        })
-        vm.load_venue_type_from_df('hospital', df)
-
-        path = vm.export_venues_to_csv("out.csv")
-        assert os.path.exists(path)
-
-        out = pd.read_csv(path)
-        assert len(out) == 2
-        # The contract: every documented column is present.
-        for col in ('venue_id', 'venue_name', 'venue_type', 'geo_unit',
-                    'total_capacity', 'num_residents', 'capacity_used_pct',
-                    'age_sex_breakdown', 'attribute_slots', 'residents'):
-            assert col in out.columns
-        # Capacity comes from 'capacity' fallback when no capacity_config.
-        assert set(out['total_capacity']) == {100, 200}
-        # No residents added → num_residents is 0 everywhere.
-        assert (out['num_residents'] == 0).all()
-
-    def test_export_uses_capacity_config_total_column(
-        self, loaded_geography, tmp_path
-    ):
-        """When the venue type has a capacity_config.total_capacity_column,
-        export must pull capacity from that column, not the generic
-        'capacity' fallback."""
-        venues_dir = tmp_path / "out"
-        venues_dir.mkdir()
-        vm = VenueManager(
-            geography=loaded_geography,
-            data_dir=str(venues_dir),
-            filter_by_geography=False,
-        )
-        vm.capacity_configs['school'] = {'total_capacity_column': 'SchoolCapacity'}
-        df = pd.DataFrame({
-            'name': ['Sch1'],
-            'geo_unit': ['SGU_001'],
-            'SchoolCapacity': [500],
-            'capacity': [9999],  # generic fallback would lie if used
-        })
-        vm.load_venue_type_from_df('school', df)
-        path = vm.export_venues_to_csv("schools.csv")
-        out = pd.read_csv(path)
-        assert out['total_capacity'].iloc[0] == 500
-
-    def test_export_sorts_by_type_then_id(self, loaded_geography, tmp_path):
-        venues_dir = tmp_path / "out"
-        venues_dir.mkdir()
-        vm = VenueManager(
-            geography=loaded_geography,
-            data_dir=str(venues_dir),
-            filter_by_geography=False,
-        )
-        # Load schools first, then hospitals. Written rows must still
-        # group by type alphabetically with ascending ids inside.
-        vm.load_venue_type_from_df(
-            'school',
-            pd.DataFrame({'name': ['S1', 'S2'], 'geo_unit': ['SGU_001'] * 2}),
-        )
-        vm.load_venue_type_from_df(
-            'hospital',
-            pd.DataFrame({'name': ['H1'], 'geo_unit': ['SGU_001']}),
-        )
-        path = vm.export_venues_to_csv("v.csv")
-        out = pd.read_csv(path)
-        assert out['venue_type'].tolist() == ['hospital', 'school', 'school']
-        assert out.iloc[1]['venue_id'] < out.iloc[2]['venue_id']
-
-    def test_export_with_no_venues_does_not_crash(self, loaded_geography, tmp_path):
-        venues_dir = tmp_path / "out"
-        venues_dir.mkdir()
-        vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
-        path = vm.export_venues_to_csv("empty.csv")
-        assert os.path.exists(path)
-        # Empty manager → empty file (pandas writes an empty DataFrame).
-        # The contract is just: no exception, file exists.
 
 
 class TestGeoUnitLinkage:

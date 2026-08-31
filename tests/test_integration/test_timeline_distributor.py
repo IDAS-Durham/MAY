@@ -212,7 +212,7 @@ def test_multi_venue_distributor_exhaustion(test_config, mock_world):
     venues[0].type = "pub"
     venues[1].type = "restaurant"
     
-    # People MUST have a residence to participate in Leisure activities (unless require_residence=False config)
+    # People have residences before Leisure activities are assigned.
     people[0].residence = venues[0]
     
     distributor = MultiVenueDistributor(config_dict=test_config["multi_venue_distributor"])

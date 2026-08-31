@@ -41,8 +41,6 @@ venues:
   # Path to YAML configuration file (relative to project root or absolute path)
   config_file: "yaml/venues/venues_config.yaml"
 
-  # Export file for venue allocations (automatically created after allocation)
-  export_file: "venue_allocations.csv"
 
 # HOUSEHOLDS
 
@@ -72,8 +70,6 @@ households:
   # Option 3: Single-pass allocation (original simple mode)
   #   - Set both strategy_file and rounds_file to null
 
-  # Export file for household allocations (automatically created after distribution)
-  export_file: "household_allocations.csv"
 
 # EXAMPLES
 

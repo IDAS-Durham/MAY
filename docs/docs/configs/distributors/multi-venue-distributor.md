@@ -27,7 +27,6 @@ Identified by `distributor_type: "multi_venue"` — this field tells the loader 
 
 | Key | Description |
 |---|---|
-| `distributor_name` | Arbitrary label used in logs |
 | `distributor_type` | Must be `"multi_venue"` |
 | `activity_map_key` | Top-level key written to `person.activity_map` |
 | `subset_key` | Subset name added to each venue |
@@ -36,7 +35,7 @@ Identified by `distributor_type: "multi_venue"` — this field tells the loader 
 | `eligibility` | Age, residence, and other filters |
 | `venue_selection` | Distance method and candidate count |
 | `allocation` | Capacity tracking (usually disabled) |
-| `settings` | Execution priority and logging |
+| `settings` | Logging and performance |
 | `validation` | Required person and venue attributes |
 
 ---
@@ -86,10 +85,9 @@ eligibility:
     - attribute: "residence.type"
       type: "categorical"
       values: ["household", "student_dorms"]
-  require_residence: true
 ```
 
-`require_unassigned: false` — leisure assignment is independent of other activities; an agent may hold this key alongside `primary_activity`. `require_residence: true` skips agents without a residence assigned. Filters follow the same rules as the standard distributor (see [Venue Distributors](venue-distributor.md)).
+`require_unassigned: false` — leisure assignment is independent of other activities; an agent may hold this key alongside `primary_activity`. Every valid world supplies a residence for each person. Filters follow the same rules as the standard distributor (see [Venue Distributors](venue-distributor.md)).
 
 ---
 
@@ -99,13 +97,9 @@ eligibility:
 venue_selection:
   consider_by: "count"
   count: 5
-  criteria: "closest"
   venue_geo_level: "MGU"
   batch_geo_level: "SGU"
   person_location_source: "geographical_unit.coordinates"
-  venue_location_source: "coordinates"
-  distance_metric: "haversine"
-  filter_by_geography: true
   respect_capacity: false
 ```
 
@@ -121,10 +115,7 @@ allocation:
   batch_by: "geo_unit"
 
 settings:
-  priority: 1
-  max_allocations: null
   verbose: true
-  log_summary: true
   use_spatial_index: true
 ```
 

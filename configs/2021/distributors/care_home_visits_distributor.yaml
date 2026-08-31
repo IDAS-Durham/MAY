@@ -1,7 +1,6 @@
 # Care Home Visits Distributor Configuration
 # Replicates JUNE 1 leisure linking of households to care homes.
 
-distributor_name: "care_home_visits_distributor"
 distributor_type: "resident_linked"
 
 # Target configuration
@@ -45,4 +44,3 @@ visitor_eligibility:
 # Settings
 settings:
   verbose: true
-  batch_geo_level: "MGU"

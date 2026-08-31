@@ -47,7 +47,6 @@ class RouteDistributor(BaseDistributor):
         super().__init__(config_file, config_dict)
 
         c = self.config
-        self.distributor_name = c.get("distributor_name", "route_distributor")
         self.activity_map_key = c.get("activity_map_key", "commute")
         self.leg_venue_type = c.get("leg_venue_type", "transport_line")
         self.leg_subset_key = c.get("leg_subset_key", "rider")
@@ -128,7 +127,7 @@ class RouteDistributor(BaseDistributor):
         self._stats = Counter()
 
         logger.info(
-            f"Initialized RouteDistributor '{self.distributor_name}' "
+            "Initialized RouteDistributor "
             f"(class_filter={self.class_filter!r}, leg_venue_type={self.leg_venue_type!r})"
         )
 
@@ -207,7 +206,7 @@ class RouteDistributor(BaseDistributor):
         unit = geography.get_unit(unit_name)
         if unit is None or unit.coordinates is None:
             raise ValueError(
-                f"{self.distributor_name}: no coordinates for unit {unit_name!r}. "
+                f"RouteDistributor: no coordinates for unit {unit_name!r}. "
                 f"A pool_rule derives travel time from unit centroids, so the "
                 f"geography's coord_files must cover every routed level."
             )
@@ -464,7 +463,7 @@ class RouteDistributor(BaseDistributor):
 
     def allocate(self, world) -> None:
         logger.info("=" * 60)
-        logger.info(f"RouteDistributor: {self.distributor_name}")
+        logger.info("RouteDistributor")
         logger.info("=" * 60)
 
         self.prepare(world.geography)

@@ -89,8 +89,6 @@ venues:
   # Path to YAML configuration file (relative to project root or absolute path)
   config_file: "${config_root}/venues/venues_config.yaml"
 
-  # Export file for venue allocations (automatically created after allocation)
-  export_file: "venue_allocations.csv"
 
 # HOUSEHOLDS
 
@@ -117,25 +115,6 @@ households:
   # at the allocation_strategy.yaml). It is not configured here, which keeps a
   # single source of truth for allocation ordering. This block only holds the
   # household data/rules wiring.
-
-  # Export file for household allocations (automatically created after distribution)
-  export_file: "household_allocations.csv"
-
-# DEBUG OUTPUTS
-# Auxiliary CSV files written during world creation. They are useful for
-# inspecting small worlds but build large in-memory DataFrames, so for
-# country-scale runs (e.g. England 2021) leave this disabled.
-# The canonical output is always `world_state.h5`; these CSVs are extras.
-#
-# Files controlled by this flag:
-#   - residence_venues.csv            (one row per residence assignment)
-#   - unallocated_people.csv          (one row per person not placed in a household)
-#   - commute_mode_debug.csv/.txt     (mode per worker + route-leg verification)
-#   - work_assignment_debug.csv/.txt  (placement rate, sector-location
-#                                      consistency, spatial basis, sex realism)
-
-debug_outputs:
-  enabled: false
 
 # ATTRIBUTES
 

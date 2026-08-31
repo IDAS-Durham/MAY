@@ -36,19 +36,16 @@ All three use `assignment_level: "person"` and are processed by the same `Attrib
 # workplace_assignment.yaml
 attribute:
   name: "workplace_location"
-  data_type: "categorical"
   assignment_level: "person"
 
 # workplace_sgu_assignment.yaml
 attribute:
   name: "workplace_sgu"
-  data_type: "categorical"
   assignment_level: "person"
 
 # work_sector_assignment.yaml
 attribute:
   name: "work_sector"
-  data_type: "categorical"
   assignment_level: "person"
 ```
 
@@ -116,7 +113,6 @@ data_sources:
     files:
       - path: "data/activities/work/EW-work-destination-likelihood.csv"
         output_format: "origin_destination_matrix"
-        origin_level: "LGU"
         destination_level: "LGU"
         key_columns:
           LGU_origin_name:
@@ -141,7 +137,7 @@ data_sources:
       work_mode: "Normal"
 ```
 
-`output_format: "origin_destination_matrix"` tells the loader to treat the file as an OD matrix. `origin_level` and `destination_level` set the geo hierarchy levels used for matching. `key_columns` uses `type: "ancestor_lookup"` to traverse the hierarchy to the person's LGU.
+`output_format: "origin_destination_matrix"` tells the loader to treat the file as an OD matrix. `key_columns` resolves each person's origin by traversing to the configured LGU, while `destination_level` declares the hierarchy level used to validate destination values against the loaded world boundary.
 
 `exclude_destinations` filters rows by destination code before sampling (e.g. removes offshore and outside-UK codes).
 

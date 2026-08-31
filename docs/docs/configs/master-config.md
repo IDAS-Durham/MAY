@@ -19,7 +19,6 @@ The master configuration file. Entry point for every simulation section — each
 | `population` | Population data source and mode |
 | `venues` | Venue data directory and type catalogue |
 | `households` | Household allocation configuration |
-| `debug_outputs` | Optional auxiliary CSV exports |
 | `timeline` | Ordered pipeline of attribute, distributor, and child-creator steps |
 | `relationship_pipeline` | Social network construction |
 | `romantic_relationships` | Sexual orientation and partnership assignment |
@@ -99,10 +98,9 @@ population:
 venues:
   data_dir: "data/venues"
   config_file: "configs/2021/venues/venues_config.yaml"
-  export_file: "venue_allocations.csv"
 ```
 
-`data_dir` is the root directory for all venue CSVs. `config_file` is the venue type catalogue — see [Venues Config](venues/venues-config.md). `export_file` is optional; when set, venue allocation results are written there.
+`data_dir` is the root directory for all venue CSVs. `config_file` is the venue type catalogue — see [Venues Config](venues/venues-config.md).
 
 ---
 
@@ -115,7 +113,6 @@ households:
   data_file: "households.csv"
   config_file: "configs/2021/households/households_config.yaml"
   strategy_file: "configs/2021/households/allocation_strategy.yaml"
-  export_file: "household_allocations.csv"
 ```
 
 `enabled: false` skips household allocation entirely.
@@ -130,19 +127,7 @@ Three allocation modes are selected by which optional files are set:
 | Household-only multi-round | Set `rounds_file`; set `strategy_file: null` |
 | Single-pass (simple) | Set both `strategy_file` and `rounds_file` to `null` |
 
-`export_file` is optional; when set, household allocation results are written there.
-
 ---
-
-## `debug_outputs`
-
-```yaml
-debug_outputs:
-  enabled: false
-```
-
-When `enabled: true`, the engine writes auxiliary CSVs during world creation: `household_allocations.csv`, `venue_allocations.csv`, `residence_venues.csv`, and `unallocated_people.csv`. These build large in-memory DataFrames — disable for country-scale runs.
-
 ---
 
 ## `timeline`
