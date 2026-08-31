@@ -14,7 +14,6 @@ def _config(storage_key="contacts_local", mean_count=3, level="SGU"):
             "network_type": "intra_geo_unit",
             "pool_type": "geographic",
             "pool": {"level": level},
-            "algorithm": "random",
             "mean_count": mean_count,
             "storage_key": storage_key,
         }]

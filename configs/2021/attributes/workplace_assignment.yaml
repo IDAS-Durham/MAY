@@ -21,10 +21,8 @@ step:
 attributes:
   - name: "workplace_location"
     description: "Geographical location (LGU) where the person works"
-    data_type: "categorical"
   - name: "work_mode"
     description: "Work mode: From_Home, Hybrid, or Normal commute"
-    data_type: "categorical"
 
 # Filters - Only assign to working-age people (18-65)
 # NOTE: We assign workplace to all working-age adults (potential workforce)
@@ -81,24 +79,23 @@ data_sources:
     files:
       - path: "${data_root}/activities/work/EW-work-destination-likelihood-modelled-prepandemic.csv"
 
-        # Geographic unit levels for matching (configurable!)
-        origin_level: "LGU"       # Match person's residence at LGU level
-        destination_level: "LGU"  # Destinations are LGU names
+        # Resolve each person's residence to an LGU name for the origin column;
+        # sample an LGU destination from that origin's commuting distribution.
+        destination_level: "LGU"  # Destination values are LGU names
 
-        # Key column: origin LGU (person's residence LGU NAME)
         key_columns:
           LGU_origin_name:
             attribute: "geographical_unit"
-            type: "ancestor_lookup"  # Traverse hierarchy to get LGU
+            type: "ancestor_lookup"  # Traverse the person's geography to LGU
             level: "LGU"
-            property: "name"  # Use LGU name for matching
+            property: "name"  # Use the LGU name as the origin lookup key
 
-        # Column definitions for O-D matrix
-        destination_column: "LGU_destination_name"  # Use NAME for easy matching with work data
-        likelihood_column: "Likelihood"
+        # The matched origin row contains destination options and their weights.
+        destination_column: "LGU_destination_name"  # Sampled workplace LGU
+        likelihood_column: "Likelihood"            # Relative probability of each destination
         metadata_columns:
-          work_mode: "Place of work indicator"
-          count: "Count"
+          work_mode: "Place of work indicator"      # Returned with the sampled destination
+          count: "Count"                             # Retained row metadata
 
         # No exclude_destinations. The census tables list non-LAD destinations
         # alongside real ones, including whole-country catch-alls ("England", "Wales",
@@ -116,7 +113,6 @@ data_sources:
       # needs to merge them into one origin lookup.
       - path: "${data_root}/activities/work/SCT-work-destination-likelihood-modelled-prepandemic.csv"
 
-        origin_level: "LGU"
         destination_level: "LGU"
 
         key_columns:
@@ -137,7 +133,6 @@ data_sources:
       # UK-wide (373 of them), so an NI resident can be drawn to a GB workplace.
       - path: "${data_root}/activities/work/NI-work-destination-likelihood-modelled-prepandemic.csv"
 
-        origin_level: "LGU"
         destination_level: "LGU"
 
         key_columns:

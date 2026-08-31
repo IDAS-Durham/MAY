@@ -18,7 +18,6 @@ step:
 attributes:
   - name: "commute_mode"
     description: "Method of travel to work (TS061), residence-side"
-    data_type: "categorical"
 
 # Filters
 # Assign commute_mode only to people who ACTUALLY got a physical workplace

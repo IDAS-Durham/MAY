@@ -72,7 +72,7 @@ class VenueMatcher:
                     'name': attr_name,
                     'type': 'categorical',
                     'col': rule.get('venue_column'),
-                    'assume': rule.get('assume_if_missing', 'Mixed'),
+                    'assume': 'Mixed',
                     'case_sensitive': rule.get('case_sensitive', False),
                     'rules': rule.get('matching_rules', {})
                 })
@@ -364,10 +364,6 @@ class VenueMatcher:
 
         if consider_by == 'count':
             count = selection.get('count', 5)
-            if selection.get('criteria') == 'largest_capacity':
-                # Query a larger pool first to find large ones nearby
-                closest_pool = self.distributor._find_closest_venues(location, self.distributor.venue_type, max(count * 5, 20), allowed_venue_ids=getattr(self.distributor, 'venue_ids', None))
-                return sorted(closest_pool, key=lambda v: self.distributor._get_venue_capacity(v), reverse=True)[:count]
             return self.distributor._find_closest_venues(location, self.distributor.venue_type, count, allowed_venue_ids=getattr(self.distributor, 'venue_ids', None))
 
         elif consider_by == 'distance':
@@ -385,8 +381,6 @@ class VenueMatcher:
             else:
                 eligible = []
             
-            if selection.get('criteria') == 'largest_capacity':
-                eligible.sort(key=lambda v: self.distributor._get_venue_capacity(v), reverse=True)
             return eligible
 
         return venues
@@ -411,7 +405,7 @@ class VenueMatcher:
     def _check_categorical_constraint(self, val, venue, rule: Dict) -> bool:
         col = rule.get('venue_column')
         if not col: return True
-        v_val = venue.properties.get(col, rule.get('assume_if_missing', 'Mixed'))
+        v_val = venue.properties.get(col, 'Mixed')
         matching = rule.get('matching_rules', {})
         if not rule.get('case_sensitive', False):
             v_val = self.distributor._normalize_value(v_val).lower()

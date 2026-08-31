@@ -27,7 +27,3 @@ allocation:
 
 fallback:
   strategy: "skip"
-
-# exports:
-  # venue_summary: "output/1911/workplace_church_venue_summary.csv"
-  # unallocated_report: "output/1911/workplace_church_unallocated.csv"

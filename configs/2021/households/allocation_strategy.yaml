@@ -194,7 +194,6 @@ steps:
         - {range: [80, 84],  weight: 0.0347}
         - {range: [85, 120], weight: 0.1133}
 
-    max_allocations: null
 
   # Step 4a: Elderly Couples
   - name: "Elderly Couples"
@@ -304,7 +303,6 @@ steps:
           max_column: "StatutoryHighAge"
 
     strategy: "random"
-    max_allocations: null
 
   # Step 9: Students to Dormitories (Venues)
   - name: "Students to Dormitories"
@@ -339,7 +337,6 @@ steps:
             age_band: [25, 99]
 
     strategy: "random"
-    max_allocations: null
 
   # Step 10: Multi-Elderly  (Households)
   - name: "Multi-elderly"
@@ -769,7 +766,6 @@ steps:
 #       - {attribute: "sex", value: "F"}        # Exact match
 #     Empty list [] or {} means no filtering
 #   - strategy: Allocation strategy ("random", "oldest_first", "youngest_first")
-#   - max_allocations: Limit number of people (null = fill capacity)
 
 # For household_excess steps:
 #   - target_patterns: List of original patterns to target for adding people

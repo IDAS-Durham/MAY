@@ -16,7 +16,6 @@
 # - Any other scenario requiring multiple venue options
 
 # BASIC INFO
-distributor_name: "multi_venue_distributor"
 distributor_type: "multi_venue"  # Tells the loader which class to use
 description: "Provide people with multiple venue options across different types"
 
@@ -54,9 +53,6 @@ eligibility:
       min: 14  # Change as needed
       max: 120
 
-  # Require residence - FULLY CUSTOMIZABLE
-  require_residence: true
-
 # VENUE SELECTION: How many venues per type?
 venue_selection:
   # Selection method: count-based (N closest venues)
@@ -65,22 +61,14 @@ venue_selection:
   # Number of venues to assign per type - FULLY CUSTOMIZABLE
   count: 5
 
-  # Selection criteria
-  criteria: "closest"
-
   # Geographical level - FULLY CUSTOMIZABLE
   venue_geo_level: "MGU"  # Leisure venues are at MGU level
   batch_geo_level: "SGU"  # Batch by SGU for performance
 
   # Location sources - FULLY CUSTOMIZABLE
   locate_person_by: "geographical_unit.coordinates"
-  venue_location_source: "coordinates"
-
-  # Distance calculation - FULLY CUSTOMIZABLE
-  distance_metric: "haversine"
 
   # Filtering
-  filter_by_geography: true
   respect_capacity: false
 
 # ALLOCATION STRATEGY
@@ -93,15 +81,8 @@ allocation:
 
 # EXECUTION SETTINGS
 settings:
-  # Execution priority
-  priority: 1
-
-  # No allocation limit
-  max_allocations: null
-
   # Logging
   verbose: true
-  log_summary: true
 
   # Performance
   use_spatial_index: true
@@ -112,12 +93,6 @@ validation:
   required_person_attributes:
     - "age"
     - "geographical_unit"
-
-  # Required venue columns
-  required_venue_columns:
-    - "geo_unit"
-    - "Latitude"
-    - "Longitude"
 
 # NOTES
 #

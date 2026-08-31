@@ -26,7 +26,6 @@ def _config_with_age_constraint(max_diff, network_type="intra_geo_unit",
             "network_type": network_type,
             "pool_type": pool_type,
             "pool": pool or {"level": "SGU"},
-            "algorithm": "random",
             "mean_count": 5,
             "storage_key": storage_key,
             "constraints": [{
@@ -89,7 +88,7 @@ def test_no_constraint_same_as_no_age_filter(toy_world):
         "networks": [{
             "name": "test", "network_type": "intra_geo_unit",
             "pool_type": "geographic", "pool": {"level": "SGU"},
-            "algorithm": "random", "mean_count": 5, "storage_key": "contacts",
+            "mean_count": 5, "storage_key": "contacts",
         }]
     }
     SocialNetworkBuilder(toy_world, config).build_all()

@@ -47,7 +47,6 @@ step:
 attributes:
   - name: "ethnicity"
     description: "Assigns ethnicity based on residence structure and roles"
-    data_type: "categorical"
 
 
 # Role Definitions
@@ -115,7 +114,6 @@ household_structures:
 
   Family:
     description: "Families with children or dependent young adults"
-    inheritance: true  # Children inherit from adults
 
     matching_rules:
       # Rule 1: Any household with at least 1 kid (regardless of original pattern)
@@ -140,7 +138,6 @@ household_structures:
 
   Couple:
     description: "Two adults living together as a couple"
-    inheritance: false
 
     matching_rules:
       # Adult couples - must have been originally intended as couple (not demoted family)
@@ -159,7 +156,6 @@ household_structures:
 
   Independents:
     description: "Independent living (singles, roommates, flexible households)"
-    inheritance: false
 
     matching_rules:
       # Single person households

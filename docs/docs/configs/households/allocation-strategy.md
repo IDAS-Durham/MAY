@@ -82,12 +82,11 @@ Creates new households matching the listed `patterns`. Each pattern is either a 
     - attribute: "age"
       min: 50
   strategy: "oldest_first"
-  max_allocations: null
 ```
 
 Sends eligible agents to a communal residence venue type. `venue_type` must match a key in `venues_config.yaml`. `allocation_mode: "attribute_aware"` activates age/sex slot matching using the `capacity_config.attribute_capacities` defined for that venue type; set `use_attribute_capacities: true` alongside it. `subset_key` is the name assigned to residents within the venue.
 
-`eligibility` is a list of attribute filters applied before slot matching; each filter specifies an `attribute` and optional `min`/`max` (for numerical) or `value` (for categorical). `strategy` controls selection order within the eligible pool: `"random"`, `"oldest_first"`, or `"youngest_first"`. `max_allocations` caps total placements for this step; `null` fills to capacity.
+`eligibility` is a list of attribute filters applied before slot matching; each filter specifies an `attribute` and optional `min`/`max` (for numerical) or `value` (for categorical). `strategy` controls selection order within the eligible pool: `"random"`, `"oldest_first"`, or `"youngest_first"`. Placement fills available capacity.
 
 ---
 

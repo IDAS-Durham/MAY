@@ -22,8 +22,7 @@ logger = logging.getLogger("allocation_strategy")
 def execute_allocation_strategy(population,
                                 venues,
                                 household_distributor,
-                                strategy_file: str = "data/households/allocation_strategy.yaml",
-                                export_debug_csv: bool = False):
+                                strategy_file: str = "data/households/allocation_strategy.yaml"):
     """
     Execute a unified allocation strategy from YAML configuration.
 
@@ -187,11 +186,6 @@ def execute_allocation_strategy(population,
     alloc_pct = (len(household_distributor.allocated_people) / total_pop * 100) if total_pop > 0 else 0
     logger.info(f"  Allocation rate: {alloc_pct:.1f}%")
     logger.info("=" * 60)
-
-    # Optionally export unallocated people (skipped for large worlds, since it
-    # builds a DataFrame across every unplaced person).
-    if export_debug_csv:
-        household_distributor.export_unallocated_people_to_csv()
 
     return all_stats
 
@@ -670,7 +664,6 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         'strategy': step_config.get('strategy', 'random'),
         # Settings the named strategy reads; "age_weighted" takes its bands here.
         'strategy_config': step_config.get('strategy_config', {}),
-        'max_allocations': step_config.get('max_allocations'),
         # Capacity rules owned by this allocation step. The presence of
         # capacity_config.attribute_capacities.column_mappings selects
         # attribute-aware vs. simple allocation downstream.

@@ -34,7 +34,6 @@ def _local_config(storage_key="contacts_local", mean_count=2):
             "network_type": "local_social_network",
             "pool_type": "geographic",
             "pool": {"level": "SGU"},
-            "algorithm": "watts_strogatz",
             "mean_count": mean_count,
             "storage_key": storage_key,
         }]

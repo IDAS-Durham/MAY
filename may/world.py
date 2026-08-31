@@ -325,17 +325,11 @@ def setup_households(geo, population, venues, config, strategy_file=None):
     if strategy_file is None and household_config.get("strategy_file"):
         strategy_file = pr.resolve(household_config.get("strategy_file"))
 
-    debug_outputs_enabled = config.get("debug_outputs", {}).get("enabled", False)
-
     if strategy_file:
         # Mode 1: Unified strategy (households + venues in order)
         logger.info(f"Using unified allocation strategy from {strategy_file}")
         execute_allocation_strategy(
-            population,
-            venues,
-            household_distributor,
-            strategy_file,
-            export_debug_csv=debug_outputs_enabled,
+            population, venues, household_distributor, strategy_file
         )
 
     # Show where households are located and examples

@@ -16,11 +16,6 @@ from may.venue_distributor import VenueDistributor
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
 from may.serialization.preflight import warn_about_venue_property_gaps
-from may.utils.debug_output import (
-    export_residence_venues,
-    export_commute_mode_debug,
-    export_work_assignment_debug,
-)
 from may.utils import path_resolver as pr
 from may.utils import build_profile as bp
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
@@ -305,14 +300,6 @@ def main(args=None):
                         logger.error(f"Household allocation failed: {e}")
                         sys.exit(1)
 
-                    # Who ended up living where, for every residence venue type.
-                    if config.get("debug_outputs", {}).get("enabled", False):
-                        output_dir = pr.resolve(config.get("serialization", {}).get("output_dir", "."))
-                        os.makedirs(output_dir, exist_ok=True)
-                        export_residence_venues(
-                            world, os.path.join(output_dir, "residence_venues.csv")
-                        )
-
                 elif step_type == "attribute":
                     logger.info("")
                     logger.info(f"[ATTRIBUTE] {step_config}")
@@ -329,16 +316,6 @@ def main(args=None):
                         distributor = VenueDistributor.from_yaml(step_config)
                         distributor.allocate(world)
 
-                        # If this is the residence distributor, optionally export detailed allocations
-                        # Skipped by default for large worlds (build a DataFrame over every person).
-                        if (
-                            getattr(distributor, 'activity_name', None) == "residence"
-                            and config.get("debug_outputs", {}).get("enabled", False)
-                        ):
-                            serial_config = config.get("serialization", {})
-                            output_dir = pr.resolve(serial_config.get("output_dir", "."))
-                            res_export_file = os.path.join(output_dir, "residence_venues.csv")
-                            export_residence_venues(world, res_export_file)
                     except Exception as e:
                         logger.error(f"Failed to run distributor {step_config}: {e}")
                         logger.exception(e)
@@ -360,22 +337,6 @@ def main(args=None):
                         f"Timeline step type {step_type!r} is accepted by "
                         f"VALID_TIMELINE_STEP_TYPES but has no branch here."
                     )
-
-        # Commute-mode verification dump (after all assignments/distributors)
-        if config.get("debug_outputs", {}).get("enabled", False):
-            serial_config = config.get("serialization", {})
-            output_dir = pr.resolve(serial_config.get("output_dir", "."))
-            os.makedirs(output_dir, exist_ok=True)
-            export_commute_mode_debug(
-                world, os.path.join(output_dir, "commute_mode_debug.csv")
-            )
-            # Work-assignment evidence (placement rate, sector-location
-            # consistency, spatial basis). Comparable across the
-            # residence-basis and workplace-basis pipelines.
-            export_work_assignment_debug(
-                world,
-                os.path.join(output_dir, "work_assignment_debug.csv"),
-            )
 
     else:
         # Every scenario drives all events through the timeline, including an

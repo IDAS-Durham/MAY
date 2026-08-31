@@ -77,6 +77,24 @@ def _build_geographic_pool(world, pool_config: dict) -> list[list]:
 
     Required pool_config keys:
         level  – e.g. "SGU", "MGU", "LGU"
+    Optional:
+        max_group_size – split any group larger than this into random parts
+
+    Why max_group_size exists. The random builder scans every member of a group
+    for every member of that group, so the cost of a group is quadratic in its
+    size. Where a geographic unit is small this never matters: England's SGU is
+    an Output Area of a few hundred people. Where it is large it is fatal. A
+    Mexican SGU is a municipio, and Ciudad Juarez alone holds about 1.5 million
+    people, which is roughly 2.2e12 candidate checks for that one group; an MGU
+    is the whole entidad at 3.7 million, or about 1.4e13. Measured throughput is
+    around 3e8 checks per second, so those are two hours and thirteen hours
+    respectively, against a two-hour build.
+
+    Splitting a group into random parts bounds that cost at the price of
+    dropping edges between parts. The parts are drawn at random and correspond
+    to nothing in the world, so they do not impose structure that a later
+    analysis could mistake for a real community; what they do is thin a pool
+    that was already an approximation of random mixing.
     """
     target_level = pool_config.get("level")
     available_levels = world.geography.levels if world.geography else []
@@ -92,7 +110,29 @@ def _build_geographic_pool(world, pool_config: dict) -> list[list]:
         key = unit.name if unit is not None else "__unknown__"
         groups.setdefault(key, []).append(person)
 
-    return list(groups.values())
+    max_size = pool_config.get("max_group_size")
+    if not max_size:
+        return list(groups.values())
+    if max_size < 2:
+        raise ValueError(f"max_group_size must be at least 2, got {max_size}")
+
+    out: list[list] = []
+    n_split = 0
+    for members in groups.values():
+        if len(members) <= max_size:
+            out.append(members)
+            continue
+        n_split += 1
+        order = np.random.permutation(len(members))
+        n_parts = -(-len(members) // max_size)
+        for part in np.array_split(order, n_parts):
+            out.append([members[i] for i in part])
+    if n_split:
+        logger.info(
+            f"geographic pool at {target_level}: split {n_split} group(s) over "
+            f"max_group_size={max_size:,} into {len(out):,} parts"
+        )
+    return out
 
 
 @register_pool_type("activity")

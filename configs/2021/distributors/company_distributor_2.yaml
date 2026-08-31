@@ -1,4 +1,3 @@
-distributor_name: "company_distributor_2"
 venue_type: "company"
 description: "Distribute people to companies"
 
@@ -79,7 +78,6 @@ venue_selection:
   batch_geo_level: "MGU"
 
   # Only consider companies in loaded geography with capacity
-  filter_by_geography: true
   respect_capacity: true
 
 allocation:
@@ -100,10 +98,7 @@ allocation:
   batch_by: "geo_unit"
 
 settings:
-  priority: 5  # Run after school (10) and university (1)
-  max_allocations: null
   verbose: true
-  log_summary: true
 
 fallback:
   strategy: "skip"  # Skip if no matching companies found

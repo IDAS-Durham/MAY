@@ -5,7 +5,6 @@ import time
 from typing import Dict, List, Optional, Any
 from .base_distributor import BaseDistributor
 from .filtering import FilteringManager
-from .reporting import ReportingManager
 
 logger = logging.getLogger("resident_linked_distributor")
 
@@ -30,11 +29,9 @@ class ResidentLinkedDistributor(BaseDistributor):
         
         # Component managers
         self.filtering = FilteringManager(self)
-        self.reporting = ReportingManager(self)
         
         self.visitor_filters = self.config.get('visitor_eligibility', {}).get('global_filters', [])
         self._pre_processed_filters = self._pre_process_filters(self.visitor_filters)
-        self._pre_processed_exclude = self.config.get('visitor_eligibility', {}).get('exclude', {})
         
         logger.info(f"Initialized ResidentLinkedDistributor for '{self.target_venue_type}'")
         logger.info(f"  Link level: {self.link_level}, Multiplier: {self.multiplier}")
@@ -338,57 +335,3 @@ class ResidentLinkedDistributor(BaseDistributor):
             # Ensure activity is in p.activities
             if activity_key not in p.activities:
                 p.add_activity(activity_key)
-
-    def export_links(self, world, output_path: str):
-        """
-        Export resident-linked connections to CSV.
-        
-        Args:
-            world: World object (or proxy)
-            output_path: Path to output CSV file
-        """
-        import csv
-        logger.info(f"Exporting resident-linked connections to {output_path}")
-        
-        # Get all relevant people (those who might have leisure links)
-        people = world.people
-        
-        # Collect links
-        data = []
-        for person in people:
-            if self.activity_map_key not in person.activity_map:
-                continue
-            
-            links = person.activity_map[self.activity_map_key].get(self.target_venue_type, [])
-            for subset_link in links:
-                venue = subset_link.venue
-                
-                # Get person details
-                residence = person.residence
-                household_id = residence.id if residence and residence.type == 'household' else 'none'
-                
-                data.append({
-                    'person_id': person.id,
-                    'age': person.age,
-                    'sex': person.sex,
-                    'household_id': household_id,
-                    'geo_unit': person.geographical_unit.name if person.geographical_unit else 'none',
-                    'linked_venue_id': venue.id,
-                    'linked_venue_name': venue.name,
-                    'linked_venue_type': venue.type,
-                    'linked_venue_geo': venue.geographical_unit.name if venue.geographical_unit else 'none'
-                })
-        
-        if not data:
-            logger.warning("No links found to export.")
-            return
-
-        # Write to CSV
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ['person_id', 'age', 'sex', 'household_id', 'geo_unit', 
-                         'linked_venue_id', 'linked_venue_name', 'linked_venue_type', 'linked_venue_geo']
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(data)
-            
-        logger.info(f"Successfully exported {len(data)} links.")

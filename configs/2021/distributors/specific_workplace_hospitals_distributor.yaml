@@ -8,7 +8,6 @@
 # - Runs BEFORE company_distributor to capture health sector workers
 
 # BASIC INFO
-distributor_name: "specific_workplace_hospitals_distributor"
 venue_type: "hospital"
 description: "Distribute health sector (Q) workers to hospitals"
 
@@ -81,7 +80,6 @@ venue_selection:
   batch_geo_level: "MGU"
 
   # Only consider hospitals in loaded geography with capacity
-  filter_by_geography: true
   respect_capacity: true
 
 # ALLOCATION STRATEGY: How to assign person to venue?
@@ -106,16 +104,8 @@ allocation:
 # EXECUTION SETTINGS
 
 settings:
-  # Execution order (higher = earlier)
-  # Run after university (1) but before company (5)
-  priority: 4
-
-  # Limit number of allocations (null = no limit)
-  max_allocations: null
-
   # Logging
   verbose: true
-  log_summary: true
 
 # FALLBACK BEHAVIOR
 

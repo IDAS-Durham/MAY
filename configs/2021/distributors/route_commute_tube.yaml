@@ -1,7 +1,6 @@
 # Tube/metro/light-rail commute legs (RouteDistributor; see route_commute_train.yaml
 # for the full schema discussion). 
 distributor_type: "route"
-distributor_name: "route_commute_tube"
 
 activity_map_key: "commute"
 leg_venue_type: "tube_line"
@@ -54,6 +53,3 @@ leg_metadata:
 on_miss:
   set:
     commute_mode: "bus"
-
-settings:
-  verbose: true

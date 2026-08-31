@@ -11,7 +11,6 @@ def _config(storage_key="work_contacts", mean_count=3, activity="primary_activit
             "network_type": "activity_peers",
             "pool_type": "activity",
             "pool": {"activity": activity},
-            "algorithm": "random",
             "mean_count": mean_count,
             "storage_key": storage_key,
         }]

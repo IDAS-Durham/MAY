@@ -15,7 +15,6 @@ step:
 attributes:
   - name: "comorbidities"
     description: "Assigns health comorbidities based on person demographics"
-    data_type: "list"
 
 # Required Attributes (Dependencies)
 # Attributes that must be assigned before this one

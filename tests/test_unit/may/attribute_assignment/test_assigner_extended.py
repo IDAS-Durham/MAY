@@ -210,11 +210,11 @@ def _build_family_config(geo_source, pair_source=None):
     # Household structures
     config.household_structures = {
         "Family": HouseholdStructure(
-            name="Family", description="", inheritance=True,
+            name="Family", description="",
             matching_rules=[MatchingRule(actual_patterns=[">=1 >=0 >=0 >=0"])],
         ),
         "Independents": HouseholdStructure(
-            name="Independents", description="", inheritance=False,
+            name="Independents", description="",
             matching_rules=[MatchingRule(actual_patterns=["0 >=0 >=0 >=0"])],
         ),
     }
@@ -551,7 +551,7 @@ class TestAssignHousehold:
         }
         config.household_structures = {
             "Independents": HouseholdStructure(
-                name="Independents", description="", inheritance=False,
+                name="Independents", description="",
                 matching_rules=[MatchingRule(actual_patterns=["0 >=0 >=0 >=0"])],
             ),
         }
@@ -686,7 +686,7 @@ class TestAssignAllResidencesStats:
         """
         config = _build_family_config(SimpleGeoSource(fallback={"W": 1.0}))
         config.household_structures["Independents"] = HouseholdStructure(
-            name="Independents", description="", inheritance=False,
+            name="Independents", description="",
             matching_rules=[MatchingRule(actual_patterns=[">=0 >=0 >=0 >=0"])],
         )
         config.venue_assignment_rules = [
@@ -732,7 +732,7 @@ class TestAssignAllResidencesStats:
         """
         config = _build_family_config(SimpleGeoSource(fallback={"W": 1.0}))
         config.household_structures["Independents"] = HouseholdStructure(
-            name="Independents", description="", inheritance=False,
+            name="Independents", description="",
             matching_rules=[MatchingRule(actual_patterns=[">=0 >=0 >=0 >=0"])],
         )
         dm = SimpleDataManager(sources={
@@ -759,7 +759,7 @@ class TestAssignAllResidencesStats:
             {'venue_types': ['care_home'], 'assignment': {'strategy': 'constant', 'value': 'A'}}
         ]
         config.household_structures["Independents"] = HouseholdStructure(
-            name="Independents", description="", inheritance=False,
+            name="Independents", description="",
             matching_rules=[MatchingRule(actual_patterns=[">=0 >=0 >=0 >=0"])],
         )
         dm = SimpleDataManager(sources={

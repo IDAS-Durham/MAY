@@ -15,7 +15,6 @@ def _two_network_config():
                 "network_type": "intra_geo_unit",
                 "pool_type": "geographic",
                 "pool": {"level": "SGU"},
-                "algorithm": "random",
                 "mean_count": 3,
                 "storage_key": "contacts_local",
             },
@@ -24,7 +23,6 @@ def _two_network_config():
                 "network_type": "activity_peers",
                 "pool_type": "activity",
                 "pool": {"activity": "primary_activity"},
-                "algorithm": "random",
                 "mean_count": 3,
                 "storage_key": "contacts_work",
             },
@@ -65,7 +63,6 @@ def test_ordering_respected_first_network_built_first(toy_world):
                 "network_type": "intra_geo_unit",
                 "pool_type": "geographic",
                 "pool": {"level": "SGU"},
-                "algorithm": "random",
                 "mean_count": 2,
                 "storage_key": "first_key",
             },
@@ -74,7 +71,6 @@ def test_ordering_respected_first_network_built_first(toy_world):
                 "network_type": "intra_geo_unit",
                 "pool_type": "geographic",
                 "pool": {"level": "MGU"},
-                "algorithm": "random",
                 "mean_count": 2,
                 "storage_key": "second_key",
             },
@@ -92,17 +88,17 @@ def test_three_networks_all_keys_present(toy_world):
             {
                 "name": "a", "network_type": "intra_geo_unit",
                 "pool_type": "geographic", "pool": {"level": "SGU"},
-                "algorithm": "random", "mean_count": 2, "storage_key": "key_a",
+                "mean_count": 2, "storage_key": "key_a",
             },
             {
                 "name": "b", "network_type": "intra_geo_unit",
                 "pool_type": "geographic", "pool": {"level": "MGU"},
-                "algorithm": "random", "mean_count": 2, "storage_key": "key_b",
+                "mean_count": 2, "storage_key": "key_b",
             },
             {
                 "name": "c", "network_type": "activity_peers",
                 "pool_type": "activity", "pool": {"activity": "primary_activity"},
-                "algorithm": "random", "mean_count": 2, "storage_key": "key_c",
+                "mean_count": 2, "storage_key": "key_c",
             },
         ]
     }

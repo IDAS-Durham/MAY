@@ -9,7 +9,6 @@
 # - Runs AFTER other education allocations
 
 # BASIC INFO
-distributor_name: "specific_workplace_classrooms_distributor"
 venue_type: "classroom"
 description: "Distribute education sector (P) workers to classrooms (1 per classroom)"
 
@@ -82,7 +81,6 @@ venue_selection:
   batch_geo_level: "MGU"
 
   # Only consider classrooms in loaded geography with capacity
-  filter_by_geography: true
   respect_capacity: true
 
 # ALLOCATION STRATEGY: How to assign person to venue?
@@ -103,16 +101,8 @@ allocation:
 # EXECUTION SETTINGS
 
 settings:
-  # Execution order (higher = earlier)
-  # Run after other education-specific allocations but before company
-  priority: 3
-
-  # Limit number of allocations (null = no limit)
-  max_allocations: null
-
   # Logging
   verbose: true
-  log_summary: true
 
 # FALLBACK BEHAVIOR
 

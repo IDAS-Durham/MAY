@@ -378,14 +378,12 @@ class TestCheckAttributeConstraints:
 class TestSimpleAllocation:
     """Simple allocation: capacity respected, geo-unit scoped, strategies applied."""
 
-    def _shelter_config(self, strategy="random", max_allocations=None):
+    def _shelter_config(self, strategy="random"):
         cfg = {
             "capacity_property": "capacity",
             "eligibility": [],
             "strategy": strategy,
         }
-        if max_allocations is not None:
-            cfg["max_allocations"] = max_allocations
         return cfg
 
     def test_total_allocations_never_exceed_total_capacity(self, hd):
@@ -430,12 +428,6 @@ class TestSimpleAllocation:
         s1_shelter = next(s for s in shelters if s.geographical_unit.name == "SGU_S1")
         for person in s1_shelter.properties.get("residents", []):
             assert person.geographical_unit.name == "SGU_S1"
-
-    def test_max_allocations_caps_total_placed(self, hd):
-        """max_allocations=2 must cap total placed even if capacity+eligible allow more."""
-        cfg = self._shelter_config(max_allocations=2)
-        stats = _allocate_to_venue_type("shelter", cfg, hd.population, hd.venue_manager, hd)
-        assert stats["allocated"] <= 2
 
     def test_pre_allocated_people_not_placed_in_venue(self, hd):
         """People already in hd.allocated_people must not be placed in shelters."""

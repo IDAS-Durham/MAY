@@ -1,4 +1,3 @@
-distributor_name: "university_distributor"
 venue_type: "university"
 description: "Distribute people to university based on age and proximity"
 
@@ -10,7 +9,6 @@ subset_key: "student"
 special_cases:
   - name: "student_dorms_students"
     description: "Students in student dorms MUST attend university"
-    priority: 1  # Highest priority
 
     # Condition: Check if person lives in student dorms
     condition:
@@ -144,7 +142,6 @@ venue_selection:
 
   # Count-based parameters (when consider_by = "count")
   count: 5
-  criteria: "distance"  # "closest", "random", "largest_capacity"
 
   max_distance: 10
   max_distance_unit: "km"  # "km", "miles", "meters"
@@ -153,11 +150,6 @@ venue_selection:
 
   locate_person_by: "geographical_unit.coordinates"
 
-  venue_location_source: "coordinates"
-
-  distance_metric: "haversine"  # "haversine" (great-circle), "euclidean"
-
-  filter_by_geography: true  # Already enforced by venues_config.yaml
 
   # Only consider venues with available capacity
   respect_capacity: true
@@ -182,24 +174,11 @@ allocation:
 
   when_full: "exclude"  # "exclude" (remove from options), "overflow" (allow over-capacity)
 
-  overflow_behavior:
-    distribute_evenly: true  # Spread overflow across all venues proportionally
-    max_overflow_per_venue: null  # null = unlimited, or set a max (e.g., 1.5x capacity)
-
   batch_by: "geo_unit"  # "geo_unit", "none"
 
-  batch_location_source: "centroid"
-
 settings:
-  # Execution order (higher = earlier)
-  priority: 1
-
-  # Limit number of allocations (null = no limit)
-  max_allocations: null
-
   # Logging
   verbose: true
-  log_summary: true  # Print allocation statistics
 
   # Performance
   use_spatial_index: true  # Use KDTree for distance queries
@@ -227,13 +206,3 @@ validation:
   required_person_attributes:
     - "age"
     - "geographical_unit"  # Person's location (at smallest level, will traverse up if needed)
-
-  # Ensure venues have required columns
-  required_venue_columns:
-    - "geo_unit"
-    - "latitude"
-    - "longitude"
-
-  # Warn if these are missing (but continue)
-  optional_venue_columns:
-    - "n_students"

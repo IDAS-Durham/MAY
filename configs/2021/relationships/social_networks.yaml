@@ -14,7 +14,6 @@ networks:
     pool_type: activity
     pool:
       activity: primary_activity
-    algorithm: random
     mean_count: 3
     degree_variants:
       - probability: 0.10
@@ -31,7 +30,6 @@ networks:
     pool_type: geographic
     pool:
       level: SGU
-    algorithm: random
     mean_count: 2
     storage_key: friendships
     constraints:
@@ -45,7 +43,6 @@ networks:
     pool_type: geographic
     pool:
       level: MGU
-    algorithm: random
     mean_count: 1
     storage_key: friendships
     constraints:

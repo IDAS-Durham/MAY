@@ -45,15 +45,9 @@ venues:
     workplace_mine:
       properties: ["BTCode", "HID"]
 
-# SUBSETS
-subsets:
-  properties: []
-
 # RELATIONSHIPS
 relationships:
   include_activity_map: true
-  include_venue_hierarchy: true
-  include_geography_hierarchy: true
 
 # OUTPUT SETTINGS
 output:

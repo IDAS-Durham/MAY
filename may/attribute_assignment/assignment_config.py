@@ -215,7 +215,6 @@ class HouseholdStructure:
     """
     name: str
     description: str
-    inheritance: bool  # Whether this structure uses inheritance
     matching_rules: List[MatchingRule] = field(default_factory=list)
 
     def matches(self, household, verbose: bool = False) -> bool:
@@ -527,7 +526,6 @@ class AttributeAssignmentConfig:
             structures[struct_name] = HouseholdStructure(
                 name=struct_name,
                 description=struct_data.get('description', ''),
-                inheritance=struct_data.get('inheritance', False),
                 matching_rules=matching_rules
             )
 

@@ -15,7 +15,6 @@
 # inside the radius, which is what made each new country expensive. Derived at
 # runtime, adding a country costs nothing.
 distributor_type: "route"
-distributor_name: "route_commute_bus"
 
 activity_map_key: "commute"
 leg_venue_type: "bus_line"
@@ -74,6 +73,3 @@ leg_metadata:
 on_miss:
   set:
     commute_mode: "car_solo"
-
-settings:
-  verbose: true

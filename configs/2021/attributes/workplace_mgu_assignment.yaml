@@ -18,7 +18,6 @@ step:
 attributes:
   - name: "workplace_mgu"
     description: "Assigns specific MGU within workplace LGU, weighted by job supply"
-    data_type: "categorical"
 
 # Filters - Only assign to working-age people (18-65)
 filters:

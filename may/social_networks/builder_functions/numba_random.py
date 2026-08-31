@@ -10,6 +10,7 @@ import numba as nb
 from .filters_and_constraints.filters import build_pool
 from .filters_and_constraints.constraints import parse_constraints
 from .store import store_contacts
+from may.utils.attribute_access import get_person_attribute
 
 
 @nb.njit(cache=True)
@@ -180,6 +181,23 @@ def _extract_age_range(connection_filters: list) -> np.int32:
     return np.int32(-1)
 
 
+def _extract_same_attribute(connection_filters: list):
+    """
+    Return the attribute an edge's two ends must share, or None.
+
+    The Numba kernel carries one subset dimension, so only one such constraint
+    can be honoured. Two would load fine and quietly enforce whichever came
+    first, so a second one raises instead.
+    """
+    same = [cf.attribute for cf in connection_filters if cf.match == "same"]
+    if len(same) > 1:
+        raise ValueError(
+            f"Only one categorical_attribute_match constraint is supported per "
+            f"network; got {same}."
+        )
+    return same[0] if same else None
+
+
 def _build_connection_counts(n_people: int, network_config: dict) -> np.ndarray:
     """
     Build per-person target connection count array from network_config.
@@ -214,7 +232,21 @@ def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
     starts, ends, people_flat = _groups_to_csr(groups, person_id_to_idx)
 
     ages = np.array([p.age for p in people], dtype=np.int32)
+
+    # The kernel restricts edges to people sharing a subset code. With no
+    # categorical constraint everyone shares code 0 and the check is a no-op,
+    # which is what every network that predates this did.
+    same_attribute = _extract_same_attribute(connection_filters or [])
     subsets = np.zeros(n_people, dtype=np.int32)
+    require_same_subset = False
+    if same_attribute is not None:
+        codes: dict = {}
+        for i, person in enumerate(people):
+            value = get_person_attribute(person, same_attribute)
+            if value not in codes:
+                codes[value] = len(codes)
+            subsets[i] = codes[value]
+        require_same_subset = True
 
     max_connections = int(connection_counts.max())
 
@@ -227,7 +259,7 @@ def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
         starts, ends, people_flat,
         ages, subsets,
         all_connections, current_counts, connection_counts,
-        np.float64(1.0), age_range, False, True,
+        np.float64(1.0), age_range, require_same_subset, True,
     )
 
     for i, person in enumerate(people):

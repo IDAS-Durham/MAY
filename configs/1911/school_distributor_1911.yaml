@@ -108,8 +108,3 @@ fallback:
 
 # --- EXPORTS ---
 # CSV reports generated after allocation completes.
-#   venue_summary:      Per-school stats (student count, avg/min/max age, capacity, remaining).
-#   unallocated_report: Details of eligible people who were NOT allocated (geo unit, age, Occode).
-# exports:
-  # venue_summary: "output/1911/school_venue_summary.csv"
-  # unallocated_report: "output/1911/school_unallocated.csv"

@@ -17,7 +17,6 @@ Identified by `distributor_type: "resident_linked"` — a distinct loader class 
 
 | Key | Description |
 |---|---|
-| `distributor_name` | Arbitrary label used in logs |
 | `distributor_type` | Must be `"resident_linked"` |
 | `target_venue_type` | Venue type to link visitors to |
 | `resident_subset` | Subset name identifying residents already in the venue |
@@ -75,7 +74,4 @@ Filters which households are eligible to be linked as visitors. `residence.type:
 ```yaml
 settings:
   verbose: true
-  batch_geo_level: "MGU"
 ```
-
-`batch_geo_level` controls the geographic unit at which venue–household pairing is batched. `"MGU"` (Middle Geographical Unit) is appropriate for care homes, which draw visitors from a broader area than a single small geo unit.
