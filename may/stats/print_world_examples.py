@@ -1,17 +1,7 @@
 import logging
 import random
-import sys
-import numpy as np
-import numba as nb
-import yaml
-from may.config_loader import setup_geography
-from may.geography import VenueManager
-from may.population import PopulationManager
-from may.world import World
 
-from . import StatMakerVenues, StatMaker, StatMakerPop
-
-import time
+from . import StatMakerVenues
 
 logger = logging.getLogger(__name__)
 
@@ -118,18 +108,6 @@ def print_world_examples(world):
                 number_of_empty_houses += 1
         logger.info(f"Number of empty houses = {number_of_empty_houses} out of {len(venues.get_venues_by_type('household'))}")
 
-        # if world.households and world.households.households:
-        #     logger.info(f"   Total households: {len(world.households.households)}")
-        #     logger.info(f"   Allocation rate: {len(world.households.allocated_people) / max(sum(len(p) for p in world.households.person_pool_by_area.values()), 1) * 100:.1f}%")
-        #     logger.info("")
-        #     logger.info("   Example households:")
-        #     for household in random.choices(world.households.households, k=5):
-        #         composition = household.get_composition()
-        #         logger.info(f"   Household {household.id} in {household.geographical_unit.name}")
-        #         logger.info(f"     - Size: {household.size()} people")
-        #         logger.info(f"     - Composition: {composition}")
-        #         if household.properties.get('original_pattern'):
-        #             logger.info(f"     - Pattern: {household.properties['original_pattern']}")
     except:
         logger.info("Failed: could not print household examples")
 
@@ -166,15 +144,6 @@ def print_world_examples(world):
         logger.info(f"   population.get_people_by_activity('home') -> {n} people out of {len(population)} with 'home' activity set")
     except:
         logger.info("Failed: Could not do query examples")
-
-    # logger.info("")
-    # logger.info("   # Get person's household")
-    # if world.households and world.households.allocated_people:
-    #     example_person_id = next(iter(world.households.allocated_people))
-    #     example_person = next((p for p in population.get_all_people() if p.id == example_person_id), None)
-    #     if example_person and hasattr(example_person, 'residence') and example_person.residence:
-    #         logger.info(f"   person.residence -> Household {example_person.residence.id}")
-    #         logger.info(f"      Size: {example_person.residence.size()}, Composition: {example_person.residence.get_composition()}")
 
     logger.info("")
     logger.info("=" * 60)

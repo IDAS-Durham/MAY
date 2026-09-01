@@ -10,7 +10,6 @@ from typing import Optional, Set
 from may.residence.household_distributor import HouseholdDistributor, HouseholdError
 from may.residence.allocation_strategy import execute_allocation_strategy
 from may.utils import path_resolver as pr
-from random import sample
 
 logger = logging.getLogger("world")
 
@@ -331,72 +330,5 @@ def setup_households(geo, population, venues, config, strategy_file=None):
         execute_allocation_strategy(
             population, venues, household_distributor, strategy_file
         )
-
-    # Show where households are located and examples
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info("HOUSEHOLD STORAGE LOCATIONS")
-    logger.info("=" * 60)
-
-    # Get all households from VenueManager
-    all_households = venues.get_venues_by_type("household")
-    logger.info(f"Total households created: {len(all_households):,}")
-    logger.info("")
-
-    logger.info("Households are stored in VenueManager:")
-    logger.info("  1. venues.get_venues_by_type('household')  -> List of all household Venues")
-    logger.info("  2. venues.get_venue_by_type_and_id('household', id)  -> Specific household by ID")
-    logger.info("")
-
-    # Show a few example households
-    if all_households:
-        logger.info("Example Households (5 random):")
-        n = len(all_households)
-        sampled_indices = set(sample(range(n), min(5, n)))
-        for i, household in enumerate(all_households):
-            if i not in sampled_indices:
-                continue
-            age_categories = household.properties.get('_age_categories', [])
-            composition = household.get_composition(age_categories)
-            members = household.get_all_members()
-
-            logger.info(f"")
-            logger.info(f"  Household ID: {household.id} (type-scoped ID)")
-            logger.info(f"  Venue ID: {id(household)} (Python object ID)")
-            logger.info(f"  Name: {household.name}")
-            logger.info(f"  Type: {household.type}")
-            logger.info(f"  Location: {household.geographical_unit.name}")
-            logger.info(f"  Size: {household.size()} people")
-            logger.info(f"  Composition: {composition}")
-            if members:
-                logger.info(f"  Members: {', '.join([f'Person_{p.id}({p.age}{'m' if p.sex=='male' else 'f'})' for p in members])}")
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info("PEOPLE IN HOUSEHOLDS - How to find where someone lives")
-    logger.info("=" * 60)
-
-    # Show how to access people's households
-    if household_distributor.allocated_people:
-        example_person_ids = sample(list(household_distributor.allocated_people), 5)
-
-        for person_id in example_person_ids:
-            person = population.get_person(person_id)
-            # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
-            if person and "residence" in person.activity_map and "household" in person.activity_map["residence"]:
-                household_subsets = person.activity_map["residence"]["household"]
-                if household_subsets:
-                    household_venue = household_subsets[0].venue
-                    age_categories = household_venue.properties.get('_age_categories', [])
-
-                    logger.info(f"")
-                    logger.info(f"  Person {person.id} (age={person.age}, sex={person.sex})")
-                    logger.info(f"  Activity map: {person.activity_map}")
-                    logger.info(f"  Lives in: {household_venue.name} (ID={household_venue.id})")
-                    logger.info(f"  Location: {household_venue.geographical_unit.name}")
-                    logger.info(f"  Household size: {household_venue.size()}")
-                    logger.info(f"  Household composition: {household_venue.get_composition(age_categories)}")
-
-    logger.info("")
-    logger.info("=" * 60)
 
     return household_distributor
