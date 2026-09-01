@@ -181,7 +181,7 @@ class _Person:
 def _filtering_for(distributor, geo_units):
     """Point the distributor's filter manager at people in the given SGUs."""
     distributor._get_person_attribute = lambda attr, person: person.geo_unit
-    return distributor.filtering, [_Person(g) for g in geo_units]
+    return distributor.allocation, [_Person(g) for g in geo_units]
 
 
 def test_filter_raises_on_a_geo_unit_with_no_row(prob_files):

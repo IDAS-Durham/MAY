@@ -82,7 +82,7 @@ def run_family_round(hd):
       - Several kids and all YA are still unallocated in the pools.
     """
     hd._prepare_person_pools()
-    hd.round_distributor.distribute_households_round(
+    hd.distribute_households_round(
         pattern_filter=[">=2 >=0 2 0", "1 >=0 2 0"],
         rule_name="Two-adult family with kids",
         demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
@@ -177,7 +177,7 @@ class TestExcessBasicBehaviour:
         # are only 4 OA total and they all go into elderly-pair households),
         # then call excess on the now-empty OA category. SGU_S3 has zero OA by
         # design.
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 0 2"],
             rule_name="Elderly pair",
         )
@@ -533,7 +533,7 @@ class TestExcessWithRule:
         assert candidates, "need at least one unallocated adult to add"
 
         rule = hd.relationship_rules.get_rule_by_name("Adult pair")  # role_A: pair_matching
-        person = hd.excess_handler._select_person_for_excess_with_rule(
+        person = hd._select_person_for_excess_with_rule(
             household, candidates, "Adults", rule
         )
 
@@ -698,11 +698,11 @@ class TestOverflowBalancedDistribution:
         run_family_round(hd)
 
         # Run the elderly round first to create more target households total
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 0 2"],
             rule_name="Elderly pair",
         )
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 2 0"],
             rule_name="Adult pair",
         )
@@ -747,11 +747,11 @@ class TestOverflowPatternBias:
         hd._prepare_person_pools()
 
         # Create one household of each pattern in SGU_S2
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["1 >=0 2 0"],
             rule_name="Two-adult family with kids",
         )
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 2 0"],
             rule_name="Adult pair",
         )
@@ -866,23 +866,23 @@ class TestFullPipelineNoStrandedPeople:
         hd._prepare_person_pools()
 
         # Step 1: two-adult families with demotion
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0", "1 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
         )
         # Step 2: elderly couples
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 0 2"],
             rule_name="Elderly pair",
         )
         # Step 3: adult couples
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 2 0"],
             rule_name="Adult pair",
         )
         # Step 4: YA pairs with fixed-count assumption
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 >=0 0 0"],
             pattern_assumptions={"0 >=0 0 0": "0 2 0 0"},
             allocate_flexible=False,

@@ -17,7 +17,6 @@ Everything is configurable and pattern-based.
 import os
 import logging
 import yaml
-import operator
 from may.utils import path_resolver as pr
 import numpy as np
 from operator import attrgetter

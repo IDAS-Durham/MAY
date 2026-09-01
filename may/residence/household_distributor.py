@@ -12,9 +12,8 @@ import os
 import logging
 import yaml
 import math
-import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional, Set, Any
+from typing import Dict, List, Tuple, Optional, Set
 from itertools import islice
 from collections import defaultdict
 
@@ -27,9 +26,7 @@ from may.residence.relationship_rules import RelationshipRulesValidator
 from may.utils import path_resolver as pr
 from may.residence.models import Category
 from may.residence.composition_pattern import CompositionPattern
-from may.residence.household_excess_handler import HouseholdExcessHandler
-from may.residence.household_promoter import HouseholdPromoter
-from may.residence.household_round_distributor import HouseholdRoundDistributor
+from . import _household_excess, _household_promotion, _household_rounds
 from may.utils.attribute_access import get_person_attribute
 
 logger = logging.getLogger("household")
@@ -114,6 +111,8 @@ class HouseholdDistributor:
         # Round tracking
         self.current_round: int = 0
         self.pools_prepared: bool = False
+        self._households_by_geo_unit = None
+        self._households_by_pattern = None
 
         # Initialize relationship rules validator. The path must come from the
         # world config's `households.rules_file`. If unset, the validator is
@@ -133,14 +132,6 @@ class HouseholdDistributor:
             config_file=rules_config_path,
             geography=self.geography,
         )
-
-        # Initialize excess handler
-        self.excess_handler = HouseholdExcessHandler(self)
-
-        # Initialize promoter
-        self.promoter = HouseholdPromoter(self)
-
-        self.round_distributor = HouseholdRoundDistributor(self)
 
         # Pre-calculate demotion fallback priority
         priority_config = self.config.get('demotion', {}).get('priority', {})
@@ -1284,7 +1275,7 @@ class HouseholdDistributor:
         # Determine allocation strategy
         if allocate_flexible and target_size is not None:
             # Use balanced distribution mode
-            selections, failed_cat = self.round_distributor._allocate_balanced_distribution(pattern, pools, target_size)
+            selections, failed_cat = self._allocate_balanced_distribution(pattern, pools, target_size)
             if failed_cat is not None:
                 return (None, failed_cat)
         else:
@@ -1521,10 +1512,6 @@ class HouseholdDistributor:
         return count
 
 
-    def _select_person_for_excess_with_rule(self, *args, **kwargs):
-        """Delegate to excess handler. See HouseholdExcessHandler._select_person_for_excess_with_rule for documentation."""
-        return self.excess_handler._select_person_for_excess_with_rule(*args, **kwargs)
-
     def _get_person_category_name(self, person: 'Person') -> str:
         """Get the category name for a person based on their attributes."""
         for cat in self.categories:
@@ -1704,22 +1691,6 @@ class HouseholdDistributor:
                         pool.pop(i)
                         break
 
-    def allocate_excess_to_households(self, *args, **kwargs):
-        """Delegate to excess handler. See HouseholdExcessHandler.allocate_excess_to_households for documentation."""
-        return self.excess_handler.allocate_excess_to_households(*args, **kwargs)
-
-    def allocate_overflow_to_households(self, *args, **kwargs):
-        """Delegate to excess handler. See HouseholdExcessHandler.allocate_overflow_to_households for documentation."""
-        return self.excess_handler.allocate_overflow_to_households(*args, **kwargs)
-
-    def promote_and_allocate(self, *args, **kwargs):
-        """Delegate to promoter. See HouseholdPromoter.promote_and_allocate for documentation."""
-        return self.promoter.promote_and_allocate(*args, **kwargs)
-
-    def promote_with_rules(self, *args, **kwargs):
-        """Delegate to promoter. See HouseholdPromoter.promote_with_rules for documentation."""
-        return self.promoter.promote_with_rules(*args, **kwargs)
-
     def _sample_from_distribution(self, distribution_config: Dict) -> int:
         """
         Sample a number from a configured distribution.
@@ -1822,3 +1793,18 @@ class HouseholdDistributor:
             logger.debug(f"  {error}")
             
         return is_valid
+
+
+    # Implemented in private function modules; assignments preserve the distributor API.
+    _calculate_balanced_distribution = _household_rounds._calculate_balanced_distribution
+    distribute_households_round = _household_rounds.distribute_households_round
+    _allocate_balanced_distribution = _household_rounds._allocate_balanced_distribution
+    _adding_person_satisfies_rules = _household_promotion._adding_person_satisfies_rules
+    _get_households_by_geo_unit = _household_promotion._get_households_by_geo_unit
+    _get_households_by_pattern = _household_promotion._get_households_by_pattern
+    reset_indexes = _household_promotion.reset_indexes
+    promote_and_allocate = _household_promotion.promote_and_allocate
+    promote_with_rules = _household_promotion.promote_with_rules
+    allocate_excess_to_households = _household_excess.allocate_excess_to_households
+    allocate_overflow_to_households = _household_excess.allocate_overflow_to_households
+    _select_person_for_excess_with_rule = _household_excess._select_person_for_excess_with_rule

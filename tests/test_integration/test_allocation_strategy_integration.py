@@ -167,7 +167,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        stats = hd.round_distributor.distribute_households_round(
+        stats = hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -189,7 +189,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        stats = hd.round_distributor.distribute_households_round(
+        stats = hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -207,7 +207,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        stats = hd.round_distributor.distribute_households_round(
+        stats = hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -243,7 +243,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -280,7 +280,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -311,7 +311,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -340,7 +340,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -362,7 +362,7 @@ class TestDemotionUnderPressure:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        stats = hd.round_distributor.distribute_households_round(
+        stats = hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={
@@ -532,7 +532,7 @@ class TestPatternAssumptions:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        stats = hd.round_distributor.distribute_households_round(
+        stats = hd.distribute_households_round(
             pattern_filter=["0 >=0 0 0"],
             pattern_assumptions={"0 >=0 0 0": "0 2 0 0"},
         )
@@ -562,7 +562,7 @@ class TestPatternAssumptions:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 >=0 0 0"],
             pattern_assumptions={"0 >=0 0 0": "0 2 0 0"},
         )
@@ -587,7 +587,7 @@ class TestPatternAssumptions:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 >=0 0 0"],
             pattern_assumptions={"0 >=0 0 0": "0 2 0 0"},
         )
@@ -612,7 +612,7 @@ class TestExcessAllocation:
         hd._prepare_person_pools()
 
         # Create family households (multiple SGUs)
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0", "1 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
@@ -652,7 +652,7 @@ class TestExcessAllocation:
         hd._prepare_person_pools()
 
         # Create family households
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
@@ -680,7 +680,7 @@ class TestExcessAllocation:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
@@ -717,7 +717,7 @@ class TestOverflowAllocation:
         hd._prepare_person_pools()
 
         # Create initial households
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
@@ -750,7 +750,7 @@ class TestOverflowAllocation:
         hd._prepare_person_pools()
 
         # Create 2 households in SGU_S1
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
@@ -795,12 +795,12 @@ class TestPromotionAllocation:
         hd._prepare_person_pools()
 
         # Run initial allocation (leaves kids, YA unallocated)
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
         )
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 0 2"],
             rule_name="Elderly pair",
         )
@@ -826,12 +826,12 @@ class TestPromotionAllocation:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},
         )
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 0 2"],
             rule_name="Elderly pair",
         )
@@ -875,7 +875,7 @@ class TestPromotionAllocation:
         hd._prepare_person_pools()
 
         # Create an elderly couple household (0 0 0 2) → has 2 OA, 0 Adults
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=["0 0 0 2"],
             rule_name="Elderly pair",
         )
@@ -912,7 +912,7 @@ class TestPoolManagement:
         np.random.seed(42)
         hd._prepare_person_pools()
 
-        hd.round_distributor.distribute_households_round(
+        hd.distribute_households_round(
             pattern_filter=[">=2 >=0 2 0"],
             rule_name="Two-adult family with kids",
             demotion_rules={">=2 >=0 1 0": "Single-adult family with kids"},

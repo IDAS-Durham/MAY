@@ -125,6 +125,6 @@ def test_venue_filtering_without_prefetched_attributes(rel):
     """
     d = VenueDistributor(config_dict=yaml.safe_load(open(rel)))
 
-    assert d.matcher.filter_venues_by_person(
+    assert d.allocation.filter_venues_by_person(
         _person(work_sector="G"), [], person_attrs=None
     ) == []

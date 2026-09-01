@@ -1,6 +1,6 @@
 """Unit tests for the capacity_proportional allocation strategy.
 
-Drives the real AllocationEngine.allocate_by_geo_unit through a minimal stub
+Drives the real VenueAllocation.allocate_by_geo_unit through a minimal stub
 distributor (mirrors the minimal-real-objects style of
 test_venue_child_creator.py). The bug this fixes: a person stream sorted by age
 then sex was packed into venues sequentially, so each venue held one contiguous
@@ -12,8 +12,8 @@ overflows.
 import numpy as np
 import pytest
 
-from may.venue_distributor.allocation_engine import (
-    AllocationEngine,
+from may.venue_distributor._allocation import (
+    VenueAllocation,
     _multinomial_capacity_draw,
 )
 
@@ -104,7 +104,7 @@ def make_engine(venues, geo):
         "allocation": {"strategy": "capacity_proportional"},
         "venue_selection": {"consider_by": "geo_unit", "respect_capacity": True},
     }
-    return AllocationEngine(StubDistributor(geo, config)), config
+    return VenueAllocation(StubDistributor(geo, config)), config
 
 
 def sorted_cohort(ages, per_age):

@@ -1,7 +1,6 @@
 import logging
 from typing import Dict, List, Optional, Any
 from .base_distributor import BaseDistributor
-from .reporting import ReportingManager
 
 logger = logging.getLogger("property_matching_distributor")
 
@@ -37,9 +36,6 @@ class PropertyMatchingDistributor(BaseDistributor):
         # Optional configuration
         self.subset_key = self.config.get('subset_key', 'resident')
         self.activity_type_override = self.config.get('activity_type', None)
-        
-        # Component managers
-        self.reporting = ReportingManager(self)
         
         logger.info(f"Initialized PropertyMatchingDistributor for types: {self.target_venue_types}")
         logger.info(f"  Matching '{self.mapping_key}' (person) to '{self.venue_property}' (venue)")

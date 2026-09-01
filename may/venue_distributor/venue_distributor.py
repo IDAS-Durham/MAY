@@ -10,12 +10,7 @@ to venues based on flexible rules including:
 """
 
 from .base_distributor import BaseDistributor
-from .filtering import FilteringManager
-from .special_cases import SpecialCaseManager
-from .fallbacks import FallbackManager
-from .matcher import VenueMatcher
-from .allocation_engine import AllocationEngine
-from .reporting import ReportingManager
+from ._allocation import VenueAllocation
 from .probability import (
     GEO_UNIT_LOOKUP_ATTRIBUTE,
     RETIRED_PROBABILITY_KEYS,
@@ -65,13 +60,8 @@ class VenueDistributor(BaseDistributor):
         self.subset_key = self.config.get('subset_key', None)
         self.activity_type = self.config.get('activity_type', None)
 
-        # Component managers
-        self.filtering = FilteringManager(self)
-        self.special_cases = SpecialCaseManager(self)
-        self.fallbacks = FallbackManager(self)
-        self.matcher = VenueMatcher(self)
-        self.allocation = AllocationEngine(self)
-        self.reporting = ReportingManager(self)
+        # One internal owner keeps the allocation state together.
+        self.allocation = VenueAllocation(self)
 
         # Where to locate the person for venue matching (e.g. 'geographical_unit.coordinates'
         # for residence, or 'properties.workplace_sgu' for work location).
@@ -238,7 +228,7 @@ class VenueDistributor(BaseDistributor):
         if self.config.get('settings', {}).get('use_spatial_index', True):
             self._build_spatial_indices({self.venue_type: venues})
         
-        self.matcher.build_attribute_index(venues)
+        self.allocation.build_attribute_index(venues)
 
         # Phase 1: Preparation
         all_unassigned = self._get_unassigned_people(world)
@@ -250,14 +240,14 @@ class VenueDistributor(BaseDistributor):
         self._prepare_vectorized_data(all_unassigned)
 
         # Phase 2: Special and Priority Allocations
-        remaining, special_unallocated = self.special_cases.handle_special_cases(all_unassigned, venues, world)
-        eligible = self.filtering.apply_global_filters(remaining)
+        remaining, special_unallocated = self.allocation.handle_special_cases(all_unassigned, venues, world)
+        eligible = self.allocation.apply_global_filters(remaining)
         
         unallocated_total = special_unallocated
         unassigned_count = len(all_unassigned)
         if not eligible:
-            if unallocated_total: self.fallbacks.handle_fallbacks(unallocated_total, venues, world)
-            self.reporting.log_allocation_summary(world, eligible_count=len(eligible))
+            if unallocated_total: self.allocation.handle_fallbacks(unallocated_total, venues, world)
+            self.allocation.log_allocation_summary(world, eligible_count=len(eligible))
             return
 
         remaining, priority_unallocated = self._handle_priority_allocation(eligible, venues)
@@ -302,14 +292,14 @@ class VenueDistributor(BaseDistributor):
 
         # Phase 4: Fallbacks and Verification
         if unallocated_total:
-            self.fallbacks.handle_fallbacks(unallocated_total, venues, world)
+            self.allocation.handle_fallbacks(unallocated_total, venues, world)
 
         # Phase 4.5: Enforce no empty venues (optional)
         if self.config.get('allocation', {}).get('enforce_no_empty_venues', False):
             self._enforce_no_empty_venues(venues)
 
-        self.reporting.log_allocation_summary(world, eligible_count=len(eligible))
-        # self.reporting.check_priority_coverage(world) # Temporarily disabled for performance (slow 630k scan)
+        self.allocation.log_allocation_summary(world, eligible_count=len(eligible))
+        # self.allocation.check_priority_coverage(world) # Temporarily disabled for performance (slow 630k scan)
 
     def _enforce_no_empty_venues(self, venues):
         """Post-allocation: ensure every venue has at least 1 person.
@@ -493,7 +483,7 @@ class VenueDistributor(BaseDistributor):
                     group_people = self.population_arrays['people'][filtered_indices].tolist()
             
             if not group_people:
-                group_people = [p for p in remaining_people if self.filtering.person_matches_filters(p, filters)]
+                group_people = [p for p in remaining_people if self.allocation.person_matches_filters(p, filters)]
 
             if not group_people:
                 continue
@@ -501,7 +491,7 @@ class VenueDistributor(BaseDistributor):
             # Probability filtering
             prob_config = group.get('probability_config')
             if prob_config:
-                group_people = self.filtering.apply_probability_filter(group_people, prob_config, group_name)
+                group_people = self.allocation.apply_probability_filter(group_people, prob_config, group_name)
 
             if not group_people:
                 continue

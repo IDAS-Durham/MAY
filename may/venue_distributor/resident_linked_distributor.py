@@ -4,7 +4,7 @@ import numpy as np
 import time
 from typing import Dict, List, Optional, Any
 from .base_distributor import BaseDistributor
-from .filtering import FilteringManager
+from ._allocation import VenueAllocation
 
 logger = logging.getLogger("resident_linked_distributor")
 
@@ -28,7 +28,7 @@ class ResidentLinkedDistributor(BaseDistributor):
         self.multiplier = self.config.get('multiplier', 1) # Visitors per resident
         
         # Component managers
-        self.filtering = FilteringManager(self)
+        self._allocation = VenueAllocation(self)
         
         self.visitor_filters = self.config.get('visitor_eligibility', {}).get('global_filters', [])
         self._pre_processed_filters = self._pre_process_filters(self.visitor_filters)
@@ -73,8 +73,6 @@ class ResidentLinkedDistributor(BaseDistributor):
 
         # 2. Setup filtering manager
         logger.info(f"  Setting up filtering manager...")
-        from may.venue_distributor.filtering import FilteringManager
-        self.filtering_manager = FilteringManager(self)
 
         # 3. Batch processing by geography level
         geo_level = self.config.get('geography_level', self.batch_geo_level)
@@ -102,7 +100,7 @@ class ResidentLinkedDistributor(BaseDistributor):
                 continue
                 
             # B. Filter by eligibility
-            eligible_people = self.filtering_manager.apply_global_filters(people_in_unit)
+            eligible_people = self._allocation.apply_global_filters(people_in_unit)
             
             if not eligible_people:
                 continue
