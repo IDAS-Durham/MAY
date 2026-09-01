@@ -381,7 +381,7 @@ class TestFilterMembers:
         # Simulate missing attribute by deleting it
         del person_without_age.__dict__["age"]
         result = creator._filter_members([person_with_age, person_without_age])
-        # get_person_attribute returns None for missing attrs → excluded by filter
+        # get_attribute returns None for missing attrs → excluded by filter
         assert len(result) == 1
 
     def test_categorical_filter_missing_attribute_excludes_person(self):
@@ -464,35 +464,35 @@ class TestGroupMembersByAttribute:
 class TestGetAttributeValue:
 
     def test_simple_attribute(self):
-        from may.utils.attribute_access import get_person_attribute
+        from may.utils.attribute_access import get_attribute
         person = MinimalPerson(age=42)
-        assert get_person_attribute(person, "age") == 42
+        assert get_attribute(person, "age") == 42
 
     def test_properties_dict(self):
-        from may.utils.attribute_access import get_person_attribute
+        from may.utils.attribute_access import get_attribute
         person = MinimalPerson(properties={"ethnicity": "X"})
-        assert get_person_attribute(person, "properties.ethnicity") == "X"
+        assert get_attribute(person, "properties.ethnicity") == "X"
 
     def test_none_path_returns_none(self):
-        from may.utils.attribute_access import get_person_attribute
-        assert get_person_attribute(MinimalPerson(), "") is None
-        assert get_person_attribute(MinimalPerson(), None) is None
+        from may.utils.attribute_access import get_attribute
+        assert get_attribute(MinimalPerson(), "") is None
+        assert get_attribute(MinimalPerson(), None) is None
 
     def test_residence_path(self):
-        from may.utils.attribute_access import get_person_attribute
+        from may.utils.attribute_access import get_attribute
         residence_venue = MinimalVenue(properties={"region": "north"})
         person = MinimalPerson(residence=residence_venue)
-        assert get_person_attribute(person, "residence.properties.region") == "north"
+        assert get_attribute(person, "residence.properties.region") == "north"
 
     def test_residence_path_no_residence(self):
-        from may.utils.attribute_access import get_person_attribute
+        from may.utils.attribute_access import get_attribute
         person = MinimalPerson(residence=None)
-        assert get_person_attribute(person, "residence.type") is None
+        assert get_attribute(person, "residence.type") is None
 
     def test_missing_nested_returns_none(self):
-        from may.utils.attribute_access import get_person_attribute
+        from may.utils.attribute_access import get_attribute
         person = MinimalPerson()
-        assert get_person_attribute(person, "properties.nonexistent") is None
+        assert get_attribute(person, "properties.nonexistent") is None
 
 
 # Tests: _create_children_for_group
@@ -1140,7 +1140,7 @@ class TestBugDetection:
     """Tests that expose potential bugs or inconsistencies in the implementation."""
 
     def test_filter_members_supports_dot_notation(self):
-        """_filter_members uses get_person_attribute, which supports
+        """_filter_members uses get_attribute, which supports
         dot-notation paths like 'properties.ethnicity'."""
         creator = VenueChildCreator("s", "c", member_filters=[
             {"attribute": "properties.ethnicity", "type": "categorical", "values": ["A"]}

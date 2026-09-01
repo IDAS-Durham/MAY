@@ -6,7 +6,7 @@ from collections import defaultdict
 from .assignment_config import AttributeAssignmentConfig
 from .data_sources import DataSourceManager
 from .strategies import StrategyFactory
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger("may.attribute_assignment.assigner")
 
@@ -348,7 +348,7 @@ class AttributeAssigner:
 
         # 1. Attribute filters
         for f in self._optimized_filters:
-            person_value = get_person_attribute(person, f['attr'])
+            person_value = get_attribute(person, f['attr'])
 
             if person_value is None:
                 continue

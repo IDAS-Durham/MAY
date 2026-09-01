@@ -10,7 +10,7 @@ Households are represented as Venue objects with type="household".
 from typing import Optional, List, Any
 from dataclasses import dataclass
 
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 
 
 @dataclass
@@ -50,7 +50,7 @@ class Category:
             True if entity's attribute value falls within this category
         """
         # Get the attribute value from the entity
-        attr_value = get_person_attribute(entity, self.attribute)
+        attr_value = get_attribute(entity, self.attribute)
         if attr_value is None:
             return False
 

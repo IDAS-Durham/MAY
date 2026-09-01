@@ -12,7 +12,7 @@ import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 from may.utils import path_resolver as pr
-from may.utils.attribute_access import get_person_attribute, get_nested_value
+from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger("may.attribute_assignment.data_sources")
 
@@ -671,20 +671,20 @@ class MultiKeyLookupSource(DataSource):
         col_type = col_config.get('type', 'direct')
 
         if col_type == 'direct':
-            return get_person_attribute(person, attr_name)
+            return get_attribute(person, attr_name)
 
         elif col_type == 'category_lookup':
             # Get attribute value, find matching category
-            value = get_person_attribute(person, attr_name)
+            value = get_attribute(person, attr_name)
             category = self.assignment_config.get_category_for_value(value, attr_name)
             return category.get('csv_value') if category else None
 
         elif col_type == 'ancestor_lookup':
             # Traverse hierarchy
-            geo_unit = get_person_attribute(person, attr_name)
+            geo_unit = get_attribute(person, attr_name)
             if geo_unit is None and household:
                 # Use the household's geo unit when the person has none
-                geo_unit = get_nested_value(household, attr_name)
+                geo_unit = get_attribute(household, attr_name)
 
             if geo_unit is None:
                 return None
@@ -1166,7 +1166,7 @@ class GUSamplerSource(DataSource):
             raise RuntimeError(
                 f"Data not loaded for source '{self.name}'. No fallbacks."
             )
-        parent_gu_name = get_person_attribute(person, self._parent_attribute)
+        parent_gu_name = get_attribute(person, self._parent_attribute)
         if not parent_gu_name:
             raise KeyError(
                 f"Source '{self.name}': person {person.id} has no '{self._parent_attribute}' "

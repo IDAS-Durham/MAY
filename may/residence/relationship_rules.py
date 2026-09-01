@@ -26,7 +26,7 @@ from typing import Dict, List, Optional, Tuple, Any, Callable
 from dataclasses import dataclass
 
 from may.population.person import Person
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 logger = logging.getLogger("relationship_rules")
@@ -323,7 +323,7 @@ class RelationshipRulesValidator:
             return attrgetter(attribute)
         else:
             # Fallback to shared utility (handles dot-notation, properties, residence)
-            return lambda p: get_person_attribute(p, attribute)
+            return lambda p: get_attribute(p, attribute)
 
     def validate_composition(self, composition: Dict[str, int], constraints: List[Dict]) -> Tuple[bool, Optional[str]]:
         """

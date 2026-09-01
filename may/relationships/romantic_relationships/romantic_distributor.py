@@ -41,7 +41,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import yaml
 from may.utils import path_resolver as pr
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 logger = logging.getLogger("romantic_relationships")
@@ -558,7 +558,7 @@ class RomanticDistributor:
         fails the filter.
         """
         for f in self.global_filters:
-            val = get_person_attribute(person, f['attribute'])
+            val = get_attribute(person, f['attribute'])
             if val is None:
                 return False
             if f.get('type', 'numerical') == 'numerical':

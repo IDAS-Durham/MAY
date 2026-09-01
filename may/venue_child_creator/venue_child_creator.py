@@ -15,7 +15,7 @@ import yaml
 import math
 from collections import defaultdict
 
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 from may.utils import path_resolver as pr
 
 logger = logging.getLogger("venue_child_creator")
@@ -295,7 +295,7 @@ class VenueChildCreator:
 
                 filtered = [
                     p for p in filtered
-                    if (v := get_person_attribute(p, attr_name)) is not None
+                    if (v := get_attribute(p, attr_name)) is not None
                     and min_val <= v <= max_val
                 ]
 
@@ -304,7 +304,7 @@ class VenueChildCreator:
 
                 filtered = [
                     p for p in filtered
-                    if get_person_attribute(p, attr_name) in allowed_values
+                    if get_attribute(p, attr_name) in allowed_values
                 ]
 
         return filtered
@@ -326,7 +326,7 @@ class VenueChildCreator:
         groups = defaultdict(list)
 
         for person in members:
-            attr_value = get_person_attribute(person, attribute_name)
+            attr_value = get_attribute(person, attribute_name)
 
             if attr_value is not None:
                 if self.attribute_mapping:
@@ -364,7 +364,7 @@ class VenueChildCreator:
 
         strata = defaultdict(list)
         for person in members:
-            values = tuple(get_person_attribute(person, a) for a in attrs)
+            values = tuple(get_attribute(person, a) for a in attrs)
             key = values if len(values) > 1 else values[0]
             if any(v is None for v in values):
                 key = 'unknown'

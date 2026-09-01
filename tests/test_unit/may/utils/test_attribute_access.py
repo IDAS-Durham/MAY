@@ -3,7 +3,7 @@ Unit tests for the shared attribute access utility.
 """
 
 import pytest
-from may.utils.attribute_access import get_person_attribute, get_nested_value
+from may.utils.attribute_access import get_attribute
 
 
 # Minimal test objects
@@ -35,102 +35,115 @@ class FakePerson:
         return self._residence
 
 
-# get_nested_value tests
+# get_attribute tests
 
 class TestGetNestedValue:
     def test_direct_attribute(self):
         person = FakePerson(age=25)
-        assert get_nested_value(person, "age") == 25
+        assert get_attribute(person, "age") == 25
 
     def test_properties_dict(self):
         person = FakePerson(properties={"workplace_sgu": "SGU_01"})
-        assert get_nested_value(person, "workplace_sgu") == "SGU_01"
+        assert get_attribute(person, "workplace_sgu") == "SGU_01"
 
     def test_properties_takes_precedence_over_attribute(self):
         """If 'foo' is in properties AND on the object, properties wins."""
         person = FakePerson(properties={"age": 99})
-        assert get_nested_value(person, "age") == 99
+        assert get_attribute(person, "age") == 99
 
     def test_dot_notation_attribute(self):
         person = FakePerson()
-        assert get_nested_value(person, "geographical_unit.name") == "TestGeo"
+        assert get_attribute(person, "geographical_unit.name") == "TestGeo"
 
     def test_dot_notation_deep(self):
         person = FakePerson()
-        result = get_nested_value(person, "geographical_unit.coordinates")
+        result = get_attribute(person, "geographical_unit.coordinates")
         assert result == (0.0, 0.0)
 
     def test_dict_access(self):
         data = {"a": {"b": {"c": 42}}}
-        assert get_nested_value(data, "a.b.c") == 42
+        assert get_attribute(data, "a.b.c") == 42
 
     def test_none_obj(self):
-        assert get_nested_value(None, "anything") is None
+        assert get_attribute(None, "anything") is None
 
     def test_missing_attribute(self):
         person = FakePerson()
-        assert get_nested_value(person, "nonexistent") is None
+        assert get_attribute(person, "nonexistent") is None
 
     def test_missing_intermediate(self):
         person = FakePerson()
-        assert get_nested_value(person, "nonexistent.deep.path") is None
+        assert get_attribute(person, "nonexistent.deep.path") is None
 
     def test_properties_nested_in_venue(self):
         venue = FakeVenue(properties={"original_pattern": "2 0 1 0"})
-        assert get_nested_value(venue, "original_pattern") == "2 0 1 0"
+        assert get_attribute(venue, "original_pattern") == "2 0 1 0"
+
+    def test_explicit_none_is_not_missing(self):
+        assert get_attribute(FakePerson(properties={"value": None}), "value", 7) is None
+
+    def test_missing_uses_default(self):
+        assert get_attribute(FakePerson(), "missing", 7) == 7
+
+    def test_callable_is_returned(self):
+        function = lambda: 1
+        assert get_attribute(FakePerson(properties={"value": function}), "value") is function
+
+    def test_invalid_path_is_missing(self):
+        assert get_attribute(FakePerson(), "missing..path", 7) == 7
 
 
-# get_person_attribute tests
+# person-access tests
 
 class TestGetPersonAttribute:
     def test_none_person(self):
-        assert get_person_attribute(None, "age") is None
+        assert get_attribute(None, "age") is None
 
     def test_empty_path(self):
         person = FakePerson()
-        assert get_person_attribute(person, "") is None
-        assert get_person_attribute(person, None) is None
+        assert get_attribute(person, "") is None
+        assert get_attribute(person, None) is None
 
     def test_direct_attribute(self):
         person = FakePerson(age=42, sex="female")
-        assert get_person_attribute(person, "age") == 42
-        assert get_person_attribute(person, "sex") == "female"
+        assert get_attribute(person, "age") == 42
+        assert get_attribute(person, "sex") == "female"
 
     def test_properties_path(self):
         person = FakePerson(properties={"work_sector": "agriculture"})
-        assert get_person_attribute(person, "work_sector") == "agriculture"
+        assert get_attribute(person, "work_sector") == "agriculture"
 
     def test_dot_notation_properties(self):
-        """properties.X should resolve via get_nested_value's properties check."""
+        """properties.X resolves through the shared properties check."""
         person = FakePerson(properties={"workplace_sgu": "SGU_05"})
-        assert get_person_attribute(person, "properties.workplace_sgu") == "SGU_05"
+        assert get_attribute(person, "properties.workplace_sgu") == "SGU_05"
 
     def test_residence_type(self):
         venue = FakeVenue(type="household")
         person = FakePerson(residence=venue)
-        assert get_person_attribute(person, "residence.type") == "household"
+        assert get_attribute(person, "residence.type") == "household"
 
     def test_residence_properties(self):
         venue = FakeVenue(properties={"original_pattern": "2 0 1 0"})
         person = FakePerson(residence=venue)
-        assert get_person_attribute(person, "residence.properties.original_pattern") == "2 0 1 0"
+        assert get_attribute(person, "residence.properties.original_pattern") == "2 0 1 0"
 
     def test_residence_missing(self):
         person = FakePerson(residence=None)
-        assert get_person_attribute(person, "residence.type") is None
+        assert get_attribute(person, "residence.type") is None
 
     def test_geographical_unit(self):
         geo = FakeGeoUnit(name="MyGeo", coordinates=(1.0, 2.0))
         person = FakePerson(geographical_unit=geo)
-        assert get_person_attribute(person, "geographical_unit.name") == "MyGeo"
-        assert get_person_attribute(person, "geographical_unit.coordinates") == (1.0, 2.0)
+        assert get_attribute(person, "geographical_unit.name") == "MyGeo"
+        assert get_attribute(person, "geographical_unit.coordinates") == (1.0, 2.0)
 
     def test_missing_attribute(self):
         person = FakePerson()
-        assert get_person_attribute(person, "nonexistent") is None
+        assert get_attribute(person, "nonexistent") is None
 
     def test_residence_nested_property(self):
         venue = FakeVenue(properties={"capacity": 4, "district": "north"})
         person = FakePerson(residence=venue)
-        assert get_person_attribute(person, "residence.capacity") == 4
-        assert get_person_attribute(person, "residence.district") == "north"
+        assert get_attribute(person, "residence.capacity") == 4
+        assert get_attribute(person, "residence.district") == "north"

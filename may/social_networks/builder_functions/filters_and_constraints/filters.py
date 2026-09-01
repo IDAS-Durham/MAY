@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Optional, Callable, Any
 
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger("social_network_filters")
 
@@ -167,7 +167,7 @@ class PoolFilter:
     Numerical: person passes if min_value <= attr_value <= max_value.
     Categorical: person passes if attr_value in allowed_values.
     """
-    attribute: str              # dot-path, resolved via get_person_attribute
+    attribute: str              # dot-path, resolved via get_attribute
     filter_type: str            # 'numerical' or 'categorical'
     min_value: Optional[float]
     max_value: Optional[float]
@@ -175,7 +175,7 @@ class PoolFilter:
 
     def matches(self, person) -> bool:
         """Python-level match (used outside Numba path or as fallback)."""
-        val = get_person_attribute(person, self.attribute)
+        val = get_attribute(person, self.attribute)
         if val is None:
             return False
         if self.filter_type == 'numerical':
@@ -232,14 +232,14 @@ def build_attribute_arrays(
       Categorical: (int32 encoded ndarray of length n_people, {str_val: int_code})
 
     Unknown/None values encoded as -1 (categorical) or NaN (numerical).
-    Uses get_person_attribute for generic dot-path resolution,
+    Uses get_attribute for generic dot-path resolution,
     mirroring _get_attribute_getter in relationship_rules.py.
     """
     result = {}
     for f in pool_filters:
         if f.attribute in result:
             continue
-        values = [get_person_attribute(p, f.attribute) for p in people]
+        values = [get_attribute(p, f.attribute) for p in people]
         if f.filter_type == 'numerical':
             arr = np.array(
                 [float(v) if v is not None else np.nan for v in values],
@@ -355,7 +355,7 @@ def build_local_attribute_arrays(
     for f in connection_filters:
         if f.attribute in result:
             continue
-        values = [get_person_attribute(p, f.attribute) for p in people]
+        values = [get_attribute(p, f.attribute) for p in people]
         if f.match == 'range':
             result[f.attribute] = np.array(
                 [float(v) if v is not None else np.nan for v in values],

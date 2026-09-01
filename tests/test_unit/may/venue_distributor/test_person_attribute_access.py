@@ -1,5 +1,5 @@
 """
-Person attributes named by config are read through `get_person_attribute`.
+Person attributes named by config are read through `get_attribute`.
 
 `Person` has `__slots__` and no `__getattr__`, and every assigned attribute lands in
 `person.properties`. A `getattr(person, name, None)` therefore returns None for anything

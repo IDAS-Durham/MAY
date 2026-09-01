@@ -8,18 +8,9 @@ from collections import defaultdict
 from scipy.spatial import cKDTree
 import logging
 from may.utils import path_resolver as pr
-from may.utils.attribute_access import compile_path
+from may.utils.attribute_access import _compile_attribute, get_attribute
 
 logger = logging.getLogger(__name__)
-
-# Attributes that Person exposes as a slot or property, so vectorizing them
-# does not need a config path walk.
-_SLOT_GETTERS = {
-    'age': lambda p: getattr(p, 'age', 0),
-    'sex': lambda p: p.sex,
-    'residence.type': lambda p: p.residence_type,
-    'residence.id': lambda p: p.residence.id if p.residence else -1,
-}
 
 # Of those, the ones whose values are already integers and go into an array
 # without a categorical mapping.
@@ -77,29 +68,23 @@ class BaseDistributor:
 
     def _get_person_location(self, person) -> Optional[Tuple[float, float]]:
         """Get person's coordinates from their residence or geographical unit."""
-        if hasattr(person, 'residence') and person.residence:
-            if hasattr(person.residence, 'lat') and hasattr(person.residence, 'lon'):
-                if person.residence.lat is not None and person.residence.lon is not None:
-                    return (person.residence.lat, person.residence.lon)
-        
-        # Fallback to geographical unit coordinates
-        geo = getattr(person, 'geographical_unit', None)
-        if geo and hasattr(geo, 'coordinates') and geo.coordinates:
-            return tuple(geo.coordinates)
-        
+        residence = get_attribute(person, 'residence')
+        lat, lon = get_attribute(residence, 'lat'), get_attribute(residence, 'lon')
+        if lat is not None and lon is not None:
+            return (lat, lon)
+        coordinates = get_attribute(person, 'geographical_unit.coordinates')
+        if coordinates:
+            return tuple(coordinates)
         return None
     
     def _get_venue_location(self, venue) -> Optional[Tuple[float, float]]:
         """Get venue's coordinates with fallback to geographical unit."""
-        if hasattr(venue, 'coordinates') and venue.coordinates:
-            if len(venue.coordinates) == 2:
-                return tuple(venue.coordinates)
-        
-        # Fallback to geographical unit coordinates
-        geo = getattr(venue, 'geographical_unit', None)
-        if geo and hasattr(geo, 'coordinates') and geo.coordinates:
-            return tuple(geo.coordinates)
-        
+        coordinates = get_attribute(venue, 'coordinates')
+        if coordinates and len(coordinates) == 2:
+            return tuple(coordinates)
+        coordinates = get_attribute(venue, 'geographical_unit.coordinates')
+        if coordinates:
+            return tuple(coordinates)
         return None
 
     def _haversine_distance(self, loc1: Tuple[float, float], loc2: Tuple[float, float]) -> float:
@@ -156,17 +141,13 @@ class BaseDistributor:
         person_geo_unit = None
 
         # Handle common formats: 'geographical_unit', 'geographical_unit.coordinates', 'properties.workplace_sgu'
-        if loc_source.startswith('geographical_unit'):
-            person_geo_unit = getattr(person, 'geographical_unit', None)
-        elif loc_source.startswith('properties.'):
-            attr_name = loc_source.split('.')[1]
-            if hasattr(person, 'properties'):
-                loc_val = person.properties.get(attr_name)
-                if loc_val:
-                    person_geo_unit = world.geography.get_unit(loc_val)
-        else:
-            # Direct attribute
-            person_geo_unit = getattr(person, loc_source, None)
+        person_geo_unit = (
+            get_attribute(person, 'geographical_unit')
+            if loc_source.startswith('geographical_unit')
+            else get_attribute(person, loc_source, nested_properties=False)
+        )
+        if loc_source.startswith('properties.') and person_geo_unit is not None:
+            person_geo_unit = world.geography.get_unit(person_geo_unit)
 
         if person_geo_unit is None:
             return None
@@ -271,8 +252,17 @@ class BaseDistributor:
         # Each attribute is resolved once per person. The values feed both the
         # categorical mapping and the array, so a second walk is not needed.
         for attr in attrs_to_vectorize:
-            getter = _SLOT_GETTERS.get(attr) or compile_path(attr, False)
-            values = [getter(p) for p in people]
+            getter = _compile_attribute(attr, False)
+            if attr == 'age':
+                values = [get_attribute(p, attr, 0, nested_properties=False) for p in people]
+            elif attr == 'residence.id':
+                values = [
+                    get_attribute(get_attribute(p, 'residence'), 'id', -1,
+                                  nested_properties=False)
+                    for p in people
+                ]
+            else:
+                values = [getter(p) for p in people]
 
             if attr in _INTEGER_SLOT_ATTRIBUTES:
                 self.population_arrays[attr] = np.array(values, dtype=np.int32)
@@ -292,51 +282,6 @@ class BaseDistributor:
                 self.population_arrays[attr] = np.array(
                     [mapping.get(v, 0) for v in values], dtype=np.int32
                 )
-
-    def _get_person_attribute(self, path: str, person: Any):
-        """
-        Get value from person with special handling for residence.
-
-        For paths like 'residence.name' or 'residence.geographical_unit.name',
-        this looks at the person.residence property.
-        """
-        return compile_path(path, False)(person)
-
-    def _get_nested_value(self, obj, path: str):
-        """Get value from nested object path (e.g., 'name' or 'geo_unit')."""
-        if not path: return obj
-        parts = path.split('.')
-        value = obj
-        for part in parts:
-            if value is None: return None
-            if hasattr(value, part):
-                value = getattr(value, part)
-            else:
-                return None
-        return value
-
-    def _create_path_getter(self, path: List[str]):
-        """Create a getter function for a specific nested path."""
-        if not path:
-            return lambda obj: obj
-            
-        if len(path) == 1:
-            part = path[0]
-            def single_getter(obj):
-                if obj is None: return None
-                if isinstance(obj, dict): return obj.get(part)
-                return getattr(obj, part, None)
-            return single_getter
-        
-        # Nested path: pre-bind the parts to avoid loops
-        def nested_getter(obj):
-            val = obj
-            for part in path:
-                if val is None: return None
-                if isinstance(val, dict): val = val.get(part)
-                else: val = getattr(val, part, None)
-            return val
-        return nested_getter
 
     def _normalize_value(self, val: Any) -> str:
         """
@@ -371,32 +316,6 @@ class BaseDistributor:
             return int(f_val)
         except (ValueError, TypeError, OverflowError):
             return 0
-
-    def _get_nested_value_with_dict_support(self, obj, path: Any):
-        """
-        Get value from nested path supporting both object attributes and dictionaries.
-        """
-        if not path: return obj
-        
-        # skip split/isinstance if we already have a list/tuple
-        if isinstance(path, (list, tuple)):
-            parts = path
-        else:
-            parts = path.split('.')
-        
-        value = obj
-        for part in parts:
-            if value is None:
-                return None
-
-            # Try dict access first if value is actually a dict
-            # This is significantly faster than try/except getattr for dicts
-            if type(value) is dict:
-                value = value.get(part)
-            else:
-                value = getattr(value, part, None)
-                
-        return value
 
     def _can_vectorize_filters(self, filters: List[Dict]) -> bool:
         """Check if all filters in the list are supported by the current vectorized arrays."""

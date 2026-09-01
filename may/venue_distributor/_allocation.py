@@ -43,6 +43,7 @@ from ._special_cases import _SpecialCasesMixin
 from ._matching import _MatchingMixin
 from ._strategies import _AllocationMixin
 from ._reporting import _ReportingMixin
+from may.utils.attribute_access import get_attribute
 
 class VenueAllocation(_FilteringMixin, _FallbackMixin, _SpecialCasesMixin, _MatchingMixin, _AllocationMixin, _ReportingMixin):
     """Single internal owner for venue allocation state and behavior."""
@@ -61,6 +62,6 @@ class VenueAllocation(_FilteringMixin, _FallbackMixin, _SpecialCasesMixin, _Matc
         eligibility = self.config.get('eligibility', {})
         self.attribute_names = [r.get('name') for r in eligibility.get('attributes', [])]
         self.attr_getters = [
-            lambda p, attr=name: self.owner._get_person_attribute(attr, p)
+            lambda p, attr=name: get_attribute(p, attr)
             for name in self.attribute_names if name
         ]

@@ -2,6 +2,7 @@ import logging
 import numpy as np
 from typing import List, Dict, Any
 from .probability import ProbabilityConfigError, probability_cache_key
+from may.utils.attribute_access import _compile_attribute, get_attribute
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class _FilteringMixin:
             # Pre-cache getters for performance
             if pre_processed_filters and 'getter' not in pre_processed_filters[0]:
                 for f in pre_processed_filters:
-                    f['getter'] = self.owner._create_path_getter(f['path_parts'])
+                    f['getter'] = _compile_attribute(f['attribute'])
 
             for person in people:
                 match = True
@@ -107,29 +108,15 @@ class _FilteringMixin:
 
         def _get_person_value_optimized(self, person, filter_rule: Dict) -> Any:
             """Get value using pre-processed filter rule information."""
-            if filter_rule.get('is_residence'):
-                res = person.residence
-                if res is None: return None
-                return self.owner._get_nested_value_with_dict_support(res, filter_rule['residence_parts'])
-            
             # Check for direct attributes for speed
             attr = filter_rule['attribute']
             if attr == 'age': return person.age
             if attr == 'sex': return person.sex
-            
-            # Check person.properties first (where custom attributes like Occode are stored)
-            if hasattr(person, 'properties') and attr in person.properties:
-                val = person.properties[attr]
-                # NaN values should be treated as missing (None)
-                if isinstance(val, float) and val != val:  # fast NaN check
-                    return None
-                return val
-            
-            return self.owner._get_nested_value_with_dict_support(person, filter_rule['path_parts'])
+            return get_attribute(person, attr)
 
         def _get_person_value_raw(self, person, attr_name: str) -> Any:
             """Fallback for raw filters without pre-processing."""
-            return self.owner._get_person_attribute(attr_name, person)
+            return get_attribute(person, attr_name)
 
         def _check_condition(self, person_value, filter_rule: Dict) -> bool:
             filter_type = filter_rule.get('type', 'numerical')
@@ -187,7 +174,7 @@ class _FilteringMixin:
 
                 selected = []
                 for person in people:
-                    lookup_value = self.owner._get_person_attribute(lookup_attr, person)
+                    lookup_value = get_attribute(person, lookup_attr, nested_properties=False)
                     if lookup_value not in prob_lookup:
                         raise ProbabilityConfigError(
                             f"Group '{group_name}': no probability for "
@@ -198,4 +185,3 @@ class _FilteringMixin:
                 return selected
 
             return people
-

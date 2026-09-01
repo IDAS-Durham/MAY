@@ -30,6 +30,7 @@ import numpy as np
 import pandas as pd
 
 from .base_distributor import BaseDistributor
+from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger("route_distributor")
 
@@ -339,25 +340,12 @@ class RouteDistributor(BaseDistributor):
         stype = source.get("type", "ancestor")
         frm = source.get("from", "geographical_unit")
 
-        unit = None
-        if frm == "geographical_unit":
-            unit = getattr(person, "geographical_unit", None)
-        elif frm.startswith("properties."):
-            prop = frm.split(".", 1)[1]
-            val = getattr(person, "properties", {}).get(prop)
-            if val is None:
-                return None
-            if stype == "property":
-                return str(val)
-            unit = world.geography.get_unit(val)
-        else:
-            # Direct attribute on the person.
-            val = getattr(person, frm, None)
-            if val is None:
-                return None
-            if stype == "property":
-                return str(val)
-            unit = val
+        val = get_attribute(person, frm, nested_properties=False)
+        if val is None:
+            return None
+        if stype == "property":
+            return str(val)
+        unit = world.geography.get_unit(val) if frm.startswith("properties.") else val
 
         if unit is None:
             return None
@@ -368,7 +356,7 @@ class RouteDistributor(BaseDistributor):
             if unit is None:
                 return None
             return unit.name
-        return getattr(unit, "name", None)
+        return get_attribute(unit, "name")
 
     def _unit_id_for(self, world, name) -> int:
         """Geo unit id for a unit-name key, or -1 when the name doesn't resolve
@@ -386,10 +374,7 @@ class RouteDistributor(BaseDistributor):
         return cached
 
     def _get_person_class(self, person) -> Optional[str]:
-        src = self.class_source
-        if src.startswith("properties."):
-            return getattr(person, "properties", {}).get(src.split(".", 1)[1])
-        return getattr(person, src, None)
+        return get_attribute(person, self.class_source, nested_properties=False)
 
     def _get_or_create_line_venue(self, world, line_id: str, person) -> Optional[Any]:
         """Lazily materialise one venue per line_id. Returns None if no MGU
@@ -402,7 +387,7 @@ class RouteDistributor(BaseDistributor):
         # guaranteed loaded (the rider lives there) and gives the venue a
         # stable, deterministic location for HDF5 partitioning.
         mgu_level = world.geography.levels[1]  # batch-partition level
-        geo_unit = getattr(person, "geographical_unit", None)
+        geo_unit = get_attribute(person, "geographical_unit")
         if geo_unit is not None and geo_unit.level != mgu_level:
             geo_unit = geo_unit.get_ancestor_by_level(mgu_level)
         if geo_unit is None:
@@ -429,7 +414,7 @@ class RouteDistributor(BaseDistributor):
         self._stats["misses"] += 1
 
     def _passes_eligibility(self, person) -> bool:
-        props = getattr(person, "properties", {})
+        props = get_attribute(person, "properties", {})
         for prop in self.require_properties:
             if prop not in props or props[prop] is None:
                 return False

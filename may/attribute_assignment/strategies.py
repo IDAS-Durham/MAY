@@ -319,7 +319,7 @@ class AssignmentStrategy:
         """
         Get attribute value from person.
 
-        Delegates to the shared get_person_attribute utility which handles
+        Delegates to the shared get_attribute utility which handles
         dot-notation, properties dict, and residence prefix.
 
         Args:
@@ -329,8 +329,8 @@ class AssignmentStrategy:
         Returns:
             Attribute value or None
         """
-        from may.utils.attribute_access import get_person_attribute
-        return get_person_attribute(person, attribute_name)
+        from may.utils.attribute_access import get_attribute
+        return get_attribute(person, attribute_name)
 
 
 class DrawStrategy(AssignmentStrategy):

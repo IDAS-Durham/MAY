@@ -18,7 +18,7 @@ from .probability import (
     probability_cache_key,
 )
 from may.utils import path_resolver as pr
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 import logging
@@ -446,7 +446,7 @@ class VenueDistributor(BaseDistributor):
     def _has_required_attributes(self, person, required_attrs: List[str]) -> bool:
         """Check if person has all required attributes."""
         for attr in required_attrs:
-            if get_person_attribute(person, attr) is None:
+            if get_attribute(person, attr) is None:
                 return False
         return True
 
@@ -562,7 +562,7 @@ class VenueDistributor(BaseDistributor):
                 return person.geographical_unit.coordinates
         
         # Fallback to general base distributor logic
-        return self._get_nested_value(person, 'geographical_unit.coordinates')
+        return get_attribute(person, 'geographical_unit.coordinates')
 
     def _pre_process_filters(self, filters: List[Dict]) -> List[Dict]:
         """Pre-process filters to avoid repeated path parsing."""

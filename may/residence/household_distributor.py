@@ -27,7 +27,7 @@ from may.utils import path_resolver as pr
 from may.residence.models import Category
 from may.residence.composition_pattern import CompositionPattern
 from . import _household_excess, _household_promotion, _household_rounds
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger("household")
 
@@ -274,7 +274,7 @@ class HouseholdDistributor:
         """Get the category index for a person based on their attributes."""
         for idx, cat in enumerate(self.categories):
             attr = cat.attribute
-            val = get_person_attribute(person, attr)
+            val = get_attribute(person, attr)
             
             if val is None:
                 continue

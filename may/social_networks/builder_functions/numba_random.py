@@ -10,7 +10,7 @@ import numba as nb
 from .filters_and_constraints.filters import build_pool
 from .filters_and_constraints.constraints import parse_constraints
 from .store import store_contacts
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 
 
 @nb.njit(cache=True)
@@ -242,7 +242,7 @@ def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
     if same_attribute is not None:
         codes: dict = {}
         for i, person in enumerate(people):
-            value = get_person_attribute(person, same_attribute)
+            value = get_attribute(person, same_attribute)
             if value not in codes:
                 codes[value] = len(codes)
             subsets[i] = codes[value]

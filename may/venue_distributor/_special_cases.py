@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 from typing import List, Dict, Tuple, Optional
+from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger(__name__)
 SPECIAL_CASE_STRATEGIES = {'closest', 'random'}
@@ -126,7 +127,7 @@ class _SpecialCasesMixin:
                 self.owner._increment_venue_count(selected_venue)
                 return True
 
-            res_name = self.owner._get_person_attribute('residence.name', person)
+            res_name = get_attribute(person, 'residence.name')
             if_no_match = rule.get('if_no_match', 'error')
             if if_no_match == 'error':
                 raise ValueError(f"Special case allocation failed for person {person.id} with residence '{res_name}'")
@@ -141,7 +142,7 @@ class _SpecialCasesMixin:
                 for criterion in match_by:
                     source = criterion.get('source', '')
                     if source.startswith('person.'):
-                        val = self.owner._get_person_attribute(source.replace('person.', ''), person)
+                        val = get_attribute(person, source.replace('person.', ''))
                         if val is None: return None
                         parts.append(val)
                 return tuple(parts) if parts else None
@@ -167,8 +168,8 @@ class _SpecialCasesMixin:
                         f"comparison implemented."
                     )
 
-                src_val = self.owner._get_person_attribute(source.replace('person.', ''), person)
-                tgt_val = self.owner._get_nested_value(venue, target.replace('venue.', ''))
+                src_val = get_attribute(person, source.replace('person.', ''))
+                tgt_val = get_attribute(venue, target.replace('venue.', ''))
 
                 if src_val != tgt_val:
                     return False

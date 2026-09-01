@@ -1,6 +1,7 @@
 import logging
 import numpy as np
 from typing import List, Dict, Tuple, Optional, Any
+from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger(__name__)
 SELECT_VENUE_STRATEGIES = {
@@ -207,7 +208,7 @@ class _MatchingMixin:
             """Fallback for venues without cache."""
             for rule in attribute_rules:
                 attr_name = rule.get('name')
-                person_value = self.owner._get_person_attribute(attr_name, person)
+                person_value = get_attribute(person, attr_name)
                 if person_value is None: return False
 
                 if rule.get('type') == 'numerical':
@@ -371,7 +372,7 @@ class _MatchingMixin:
             if person_attrs and attr_name in person_attrs:
                 return person_attrs[attr_name]
 
-            return self.owner._get_person_attribute(attr_name, person)
+            return get_attribute(person, attr_name)
 
         def _check_numerical_constraint(self, val, venue, rule: Dict) -> bool:
             constraints = rule.get('venue_constraints', {})

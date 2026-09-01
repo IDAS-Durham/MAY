@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
+from may.utils.attribute_access import get_attribute
 
 from .base_distributor import BaseDistributor
 from may.population import Subset
@@ -308,7 +309,7 @@ class MultiVenueDistributor(BaseDistributor):
             match_type = filter_config.get('match_type', 'exact')
 
             # Get person attribute value
-            person_value = self._get_person_attribute(person_attr, person)
+            person_value = get_attribute(person, person_attr)
             if person_value is None:
                 return False
 
@@ -392,7 +393,7 @@ class MultiVenueDistributor(BaseDistributor):
             person_attr = prob_config.get('person_attribute')
 
             if person_attr:
-                person_value = self._get_person_attribute(person_attr, person)
+                person_value = get_attribute(person, person_attr)
                 if person_value is None:
                     return None
 
@@ -452,7 +453,7 @@ class MultiVenueDistributor(BaseDistributor):
             match_type = filter_cfg.get('match_type', 'exact')
 
             # Get person attribute value
-            person_value = self._get_person_attribute(person_attr, person)
+            person_value = get_attribute(person, person_attr)
             if person_value is None:
                 return False
 
@@ -485,7 +486,7 @@ class MultiVenueDistributor(BaseDistributor):
         if isinstance(prob_value, dict):
             # Template-based: select probability by person attribute
             person_attr = prob_config.get('person_attribute')
-            attr_value = self._get_person_attribute(person_attr, person)
+            attr_value = get_attribute(person, person_attr)
             if attr_value is not None:
                 probability = prob_value.get(str(attr_value).lower())
         else:
