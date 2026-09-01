@@ -21,5 +21,4 @@ from .builder_functions.filters_and_constraints.filters import (
     build_pool,
 )
 from .builder_functions.filters_and_constraints.constraints import parse_constraints
-from .social_networks import network_type_builders, register_network_type, SocialNetworkBuilder
-from . import network_builders  # noqa: F401 — triggers @register_network_type decorators
+from .social_networks import SocialNetworkBuilder

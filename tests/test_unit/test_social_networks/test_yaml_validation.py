@@ -2,27 +2,14 @@ import pytest
 
 from may.social_networks import (
     SocialNetworkBuilder,
-    register_network_type,
-    register_pool_type,
 )
-
-
-# Register stub builders so valid-config tests have something to resolve against.
-@register_network_type("_stub_net")
-def _stub_net(world, config):
-    return {}
-
-
-@register_pool_type("_stub_pool")
-def _stub_pool(world, config):
-    return []
 
 
 def _valid_entry(**overrides):
     entry = {
         "name": "test_network",
-        "network_type": "_stub_net",
-        "pool_type": "_stub_pool",
+        "network_type": "intra_geo_unit",
+        "pool_type": "geographic",
         "pool": {},
         "mean_count": 4,
         "storage_key": "test_key",

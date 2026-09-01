@@ -1,58 +1,30 @@
-"""
-YAML-driven dispatcher for building multiple named social networks.
-
-To add a new network type, decorate a builder function:
-
-    @register_network_type("my_type")
-    def build_my_type(world, network_config: dict) -> dict:
-        # network_config is the full YAML entry for this network
-        # Return: dict mapping person_id -> list[Person]
-        ...
-
-Required YAML keys per network entry:
-    network_type  – registered builder name
-    pool_type     – registered pool builder name (from filters.py)
-    pool          – dict of pool-builder-specific config
-    mean_count    – target mean connections per person
-    storage_key   – key written to person.properties
-    constraints   – (optional) list of typed edge constraints
-"""
+"""YAML-driven construction of the built-in social network types."""
 
 import logging
 import yaml
-from functools import wraps
 from may.utils import path_resolver as pr
-from typing import Callable, Any
 
 from may.social_networks.builder_functions.filters_and_constraints.filters import pool_type_builders
+from may.social_networks.builder_functions.numba_random import (
+    build_activity_peers,
+    build_intra_geo_unit,
+)
+from may.social_networks.builder_functions.spatial import (
+    build_bounded_distance,
+    build_local_social_network,
+    build_spatial_social_network,
+)
 
 logger = logging.getLogger("social_networks")
 
-NetworkTypeBuilder = Callable[[Any, dict], dict]
-
-network_type_builders: dict[str, NetworkTypeBuilder] = {}
-
-
-def register_network_type(name: str):
-    """
-    Decorator to register a network builder in the network_type_builders registry.
-
-    Example:
-        >>> @register_network_type("my_type")
-        ... def build_my_type(world, network_config):
-        ...     return {}
-        >>> network_type_builders["my_type"](world, config)
-    """
-    def decorator(func: NetworkTypeBuilder):
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
-        network_type_builders[name] = wrapper
-        return wrapper
-    return decorator
-
-
 _REQUIRED_KEYS = ("network_type", "pool_type", "storage_key", "mean_count")
+_NETWORK_TYPES = (
+    "activity_peers",
+    "intra_geo_unit",
+    "local_social_network",
+    "spatial_social_network",
+    "bounded_distance",
+)
 
 
 class SocialNetworkBuilder:
@@ -78,10 +50,10 @@ class SocialNetworkBuilder:
                     f"Network '{name}' missing required key '{key}'"
                 )
         net_type = entry["network_type"]
-        if net_type not in network_type_builders:
+        if net_type not in _NETWORK_TYPES:
             raise ValueError(
                 f"Network '{name}': unknown network_type '{net_type}'. "
-                f"Registered: {sorted(network_type_builders)}"
+                f"Supported: {list(_NETWORK_TYPES)}"
             )
         pool_type = entry["pool_type"]
         if pool_type not in pool_type_builders:
@@ -103,6 +75,14 @@ class SocialNetworkBuilder:
                         f"(network_type={entry['network_type']}, "
                         f"pool_type={entry['pool_type']}, "
                         f"storage_key={entry['storage_key']})")
-            builder_fn = network_type_builders[entry["network_type"]]
-            builder_fn(self.world, entry)
+            if entry["network_type"] == "activity_peers":
+                build_activity_peers(self.world, entry)
+            elif entry["network_type"] == "intra_geo_unit":
+                build_intra_geo_unit(self.world, entry)
+            elif entry["network_type"] == "local_social_network":
+                build_local_social_network(self.world, entry)
+            elif entry["network_type"] == "spatial_social_network":
+                build_spatial_social_network(self.world, entry)
+            else:
+                build_bounded_distance(self.world, entry)
             logger.info(f"  Stored '{network_name}' → '{entry['storage_key']}'")
