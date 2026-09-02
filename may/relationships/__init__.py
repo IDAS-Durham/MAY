@@ -7,6 +7,4 @@ All relationship types and criteria are defined via YAML configuration.
 
 from .romantic_relationships import RomanticDistributor
 
-__all__ = [
-    'RomanticDistributor'
-]
+__all__ = ["RomanticDistributor"]

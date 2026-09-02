@@ -8,21 +8,23 @@ import csv
 import os
 import logging
 import operator
-import yaml
 from typing import Dict, List, Optional
 from .venue_allocator import _allocate_to_venue_type
 from .household_distributor import HouseholdError
 from .composition_pattern import CompositionPattern
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 from may.utils import build_profile as bp
 
 logger = logging.getLogger("allocation_strategy")
 
 
-def execute_allocation_strategy(population,
-                                venues,
-                                household_distributor,
-                                strategy_file: str = "data/households/allocation_strategy.yaml"):
+def execute_allocation_strategy(
+    population,
+    venues,
+    household_distributor,
+    strategy_file: str = "data/households/allocation_strategy.yaml",
+):
     """
     Execute a unified allocation strategy from YAML configuration.
 
@@ -33,11 +35,11 @@ def execute_allocation_strategy(population,
         population: PopulationManager
         venues: VenueManager
         household_distributor: HouseholdDistributor
-        strategy_file (str, optional): Path to YAML strategy file (relative or absolute). Default is "data/households/allocation_strategy.yaml". 
+        strategy_file (str, optional): Path to YAML strategy file (relative or absolute). Default is "data/households/allocation_strategy.yaml".
 
     Returns:
         dict: Complete statistics for all steps
-    
+
     """
     logger.info("=" * 60)
     logger.info("Executing Unified Allocation Strategy")
@@ -51,16 +53,15 @@ def execute_allocation_strategy(population,
 
     # Load strategy configuration
     logger.info(f"Loading allocation strategy from {strategy_file}")
-    with open(strategy_file, 'r', encoding='utf-8-sig') as f:
-        strategy = yaml.safe_load(f)
+    strategy = load_yaml(strategy_file)
 
     # Check if enabled
-    if not strategy.get('enabled', True):
+    if not strategy.get("enabled", True):
         logger.info("Unified strategy is disabled, skipping")
         return {}
 
     # Get steps
-    steps = strategy.get('steps', [])
+    steps = strategy.get("steps", [])
     if not steps:
         logger.warning("No allocation steps defined in strategy")
         return {}
@@ -71,7 +72,7 @@ def execute_allocation_strategy(population,
         household_distributor.categories,
     )
     _validate_step_patterns(steps, household_distributor.household_pattern_vocabulary)
-    _setup_structure_mixture(strategy.get('mixture'), steps, household_distributor)
+    _setup_structure_mixture(strategy.get("mixture"), steps, household_distributor)
 
     logger.info(f"Found {len(steps)} allocation steps")
     logger.info("")
@@ -81,40 +82,52 @@ def execute_allocation_strategy(population,
     step_number = 1
 
     for step_config in steps:
-        step_type = step_config.get('type')
-        step_name = step_config.get('name', f'Step {step_number}')
+        step_type = step_config.get("type")
+        step_name = step_config.get("name", f"Step {step_number}")
 
-        if step_type not in ['household', 'venue', 'household_excess', 'household_overflow', 'household_promotion']:
-            logger.warning(f"Unknown step type '{step_type}' for step '{step_name}', skipping")
+        if step_type not in [
+            "household",
+            "venue",
+            "household_excess",
+            "household_overflow",
+            "household_promotion",
+        ]:
+            logger.warning(
+                f"Unknown step type '{step_type}' for step '{step_name}', skipping"
+            )
             continue
 
         logger.info("=" * 60)
         logger.info(f"Step {step_number}: {step_name} ({step_type})")
         logger.info("=" * 60)
 
-        description = step_config.get('description')
+        description = step_config.get("description")
         if description:
             logger.info(f"Description: {description}")
             logger.info("")
 
         # Execute based on type
         with bp.stage(step_name, step_type):
-            if step_type == 'household':
+            if step_type == "household":
                 stats = _execute_household_step(step_config, household_distributor)
-            elif step_type == 'venue':
-                stats = _execute_venue_step(step_config, population, venues, household_distributor)
-            elif step_type == 'household_excess':
-                stats = _execute_household_excess_step(step_config, household_distributor)
-            elif step_type == 'household_overflow':
-                stats = _execute_household_overflow_step(step_config, household_distributor)
-            elif step_type == 'household_promotion':
-                stats = _execute_household_promotion_step(step_config, household_distributor)
+            elif step_type == "venue":
+                stats = _execute_venue_step(
+                    step_config, population, venues, household_distributor
+                )
+            elif step_type == "household_excess":
+                stats = _execute_household_excess_step(
+                    step_config, household_distributor
+                )
+            elif step_type == "household_overflow":
+                stats = _execute_household_overflow_step(
+                    step_config, household_distributor
+                )
+            elif step_type == "household_promotion":
+                stats = _execute_household_promotion_step(
+                    step_config, household_distributor
+                )
 
-        all_stats[step_name] = {
-            'type': step_type,
-            'step_number': step_number,
-            **stats
-        }
+        all_stats[step_name] = {"type": step_type, "step_number": step_number, **stats}
 
         step_number += 1
         logger.info("")
@@ -133,37 +146,37 @@ def execute_allocation_strategy(population,
     for step_name, stats in all_stats.items():
         logger.info(f"{stats['step_number']}. {step_name} ({stats['type']}):")
 
-        if stats['type'] == 'household':
-            households_created = stats.get('households_created', 0)
-            people_allocated = stats.get('people_allocated_this_round', 0)
+        if stats["type"] == "household":
+            households_created = stats.get("households_created", 0)
+            people_allocated = stats.get("people_allocated_this_round", 0)
             logger.info(f"   Households: {households_created:,}")
             logger.info(f"   People: {people_allocated:,}")
             total_household_alloc += people_allocated
 
-        elif stats['type'] == 'venue':
-            allocated = stats.get('allocated', 0)
-            venues_count = stats.get('venues', 0)
+        elif stats["type"] == "venue":
+            allocated = stats.get("allocated", 0)
+            venues_count = stats.get("venues", 0)
             logger.info(f"   Venues: {venues_count}")
             logger.info(f"   People: {allocated:,}")
             total_venue_alloc += allocated
 
-        elif stats['type'] == 'household_excess':
-            people_added = stats.get('people_added', 0)
-            households_modified = stats.get('households_modified', 0)
+        elif stats["type"] == "household_excess":
+            people_added = stats.get("people_added", 0)
+            households_modified = stats.get("households_modified", 0)
             logger.info(f"   Households modified: {households_modified:,}")
             logger.info(f"   People added: {people_added:,}")
             total_excess_alloc += people_added
 
-        elif stats['type'] == 'household_overflow':
-            people_added = stats.get('people_added', 0)
-            households_modified = stats.get('households_modified', 0)
+        elif stats["type"] == "household_overflow":
+            people_added = stats.get("people_added", 0)
+            households_modified = stats.get("households_modified", 0)
             logger.info(f"   Households modified: {households_modified:,}")
             logger.info(f"   People added (overflow): {people_added:,}")
             total_overflow_alloc += people_added
 
-        elif stats['type'] == 'household_promotion':
-            people_added = stats.get('people_added', 0)
-            households_promoted = stats.get('households_promoted', 0)
+        elif stats["type"] == "household_promotion":
+            people_added = stats.get("people_added", 0)
+            households_promoted = stats.get("households_promoted", 0)
             logger.info(f"   Households promoted: {households_promoted:,}")
             logger.info(f"   People added (promotion): {people_added:,}")
             total_overflow_alloc += people_added  # Count with overflow
@@ -180,21 +193,34 @@ def execute_allocation_strategy(population,
     logger.info(f"  People in venues: {total_venue_alloc:,}")
 
     logger.info(f"  Total allocated: {len(household_distributor.allocated_people):,}")
-    logger.info(f"  Remaining unallocated: {household_distributor.get_available_people_count():,}")
+    logger.info(
+        f"  Remaining unallocated: {household_distributor.get_available_people_count():,}"
+    )
 
     total_pop = len(population.get_all_people())
-    alloc_pct = (len(household_distributor.allocated_people) / total_pop * 100) if total_pop > 0 else 0
+    alloc_pct = (
+        (len(household_distributor.allocated_people) / total_pop * 100)
+        if total_pop > 0
+        else 0
+    )
     logger.info(f"  Allocation rate: {alloc_pct:.1f}%")
     logger.info("=" * 60)
 
     return all_stats
 
 
-_SELECTOR_OPS = {'>=': operator.ge, '>': operator.gt, '==': operator.eq,
-                 '<=': operator.le, '<': operator.lt}
+_SELECTOR_OPS = {
+    ">=": operator.ge,
+    ">": operator.gt,
+    "==": operator.eq,
+    "<=": operator.le,
+    "<": operator.lt,
+}
 
 
-def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: List) -> None:
+def _resolve_pattern_selectors(
+    steps: List[Dict], vocabulary: set, categories: List
+) -> None:
     """Resolve `patterns_where` selectors and enforce build-step disjointness.
 
     Runs once, before any allocation. A selector is a list of
@@ -205,23 +231,27 @@ def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: L
     a pattern claimed twice would double its census build quota, so overlap is
     an error, and a `patterns: null` step takes whatever remains unclaimed.
     """
-    build_steps = [s for s in steps if s.get('type') == 'household']
+    build_steps = [s for s in steps if s.get("type") == "household"]
     if not build_steps or not vocabulary:
         return
     name_to_idx = {cat.name: idx for idx, cat in enumerate(categories)}
 
     for step in build_steps:
-        where = step.get('patterns_where')
+        where = step.get("patterns_where")
         if where is None:
             continue
-        step_name = step.get('name', 'household')
-        if step.get('patterns') is not None:
+        step_name = step.get("name", "household")
+        if step.get("patterns") is not None:
             raise HouseholdError(
                 f"Step '{step_name}': give either 'patterns' or 'patterns_where', not both."
             )
         conditions = []
         for cond in where:
-            cat, op, value = cond.get('category'), cond.get('operator'), cond.get('value')
+            cat, op, value = (
+                cond.get("category"),
+                cond.get("operator"),
+                cond.get("value"),
+            )
             if cat not in name_to_idx:
                 raise HouseholdError(
                     f"Step '{step_name}': patterns_where category {cat!r} is not one of "
@@ -237,15 +267,19 @@ def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: L
         matched = []
         for pattern_str in vocabulary:
             pattern = CompositionPattern.from_string(pattern_str)
-            if all(op(pattern.get_min_count(idx), value) for idx, op, value in conditions):
+            if all(
+                op(pattern.get_min_count(idx), value) for idx, op, value in conditions
+            ):
                 matched.append(pattern_str)
         if not matched:
             raise HouseholdError(
                 f"Step '{step_name}': patterns_where matched no pattern in households.csv."
             )
-        step['patterns'] = sorted(matched)
-        del step['patterns_where']
-        logger.info(f"Step '{step_name}': patterns_where resolved to {len(matched)} patterns")
+        step["patterns"] = sorted(matched)
+        del step["patterns_where"]
+        logger.info(
+            f"Step '{step_name}': patterns_where resolved to {len(matched)} patterns"
+        )
 
     # pattern -> {interpretation-or-None: step name}. A step without an
     # `interpretation` claims the pattern's WHOLE census count (key None),
@@ -254,17 +288,23 @@ def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: L
     # mixture quota of the count.
     claimed: Dict[str, Dict[Optional[str], str]] = {}
     for step in build_steps:
-        patterns = step.get('patterns')
+        patterns = step.get("patterns")
         if patterns is None:
             continue
-        step_name = step.get('name', 'household')
-        interp = step.get('interpretation')
+        step_name = step.get("name", "household")
+        interp = step.get("interpretation")
         for p in patterns:
-            name = p.get('pattern') if isinstance(p, dict) else p
+            name = p.get("pattern") if isinstance(p, dict) else p
             holders = claimed.setdefault(name, {})
-            conflict = (holders.get(interp) if interp is not None and None not in holders
-                        else next(iter(holders.values()), None) if interp is None
-                        else holders.get(None) or holders.get(interp))
+            conflict = (
+                holders.get(interp)
+                if interp is not None and None not in holders
+                else (
+                    next(iter(holders.values()), None)
+                    if interp is None
+                    else holders.get(None) or holders.get(interp)
+                )
+            )
             if conflict:
                 raise HouseholdError(
                     f"Pattern '{name}' is claimed by both '{conflict}' and "
@@ -275,23 +315,26 @@ def _resolve_pattern_selectors(steps: List[Dict], vocabulary: set, categories: L
             holders[interp] = step_name
 
     for step in build_steps:
-        if step.get('patterns') is not None:
+        if step.get("patterns") is not None:
             continue
-        step_name = step.get('name', 'household')
+        step_name = step.get("name", "household")
         remainder = sorted(vocabulary - set(claimed))
         if not remainder:
             raise HouseholdError(
                 f"Step '{step_name}' (patterns: null) has no patterns left — "
                 f"earlier build steps already claim the whole vocabulary."
             )
-        step['patterns'] = remainder
+        step["patterns"] = remainder
         for name in remainder:
-            claimed[name] = {step.get('interpretation'): step_name}
-        logger.info(f"Step '{step_name}': patterns null -> {len(remainder)} remaining patterns")
+            claimed[name] = {step.get("interpretation"): step_name}
+        logger.info(
+            f"Step '{step_name}': patterns null -> {len(remainder)} remaining patterns"
+        )
 
 
-def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
-                             household_distributor) -> None:
+def _setup_structure_mixture(
+    mixture_cfg: Optional[Dict], steps: List[Dict], household_distributor
+) -> None:
     """Load the structure-mixture table and validate interpretation claims.
 
     A census composition pattern is a marginal: different household structures
@@ -303,11 +346,14 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
     Entirely opt-in: no `mixture:` block means no behavior change, and using
     `interpretation:` on a step without the block is an error.
     """
-    interp_steps = [s for s in steps
-                    if s.get('type') == 'household' and s.get('interpretation') is not None]
+    interp_steps = [
+        s
+        for s in steps
+        if s.get("type") == "household" and s.get("interpretation") is not None
+    ]
     if mixture_cfg is None:
         if interp_steps:
-            names = [s.get('name', 'household') for s in interp_steps]
+            names = [s.get("name", "household") for s in interp_steps]
             raise HouseholdError(
                 f"Step(s) {names} use 'interpretation' but the strategy has no "
                 f"'mixture:' block declaring the shares file."
@@ -315,10 +361,10 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
         household_distributor.structure_mixture = None
         return
 
-    path = pr.resolve(mixture_cfg.get('file', ''))
+    path = pr.resolve(mixture_cfg.get("file", ""))
     if not path or not os.path.exists(path):
         raise HouseholdError(f"mixture.file not found: {path!r}")
-    geo_level = mixture_cfg.get('geo_level')
+    geo_level = mixture_cfg.get("geo_level")
     if geo_level not in household_distributor.geography.levels:
         raise HouseholdError(
             f"mixture.geo_level {geo_level!r} is not one of the configured "
@@ -326,10 +372,10 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
         )
 
     shares: Dict[tuple, Dict[str, float]] = {}
-    with open(path, newline='', encoding='utf-8-sig') as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
-            key = (row['geo_unit'], row['pattern'])
-            shares.setdefault(key, {})[row['interpretation']] = float(row['share'])
+            key = (row["geo_unit"], row["pattern"])
+            shares.setdefault(key, {})[row["interpretation"]] = float(row["share"])
 
     interps_by_pattern: Dict[str, set] = {}
     for (geo_unit, pattern), parts in shares.items():
@@ -346,10 +392,10 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
     # step, or part of its census count would silently never be built.
     claimed_by_pattern: Dict[str, set] = {}
     for step in interp_steps:
-        step_name = step.get('name', 'household')
-        interp = step['interpretation']
-        for p in (step.get('patterns') or []):
-            name = p.get('pattern') if isinstance(p, dict) else p
+        step_name = step.get("name", "household")
+        interp = step["interpretation"]
+        for p in step.get("patterns") or []:
+            name = p.get("pattern") if isinstance(p, dict) else p
             if name not in interps_by_pattern:
                 raise HouseholdError(
                     f"Step '{step_name}' claims interpretation '{interp}' of pattern "
@@ -376,7 +422,7 @@ def _setup_structure_mixture(mixture_cfg: Optional[Dict], steps: List[Dict],
             f"'interpretation:' step (built whole, mixture ignored): {sorted(unused)}"
         )
 
-    household_distributor.structure_mixture = {'geo_level': geo_level, 'shares': shares}
+    household_distributor.structure_mixture = {"geo_level": geo_level, "shares": shares}
     logger.info(
         f"Structure mixture loaded: {len(interps_by_pattern)} patterns x "
         f"{len({g for g, _ in shares})} geo units at {geo_level}"
@@ -399,13 +445,15 @@ def _validate_step_patterns(steps: List[Dict], vocabulary: set) -> None:
         return  # no data loaded to validate against
     unknown: Dict[str, List[str]] = {}
     for step in steps:
-        if step.get('type') != 'household':
+        if step.get("type") != "household":
             continue
-        names = [p.get('pattern') if isinstance(p, dict) else p
-                 for p in (step.get('patterns') or [])]
+        names = [
+            p.get("pattern") if isinstance(p, dict) else p
+            for p in (step.get("patterns") or [])
+        ]
         for name in names:
             if name and name not in vocabulary:
-                unknown.setdefault(step.get('name', 'household'), []).append(name)
+                unknown.setdefault(step.get("name", "household"), []).append(name)
     if unknown:
         raise HouseholdError(
             f"household build step(s) reference composition patterns absent from "
@@ -424,15 +472,17 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
     Returns:
         dict: Statistics for this step
     """
-    patterns = step_config.get('patterns')
-    max_households = step_config.get('max_households')
-    refresh_pools = step_config.get('refresh_pools', False)
-    enable_demotion = step_config.get('enable_demotion')
-    max_household_size = step_config.get('max_household_size')
-    allocate_flexible = step_config.get('allocate_flexible', False)
-    round_name = step_config.get('name', 'Household Round')
-    rule_name = step_config.get('rule')  # Optional: explicit rule to apply
-    demotion_rules = step_config.get('demotion_rules', {})  # Optional: pattern -> rule mapping for demotions
+    patterns = step_config.get("patterns")
+    max_households = step_config.get("max_households")
+    refresh_pools = step_config.get("refresh_pools", False)
+    enable_demotion = step_config.get("enable_demotion")
+    max_household_size = step_config.get("max_household_size")
+    allocate_flexible = step_config.get("allocate_flexible", False)
+    round_name = step_config.get("name", "Household Round")
+    rule_name = step_config.get("rule")  # Optional: explicit rule to apply
+    demotion_rules = step_config.get(
+        "demotion_rules", {}
+    )  # Optional: pattern -> rule mapping for demotions
 
     if rule_name:
         logger.info(f"  Using explicit relationship rule: '{rule_name}'")
@@ -452,14 +502,16 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
         for p in patterns:
             if isinstance(p, dict):
                 # Format with assumption
-                pattern_str = p.get('pattern')
-                assumption_str = p.get('assumption')
+                pattern_str = p.get("pattern")
+                assumption_str = p.get("assumption")
 
                 if pattern_str:
                     pattern_list.append(pattern_str)
                     if assumption_str:
                         pattern_assumptions[pattern_str] = assumption_str
-                        logger.info(f"  Pattern '{pattern_str}' has assumption: '{assumption_str}'")
+                        logger.info(
+                            f"  Pattern '{pattern_str}' has assumption: '{assumption_str}'"
+                        )
             else:
                 # Simple format
                 pattern_list.append(p)
@@ -471,25 +523,29 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
     # error, so one map can cover several census vocabularies (e.g. the
     # England/Wales ">=2" bucket and the Northern Ireland "2"/">=3" split) when
     # only one of them is loaded.
-    step_assumptions = step_config.get('assumptions') or {}
+    step_assumptions = step_config.get("assumptions") or {}
     if step_assumptions and pattern_list is not None:
         claimed = set(pattern_list)
         for pattern_str, assumption_str in step_assumptions.items():
             if pattern_str in claimed and pattern_str not in pattern_assumptions:
                 pattern_assumptions[pattern_str] = assumption_str
-                logger.info(f"  Pattern '{pattern_str}' has assumption: '{assumption_str}'")
+                logger.info(
+                    f"  Pattern '{pattern_str}' has assumption: '{assumption_str}'"
+                )
         skipped = sorted(set(step_assumptions) - claimed)
         if skipped:
-            logger.info(f"  Assumptions for patterns not in this data, skipped: {skipped}")
+            logger.info(
+                f"  Assumptions for patterns not in this data, skipped: {skipped}"
+            )
 
     # Temporarily override demotion if specified
     original_demotion = None
     if enable_demotion is not None:
-        original_demotion = household_distributor.config['demotion']['enabled']
-        household_distributor.config['demotion']['enabled'] = enable_demotion
+        original_demotion = household_distributor.config["demotion"]["enabled"]
+        household_distributor.config["demotion"]["enabled"] = enable_demotion
 
     try:
-        stats = household_distributor.round_distributor.distribute_households_round(
+        stats = household_distributor.distribute_households_round(
             pattern_filter=pattern_list,
             pattern_assumptions=pattern_assumptions,
             max_households=max_households,
@@ -499,13 +555,13 @@ def _execute_household_step(step_config: Dict, household_distributor) -> Dict:
             round_name=round_name,
             rule_name=rule_name,
             demotion_rules=demotion_rules,
-            interpretation=step_config.get('interpretation')
+            interpretation=step_config.get("interpretation"),
         )
         return stats
     finally:
         # Restore original demotion setting
         if original_demotion is not None:
-            household_distributor.config['demotion']['enabled'] = original_demotion
+            household_distributor.config["demotion"]["enabled"] = original_demotion
 
 
 def _execute_household_excess_step(step_config: Dict, household_distributor) -> Dict:
@@ -521,14 +577,14 @@ def _execute_household_excess_step(step_config: Dict, household_distributor) -> 
     Returns:
         dict: Statistics for this step
     """
-    target_patterns = step_config.get('target_patterns', [])
-    add_category = step_config.get('add_category')
-    constraints = step_config.get('constraints')
-    max_per_household = step_config.get('max_per_household')
-    add_distribution = step_config.get('add_distribution')
-    refresh_pools = step_config.get('refresh_pools', False)
-    round_name = step_config.get('name', 'Household Excess Round')
-    rule_name = step_config.get('rule')  # Optional: relationship rule to apply
+    target_patterns = step_config.get("target_patterns", [])
+    add_category = step_config.get("add_category")
+    constraints = step_config.get("constraints")
+    max_per_household = step_config.get("max_per_household")
+    add_distribution = step_config.get("add_distribution")
+    refresh_pools = step_config.get("refresh_pools", False)
+    round_name = step_config.get("name", "Household Excess Round")
+    rule_name = step_config.get("rule")  # Optional: relationship rule to apply
 
     if rule_name:
         logger.info(f"  Using explicit relationship rule: '{rule_name}'")
@@ -536,9 +592,9 @@ def _execute_household_excess_step(step_config: Dict, household_distributor) -> 
     if not add_category:
         logger.error("No 'add_category' specified for household_excess step")
         return {
-            'people_added': 0,
-            'households_modified': 0,
-            'error': "Missing 'add_category' parameter"
+            "people_added": 0,
+            "households_modified": 0,
+            "error": "Missing 'add_category' parameter",
         }
 
     stats = household_distributor.allocate_excess_to_households(
@@ -549,7 +605,7 @@ def _execute_household_excess_step(step_config: Dict, household_distributor) -> 
         add_distribution=add_distribution,
         refresh_pools=refresh_pools,
         round_name=round_name,
-        rule_name=rule_name
+        rule_name=rule_name,
     )
 
     return stats
@@ -570,18 +626,18 @@ def _execute_household_overflow_step(step_config: Dict, household_distributor) -
     Returns:
         dict: Statistics for this step
     """
-    target_patterns = step_config.get('target_patterns', [])
-    add_category = step_config.get('add_category')
-    pattern_bias = step_config.get('pattern_bias', {})  # e.g., {"0 >=0 0 0": 2.0}
-    refresh_pools = step_config.get('refresh_pools', False)
-    round_name = step_config.get('name', 'Household Overflow Round')
+    target_patterns = step_config.get("target_patterns", [])
+    add_category = step_config.get("add_category")
+    pattern_bias = step_config.get("pattern_bias", {})  # e.g., {"0 >=0 0 0": 2.0}
+    refresh_pools = step_config.get("refresh_pools", False)
+    round_name = step_config.get("name", "Household Overflow Round")
 
     if not add_category:
         logger.error("No 'add_category' specified for household_overflow step")
         return {
-            'people_added': 0,
-            'households_modified': 0,
-            'error': "Missing 'add_category' parameter"
+            "people_added": 0,
+            "households_modified": 0,
+            "error": "Missing 'add_category' parameter",
         }
 
     stats = household_distributor.allocate_overflow_to_households(
@@ -589,7 +645,7 @@ def _execute_household_overflow_step(step_config: Dict, household_distributor) -
         add_category=add_category,
         pattern_bias=pattern_bias,
         refresh_pools=refresh_pools,
-        round_name=round_name
+        round_name=round_name,
     )
 
     return stats
@@ -609,17 +665,21 @@ def _execute_household_promotion_step(step_config: Dict, household_distributor) 
     Returns:
         dict: Statistics for this step
     """
-    promotion_rules = step_config.get('promotion_rules', [])
-    target_categories = step_config.get('target_categories', [])  # Fallback to simple mode
-    refresh_pools = step_config.get('refresh_pools', False)
-    round_name = step_config.get('name', 'Household Promotion Round')
+    promotion_rules = step_config.get("promotion_rules", [])
+    target_categories = step_config.get(
+        "target_categories", []
+    )  # Fallback to simple mode
+    refresh_pools = step_config.get("refresh_pools", False)
+    round_name = step_config.get("name", "Household Promotion Round")
 
     if not promotion_rules and not target_categories:
-        logger.error("No 'promotion_rules' or 'target_categories' specified for household_promotion step")
+        logger.error(
+            "No 'promotion_rules' or 'target_categories' specified for household_promotion step"
+        )
         return {
-            'people_added': 0,
-            'households_promoted': 0,
-            'error': "Missing 'promotion_rules' or 'target_categories' parameter"
+            "people_added": 0,
+            "households_promoted": 0,
+            "error": "Missing 'promotion_rules' or 'target_categories' parameter",
         }
 
     if promotion_rules:
@@ -627,20 +687,22 @@ def _execute_household_promotion_step(step_config: Dict, household_distributor) 
         stats = household_distributor.promote_with_rules(
             promotion_rules=promotion_rules,
             refresh_pools=refresh_pools,
-            round_name=round_name
+            round_name=round_name,
         )
     else:
         # Simple promotion (all categories)
         stats = household_distributor.promote_and_allocate(
             target_categories=target_categories,
             refresh_pools=refresh_pools,
-            round_name=round_name
+            round_name=round_name,
         )
 
     return stats
 
 
-def _execute_venue_step(step_config: Dict, population, venues, household_distributor) -> Dict:
+def _execute_venue_step(
+    step_config: Dict, population, venues, household_distributor
+) -> Dict:
     """
     Execute a venue allocation step.
 
@@ -653,23 +715,23 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
     Returns:
         dict: Statistics for this step
     """
-    venue_type = step_config.get('venue_type')
+    venue_type = step_config.get("venue_type")
 
     # Create allocation config for venue allocator
     allocation_config = {
-        'venue_type': venue_type,
-        'description': step_config.get('description', ''),
-        'capacity_property': step_config.get('capacity_property', 'capacity'),
-        'eligibility': step_config.get('eligibility', {}),
-        'strategy': step_config.get('strategy', 'random'),
+        "venue_type": venue_type,
+        "description": step_config.get("description", ""),
+        "capacity_property": step_config.get("capacity_property", "capacity"),
+        "eligibility": step_config.get("eligibility", {}),
+        "strategy": step_config.get("strategy", "random"),
         # Settings the named strategy reads; "age_weighted" takes its bands here.
-        'strategy_config': step_config.get('strategy_config', {}),
+        "strategy_config": step_config.get("strategy_config", {}),
         # Capacity rules owned by this allocation step. The presence of
         # capacity_config.attribute_capacities.column_mappings selects
         # attribute-aware vs. simple allocation downstream.
-        'capacity_config': step_config.get('capacity_config', {}),
+        "capacity_config": step_config.get("capacity_config", {}),
         # Subset configuration
-        'subset_key': step_config.get('subset_key')
+        "subset_key": step_config.get("subset_key"),
     }
 
     # Use the existing venue allocator function
@@ -678,7 +740,7 @@ def _execute_venue_step(step_config: Dict, population, venues, household_distrib
         allocation_config=allocation_config,
         population=population,
         venues=venues,
-        household_distributor=household_distributor
+        household_distributor=household_distributor,
     )
 
     return stats

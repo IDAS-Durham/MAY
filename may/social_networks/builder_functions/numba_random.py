@@ -10,14 +10,22 @@ import numba as nb
 from .filters_and_constraints.filters import build_pool
 from .filters_and_constraints.constraints import parse_constraints
 from .store import store_contacts
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
 
 
 @nb.njit(cache=True)
-def _process_group_numba(group_people, group_ages, group_subsets,
-                         all_connections, current_counts, target_counts,
-                         weight_fraction, age_range, require_same_subset,
-                         check_duplicates):
+def _process_group_numba(
+    group_people,
+    group_ages,
+    group_subsets,
+    all_connections,
+    current_counts,
+    target_counts,
+    weight_fraction,
+    age_range,
+    require_same_subset,
+    check_duplicates,
+):
     """
     Process a single group (venue or geo unit) with Numba acceleration.
 
@@ -104,10 +112,20 @@ def _process_group_numba(group_people, group_ages, group_subsets,
 
 
 @nb.njit(parallel=True, cache=True)
-def _process_all_groups_numba(group_starts, group_ends, group_people_flat,
-                               ages, subsets, all_connections, current_counts,
-                               target_counts, weight_fraction, age_range,
-                               require_same_subset, check_duplicates):
+def _process_all_groups_numba(
+    group_starts,
+    group_ends,
+    group_people_flat,
+    ages,
+    subsets,
+    all_connections,
+    current_counts,
+    target_counts,
+    weight_fraction,
+    age_range,
+    require_same_subset,
+    check_duplicates,
+):
     """
     Process all groups in parallel using Numba.
 
@@ -146,10 +164,16 @@ def _process_all_groups_numba(group_starts, group_ends, group_people_flat,
             group_subsets[i] = subsets[pid]
 
         _process_group_numba(
-            group_people, group_ages, group_subsets,
-            all_connections, current_counts, target_counts,
-            weight_fraction, age_range, require_same_subset,
-            check_duplicates
+            group_people,
+            group_ages,
+            group_subsets,
+            all_connections,
+            current_counts,
+            target_counts,
+            weight_fraction,
+            age_range,
+            require_same_subset,
+            check_duplicates,
         )
 
 
@@ -216,9 +240,14 @@ def _build_connection_counts(n_people: int, network_config: dict) -> np.ndarray:
     return counts
 
 
-def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
-                      storage_key: str, connection_filters: list | None = None,
-                      activity_config: dict | None = None) -> None:
+def _run_random_numba(
+    world,
+    groups: list,
+    connection_counts: np.ndarray,
+    storage_key: str,
+    connection_filters: list | None = None,
+    activity_config: dict | None = None,
+) -> None:
     """
     Run the Numba random-connection builder over pre-built groups.
     Writes contacts directly to person.properties via store_contacts.
@@ -242,7 +271,7 @@ def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
     if same_attribute is not None:
         codes: dict = {}
         for i, person in enumerate(people):
-            value = get_person_attribute(person, same_attribute)
+            value = get_attribute(person, same_attribute)
             if value not in codes:
                 codes[value] = len(codes)
             subsets[i] = codes[value]
@@ -256,18 +285,24 @@ def _run_random_numba(world, groups: list, connection_counts: np.ndarray,
     age_range = _extract_age_range(connection_filters or [])
 
     _process_all_groups_numba(
-        starts, ends, people_flat,
-        ages, subsets,
-        all_connections, current_counts, connection_counts,
-        np.float64(1.0), age_range, require_same_subset, True,
+        starts,
+        ends,
+        people_flat,
+        ages,
+        subsets,
+        all_connections,
+        current_counts,
+        connection_counts,
+        np.float64(1.0),
+        age_range,
+        require_same_subset,
+        True,
     )
 
     for i, person in enumerate(people):
         n_conn = int(current_counts[i])
         contacts = [
-            idx_to_person[int(idx)]
-            for idx in all_connections[i, :n_conn]
-            if idx >= 0
+            idx_to_person[int(idx)] for idx in all_connections[i, :n_conn] if idx >= 0
         ]
         if contacts:
             store_contacts(person, contacts, storage_key, activity_config)
@@ -295,8 +330,14 @@ def build_intra_geo_unit(world, network_config: dict) -> None:
     groups = build_pool(world, pool_type, pool_config)
     connection_filters = parse_constraints(network_config.get("constraints", []))
     connection_counts = _build_connection_counts(n_people, network_config)
-    _run_random_numba(world, groups, connection_counts, storage_key,
-                      connection_filters, activity_config)
+    _run_random_numba(
+        world,
+        groups,
+        connection_counts,
+        storage_key,
+        connection_filters,
+        activity_config,
+    )
 
 
 def build_activity_peers(world, network_config: dict) -> None:
@@ -321,5 +362,11 @@ def build_activity_peers(world, network_config: dict) -> None:
     groups = build_pool(world, pool_type, pool_config)
     connection_filters = parse_constraints(network_config.get("constraints", []))
     connection_counts = _build_connection_counts(n_people, network_config)
-    _run_random_numba(world, groups, connection_counts, storage_key,
-                      connection_filters, activity_config)
+    _run_random_numba(
+        world,
+        groups,
+        connection_counts,
+        storage_key,
+        connection_filters,
+        activity_config,
+    )

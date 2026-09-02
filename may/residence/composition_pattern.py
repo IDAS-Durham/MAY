@@ -13,6 +13,23 @@ from functools import lru_cache
 logger = logging.getLogger("composition_pattern")
 
 
+def _evaluate_operator(actual: int, operator: str, expected: int) -> bool:
+    """Evaluate a comparison operator."""
+    if operator == ">=":
+        return actual >= expected
+    elif operator == ">":
+        return actual > expected
+    elif operator == "==":
+        return actual == expected
+    elif operator == "<=":
+        return actual <= expected
+    elif operator == "<":
+        return actual < expected
+    else:
+        logger.warning(f"Unknown operator '{operator}', assuming False")
+        return False
+
+
 @lru_cache(maxsize=1024)
 def _parse_pattern_cached(pattern: str) -> Tuple[Tuple[str, int], ...]:
     """
@@ -48,17 +65,15 @@ class CompositionPattern:
     - exactly 2 people in category 2 (Adults)
     - 2 or fewer people in category 3 (Old Adults)
     """
+
     original_pattern: str
     requirements: List[Tuple[str, int]]  # List of (operator, count) for each category
     # operator can be "exact", "gte" (>=), or "lte" (<=)
 
-    # Object cache for CompositionPattern instances
-    _instance_cache = {}
-
     @classmethod
-    def from_string(cls, pattern: str) -> 'CompositionPattern':
+    def from_string(cls, pattern: str) -> "CompositionPattern":
         """
-        Parse a composition pattern string (with object-level caching).
+        Parse a composition pattern string.
 
         Args:
             pattern: Pattern string like ">=2 >=0 2 <=2"
@@ -67,21 +82,9 @@ class CompositionPattern:
             CompositionPattern object
         """
         pattern = pattern.strip()
-        if pattern in cls._instance_cache:
-            return cls._instance_cache[pattern]
-
         # Use cached parsing function for internal requirements
         requirements_tuple = _parse_pattern_cached(pattern)
-        instance = cls(original_pattern=pattern, requirements=list(requirements_tuple))
-        
-        # Cache the instance
-        cls._instance_cache[pattern] = instance
-        return instance
-
-    def __post_init__(self):
-        """Initialize cached properties."""
-        self._string_repr = None
-        self._min_size = None
+        return cls(original_pattern=pattern, requirements=list(requirements_tuple))
 
     def get_min_count(self, category_idx: int) -> int:
         """Get minimum required count for a category."""
@@ -112,13 +115,12 @@ class CompositionPattern:
         return operator in ("gte", "lte")
 
     def min_household_size(self) -> int:
-        """Calculate minimum household size required (with caching)."""
-        if self._min_size is None:
-            self._min_size = sum(self.get_min_count(i) for i in range(len(self.requirements)))
-        return self._min_size
+        """Calculate minimum household size required."""
+        return sum(self.get_min_count(i) for i in range(len(self.requirements)))
 
-    def validate_against_rules(self, validation_rules: List[Dict],
-                              category_name_to_idx: Dict[str, int]) -> bool:
+    def validate_against_rules(
+        self, validation_rules: List[Dict], category_name_to_idx: Dict[str, int]
+    ) -> bool:
         """
         Validate this pattern against a list of validation rules.
 
@@ -131,43 +133,47 @@ class CompositionPattern:
         """
         for rule in validation_rules:
             # Extract rule components
-            condition = rule.get('condition', {})
-            requirement = rule.get('requirement', {})
-            rule_name = rule.get('name', 'Unnamed rule')
+            condition = rule.get("condition", {})
+            requirement = rule.get("requirement", {})
+            rule_name = rule.get("name", "Unnamed rule")
 
             # Get category indices
-            cond_category = condition.get('category')
+            cond_category = condition.get("category")
             if cond_category not in category_name_to_idx:
-                logger.warning(f"Rule '{rule_name}': Unknown category '{cond_category}'")
+                logger.warning(
+                    f"Rule '{rule_name}': Unknown category '{cond_category}'"
+                )
                 continue
-            
+
             cond_cat_idx = category_name_to_idx[cond_category]
             cond_count = self.get_min_count(cond_cat_idx)
-            
+
             # Evaluate condition
-            cond_operator = condition.get('operator')
-            cond_value = condition.get('value')
-            if not self._evaluate_operator(cond_count, cond_operator, cond_value):
-                continue # Condition not met, skip to next rule
+            cond_operator = condition.get("operator")
+            cond_value = condition.get("value")
+            if not _evaluate_operator(cond_count, cond_operator, cond_value):
+                continue  # Condition not met, skip to next rule
 
             # Condition met, check requirement(s)
             # requirement can be a single dict or a list of dicts (OR condition)
             req_list = requirement if isinstance(requirement, list) else [requirement]
-            
+
             any_req_met = False
             for req in req_list:
-                req_category = req.get('category')
+                req_category = req.get("category")
                 if req_category not in category_name_to_idx:
-                    logger.warning(f"Rule '{rule_name}': Unknown category '{req_category}'")
+                    logger.warning(
+                        f"Rule '{rule_name}': Unknown category '{req_category}'"
+                    )
                     continue
 
                 req_cat_idx = category_name_to_idx[req_category]
                 req_count = self.get_min_count(req_cat_idx)
-                
-                req_operator = req.get('operator')
-                req_value = req.get('value')
-                
-                if self._evaluate_operator(req_count, req_operator, req_value):
+
+                req_operator = req.get("operator")
+                req_value = req.get("value")
+
+                if _evaluate_operator(req_count, req_operator, req_value):
                     any_req_met = True
                     break
 
@@ -178,33 +184,7 @@ class CompositionPattern:
 
         return True
 
-    def _evaluate_operator(self, actual: int, operator: str, expected: int) -> bool:
-        """
-        Evaluate a comparison operator.
-
-        Args:
-            actual: Actual value
-            operator: Comparison operator (>=, >, ==, <=, <)
-            expected: Expected value
-
-        Returns:
-            bool: True if comparison holds, False otherwise
-        """
-        if operator == ">=":
-            return actual >= expected
-        elif operator == ">":
-            return actual > expected
-        elif operator == "==":
-            return actual == expected
-        elif operator == "<=":
-            return actual <= expected
-        elif operator == "<":
-            return actual < expected
-        else:
-            logger.warning(f"Unknown operator '{operator}', assuming False")
-            return False
-
-    def demote_once(self, priority_order: List[int]) -> Optional['CompositionPattern']:
+    def demote_once(self, priority_order: List[int]) -> Optional["CompositionPattern"]:
         """
         Attempt to demote this pattern by reducing requirements.
 
@@ -229,20 +209,22 @@ class CompositionPattern:
                 new_requirements[cat_idx] = ("gte", count - 1)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
-                    requirements=new_requirements
+                    requirements=new_requirements,
                 )
             elif operator == "exact" and count > 0:
                 # Reduce exact N to (N-1)
                 new_requirements[cat_idx] = ("exact", count - 1)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
-                    requirements=new_requirements
+                    requirements=new_requirements,
                 )
 
         # Couldn't demote further
         return None
 
-    def demote_to_count(self, cat_idx: int, target_count: int) -> Optional['CompositionPattern']:
+    def demote_to_count(
+        self, cat_idx: int, target_count: int
+    ) -> Optional["CompositionPattern"]:
         """
         Demote a specific category directly to a target count.
 
@@ -268,21 +250,19 @@ class CompositionPattern:
             new_requirements = list(self.requirements)
             new_requirements[cat_idx] = ("gte", target_count)
             return CompositionPattern(
-                original_pattern=self.original_pattern,
-                requirements=new_requirements
+                original_pattern=self.original_pattern, requirements=new_requirements
             )
         elif operator == "exact" and target_count < current_count:
             new_requirements = list(self.requirements)
             new_requirements[cat_idx] = ("exact", target_count)
             return CompositionPattern(
-                original_pattern=self.original_pattern,
-                requirements=new_requirements
+                original_pattern=self.original_pattern, requirements=new_requirements
             )
 
         # No demotion needed or possible
         return None
 
-    def promote_once(self, priority_order: List[int]) -> Optional['CompositionPattern']:
+    def promote_once(self, priority_order: List[int]) -> Optional["CompositionPattern"]:
         """
         Attempt to promote this pattern by relaxing requirements to allow more people.
 
@@ -311,7 +291,7 @@ class CompositionPattern:
                 new_requirements[cat_idx] = ("gte", count)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
-                    requirements=new_requirements
+                    requirements=new_requirements,
                 )
 
         # Couldn't promote further (all categories already flexible)
@@ -333,7 +313,5 @@ class CompositionPattern:
         return f"Pattern({self.to_string()})"
 
     def to_string(self) -> str:
-        """Get current pattern as string (with lazy caching)."""
-        if self._string_repr is None:
-            self._string_repr = self._requirements_to_string(self.requirements)
-        return self._string_repr
+        """Get current pattern as string."""
+        return self._requirements_to_string(self.requirements)

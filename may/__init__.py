@@ -1,5 +1,3 @@
-
-
 # import logging.config
 # import os
 

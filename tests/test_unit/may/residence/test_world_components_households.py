@@ -132,7 +132,7 @@ def test_rules_based_allocation(hd):
 
 def test_excess_allocation(hd):
     """
-    Test HouseholdExcessHandler respects adding elements directly to existing structures up to constraints.
+    Test household excess allocation respects adding elements directly to existing structures up to constraints.
     """
     # Create an initial household
     hd._prepare_person_pools()

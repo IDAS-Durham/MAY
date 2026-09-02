@@ -175,13 +175,12 @@ def test_coverage_skipped_when_lookup_is_not_geography(prob_files, geo_dir):
 
 class _Person:
     def __init__(self, geo_unit):
-        self.geo_unit = geo_unit
+        self.geographical_unit = type("GeoUnit", (), {"name": geo_unit})()
 
 
 def _filtering_for(distributor, geo_units):
     """Point the distributor's filter manager at people in the given SGUs."""
-    distributor._get_person_attribute = lambda attr, person: person.geo_unit
-    return distributor.filtering, [_Person(g) for g in geo_units]
+    return distributor.allocation, [_Person(g) for g in geo_units]
 
 
 def test_filter_raises_on_a_geo_unit_with_no_row(prob_files):
@@ -208,4 +207,4 @@ def test_filter_selects_by_the_stacked_probabilities(prob_files):
 
     selected = filtering.apply_probability_filter(people, prob_config, "uni_age")
 
-    assert [p.geo_unit for p in selected] == ["A001", "B001"]
+    assert [p.geographical_unit.name for p in selected] == ["A001", "B001"]

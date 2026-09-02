@@ -8,23 +8,27 @@ logger = logging.getLogger("may.attribute_assignment.strategies")
 # Config validation. Assignment blocks accept only the keys the engine reads,
 # failing loudly on any other.
 STRATEGY_ALLOWED_KEYS: Dict[str, set] = {
-    'probabilistic': {'strategy', 'data_source'},
-    'partnership': {'strategy', 'data_source', 'partner_role', 'marginal_source'},
-    'inheritance': {'strategy', 'inherit_from', 'logic', 'marginal_source'},
-    'reverse_inheritance': {'strategy', 'inherit_from', 'logic', 'marginal_source'},
-    'probabilistic_conditions': {'strategy', 'data_source', 'conditions',
-                                 'selection_method'},
-    'commuting_likelihood': {'strategy', 'data_source', 'outputs', 'condition'},
-    'geographical_unit_sampler': {'strategy', 'data_source'},
-    'categorical_sampler': {'strategy', 'data_source'},
-    'constant': {'strategy', 'value'},
+    "probabilistic": {"strategy", "data_source"},
+    "partnership": {"strategy", "data_source", "partner_role", "marginal_source"},
+    "inheritance": {"strategy", "inherit_from", "logic", "marginal_source"},
+    "reverse_inheritance": {"strategy", "inherit_from", "logic", "marginal_source"},
+    "probabilistic_conditions": {
+        "strategy",
+        "data_source",
+        "conditions",
+        "selection_method",
+    },
+    "commuting_likelihood": {"strategy", "data_source", "outputs", "condition"},
+    "geographical_unit_sampler": {"strategy", "data_source"},
+    "categorical_sampler": {"strategy", "data_source"},
+    "constant": {"strategy", "value"},
 }
 # Logic entries and nested then-blocks (inheritance strategies read these inline).
-_LOGIC_ENTRY_KEYS = {'when', 'then', 'note'}
-_THEN_BLOCK_KEYS = {'strategy', 'data_source', 'exclude', 'value', 'copy'}
+_LOGIC_ENTRY_KEYS = {"when", "then", "note"}
+_THEN_BLOCK_KEYS = {"strategy", "data_source", "exclude", "value", "copy"}
 
 # Strategies whose `logic:` blocks use the declarative when/then schema.
-_LOGIC_STRATEGIES = {'inheritance', 'reverse_inheritance'}
+_LOGIC_STRATEGIES = {"inheritance", "reverse_inheritance"}
 
 # Tolerance for probability arithmetic in the gated comorbidity sampler, which
 # separates a negative P(exactly 1) that reflects inconsistent inputs from one
@@ -49,10 +53,11 @@ def _draw_cdf(probabilities: np.ndarray) -> np.ndarray:
     cdf /= cdf[-1]
     return cdf
 
+
 # How `probabilistic_conditions` turns per-person probabilities into a set of
 # conditions. A config must pick one explicitly, so the modelling choice is
 # always visible (see ProbabilisticConditionsStrategy).
-_CONDITION_SELECTION_METHODS = {'independent_bernoulli', 'gated_conditions'}
+_CONDITION_SELECTION_METHODS = {"independent_bernoulli", "gated_conditions"}
 
 
 class _CompiledBlock:
@@ -64,7 +69,7 @@ class _CompiledBlock:
     per-person `assign` path reuses them directly.
     """
 
-    __slots__ = ('when_kind', 'when', 'then_kind', 'then', 'nested_strategy')
+    __slots__ = ("when_kind", "when", "then_kind", "then", "nested_strategy")
 
     def __init__(self, when_kind, when, then_kind, then, nested_strategy):
         self.when_kind = when_kind
@@ -95,13 +100,13 @@ def _classify_when(when: Any) -> str:
             f"{{role: primary_adult, attr: ethnicity, equals: M}}."
         )
     keys = set(when)
-    if keys == {'unique_count'}:
-        return 'unique_count'
-    if keys == {'unique_count_at_least'}:
-        return 'unique_count_at_least'
-    if {'role', 'attr'} <= keys and keys <= {'role', 'attr', 'equals', 'in'}:
-        if ('equals' in keys) ^ ('in' in keys):
-            return 'role_attr'
+    if keys == {"unique_count"}:
+        return "unique_count"
+    if keys == {"unique_count_at_least"}:
+        return "unique_count_at_least"
+    if {"role", "attr"} <= keys and keys <= {"role", "attr", "equals", "in"}:
+        if ("equals" in keys) ^ ("in" in keys):
+            return "role_attr"
         raise ValueError(
             f"inheritance role predicate needs exactly one of 'equals'/'in': {when!r}"
         )
@@ -128,28 +133,30 @@ def _classify_then(then: Any) -> str:
     """
     if isinstance(then, dict):
         keys = set(then)
-        if keys == {'value'}:
-            return 'value'
-        if keys == {'copy'}:
-            spec = then['copy']
-            if not isinstance(spec, dict) or set(spec) != {'role', 'attr'}:
+        if keys == {"value"}:
+            return "value"
+        if keys == {"copy"}:
+            spec = then["copy"]
+            if not isinstance(spec, dict) or set(spec) != {"role", "attr"}:
                 raise ValueError(
                     f"inheritance 'then.copy' must be {{role, attr}}, got {then['copy']!r}"
                 )
-            return 'copy'
-        if 'strategy' in keys:
-            return 'strategy'
+            return "copy"
+        if "strategy" in keys:
+            return "strategy"
         raise ValueError(
             f"unknown inheritance 'then' block {then!r}. Known forms: a literal, "
-            f"\"values[0]\", {{value: V}}, {{copy: {{role, attr}}}}, or a nested "
+            f'"values[0]", {{value: V}}, {{copy: {{role, attr}}}}, or a nested '
             f"strategy block."
         )
-    if then == 'values[0]':
-        return 'values[0]'
-    return 'literal'
+    if then == "values[0]":
+        return "values[0]"
+    return "literal"
 
 
-def validate_assignment_config(config: Dict[str, Any], where: str = "assignment") -> None:
+def validate_assignment_config(
+    config: Dict[str, Any], where: str = "assignment"
+) -> None:
     """
     Reject assignment config keys no strategy reads.
 
@@ -158,9 +165,11 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
         set, so a stale key (e.g. `context`) breaks the build at load time.
     """
     if not isinstance(config, dict):
-        raise ValueError(f"{where}: assignment must be a mapping, got {type(config).__name__}")
+        raise ValueError(
+            f"{where}: assignment must be a mapping, got {type(config).__name__}"
+        )
 
-    strategy_type = config.get('strategy')
+    strategy_type = config.get("strategy")
     if not strategy_type:
         raise ValueError(f"{where}: assignment has no 'strategy' field")
 
@@ -179,8 +188,8 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
             f"Remove them (dead config) or fix the typo."
         )
 
-    if strategy_type == 'probabilistic_conditions':
-        method = config.get('selection_method')
+    if strategy_type == "probabilistic_conditions":
+        method = config.get("selection_method")
         if method is None:
             raise ValueError(
                 f"{where}: strategy 'probabilistic_conditions' requires "
@@ -194,7 +203,7 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
             )
 
     is_logic_strategy = strategy_type in _LOGIC_STRATEGIES
-    for i, entry in enumerate(config.get('logic') or []):
+    for i, entry in enumerate(config.get("logic") or []):
         entry = entry or {}
         unknown = set(entry) - _LOGIC_ENTRY_KEYS
         if unknown:
@@ -202,7 +211,7 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
                 f"{where}.logic[{i}]: unknown key(s) {sorted(unknown)} — "
                 f"allowed: {sorted(_LOGIC_ENTRY_KEYS)}"
             )
-        then = entry.get('then')
+        then = entry.get("then")
         if isinstance(then, dict):
             unknown = set(then) - _THEN_BLOCK_KEYS
             if unknown:
@@ -212,7 +221,7 @@ def validate_assignment_config(config: Dict[str, Any], where: str = "assignment"
                 )
         if is_logic_strategy:
             try:
-                _classify_when(entry.get('when'))
+                _classify_when(entry.get("when"))
                 _classify_then(then)
             except ValueError as exc:
                 raise ValueError(f"{where}.logic[{i}]: {exc}") from exc
@@ -235,7 +244,7 @@ class AssignmentStrategy:
         """
         self.config = config
         self.data_manager = data_manager
-        self.strategy_type = config.get('strategy')
+        self.strategy_type = config.get("strategy")
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """
@@ -289,14 +298,14 @@ class AssignmentStrategy:
         marginal source is named by `marginal_source`; absence of that key means
         the case is not expected and is a hard error.
         """
-        marginal_source = self.config.get('marginal_source')
+        marginal_source = self.config.get("marginal_source")
         if not marginal_source:
             self._fail(
                 person,
                 "no value to condition on and no 'marginal_source' configured",
             )
         strat = ProbabilisticStrategy(
-            {'strategy': 'probabilistic', 'data_source': marginal_source},
+            {"strategy": "probabilistic", "data_source": marginal_source},
             self.data_manager,
         )
         return strat.assign(person, household, context)
@@ -319,7 +328,7 @@ class AssignmentStrategy:
         """
         Get attribute value from person.
 
-        Delegates to the shared get_person_attribute utility which handles
+        Delegates to the shared get_attribute utility which handles
         dot-notation, properties dict, and residence prefix.
 
         Args:
@@ -329,8 +338,9 @@ class AssignmentStrategy:
         Returns:
             Attribute value or None
         """
-        from may.utils.attribute_access import get_person_attribute
-        return get_person_attribute(person, attribute_name)
+        from may.utils.attribute_access import get_attribute
+
+        return get_attribute(person, attribute_name)
 
 
 class DrawStrategy(AssignmentStrategy):
@@ -347,7 +357,7 @@ class DrawStrategy(AssignmentStrategy):
 
     def __init__(self, config: Dict[str, Any], data_manager):
         super().__init__(config, data_manager)
-        self.data_source_name = config.get('data_source')
+        self.data_source_name = config.get("data_source")
 
     def _source(self):
         source = self.data_manager.get_source(self.data_source_name)
@@ -365,8 +375,12 @@ class DrawStrategy(AssignmentStrategy):
         logger.debug(f"{self.strategy_type}: {sampled} for {person.id}")
         return sampled
 
-    def assign_batch(self, people_list: List, households_list: List,
-                     contexts_list: List[Dict[str, Any]]) -> List[Any]:
+    def assign_batch(
+        self,
+        people_list: List,
+        households_list: List,
+        contexts_list: List[Dict[str, Any]],
+    ) -> List[Any]:
         """
         Batch draw. Group people by the distribution their source returns, then
         sample each group in one np.random.choice. Grouping is by the resolved
@@ -402,8 +416,8 @@ class PartnershipStrategy(AssignmentStrategy):
     def __init__(self, config: Dict[str, Any], data_manager):
         """Initialize partnership strategy."""
         super().__init__(config, data_manager)
-        self.data_source_name = config.get('data_source', 'pair_probabilities')
-        self.partner_role = config.get('partner_role', 'primary_adult')
+        self.data_source_name = config.get("data_source", "pair_probabilities")
+        self.partner_role = config.get("partner_role", "primary_adult")
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """
@@ -422,7 +436,7 @@ class PartnershipStrategy(AssignmentStrategy):
             logger.warning(f"Partner role '{self.partner_role}' not found in context")
             return self._marginal_assign(person, household, context)
 
-        attribute_name = context.get('attribute_name')
+        attribute_name = context.get("attribute_name")
         first_value = self._get_attribute_value(first_person, attribute_name)
         if first_value is None:
             logger.warning(f"No {attribute_name} found for {self.partner_role}")
@@ -443,9 +457,10 @@ class PartnershipStrategy(AssignmentStrategy):
         probabilities = list(probs.values())
         sampled = np.random.choice(values, p=probabilities)
 
-        logger.debug(f"Partnership: {sampled} (partner of {first_value}) for {person.id}")
+        logger.debug(
+            f"Partnership: {sampled} (partner of {first_value}) for {person.id}"
+        )
         return sampled
-
 
 
 class LogicBlockStrategy(AssignmentStrategy):
@@ -462,8 +477,8 @@ class LogicBlockStrategy(AssignmentStrategy):
 
     def __init__(self, config: Dict[str, Any], data_manager):
         super().__init__(config, data_manager)
-        self.inherit_config = config.get('inherit_from', {})
-        self.logic_blocks = config.get('logic', [])
+        self.inherit_config = config.get("inherit_from", {})
+        self.logic_blocks = config.get("logic", [])
         # Precompile blocks once per strategy instance (instances are cached and
         # reused across every person, see assigner._get_or_create_strategy), so
         # the per-call `assign` path only evaluates the precompiled blocks:
@@ -471,14 +486,14 @@ class LogicBlockStrategy(AssignmentStrategy):
         # construction all happen here, once, up front.
         self._compiled = [self._compile_block(b) for b in self.logic_blocks]
 
-    def _compile_block(self, block: Dict[str, Any]) -> '_CompiledBlock':
+    def _compile_block(self, block: Dict[str, Any]) -> "_CompiledBlock":
         """Classify and pre-build a logic block once (raises on bad shapes)."""
-        when = block.get('when')
-        then = block.get('then')
+        when = block.get("when")
+        then = block.get("then")
         when_kind = _classify_when(when)
         then_kind = _classify_then(then)
         nested = None
-        if then_kind == 'strategy' and then.get('strategy') == 'probabilistic':
+        if then_kind == "strategy" and then.get("strategy") == "probabilistic":
             nested = ProbabilisticStrategy(then, self.data_manager)
         return _CompiledBlock(when_kind, when, then_kind, then, nested)
 
@@ -486,46 +501,66 @@ class LogicBlockStrategy(AssignmentStrategy):
         """Resolve a `role.attribute` reference to its assigned value, or raise."""
         person = self._get_person_by_role(context, role)
         if person is None:
-            raise ValueError(f"logic predicate references role '{role}' absent from context")
+            raise ValueError(
+                f"logic predicate references role '{role}' absent from context"
+            )
         value = self._get_attribute_value(person, attr)
         if value is None:
             raise ValueError(f"logic predicate: role '{role}' has no '{attr}' assigned")
         return value
 
-    def _evaluate_when(self, block: '_CompiledBlock', source_values: List[Any],
-                       context: Dict[str, Any]) -> bool:
+    def _evaluate_when(
+        self, block: "_CompiledBlock", source_values: List[Any], context: Dict[str, Any]
+    ) -> bool:
         """Evaluate a precompiled `when` predicate."""
         kind, when = block.when_kind, block.when
-        if kind == 'unique_count':
-            return len(set(source_values)) == when['unique_count']
-        if kind == 'unique_count_at_least':
-            return len(set(source_values)) >= when['unique_count_at_least']
+        if kind == "unique_count":
+            return len(set(source_values)) == when["unique_count"]
+        if kind == "unique_count_at_least":
+            return len(set(source_values)) >= when["unique_count_at_least"]
         # role_attr
-        value = self._resolve_role_attr(when['role'], when['attr'], context)
-        if 'equals' in when:
-            return value == when['equals']
-        return value in when['in']
+        value = self._resolve_role_attr(when["role"], when["attr"], context)
+        if "equals" in when:
+            return value == when["equals"]
+        return value in when["in"]
 
-    def _resolve_then(self, block: '_CompiledBlock', source_values: List[Any], person,
-                      household, context: Dict[str, Any], attribute_name: str) -> Any:
+    def _resolve_then(
+        self,
+        block: "_CompiledBlock",
+        source_values: List[Any],
+        person,
+        household,
+        context: Dict[str, Any],
+        attribute_name: str,
+    ) -> Any:
         """Produce the value for a matched precompiled `then` action."""
         kind, then = block.then_kind, block.then
-        if kind == 'value':
-            return then['value']
-        if kind == 'copy':
-            spec = then['copy']
-            return self._resolve_role_attr(spec['role'], spec['attr'], context)
-        if kind == 'strategy':
-            return self._run_nested_strategy(block, person, household, context, attribute_name)
-        if kind == 'values[0]':
+        if kind == "value":
+            return then["value"]
+        if kind == "copy":
+            spec = then["copy"]
+            return self._resolve_role_attr(spec["role"], spec["attr"], context)
+        if kind == "strategy":
+            return self._run_nested_strategy(
+                block, person, household, context, attribute_name
+            )
+        if kind == "values[0]":
             if not source_values:
-                return self._fail(person, "'then: values[0]' but no source values collected")
+                return self._fail(
+                    person, "'then: values[0]' but no source values collected"
+                )
             return source_values[0]
         # literal
         return then
 
-    def _run_nested_strategy(self, block: '_CompiledBlock', person, household,
-                             context: Dict[str, Any], attribute_name: str) -> Any:
+    def _run_nested_strategy(
+        self,
+        block: "_CompiledBlock",
+        person,
+        household,
+        context: Dict[str, Any],
+        attribute_name: str,
+    ) -> Any:
         """Run a precompiled nested strategy block, honouring any `exclude` constraint."""
         if block.nested_strategy is None:
             return self._fail(
@@ -533,27 +568,40 @@ class LogicBlockStrategy(AssignmentStrategy):
                 f"unsupported nested strategy '{block.then.get('strategy')}' in logic block",
             )
         excluded_values = self._resolve_exclude_values(
-            block.then.get('exclude', []), context, attribute_name
+            block.then.get("exclude", []), context, attribute_name
         )
         if excluded_values:
-            return self._sample_with_exclusion(person, household, context, block.then, excluded_values)
+            return self._sample_with_exclusion(
+                person, household, context, block.then, excluded_values
+            )
         return block.nested_strategy.assign(person, household, context)
 
-    def _run_logic(self, source_values: List[Any], person, household,
-                   context: Dict[str, Any], attribute_name: str) -> Any:
+    def _run_logic(
+        self,
+        source_values: List[Any],
+        person,
+        household,
+        context: Dict[str, Any],
+        attribute_name: str,
+    ) -> Any:
         """First block whose `when` matches wins; no match fails loudly."""
         for block in self._compiled:
             if self._evaluate_when(block, source_values, context):
                 result = self._resolve_then(
-                    block, source_values, person, household, context, attribute_name,
+                    block,
+                    source_values,
+                    person,
+                    household,
+                    context,
+                    attribute_name,
                 )
                 logger.debug(f"{self.strategy_type}: {result} for {person.id}")
                 return result
         return self._fail(person, "no logic block matched")
 
-    def _resolve_exclude_values(self, exclude_refs: List[str],
-                                context: Dict[str, Any],
-                                attribute_name: str) -> set:
+    def _resolve_exclude_values(
+        self, exclude_refs: List[str], context: Dict[str, Any], attribute_name: str
+    ) -> set:
         """
         Resolve exclude references like ["primary_elder.ethnicity"] into
         concrete values by looking up the referenced role persons in context.
@@ -573,7 +621,7 @@ class LogicBlockStrategy(AssignmentStrategy):
         excluded = set()
         for ref in exclude_refs:
             # Parse "role_name.attribute_name" format
-            parts = ref.split('.', 1)
+            parts = ref.split(".", 1)
             if len(parts) == 2:
                 role_name, attr_name = parts
             else:
@@ -587,15 +635,24 @@ class LogicBlockStrategy(AssignmentStrategy):
                     excluded.add(value)
                     logger.debug(f"Exclude: resolved '{ref}' → '{value}'")
                 else:
-                    logger.debug(f"Exclude: '{ref}' has no value assigned yet, skipping")
+                    logger.debug(
+                        f"Exclude: '{ref}' has no value assigned yet, skipping"
+                    )
             else:
-                logger.debug(f"Exclude: role '{role_name}' not found in context, skipping")
+                logger.debug(
+                    f"Exclude: role '{role_name}' not found in context, skipping"
+                )
 
         return excluded
 
-    def _sample_with_exclusion(self, person, household, context: Dict[str, Any],
-                                strategy_config: Dict[str, Any],
-                                excluded_values: set) -> Any:
+    def _sample_with_exclusion(
+        self,
+        person,
+        household,
+        context: Dict[str, Any],
+        strategy_config: Dict[str, Any],
+        excluded_values: set,
+    ) -> Any:
         """
         Sample from a probabilistic distribution while excluding specific values.
 
@@ -613,7 +670,7 @@ class LogicBlockStrategy(AssignmentStrategy):
         Returns:
             Sampled attribute value
         """
-        data_source_name = strategy_config.get('data_source', 'geo_distribution')
+        data_source_name = strategy_config.get("data_source", "geo_distribution")
         source = self.data_manager.get_source(data_source_name)
         if not source:
             raise KeyError(
@@ -649,8 +706,8 @@ class InheritanceStrategy(LogicBlockStrategy):
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """Assign a value by inheriting from the configured parent roles."""
-        attribute_name = context.get('attribute_name')
-        parent_roles = self.inherit_config.get('roles', [])
+        attribute_name = context.get("attribute_name")
+        parent_roles = self.inherit_config.get("roles", [])
 
         parent_values = []
         for role_name in parent_roles:
@@ -663,7 +720,9 @@ class InheritanceStrategy(LogicBlockStrategy):
         if not parent_values:
             return self._marginal_assign(person, household, context)
 
-        return self._run_logic(parent_values, person, household, context, attribute_name)
+        return self._run_logic(
+            parent_values, person, household, context, attribute_name
+        )
 
 
 class ReverseInheritanceStrategy(LogicBlockStrategy):
@@ -678,11 +737,13 @@ class ReverseInheritanceStrategy(LogicBlockStrategy):
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """Assign a value by inferring it from the configured child role."""
-        attribute_name = context.get('attribute_name')
+        attribute_name = context.get("attribute_name")
 
-        child_role = self.inherit_config.get('role')
+        child_role = self.inherit_config.get("role")
         if not child_role:
-            return self._fail(person, "no child role configured for reverse inheritance")
+            return self._fail(
+                person, "no child role configured for reverse inheritance"
+            )
 
         child = self._get_person_by_role(context, child_role)
         if not child:
@@ -692,7 +753,9 @@ class ReverseInheritanceStrategy(LogicBlockStrategy):
         if child_value is None:
             return self._marginal_assign(person, household, context)
 
-        return self._run_logic([child_value], person, household, context, attribute_name)
+        return self._run_logic(
+            [child_value], person, household, context, attribute_name
+        )
 
 
 class ProbabilisticConditionsStrategy(AssignmentStrategy):
@@ -713,11 +776,11 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         """Initialize probabilistic conditions strategy."""
         super().__init__(config, data_manager)
         self.strategy_type = "probabilistic_conditions"
-        self.conditions = config.get('conditions', [])
+        self.conditions = config.get("conditions", [])
         # A config must declare its selection_method (validated at load by
         # validate_assignment_config); the dispatch in assign() fails loudly if
         # an unknown value reaches it via direct construction.
-        self.selection_method = config.get('selection_method')
+        self.selection_method = config.get("selection_method")
         self._distribution_cache = {}
 
     def assign(self, person, household, context: Dict[str, Any]) -> List[str]:
@@ -732,7 +795,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         Returns:
             List of condition names (e.g., ["cvd", "crd"])
         """
-        data_source_name = self.config.get('data_source')
+        data_source_name = self.config.get("data_source")
         if not data_source_name:
             self._fail(person, "probabilistic_conditions has no 'data_source'")
 
@@ -743,13 +806,15 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         # Perform lookup (raises on a miss, with no fallbacks)
         probabilities = source.lookup(person, household, context)
 
-        if self.selection_method == 'independent_bernoulli':
+        if self.selection_method == "independent_bernoulli":
             return self._sample_independent_bernoulli(probabilities)
-        if self.selection_method == 'gated_conditions':
+        if self.selection_method == "gated_conditions":
             return self._sample_gated_conditions(person, probabilities)
         self._fail(person, f"unknown selection_method '{self.selection_method}'")
 
-    def _sample_independent_bernoulli(self, probabilities: Dict[str, float]) -> List[str]:
+    def _sample_independent_bernoulli(
+        self, probabilities: Dict[str, float]
+    ) -> List[str]:
         """
         Sample conditions independently using Bernoulli trials.
 
@@ -764,7 +829,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         selected_conditions = []
 
         for condition in self.conditions:
-            condition_name = condition.get('name')
+            condition_name = condition.get("name")
             if not condition_name:
                 continue
 
@@ -775,7 +840,9 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
 
         return selected_conditions
 
-    def _sample_gated_conditions(self, person, probabilities: Dict[str, float]) -> List[str]:
+    def _sample_gated_conditions(
+        self, person, probabilities: Dict[str, float]
+    ) -> List[str]:
         """
         Gated hierarchical comorbidity sampler.
 
@@ -796,7 +863,9 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         """
         dist = self._distribution(probabilities, person)
 
-        drawn_tier = int(dist['tier_cdf'].searchsorted(np.random.random(), side='right'))
+        drawn_tier = int(
+            dist["tier_cdf"].searchsorted(np.random.random(), side="right")
+        )
         if drawn_tier == 0:
             return []
 
@@ -804,8 +873,12 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             dist, probabilities, person
         )
 
-        count = 1 if drawn_tier == 1 else self._sample_multi_count(person, dist, margins)
-        return self._pick_distinct_conditions(person, valid, weights, weights_cdf, count)
+        count = (
+            1 if drawn_tier == 1 else self._sample_multi_count(person, dist, margins)
+        )
+        return self._pick_distinct_conditions(
+            person, valid, weights, weights_cdf, count
+        )
 
     def _distribution(self, probabilities: Dict[str, float], person) -> Dict[str, Any]:
         """
@@ -819,9 +892,9 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         if entry is not None:
             return entry[1]
 
-        p_none = self._require_prob(probabilities, 'no_condition', person)
-        p_any = self._require_prob(probabilities, 'has_comorbidity', person)
-        p_multi = self._require_prob(probabilities, 'multiple_morbidities', person)
+        p_none = self._require_prob(probabilities, "no_condition", person)
+        p_any = self._require_prob(probabilities, "has_comorbidity", person)
+        p_multi = self._require_prob(probabilities, "multiple_morbidities", person)
 
         p_one = p_any - p_multi
         if p_one < -_PROB_TOL:
@@ -837,7 +910,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             self._fail(person, "comorbidity count-tier probabilities sum to zero")
         tier /= total
 
-        dist = {'tier_cdf': _draw_cdf(tier), 'weights': None, 'multi': None}
+        dist = {"tier_cdf": _draw_cdf(tier), "weights": None, "multi": None}
 
         # A source that returns a fresh dict per person would otherwise grow
         # this to one entry per person, so cap it. Sources that cache their
@@ -847,22 +920,27 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
         self._distribution_cache[id(probabilities)] = (probabilities, dist)
         return dist
 
-    def _condition_weights(self, dist: Dict[str, Any],
-                           probabilities: Dict[str, float], person):
+    def _condition_weights(
+        self, dist: Dict[str, Any], probabilities: Dict[str, float], person
+    ):
         """
         Per-condition marginals for one data row, resolved on first draw above tier 0.
 
         Returns the marginals, the names carrying positive probability, and the
         normalized weights over those names with their draw CDF.
         """
-        cached = dist['weights']
+        cached = dist["weights"]
         if cached is not None:
             return cached
 
-        names = [c['name'] for c in self.conditions if c.get('name')]
+        names = [c["name"] for c in self.conditions if c.get("name")]
         margins = np.clip(
-            np.array([self._require_prob(probabilities, n, person) for n in names], dtype=float),
-            0.0, None,
+            np.array(
+                [self._require_prob(probabilities, n, person) for n in names],
+                dtype=float,
+            ),
+            0.0,
+            None,
         )
 
         positive = margins > 0
@@ -875,21 +953,25 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             weights_cdf = _draw_cdf(weights)
 
         cached = (margins, valid, weights, weights_cdf)
-        dist['weights'] = cached
+        dist["weights"] = cached
         return cached
 
     def _require_prob(self, probabilities: Dict[str, float], key: str, person) -> float:
         """Read a probability the gated sampler depends on, or fail loudly."""
         if key not in probabilities:
-            self._fail(person, f"gated_conditions requires '{key}' from the data source")
+            self._fail(
+                person, f"gated_conditions requires '{key}' from the data source"
+            )
         return float(probabilities[key])
 
-    def _sample_multi_count(self, person, dist: Dict[str, Any], margins: np.ndarray) -> int:
+    def _sample_multi_count(
+        self, person, dist: Dict[str, Any], margins: np.ndarray
+    ) -> int:
         """
         Draw a condition count >=2 from the Poisson-binomial of the per-condition
         marginals, conditioned on >=2.
         """
-        cached = dist['multi']
+        cached = dist["multi"]
         if cached is None:
             # Poisson-binomial PMF over the marginals: convolve each [1-p, p].
             pmf = np.array([1.0])
@@ -905,13 +987,14 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
                     "cannot produce two or more",
                 )
             cached = (np.arange(2, len(pmf)), _draw_cdf(tail / total))
-            dist['multi'] = cached
+            dist["multi"] = cached
 
         counts, cdf = cached
-        return int(counts[cdf.searchsorted(np.random.random(), side='right')])
+        return int(counts[cdf.searchsorted(np.random.random(), side="right")])
 
-    def _pick_distinct_conditions(self, person, valid: List[str], weights,
-                                  weights_cdf, count: int) -> List[str]:
+    def _pick_distinct_conditions(
+        self, person, valid: List[str], weights, weights_cdf, count: int
+    ) -> List[str]:
         """Pick `count` distinct conditions weighted by their marginals, no replacement."""
         if count > len(valid):
             self._fail(
@@ -921,7 +1004,7 @@ class ProbabilisticConditionsStrategy(AssignmentStrategy):
             )
 
         if count == 1:
-            return [valid[weights_cdf.searchsorted(np.random.rand(1), side='right')[0]]]
+            return [valid[weights_cdf.searchsorted(np.random.rand(1), side="right")[0]]]
 
         chosen = np.random.choice(valid, size=count, replace=False, p=weights)
         return [str(c) for c in chosen]
@@ -940,20 +1023,20 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
     def __init__(self, config: Dict[str, Any], data_manager):
         """Initialize commuting likelihood strategy."""
         super().__init__(config, data_manager)
-        self.data_source_name = config.get('data_source')
-        self.outputs = config.get('outputs', {})
+        self.data_source_name = config.get("data_source")
+        self.outputs = config.get("outputs", {})
         # Optional: restrict the destination draw to O-D rows whose metadata
         # matches an attribute already assigned to the person. Lets a coarser
         # matrix answer only "where", once a finer source has answered "whether".
-        self.condition = config.get('condition')
+        self.condition = config.get("condition")
 
     def _condition_allowed(self, person) -> Optional[set]:
         """Metadata values this person's destinations may carry, or None if unconditioned."""
         if not self.condition:
             return None
-        attribute = self.condition['attribute']
+        attribute = self.condition["attribute"]
         value = self._get_attribute_value(person, attribute)
-        mapping = self.condition['map']
+        mapping = self.condition["map"]
         if value not in mapping:
             raise ValueError(
                 f"commuting_likelihood condition on '{attribute}': value {value!r} "
@@ -965,7 +1048,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         """Keep O-D rows whose condition metadata is allowed, renormalised to 1.0."""
         if allowed is None:
             return destinations
-        key = self.condition['metadata_key']
+        key = self.condition["metadata_key"]
         kept = [(d, m, l) for (d, m, l) in destinations if m.get(key) in allowed]
         total = sum(l for _, _, l in kept)
         if not kept or total <= 0:
@@ -988,7 +1071,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         Returns:
             Origin code string, or None if resolution fails
         """
-        origin_geo_unit = getattr(person, 'geographical_unit', None)
+        origin_geo_unit = getattr(person, "geographical_unit", None)
         if not origin_geo_unit:
             return None
 
@@ -996,18 +1079,18 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         if not source:
             return None
 
-        if hasattr(source, '_file_configs') and source._file_configs:
+        if hasattr(source, "_file_configs") and source._file_configs:
             file_config = source._file_configs[0]
-            key_columns = file_config.get('key_columns', {})
+            key_columns = file_config.get("key_columns", {})
 
             if key_columns:
                 first_key_config = list(key_columns.values())[0]
 
                 if isinstance(first_key_config, dict):
-                    lookup_type = first_key_config.get('type')
-                    if lookup_type == 'ancestor_lookup':
-                        level = first_key_config.get('level')
-                        property_name = first_key_config.get('property', 'name')
+                    lookup_type = first_key_config.get("type")
+                    if lookup_type == "ancestor_lookup":
+                        level = first_key_config.get("level")
+                        property_name = first_key_config.get("property", "name")
 
                         ancestor = origin_geo_unit.get_ancestor_by_level(level)
                         if ancestor:
@@ -1023,7 +1106,12 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         else:
             return origin_geo_unit.name
 
-    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
+    def assign_batch(
+        self,
+        people_list: List,
+        households_list: List,
+        contexts_list: List[Dict[str, Any]],
+    ) -> List[Any]:
         """
         Batch assignment to minimize repeated O-D matrix lookups.
 
@@ -1044,8 +1132,12 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         source = self.data_manager.get_source(self.data_source_name)
         if not source:
             logger.warning(f"Data source '{self.data_source_name}' not found")
-            return [self._fail(person, "no commuting-flow row for this origin")
-                    for person, household, context in zip(people_list, households_list, contexts_list)]
+            return [
+                self._fail(person, "no commuting-flow row for this origin")
+                for person, household, context in zip(
+                    people_list, households_list, contexts_list
+                )
+            ]
 
         # Group by origin and, when conditioning, by the condition value too:
         # every member of a group then shares one filtered distribution.
@@ -1055,22 +1147,25 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             origin_code = self._resolve_origin_code(person)
             if origin_code:
                 allowed = self._condition_allowed(person)
-                origin_groups[(origin_code,
-                               frozenset(allowed) if allowed else None)].append(i)
+                origin_groups[
+                    (origin_code, frozenset(allowed) if allowed else None)
+                ].append(i)
 
         results = [None] * len(people_list)
 
         for (origin_code, allowed), indices in origin_groups.items():
             destinations = source.lookup(origin_code)
             if destinations:
-                destinations = self._filter_by_condition(destinations, allowed, origin_code)
+                destinations = self._filter_by_condition(
+                    destinations, allowed, origin_code
+                )
             if not destinations:
                 logger.warning(f"No destinations found for origin {origin_code}")
                 for idx in indices:
                     person = people_list[idx]
-                    household = households_list[idx]
-                    context = contexts_list[idx]
-                    results[idx] = self._fail(person, "no commuting-flow row for this origin")
+                    results[idx] = self._fail(
+                        person, "no commuting-flow row for this origin"
+                    )
                 continue
 
             # destinations is List[(destination, metadata_dict, likelihood)]
@@ -1079,7 +1174,9 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             metadata_list = [meta for dest, meta, lik in destinations]
 
             n_samples = len(indices)
-            sampled_indices = np.random.choice(len(dest_codes), size=n_samples, p=likelihoods)
+            sampled_indices = np.random.choice(
+                len(dest_codes), size=n_samples, p=likelihoods
+            )
 
             for idx, sampled_idx in zip(indices, sampled_indices):
                 sampled_dest = dest_codes[sampled_idx]
@@ -1089,8 +1186,10 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             # Mark redistributed assignments. A worker from this origin was
             # bounced back in-boundary with probability = the origin's
             # out-of-boundary mass; a per-person Bernoulli reproduces that fraction.
-            flag = getattr(source, '_redistributed_flag', None)
-            fraction = getattr(source, '_redistributed_fraction', {}).get(origin_code, 0.0)
+            flag = getattr(source, "_redistributed_flag", None)
+            fraction = getattr(source, "_redistributed_fraction", {}).get(
+                origin_code, 0.0
+            )
             if flag and fraction > 0.0:
                 marks = np.random.random(len(indices)) < fraction
                 for idx, marked in zip(indices, marks):
@@ -1100,15 +1199,16 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         # Headcount of out-of-boundary assignments. Under the 'outside'
         # policy the sentinel is a normal destination value, so report how many
         # people drew it, and the per-step exclusion downstream reports the rest.
-        outside_value = getattr(source, '_outside_value', None)
+        outside_value = getattr(source, "_outside_value", None)
         if outside_value:
             # The sentinel lands on whichever output is wired to 'destination'.
             dest_attr = next(
-                (attr for attr, src in self.outputs.items() if src == 'destination'),
+                (attr for attr, src in self.outputs.items() if src == "destination"),
                 None,
             )
             n_outside = sum(
-                1 for r in results
+                1
+                for r in results
                 if (r.get(dest_attr) if isinstance(r, dict) else r) == outside_value
             )
             if n_outside:
@@ -1178,7 +1278,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
             result[flag] = True
             return result
         dest_attr = next(
-            (attr for attr, src in self.outputs.items() if src == 'destination'),
+            (attr for attr, src in self.outputs.items() if src == "destination"),
             None,
         )
         if dest_attr is None:
@@ -1197,7 +1297,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
         """
         if len(self.outputs) == 1:
             output_attr, output_source = list(self.outputs.items())[0]
-            if output_source == 'destination':
+            if output_source == "destination":
                 return sampled_dest
             if output_source in sampled_metadata:
                 return sampled_metadata[output_source]
@@ -1208,7 +1308,7 @@ class CommutingLikelihoodStrategy(AssignmentStrategy):
 
         result = {}
         for output_attr, output_source in self.outputs.items():
-            if output_source == 'destination':
+            if output_source == "destination":
                 result[output_attr] = sampled_dest
             elif output_source in sampled_metadata:
                 result[output_attr] = sampled_metadata[output_source]
@@ -1232,18 +1332,28 @@ class ConstantStrategy(AssignmentStrategy):
     def __init__(self, config: Dict[str, Any], data_manager):
         """Initialize constant strategy."""
         super().__init__(config, data_manager)
-        self.value = config.get('value')
+        self.value = config.get("value")
 
-    def assign_batch(self, people_list: List, households_list: List, contexts_list: List[Dict[str, Any]]) -> List[Any]:
+    def assign_batch(
+        self,
+        people_list: List,
+        households_list: List,
+        contexts_list: List[Dict[str, Any]],
+    ) -> List[Any]:
         """Batch assignment - all receive the same value."""
         if self.value is None:
-            return [self.assign(p, h, c) for p, h, c in zip(people_list, households_list, contexts_list)]
+            return [
+                self.assign(p, h, c)
+                for p, h, c in zip(people_list, households_list, contexts_list)
+            ]
         return [self.value] * len(people_list)
 
     def assign(self, person, household, context: Dict[str, Any]) -> Any:
         """Assign the constant value."""
         if self.value is None:
-            logger.warning(f"ConstantStrategy: No value configured for assignment to person {person.id}")
+            logger.warning(
+                f"ConstantStrategy: No value configured for assignment to person {person.id}"
+            )
             return self._fail(person, "constant strategy has no 'value'")
 
         return self.value
@@ -1257,41 +1367,24 @@ CategoricalSamplerStrategy = DrawStrategy
 GUSamplerStrategy = DrawStrategy
 
 
-class StrategyFactory:
-    """
-    Factory for creating strategy instances.
+_STRATEGIES = {
+    "probabilistic": ProbabilisticStrategy,
+    "partnership": PartnershipStrategy,
+    "inheritance": InheritanceStrategy,
+    "reverse_inheritance": ReverseInheritanceStrategy,
+    "probabilistic_conditions": ProbabilisticConditionsStrategy,
+    "commuting_likelihood": CommutingLikelihoodStrategy,
+    "geographical_unit_sampler": GUSamplerStrategy,
+    "categorical_sampler": CategoricalSamplerStrategy,
+    "constant": ConstantStrategy,
+}
 
-    Maps strategy type strings to strategy classes.
-    """
 
-    _strategy_map = {
-        'probabilistic': ProbabilisticStrategy,
-        'partnership': PartnershipStrategy,
-        'inheritance': InheritanceStrategy,
-        'reverse_inheritance': ReverseInheritanceStrategy,
-        'probabilistic_conditions': ProbabilisticConditionsStrategy,
-        'commuting_likelihood': CommutingLikelihoodStrategy,
-        'geographical_unit_sampler': GUSamplerStrategy,
-        'categorical_sampler': CategoricalSamplerStrategy,
-        'constant': ConstantStrategy,
-    }
-
-    @classmethod
-    def create_strategy(cls, config: Dict[str, Any], data_manager) -> AssignmentStrategy:
-        """
-        Create strategy instance from configuration.
-
-        Args:
-            config: Strategy configuration dict
-            data_manager: DataSourceManager instance
-
-        Returns:
-            Strategy instance
-
-        Raises:
-            ValueError: If strategy type is unknown
-        """
-        validate_assignment_config(config)
-
-        strategy_class = cls._strategy_map.get(config['strategy'])
-        return strategy_class(config, data_manager)
+def create_strategy(config: Dict[str, Any], data_manager) -> AssignmentStrategy:
+    """Validate and instantiate one of the built-in assignment strategies."""
+    validate_assignment_config(config)
+    try:
+        strategy_class = _STRATEGIES[config["strategy"]]
+    except KeyError:
+        raise ValueError(f"Unknown strategy type: {config.get('strategy')}") from None
+    return strategy_class(config, data_manager)

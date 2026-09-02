@@ -22,13 +22,13 @@ Usage:
 """
 
 from .assignment_config import AttributeAssignmentConfig
-from .strategies import StrategyFactory
+from .strategies import create_strategy
 from .assigner import AttributeAssigner, AttributeAssignmentError, assign_attributes
 
 __all__ = [
-    'AttributeAssignmentConfig',
-    'StrategyFactory',
-    'AttributeAssigner',
-    'AttributeAssignmentError',
-    'assign_attributes',
+    "AttributeAssignmentConfig",
+    "create_strategy",
+    "AttributeAssigner",
+    "AttributeAssignmentError",
+    "assign_attributes",
 ]

@@ -44,8 +44,9 @@ def as_path_list(spec, label):
     )
 
 
-def load_stacked_csv(paths, *, label, key_column=None, column_policy="strict",
-                     **read_csv_kwargs):
+def load_stacked_csv(
+    paths, *, label, key_column=None, column_policy="strict", **read_csv_kwargs
+):
     """
     Read one or more CSVs and concatenate them into a single DataFrame.
 
@@ -205,9 +206,7 @@ def _check_column_types(frames, stacked, label):
             f"{path} -> {_first_value_type(df[column]) or 'all null'}"
             for path, df in frames
         ]
-        shown = ", ".join(
-            f"{name} {examples[name]!r}" for name in sorted(examples)
-        )
+        shown = ", ".join(f"{name} {examples[name]!r}" for name in sorted(examples))
         offenders.append(
             f"column {column!r} holds {sorted(examples)} ({shown}); "
             f"{'; '.join(per_file)}"
@@ -217,8 +216,7 @@ def _check_column_types(frames, stacked, label):
             f"{label}: stacking produced column(s) holding more than one value "
             f"type, which one output type would have to alter to represent. "
             f"Give the column the same type in every file, or read it as text "
-            f"throughout with dtype=. "
-            + " | ".join(offenders)
+            f"throughout with dtype=. " + " | ".join(offenders)
         )
 
 
@@ -243,9 +241,7 @@ def _check_key_uniqueness(frames, key_column, label):
             )
         clashes = [(k, first_seen[k]) for k in keys if k in first_seen]
         if clashes:
-            examples = [
-                f"{k!r} (also in {other})" for k, other in clashes[:5]
-            ]
+            examples = [f"{k!r} (also in {other})" for k, other in clashes[:5]]
             raise StackedInputError(
                 f"{label}: {len(clashes)} key(s) in {path} already appear in "
                 f"another file: {examples}."

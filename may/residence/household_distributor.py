@@ -10,11 +10,9 @@ This module handles:
 
 import os
 import logging
-import yaml
 import math
-import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple, Optional, Set, Any
+from typing import Dict, List, Tuple, Optional, Set
 from itertools import islice
 from collections import defaultdict
 
@@ -23,14 +21,13 @@ from may.geography.venue import Venue
 from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
+from may.utils.yaml_loader import load_yaml
 from may.residence.relationship_rules import RelationshipRulesValidator
 from may.utils import path_resolver as pr
 from may.residence.models import Category
 from may.residence.composition_pattern import CompositionPattern
-from may.residence.household_excess_handler import HouseholdExcessHandler
-from may.residence.household_promoter import HouseholdPromoter
-from may.residence.household_round_distributor import HouseholdRoundDistributor
-from may.utils.attribute_access import get_person_attribute
+from may.utils.attribute_access import get_attribute
+from . import _household_excess, _household_promotion, _household_rounds
 
 logger = logging.getLogger("household")
 
@@ -51,9 +48,15 @@ class HouseholdDistributor:
     - Handles census obfuscation through pattern demotion
     """
 
-    def __init__(self, geography: Geography, population: PopulationManager,
-                 venue_manager: VenueManager,
-                 data_dir, config_file, rules_file: Optional[str] = None):
+    def __init__(
+        self,
+        geography: Geography,
+        population: PopulationManager,
+        venue_manager: VenueManager,
+        data_dir,
+        config_file,
+        rules_file: Optional[str] = None,
+    ):
         """
         Initialize the household distributor.
 
@@ -80,8 +83,7 @@ class HouseholdDistributor:
             config_path = os.path.join(data_dir, config_file)
 
         try:
-            with open(config_path, 'r', encoding='utf-8-sig') as f:
-                self.config = yaml.safe_load(f)
+            self.config = load_yaml(config_path)
         except FileNotFoundError:
             raise HouseholdError(f"Household config file not found: {config_path}")
         if not self.config:
@@ -91,7 +93,9 @@ class HouseholdDistributor:
         self.categories = self._parse_categories()
 
         # Create mapping from category name to index for validation rules
-        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(self.categories)}
+        self.category_name_to_idx = {
+            cat.name: idx for idx, cat in enumerate(self.categories)
+        }
 
         self.household_counts_by_geo_unit: Dict[str, Dict[str, int]] = {}
         # The set of composition-pattern column headers in households.csv, the
@@ -100,10 +104,10 @@ class HouseholdDistributor:
         self.allocated_people: Set[int] = set()  # Person IDs that have been allocated
 
         # Pool of available people by geo_unit and category
-        self.person_pool_by_geo_unit: Dict[str, List[Dict[int, 'Person']]] = {}
+        self.person_pool_by_geo_unit: Dict[str, List[Dict[int, "Person"]]] = {}
         # Companion lists for O(1) random sampling of large pools; entries may
         # be stale (checked against the dict on probe); see _sample_candidates.
-        self._sample_lists: Dict[str, Dict[int, List['Person']]] = {}
+        self._sample_lists: Dict[str, Dict[int, List["Person"]]] = {}
         self._warned_large_pool = False
 
         # Structure mixture: set by the allocation strategy
@@ -114,6 +118,8 @@ class HouseholdDistributor:
         # Round tracking
         self.current_round: int = 0
         self.pools_prepared: bool = False
+        self._households_by_geo_unit = None
+        self._households_by_pattern = None
 
         # Initialize relationship rules validator. The path must come from the
         # world config's `households.rules_file`. If unset, the validator is
@@ -125,7 +131,9 @@ class HouseholdDistributor:
             else:
                 rules_config_path = os.path.join(data_dir, rules_file)
         else:
-            logger.warning("households.rules_file is not set; relationship rules disabled")
+            logger.warning(
+                "households.rules_file is not set; relationship rules disabled"
+            )
             rules_config_path = ""
 
         self.relationship_rules = RelationshipRulesValidator(
@@ -134,16 +142,8 @@ class HouseholdDistributor:
             geography=self.geography,
         )
 
-        # Initialize excess handler
-        self.excess_handler = HouseholdExcessHandler(self)
-
-        # Initialize promoter
-        self.promoter = HouseholdPromoter(self)
-
-        self.round_distributor = HouseholdRoundDistributor(self)
-
         # Pre-calculate demotion fallback priority
-        priority_config = self.config.get('demotion', {}).get('priority', {})
+        priority_config = self.config.get("demotion", {}).get("priority", {})
         priority_order = []
         for cat_idx, cat in enumerate(self.categories):
             priority = priority_config.get(cat.name, 999)
@@ -151,44 +151,45 @@ class HouseholdDistributor:
         priority_order.sort()  # Sort by priority (lower = demote first)
         self.fallback_priority = [idx for _, idx in priority_order]
 
-        logger.info(f"Initialized HouseholdDistributor with {len(self.categories)} categories")
+        logger.info(
+            f"Initialized HouseholdDistributor with {len(self.categories)} categories"
+        )
         for cat in self.categories:
             logger.info(f"  - {cat}")
 
     def _parse_categories(self) -> List[Category]:
         """Parse categories from config."""
         categories = []
-        for cat_config in self.config['categories']:
-            cat_type = cat_config['type']
+        for cat_config in self.config["categories"]:
+            cat_type = cat_config["type"]
 
             # Extract type-specific parameters from nested structure
-            if cat_type == 'numerical':
-                numerical_config = cat_config.get('numerical', {})
-                min_value = numerical_config.get('min')
-                max_value = numerical_config.get('max')
+            if cat_type == "numerical":
+                numerical_config = cat_config.get("numerical", {})
+                min_value = numerical_config.get("min")
+                max_value = numerical_config.get("max")
                 allowed_values = None
-            elif cat_type == 'categorical':
-                categorical_config = cat_config.get('categorical', {})
+            elif cat_type == "categorical":
+                categorical_config = cat_config.get("categorical", {})
                 min_value = None
                 max_value = None
-                allowed_values = categorical_config.get('allowed_values')
+                allowed_values = categorical_config.get("allowed_values")
             else:
                 raise ValueError(f"Unknown category type: {cat_type}")
 
             cat = Category(
-                name=cat_config['name'],
-                symbol=cat_config['symbol'],
-                attribute=cat_config['attribute'],
+                name=cat_config["name"],
+                symbol=cat_config["symbol"],
+                attribute=cat_config["attribute"],
                 type=cat_type,
                 min_value=min_value,
                 max_value=max_value,
-                allowed_values=allowed_values
+                allowed_values=allowed_values,
             )
             categories.append(cat)
         return categories
 
-    def load_household_data(self, filename,
-                            column_policy: str = "strict"):
+    def load_household_data(self, filename, column_policy: str = "strict"):
         """
         Load household composition data from CSV.
 
@@ -224,13 +225,17 @@ class HouseholdDistributor:
 
         # Create a set of geo unit names that exist in our geography for fast lookup
         valid_geo_units = set(smallest_units_dict.keys())
-        logger.info(f"Filtering household data to {len(valid_geo_units)} {smallest_level}s in loaded geography")
+        logger.info(
+            f"Filtering household data to {len(valid_geo_units)} {smallest_level}s in loaded geography"
+        )
 
         # Fail loud on missing/mismatched data. The engine works on complete
         # data or not at all, matching PopulationError/VenueError.
         try:
             df = load_stacked_csv(
-                filepaths, label="household data", key_column=0,
+                filepaths,
+                label="household data",
+                key_column=0,
                 column_policy=column_policy,
             )
         except Exception as e:
@@ -256,7 +261,9 @@ class HouseholdDistributor:
         # Filter to only geo units in our geography BEFORE processing
         df = df[df[geo_unit_col].isin(valid_geo_units)]
 
-        logger.info(f"Filtered to {len(df)} geo_units with {len(composition_cols)} household types")
+        logger.info(
+            f"Filtered to {len(df)} geo_units with {len(composition_cols)} household types"
+        )
 
         # Store household counts by geo_unit
         for _, row in df.iterrows():
@@ -277,22 +284,25 @@ class HouseholdDistributor:
                 f"(check data_dir and the geography filter)."
             )
 
-        logger.info(f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units")
+        logger.info(
+            f"Loaded household data for {len(self.household_counts_by_geo_unit)} geographical units"
+        )
 
     def _categorize_person(self, person: Person) -> int:
         """Get the category index for a person based on their attributes."""
         for idx, cat in enumerate(self.categories):
             attr = cat.attribute
-            val = get_person_attribute(person, attr)
-            
+            val = get_attribute(person, attr)
+
             if val is None:
                 continue
 
-            if cat.type == 'numerical':
-                if (cat.min_value is None or val >= cat.min_value) and \
-                   (cat.max_value is None or val <= cat.max_value):
+            if cat.type == "numerical":
+                if (cat.min_value is None or val >= cat.min_value) and (
+                    cat.max_value is None or val <= cat.max_value
+                ):
                     return idx
-            elif cat.type == 'categorical':
+            elif cat.type == "categorical":
                 if cat.allowed_values is None or val in cat.allowed_values:
                     return idx
 
@@ -330,7 +340,9 @@ class HouseholdDistributor:
         total_units = len(sgu_units)
 
         # Progress indicator configuration
-        progress_interval = max(1, total_units // 10)  # Update every 10% or at least every unit
+        progress_interval = max(
+            1, total_units // 10
+        )  # Update every 10% or at least every unit
 
         for idx, (geo_unit_code, unit) in enumerate(sgu_units.items(), 1):
             # Get all people in this geo_unit
@@ -362,18 +374,28 @@ class HouseholdDistributor:
             # Progress indicator - log every 10% or at key milestones
             if idx % progress_interval == 0 or idx == total_units:
                 percent_complete = (idx / total_units) * 100
-                logger.info(f"  Progress: {idx}/{total_units} geo_units processed ({percent_complete:.1f}%)")
+                logger.info(
+                    f"  Progress: {idx}/{total_units} geo_units processed ({percent_complete:.1f}%)"
+                )
 
-        total_people = sum(sum(len(pool) for pool in pools)
-                          for pools in self.person_pool_by_geo_unit.values())
-        logger.info(f"Prepared person pools for {len(self.person_pool_by_geo_unit)} geo_units ({total_people} total people)")
+        total_people = sum(
+            sum(len(pool) for pool in pools)
+            for pools in self.person_pool_by_geo_unit.values()
+        )
+        logger.info(
+            f"Prepared person pools for {len(self.person_pool_by_geo_unit)} geo_units ({total_people} total people)"
+        )
         self.pools_prepared = True
 
-    def _allocate_household_with_rules(self, geo_unit_code: str, pattern: CompositionPattern,
-                                       max_size: Optional[int] = None,
-                                       allocate_flexible: bool = False,
-                                       target_size: Optional[int] = None,
-                                       rule_name: Optional[str] = None) -> Tuple[Optional[Venue], Optional[int]]:
+    def _allocate_household_with_rules(
+        self,
+        geo_unit_code: str,
+        pattern: CompositionPattern,
+        max_size: Optional[int] = None,
+        allocate_flexible: bool = False,
+        target_size: Optional[int] = None,
+        rule_name: Optional[str] = None,
+    ) -> Tuple[Optional[Venue], Optional[int]]:
         """
         Allocate a household using relationship rules.
 
@@ -395,19 +417,25 @@ class HouseholdDistributor:
         """
         # If no rule is specified, use simple allocation (no rules)
         if not rule_name:
-            return self._allocate_household(geo_unit_code, pattern, max_size, allocate_flexible, target_size)
+            return self._allocate_household(
+                geo_unit_code, pattern, max_size, allocate_flexible, target_size
+            )
 
         # Get pattern to match (for logging)
-        pattern_to_match = getattr(pattern, 'census_pattern', pattern.original_pattern)
+        pattern_to_match = getattr(pattern, "census_pattern", pattern.original_pattern)
 
         # Use explicitly specified rule
         rule = self.relationship_rules.get_rule_by_name(rule_name)
         if not rule:
-            logger.warning(f"Rule '{rule_name}' not found, falling back to simple allocation")
-            return self._allocate_household(geo_unit_code, pattern, max_size, allocate_flexible, target_size)
+            logger.warning(
+                f"Rule '{rule_name}' not found, falling back to simple allocation"
+            )
+            return self._allocate_household(
+                geo_unit_code, pattern, max_size, allocate_flexible, target_size
+            )
 
         # Log first time we apply rules for this pattern
-        if not hasattr(self, '_logged_rules'):
+        if not hasattr(self, "_logged_rules"):
             self._logged_rules = set()
 
         # Create a unique key for logging (pattern + rule_name if specified)
@@ -415,11 +443,17 @@ class HouseholdDistributor:
 
         if log_key not in self._logged_rules:
             if rule_name:
-                logger.debug(f"✓ Applying explicit rule '{rule_name}' to pattern: '{pattern.original_pattern}'")
-            elif hasattr(pattern, 'census_pattern'):
-                logger.debug(f"✓ Applying relationship rules for pattern: '{pattern.census_pattern}' (using assumption: '{pattern.original_pattern}')")
+                logger.debug(
+                    f"✓ Applying explicit rule '{rule_name}' to pattern: '{pattern.original_pattern}'"
+                )
+            elif hasattr(pattern, "census_pattern"):
+                logger.debug(
+                    f"✓ Applying relationship rules for pattern: '{pattern.census_pattern}' (using assumption: '{pattern.original_pattern}')"
+                )
             else:
-                logger.debug(f"✓ Applying relationship rules for pattern: '{pattern.original_pattern}'")
+                logger.debug(
+                    f"✓ Applying relationship rules for pattern: '{pattern.original_pattern}'"
+                )
             self._logged_rules.add(log_key)
 
         if geo_unit_code not in self.person_pool_by_geo_unit:
@@ -431,7 +465,7 @@ class HouseholdDistributor:
         household_num = self._setup_allocation_logging(geo_unit_code)
         logger.debug("=" * 80)
         logger.debug(f"GEO UNIT: {geo_unit_code} - HOUSEHOLD #{household_num}")
-        if hasattr(pattern, 'census_pattern'):
+        if hasattr(pattern, "census_pattern"):
             logger.debug(f"Census Pattern: '{pattern.census_pattern}'")
             logger.debug(f"Assumption: '{pattern.original_pattern}'")
         else:
@@ -443,11 +477,17 @@ class HouseholdDistributor:
         self._show_detailed_logs = logger.isEnabledFor(logging.DEBUG)
 
         # Get backtracking config
-        backtrack_config = self.relationship_rules.selection_strategy.get('backtracking', {})
+        backtrack_config = self.relationship_rules.selection_strategy.get(
+            "backtracking", {}
+        )
 
         # Use backtracking algorithm to select people for all roles
         selected_by_role, failed_cat_idx = self._select_roles_with_backtracking(
-            rule, pattern, pools, backtrack_config, self._show_detailed_logs,
+            rule,
+            pattern,
+            pools,
+            backtrack_config,
+            self._show_detailed_logs,
             geo_unit_code=geo_unit_code,
         )
 
@@ -466,13 +506,13 @@ class HouseholdDistributor:
         # Remove selected people from pools
         selected_ids = {p.id for p in all_selected}
         self.allocated_people.update(selected_ids)
-        
+
         for p in all_selected:
             cat_idx = self._get_person_category_idx(p)
             try:
                 del pools[cat_idx][p.id]
             except KeyError:
-                pass # Already removed or not in pool
+                pass  # Already removed or not in pool
 
         # Create household as Venue (ID auto-generated)
         unit = self.geography.get_unit(geo_unit_code)
@@ -480,10 +520,10 @@ class HouseholdDistributor:
             venue_type="household",
             geo_unit=unit,
             properties={
-                'original_pattern': pattern.original_pattern,
-                'allocation_pattern': pattern.to_string(),
-                '_age_categories': self.categories
-            }
+                "original_pattern": pattern.original_pattern,
+                "allocation_pattern": pattern.to_string(),
+                "_age_categories": self.categories,
+            },
         )
 
         # Add residents to venue subset (with category name as subset_key)
@@ -509,9 +549,15 @@ class HouseholdDistributor:
 
         return (household, None)
 
-    def _adjust_role_count_for_pattern(self, role_count, role_name: str, category_names: List[str],
-                                       category_indices: List[int], pattern: CompositionPattern,
-                                       show_detailed_logs: bool) -> Tuple[int, bool]:
+    def _adjust_role_count_for_pattern(
+        self,
+        role_count,
+        role_name: str,
+        category_names: List[str],
+        category_indices: List[int],
+        pattern: CompositionPattern,
+        show_detailed_logs: bool,
+    ) -> Tuple[int, bool]:
         """
         Adjust role count based on pattern requirements.
 
@@ -532,7 +578,9 @@ class HouseholdDistributor:
             - should_skip_role: True if the role should be skipped (pattern requires 0 people)
         """
         # Calculate total count needed from pattern for these categories
-        pattern_count = sum(pattern.get_min_count(cat_idx) for cat_idx in category_indices)
+        pattern_count = sum(
+            pattern.get_min_count(cat_idx) for cat_idx in category_indices
+        )
 
         # If role_count is numeric and pattern_count is different, use pattern_count
         if isinstance(role_count, int) and pattern_count != role_count:
@@ -540,13 +588,17 @@ class HouseholdDistributor:
                 logger.debug(f"Step: Selecting role '{role_name}'")
                 logger.debug(f"  Categories: {category_names}")
                 logger.debug(f"  Count needed (from rule): {role_count}")
-                logger.debug(f"  Count needed (from pattern): {pattern_count} (using pattern count)")
+                logger.debug(
+                    f"  Count needed (from pattern): {pattern_count} (using pattern count)"
+                )
             role_count = pattern_count
 
             # If pattern requires 0 people for this role, skip it
             if role_count == 0:
                 if show_detailed_logs:
-                    logger.debug(f"  → Pattern requires 0 people for this role, skipping")
+                    logger.debug(
+                        f"  → Pattern requires 0 people for this role, skipping"
+                    )
                     logger.debug("")
                 return (role_count, True)  # Signal to skip this role
         else:
@@ -557,8 +609,13 @@ class HouseholdDistributor:
 
         return (role_count, False)  # Don't skip
 
-    def _mixture_quota(self, geo_unit_code: str, pattern_str: str,
-                       interpretation: str, census_count: int) -> int:
+    def _mixture_quota(
+        self,
+        geo_unit_code: str,
+        pattern_str: str,
+        interpretation: str,
+        census_count: int,
+    ) -> int:
         """This interpretation's quota of a pattern's census count in one geo unit.
 
         The split is deterministic: floor(count x share) per interpretation,
@@ -573,7 +630,7 @@ class HouseholdDistributor:
         key = (geo_unit_code, pattern_str)
         quotas = self._mixture_quota_cache.get(key)
         if quotas is None:
-            level = self.structure_mixture['geo_level']
+            level = self.structure_mixture["geo_level"]
             unit = self.geography.get_unit(geo_unit_code)
             while unit is not None and unit.level != level:
                 unit = unit.parent
@@ -582,7 +639,7 @@ class HouseholdDistributor:
                     f"Geo unit '{geo_unit_code}' has no ancestor at mixture "
                     f"geo_level '{level}'."
                 )
-            shares = self.structure_mixture['shares'].get((unit.name, pattern_str))
+            shares = self.structure_mixture["shares"].get((unit.name, pattern_str))
             if shares is None:
                 raise HouseholdError(
                     f"No mixture shares for ({unit.name}, '{pattern_str}') — the "
@@ -591,9 +648,9 @@ class HouseholdDistributor:
                 )
             quotas = {i: int(census_count * s) for i, s in shares.items()}
             remainder = census_count - sum(quotas.values())
-            by_fraction = sorted(shares,
-                                 key=lambda i: (census_count * shares[i]) % 1,
-                                 reverse=True)
+            by_fraction = sorted(
+                shares, key=lambda i: (census_count * shares[i]) % 1, reverse=True
+            )
             for i in range(remainder):
                 quotas[by_fraction[i % len(by_fraction)]] += 1
             self._mixture_quota_cache[key] = quotas
@@ -604,11 +661,18 @@ class HouseholdDistributor:
             )
         return quotas[interpretation]
 
-    def _prepare_role_candidates(self, pools: List[List[Person]], category_indices: List[int],
-                                 role_index: int, backtrack_attempt: int,
-                                 tried_first_role_ids: Set[int], avoid_duplicates: bool,
-                                 show_detailed_logs: bool, log_backtracks: bool,
-                                 geo_unit_code: Optional[str] = None) -> List[Person]:
+    def _prepare_role_candidates(
+        self,
+        pools: List[List[Person]],
+        category_indices: List[int],
+        role_index: int,
+        backtrack_attempt: int,
+        tried_first_role_ids: Set[int],
+        avoid_duplicates: bool,
+        show_detailed_logs: bool,
+        log_backtracks: bool,
+        geo_unit_code: Optional[str] = None,
+    ) -> List[Person]:
         """
         Prepare candidate pool for role selection with backtracking support.
 
@@ -642,11 +706,15 @@ class HouseholdDistributor:
         """
         cap = None
         if self.relationship_rules is not None:
-            cap = self.relationship_rules.selection_strategy.get('candidate_sample_size')
+            cap = self.relationship_rules.selection_strategy.get(
+                "candidate_sample_size"
+            )
 
         total_available = sum(len(pools[cat_idx]) for cat_idx in category_indices)
         if cap is not None and geo_unit_code is not None and total_available > cap:
-            candidates = self._sample_candidates(geo_unit_code, pools, category_indices, cap)
+            candidates = self._sample_candidates(
+                geo_unit_code, pools, category_indices, cap
+            )
         else:
             if cap is None and total_available > 10000 and not self._warned_large_pool:
                 self._warned_large_pool = True
@@ -662,26 +730,38 @@ class HouseholdDistributor:
             for cat_idx in category_indices:
                 candidates.extend(pools[cat_idx].values())
 
-        stats = getattr(self, 'candidate_prep_stats', None)
+        stats = getattr(self, "candidate_prep_stats", None)
         if stats is None:
-            stats = self.candidate_prep_stats = {'calls': 0, 'candidates': 0}
-        stats['calls'] += 1
-        stats['candidates'] += len(candidates)
+            stats = self.candidate_prep_stats = {"calls": 0, "candidates": 0}
+        stats["calls"] += 1
+        stats["candidates"] += len(candidates)
 
         # If this is the first role and we're backtracking, exclude already-tried people
-        if role_index == 0 and backtrack_attempt > 0 and avoid_duplicates and tried_first_role_ids:
+        if (
+            role_index == 0
+            and backtrack_attempt > 0
+            and avoid_duplicates
+            and tried_first_role_ids
+        ):
             original_count = len(candidates)
             candidates = [p for p in candidates if p.id not in tried_first_role_ids]
             if show_detailed_logs and log_backtracks:
-                logger.debug(f"  Backtracking: Excluded {original_count - len(candidates)} already-tried candidates")
+                logger.debug(
+                    f"  Backtracking: Excluded {original_count - len(candidates)} already-tried candidates"
+                )
 
         if show_detailed_logs:
             logger.debug(f"  Available candidates: {len(candidates)} people")
 
         return candidates
 
-    def _sample_candidates(self, geo_unit_code: str, pools: List[Dict[int, Person]],
-                           category_indices: List[int], cap: int) -> List[Person]:
+    def _sample_candidates(
+        self,
+        geo_unit_code: str,
+        pools: List[Dict[int, Person]],
+        category_indices: List[int],
+        cap: int,
+    ) -> List[Person]:
         """Draw ~cap people uniformly from the given category pools in O(cap).
 
         Pools are dicts (id -> Person), which cannot be indexed for random
@@ -722,13 +802,19 @@ class HouseholdDistributor:
                 lst = lists[cat_idx] = list(pool.values())
                 remaining = [p for p in lst if p.id not in picked_ids]
                 need = quota - len(picked_ids)
-                idx = np.random.choice(len(remaining), size=min(need, len(remaining)), replace=False)
+                idx = np.random.choice(
+                    len(remaining), size=min(need, len(remaining)), replace=False
+                )
                 sampled.extend(remaining[i] for i in idx)
         return sampled
 
-    def _can_skip_role_with_no_candidates(self, role_count, category_indices: List[int],
-                                          pattern: CompositionPattern,
-                                          show_detailed_logs: bool) -> bool:
+    def _can_skip_role_with_no_candidates(
+        self,
+        role_count,
+        category_indices: List[int],
+        pattern: CompositionPattern,
+        show_detailed_logs: bool,
+    ) -> bool:
         """
         Check if a role with no candidates can be skipped.
 
@@ -765,7 +851,9 @@ class HouseholdDistributor:
             logger.debug(f"  ✗ FAILED: No candidates available")
         return False  # Cannot skip - allocation fails
 
-    def _find_pair_constraint_for_role(self, rule, role_name: str, role_count) -> Optional[Dict]:
+    def _find_pair_constraint_for_role(
+        self, rule, role_name: str, role_count
+    ) -> Optional[Dict]:
         """
         Find a pair_matching constraint that applies to the given role.
 
@@ -782,9 +870,12 @@ class HouseholdDistributor:
             The matching pair_matching constraint dict, or None if not found
         """
         for constraint in rule.constraints:
-            if constraint['type'] == 'pair_matching' and constraint.get('role') == role_name:
+            if (
+                constraint["type"] == "pair_matching"
+                and constraint.get("role") == role_name
+            ):
                 # Check if require_exact_count is specified
-                required_count = constraint.get('require_exact_count')
+                required_count = constraint.get("require_exact_count")
                 if required_count is None or role_count == required_count:
                     return constraint
         return None
@@ -798,19 +889,25 @@ class HouseholdDistributor:
         can't represent them). Returns (constraint, other_role_name) or None.
         """
         for constraint in rule.constraints:
-            if constraint.get('type') != 'pair_matching':
+            if constraint.get("type") != "pair_matching":
                 continue
-            roles = constraint.get('roles')
+            roles = constraint.get("roles")
             if roles and role_name in roles:
                 other = next(r for r in roles if r != role_name)
                 return constraint, other
         return None
 
-    def _handle_role_selection_failure(self, failed_at_role_index: int, rule,
-                                       selected_by_role: Dict[str, List[Person]],
-                                       backtrack_enabled: bool, backtrack_attempt: int,
-                                       max_backtracks: int, avoid_duplicates: bool,
-                                       log_backtracks: bool) -> Tuple[str, Optional[int], List[int]]:
+    def _handle_role_selection_failure(
+        self,
+        failed_at_role_index: int,
+        rule,
+        selected_by_role: Dict[str, List[Person]],
+        backtrack_enabled: bool,
+        backtrack_attempt: int,
+        max_backtracks: int,
+        avoid_duplicates: bool,
+        log_backtracks: bool,
+    ) -> Tuple[str, Optional[int], List[int]]:
         """
         Handle role selection failure and determine backtracking action.
 
@@ -842,14 +939,22 @@ class HouseholdDistributor:
         if failed_at_role_index == 0:
             # Failed at first role - cannot backtrack
             if log_backtracks:
-                logger.debug(f"  ✗ Cannot backtrack: Failed at first role '{failed_role_name}'")
+                logger.debug(
+                    f"  ✗ Cannot backtrack: Failed at first role '{failed_role_name}'"
+                )
             # Get category index for failure reporting
             role_config = rule.roles[failed_role_name]
-            category_names = role_config['categories']
-            category_indices = [self.relationship_rules.category_name_to_idx[cat]
-                               for cat in category_names
-                               if cat in self.relationship_rules.category_name_to_idx]
-            return ('cannot_backtrack', category_indices[0] if category_indices else None, [])
+            category_names = role_config["categories"]
+            category_indices = [
+                self.relationship_rules.category_name_to_idx[cat]
+                for cat in category_names
+                if cat in self.relationship_rules.category_name_to_idx
+            ]
+            return (
+                "cannot_backtrack",
+                category_indices[0] if category_indices else None,
+                [],
+            )
 
         elif backtrack_enabled and backtrack_attempt < max_backtracks:
             # Can backtrack - get IDs to track for avoiding duplicates
@@ -858,10 +963,12 @@ class HouseholdDistributor:
                 tried_ids = [person.id for person in selected_by_role[first_role_name]]
 
             if log_backtracks:
-                logger.debug(f"  ⟲ BACKTRACK #{backtrack_attempt + 1}: '{failed_role_name}' failed, "
-                           f"retrying with different '{first_role_name}'")
+                logger.debug(
+                    f"  ⟲ BACKTRACK #{backtrack_attempt + 1}: '{failed_role_name}' failed, "
+                    f"retrying with different '{first_role_name}'"
+                )
                 logger.debug("")
-            return ('do_backtrack', None, tried_ids)
+            return ("do_backtrack", None, tried_ids)
 
         else:
             # Exhausted backtracks
@@ -869,17 +976,23 @@ class HouseholdDistributor:
                 logger.debug(f"  ✗ Exhausted {max_backtracks} backtrack attempts")
             # Get category index for failure reporting
             role_config = rule.roles[failed_role_name]
-            category_names = role_config['categories']
-            category_indices = [self.relationship_rules.category_name_to_idx[cat]
-                               for cat in category_names
-                               if cat in self.relationship_rules.category_name_to_idx]
-            return ('exhausted', category_indices[0] if category_indices else None, [])
+            category_names = role_config["categories"]
+            category_indices = [
+                self.relationship_rules.category_name_to_idx[cat]
+                for cat in category_names
+                if cat in self.relationship_rules.category_name_to_idx
+            ]
+            return ("exhausted", category_indices[0] if category_indices else None, [])
 
-    def _select_roles_with_backtracking(self, rule, pattern: CompositionPattern,
-                                       pools: Dict[int, List[Person]],
-                                       backtrack_config: Dict,
-                                       show_detailed_logs: bool,
-                                       geo_unit_code: Optional[str] = None) -> Tuple[Optional[Dict[str, List[Person]]], Optional[int]]:
+    def _select_roles_with_backtracking(
+        self,
+        rule,
+        pattern: CompositionPattern,
+        pools: Dict[int, List[Person]],
+        backtrack_config: Dict,
+        show_detailed_logs: bool,
+        geo_unit_code: Optional[str] = None,
+    ) -> Tuple[Optional[Dict[str, List[Person]]], Optional[int]]:
         """
         Select people for household roles using backtracking algorithm.
 
@@ -901,36 +1014,47 @@ class HouseholdDistributor:
             - selected_by_role: Dict mapping role names to selected people if successful
             - failed_category_idx: Category index that caused failure, or None if successful
         """
-        backtrack_enabled = backtrack_config.get('enabled', False)
-        max_backtracks = backtrack_config.get('max_backtracks', 3)
-        log_backtracks = backtrack_config.get('log_backtracks', True)
-        avoid_duplicates = backtrack_config.get('avoid_duplicates', True)
+        backtrack_enabled = backtrack_config.get("enabled", False)
+        max_backtracks = backtrack_config.get("max_backtracks", 3)
+        log_backtracks = backtrack_config.get("log_backtracks", True)
+        avoid_duplicates = backtrack_config.get("avoid_duplicates", True)
 
         # Backtracking loop
         backtrack_attempt = 0
-        tried_first_role_ids = set()  # Track tried first-role person IDs to avoid duplicates
+        tried_first_role_ids = (
+            set()
+        )  # Track tried first-role person IDs to avoid duplicates
 
         while backtrack_attempt <= max_backtracks:
             # Track selected people by role
-            selected_by_role: Dict[str, List[Person]] = {role_name: [] for role_name in rule.roles.keys()}
+            selected_by_role: Dict[str, List[Person]] = {
+                role_name: [] for role_name in rule.roles.keys()
+            }
             failed_at_role_index = None
             couples_to_flag = []  # Defer property assignment until success
 
             # Select people for each role in order
             for role_index, role_name in enumerate(rule.selection_order):
                 role_config = rule.roles[role_name]
-                category_names = role_config['categories']
-                role_count = role_config['count']
+                category_names = role_config["categories"]
+                role_count = role_config["count"]
 
                 # Map category names to indices
                 category_indices = []
                 for cat_name in category_names:
                     if cat_name in self.relationship_rules.category_name_to_idx:
-                        category_indices.append(self.relationship_rules.category_name_to_idx[cat_name])
+                        category_indices.append(
+                            self.relationship_rules.category_name_to_idx[cat_name]
+                        )
 
                 # Adjust role count based on pattern requirements (e.g., after demotion)
                 role_count, should_skip = self._adjust_role_count_for_pattern(
-                    role_count, role_name, category_names, category_indices, pattern, show_detailed_logs
+                    role_count,
+                    role_name,
+                    category_names,
+                    category_indices,
+                    pattern,
+                    show_detailed_logs,
                 )
 
                 if should_skip:
@@ -938,9 +1062,15 @@ class HouseholdDistributor:
 
                 # Prepare candidates for this role (with backtracking support)
                 candidates = self._prepare_role_candidates(
-                    pools, category_indices, role_index, backtrack_attempt,
-                    tried_first_role_ids, avoid_duplicates, show_detailed_logs, log_backtracks,
-                    geo_unit_code=geo_unit_code
+                    pools,
+                    category_indices,
+                    role_index,
+                    backtrack_attempt,
+                    tried_first_role_ids,
+                    avoid_duplicates,
+                    show_detailed_logs,
+                    log_backtracks,
+                    geo_unit_code=geo_unit_code,
                 )
 
                 if not candidates:
@@ -955,7 +1085,9 @@ class HouseholdDistributor:
                         break
 
                 # Check for pair_matching constraint for this role
-                pair_constraint = self._find_pair_constraint_for_role(rule, role_name, role_count)
+                pair_constraint = self._find_pair_constraint_for_role(
+                    rule, role_name, role_count
+                )
 
                 if pair_constraint and role_count == 2:
                     # Select a compatible pair
@@ -963,11 +1095,17 @@ class HouseholdDistributor:
                     if show_detailed_logs:
                         logger.debug(f"  Mode: Selecting a compatible pair")
                         if selected_by_role:
-                            already_selected = sum(len(people) for people in selected_by_role.values())
-                            logger.debug(f"  Constraints: Must validate against {already_selected} already-selected people")
+                            already_selected = sum(
+                                len(people) for people in selected_by_role.values()
+                            )
+                            logger.debug(
+                                f"  Constraints: Must validate against {already_selected} already-selected people"
+                            )
 
                     # Pre-group candidates by categorical attribute
-                    cat_attr = pair_constraint.get('categorical_attribute', {}).get('attribute', 'sex')
+                    cat_attr = pair_constraint.get("categorical_attribute", {}).get(
+                        "attribute", "sex"
+                    )
                     cat_getter = self.relationship_rules._get_attribute_getter(cat_attr)
                     candidates_by_cat = defaultdict(list)
                     for p in candidates:
@@ -996,7 +1134,7 @@ class HouseholdDistributor:
                         logger.debug("")
 
                     # Check if this pair should be flagged as a romantic couple
-                    if pair_constraint.get('creates_romantic_couple', False):
+                    if pair_constraint.get("creates_romantic_couple", False):
                         couples_to_flag.append(pair)
 
                 elif role_count == "any":
@@ -1014,7 +1152,7 @@ class HouseholdDistributor:
                             existing_people_by_role=selected_by_role,
                             constraints=rule.constraints,
                             current_role=role_name,
-                            show_detailed_logs=show_detailed_logs
+                            show_detailed_logs=show_detailed_logs,
                         )
 
                         if not person:
@@ -1028,7 +1166,9 @@ class HouseholdDistributor:
                 else:
                     # Select specific number of people
                     if show_detailed_logs:
-                        logger.debug(f"  Mode: Selecting {role_count} person(s) individually")
+                        logger.debug(
+                            f"  Mode: Selecting {role_count} person(s) individually"
+                        )
 
                     # Cross-role couple: when the pair's other role is already
                     # filled with exactly one person and this role needs one,
@@ -1039,9 +1179,13 @@ class HouseholdDistributor:
                         cross_constraint, other_role = cross
                         partners = selected_by_role.get(other_role, [])
                         if len(partners) == 1:
-                            ordered = self.relationship_rules.couple_compatible_candidates(
-                                partners[0], candidates, cross_constraint,
-                                geo_unit_code=geo_unit_code,
+                            ordered = (
+                                self.relationship_rules.couple_compatible_candidates(
+                                    partners[0],
+                                    candidates,
+                                    cross_constraint,
+                                    geo_unit_code=geo_unit_code,
+                                )
                             )
                             # The pair ranking says nothing about this role's own
                             # numerical constraints (e.g. a co-parent must still be
@@ -1051,17 +1195,29 @@ class HouseholdDistributor:
                             for cand in ordered:
                                 ok = True
                                 for c in rule.constraints:
-                                    if c.get('type') != 'numerical_attribute_difference':
+                                    if (
+                                        c.get("type")
+                                        != "numerical_attribute_difference"
+                                    ):
                                         continue
-                                    if c.get('role_1') == role_name:
-                                        others, is_r1 = selected_by_role.get(c.get('role_2'), []), True
-                                    elif c.get('role_2') == role_name:
-                                        others, is_r1 = selected_by_role.get(c.get('role_1'), []), False
+                                    if c.get("role_1") == role_name:
+                                        others, is_r1 = (
+                                            selected_by_role.get(c.get("role_2"), []),
+                                            True,
+                                        )
+                                    elif c.get("role_2") == role_name:
+                                        others, is_r1 = (
+                                            selected_by_role.get(c.get("role_1"), []),
+                                            False,
+                                        )
                                     else:
                                         continue
                                     if others:
-                                        valid, _ = self.relationship_rules.validate_numerical_attribute_difference_constraint(
-                                            cand, others, c, is_role_1=is_r1)
+                                        valid, _ = (
+                                            self.relationship_rules.validate_numerical_attribute_difference_constraint(
+                                                cand, others, c, is_role_1=is_r1
+                                            )
+                                        )
                                         if not valid:
                                             ok = False
                                             break
@@ -1070,15 +1226,19 @@ class HouseholdDistributor:
                                     break
                             if person is None:
                                 if show_detailed_logs:
-                                    logger.debug(f"  ✗ FAILED: No couple-compatible candidate for {other_role}")
+                                    logger.debug(
+                                        f"  ✗ FAILED: No couple-compatible candidate for {other_role}"
+                                    )
                                 failed_at_role_index = role_index
                                 break
                             selected_by_role[role_name].append(person)
                             candidates = [p for p in candidates if p.id != person.id]
-                            if cross_constraint.get('creates_romantic_couple', False):
+                            if cross_constraint.get("creates_romantic_couple", False):
                                 couples_to_flag.append((partners[0], person))
                             if show_detailed_logs:
-                                logger.debug(f"  ✓ Selected cross-role partner: {person}")
+                                logger.debug(
+                                    f"  ✓ Selected cross-role partner: {person}"
+                                )
                             continue
 
                     for i in range(role_count):
@@ -1087,18 +1247,22 @@ class HouseholdDistributor:
                             existing_people_by_role=selected_by_role,
                             constraints=rule.constraints,
                             current_role=role_name,
-                            show_detailed_logs=show_detailed_logs
+                            show_detailed_logs=show_detailed_logs,
                         )
 
                         if not person:
                             if show_detailed_logs:
-                                logger.debug(f"  ✗ FAILED: Could not find valid person {i+1}/{role_count}")
+                                logger.debug(
+                                    f"  ✗ FAILED: Could not find valid person {i+1}/{role_count}"
+                                )
                             failed_at_role_index = role_index
                             break
 
                         selected_by_role[role_name].append(person)
                         if show_detailed_logs:
-                            logger.debug(f"  ✓ Selected person {i+1}/{role_count}: {person}")
+                            logger.debug(
+                                f"  ✓ Selected person {i+1}/{role_count}: {person}"
+                            )
                         # Remove from candidates
                         candidates = [p for p in candidates if p.id != person.id]
 
@@ -1109,12 +1273,17 @@ class HouseholdDistributor:
             if failed_at_role_index is not None:
                 # Handle the failure and determine what action to take
                 action, failed_cat_idx, tried_ids = self._handle_role_selection_failure(
-                    failed_at_role_index, rule, selected_by_role,
-                    backtrack_enabled, backtrack_attempt, max_backtracks,
-                    avoid_duplicates, log_backtracks
+                    failed_at_role_index,
+                    rule,
+                    selected_by_role,
+                    backtrack_enabled,
+                    backtrack_attempt,
+                    max_backtracks,
+                    avoid_duplicates,
+                    log_backtracks,
                 )
 
-                if action == 'do_backtrack':
+                if action == "do_backtrack":
                     # Track tried IDs and retry with different first role
                     for person_id in tried_ids:
                         tried_first_role_ids.add(person_id)
@@ -1130,17 +1299,20 @@ class HouseholdDistributor:
 
             # Now that success is certain, apply relationship flagging
             for p0, p1 in couples_to_flag:
-                p0.properties['cohabiting_couple'] = [p1.id]
-                p1.properties['cohabiting_couple'] = [p0.id]
+                p0.properties["cohabiting_couple"] = [p1.id]
+                p1.properties["cohabiting_couple"] = [p0.id]
 
             break  # Exit backtracking while loop
 
         return (selected_by_role, None)
 
-    def _allocate_sequential(self, pattern: CompositionPattern,
-                            pools: Dict[int, List[Person]],
-                            max_size: Optional[int],
-                            allocate_flexible: bool) -> Tuple[List[Tuple[int, int]], Optional[int]]:
+    def _allocate_sequential(
+        self,
+        pattern: CompositionPattern,
+        pools: Dict[int, List[Person]],
+        max_size: Optional[int],
+        allocate_flexible: bool,
+    ) -> Tuple[List[Tuple[int, int]], Optional[int]]:
         """
         Perform sequential allocation through age categories.
 
@@ -1178,13 +1350,17 @@ class HouseholdDistributor:
 
             cat_name = self.categories[cat_idx].name
             logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
-            logger.debug(f"  min: {min_count}, max: {max_count}, available: {available}")
+            logger.debug(
+                f"  min: {min_count}, max: {max_count}, available: {available}"
+            )
             logger.debug(f"  total_selected so far: {total_selected}")
 
             # Check if we have enough people
             if available < min_count:
                 # Can't fulfill - return failure with the category that caused it
-                logger.debug(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
+                logger.debug(
+                    f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available"
+                )
                 return ([], cat_idx)
 
             # Decide how many to take
@@ -1210,11 +1386,17 @@ class HouseholdDistributor:
 
                     # Random count between min and max_allocatable
                     if max_allocatable > min_count:
-                        count = np.random.randint(min_count, max_allocatable + 1)  # numpy's randint is exclusive of upper bound
-                        logger.debug(f"    random allocation: {count} (range: {min_count}-{max_allocatable})")
+                        count = np.random.randint(
+                            min_count, max_allocatable + 1
+                        )  # numpy's randint is exclusive of upper bound
+                        logger.debug(
+                            f"    random allocation: {count} (range: {min_count}-{max_allocatable})"
+                        )
                     else:
                         count = min_count
-                        logger.debug(f"    max_allocatable <= min_count, using min: {count}")
+                        logger.debug(
+                            f"    max_allocatable <= min_count, using min: {count}"
+                        )
                 else:
                     # Take minimum required
                     count = min_count
@@ -1226,11 +1408,15 @@ class HouseholdDistributor:
                 original_count = count
                 count = min(count, remaining_capacity)
                 if count != original_count:
-                    logger.debug(f"  max_size constraint applied: {original_count} → {count}")
+                    logger.debug(
+                        f"  max_size constraint applied: {original_count} → {count}"
+                    )
 
                 # If this brings us below minimum, we can't fulfill the pattern
                 if count < min_count:
-                    logger.debug(f"  ✗ CONSTRAINT VIOLATION: count ({count}) < min_count ({min_count})")
+                    logger.debug(
+                        f"  ✗ CONSTRAINT VIOLATION: count ({count}) < min_count ({min_count})"
+                    )
                     return ([], cat_idx)
 
             total_selected += count
@@ -1244,10 +1430,14 @@ class HouseholdDistributor:
 
         return (selections, None)
 
-    def _allocate_household(self, geo_unit_code: str, pattern: CompositionPattern,
-                            max_size: Optional[int] = None,
-                            allocate_flexible: bool = False,
-                            target_size: Optional[int] = None) -> Tuple[Optional[Venue], Optional[int]]:
+    def _allocate_household(
+        self,
+        geo_unit_code: str,
+        pattern: CompositionPattern,
+        max_size: Optional[int] = None,
+        allocate_flexible: bool = False,
+        target_size: Optional[int] = None,
+    ) -> Tuple[Optional[Venue], Optional[int]]:
         """
         Attempt to allocate a household in an geo_unit with the given pattern.
 
@@ -1284,12 +1474,16 @@ class HouseholdDistributor:
         # Determine allocation strategy
         if allocate_flexible and target_size is not None:
             # Use balanced distribution mode
-            selections, failed_cat = self.round_distributor._allocate_balanced_distribution(pattern, pools, target_size)
+            selections, failed_cat = self._allocate_balanced_distribution(
+                pattern, pools, target_size
+            )
             if failed_cat is not None:
                 return (None, failed_cat)
         else:
             # Use sequential allocation mode
-            selections, failed_cat = self._allocate_sequential(pattern, pools, max_size, allocate_flexible)
+            selections, failed_cat = self._allocate_sequential(
+                pattern, pools, max_size, allocate_flexible
+            )
             if failed_cat is not None:
                 return (None, failed_cat)
 
@@ -1298,13 +1492,15 @@ class HouseholdDistributor:
         logger.debug("ALLOCATION DECISIONS:")
         for cat_idx, count in selections:
             cat = self.categories[cat_idx]
-            logger.debug(f"  {cat.name} ({cat.attribute} {cat.min_value}-{cat.max_value if cat.max_value else '∞'}): {count} people")
+            logger.debug(
+                f"  {cat.name} ({cat.attribute} {cat.min_value}-{cat.max_value if cat.max_value else '∞'}): {count} people"
+            )
             if count > 0:
                 pool = pools[cat_idx]
                 # Take N IDs from the front of the dictionary
                 # Dict preserves order in Python 3.7+, so this is equivalent to list slicing
                 ids_to_remove = list(islice(pool.keys(), count))
-                
+
                 for pid in ids_to_remove:
                     person = pool.pop(pid)
                     selected_people.append(person)
@@ -1326,10 +1522,10 @@ class HouseholdDistributor:
             venue_type="household",
             geo_unit=unit,
             properties={
-                'original_pattern': pattern.original_pattern,  # The original requested pattern
-                'allocation_pattern': pattern.to_string(),  # operative spec it was built under (post-demotion)
-                '_age_categories': self.categories
-            }
+                "original_pattern": pattern.original_pattern,  # The original requested pattern
+                "allocation_pattern": pattern.to_string(),  # operative spec it was built under (post-demotion)
+                "_age_categories": self.categories,
+            },
         )
 
         # Add residents to venue subset (with category name as subset_key)
@@ -1344,12 +1540,17 @@ class HouseholdDistributor:
 
         return (household, None)
 
-    def _attempt_with_demotion(self, geo_unit_code: str, pattern: CompositionPattern,
-                               max_attempts: int, max_size: Optional[int] = None,
-                               allocate_flexible: bool = False,
-                               target_size: Optional[int] = None,
-                               rule_name: Optional[str] = None,
-                               demotion_rules: Optional[Dict[str, str]] = None) -> Optional[Venue]:
+    def _attempt_with_demotion(
+        self,
+        geo_unit_code: str,
+        pattern: CompositionPattern,
+        max_attempts: int,
+        max_size: Optional[int] = None,
+        allocate_flexible: bool = False,
+        target_size: Optional[int] = None,
+        rule_name: Optional[str] = None,
+        demotion_rules: Optional[Dict[str, str]] = None,
+    ) -> Optional[Venue]:
         """
         Attempt to allocate a household, using intelligent demotion if necessary.
 
@@ -1377,32 +1578,45 @@ class HouseholdDistributor:
 
         for attempt in range(max_attempts + 1):
             if attempt > 0:
-                logger.debug(f"  ⚠️  DEMOTION ATTEMPT #{attempt}: Trying pattern '{current_pattern.to_string()}'")
+                logger.debug(
+                    f"  ⚠️  DEMOTION ATTEMPT #{attempt}: Trying pattern '{current_pattern.to_string()}'"
+                )
 
             # Try to allocate with current pattern
             # First try with relationship rules if available
             household, failed_category_idx = self._allocate_household_with_rules(
-                geo_unit_code, current_pattern, max_size, allocate_flexible, target_size, rule_name
+                geo_unit_code,
+                current_pattern,
+                max_size,
+                allocate_flexible,
+                target_size,
+                rule_name,
             )
 
             # If rules-based allocation returned None and called the fallback,
             # the fallback already tried regular allocation, so we're done
             if household:
                 if attempt > 0:
-                    logger.debug(f"  ✓ Succeeded after {attempt} demotion(s) with pattern: {current_pattern.to_string()}")
+                    logger.debug(
+                        f"  ✓ Succeeded after {attempt} demotion(s) with pattern: {current_pattern.to_string()}"
+                    )
                     logger.debug("")
                 return household
 
             if failed_category_idx is not None:
                 cat = self.categories[failed_category_idx]
-                logger.debug(f"  ✗ ALLOCATION FAILED: Category '{cat.name}' (idx {failed_category_idx}) has insufficient people")
+                logger.debug(
+                    f"  ✗ ALLOCATION FAILED: Category '{cat.name}' (idx {failed_category_idx}) has insufficient people"
+                )
             else:
                 logger.debug(f"  ✗ ALLOCATION FAILED: No specific category identified")
 
             # Check minimum size
-            min_size = self.config['demotion']['min_household_size']
+            min_size = self.config["demotion"]["min_household_size"]
             if current_pattern.min_household_size() < min_size:
-                logger.debug(f"  ✗ Pattern too small after demotion (min size {min_size}): {current_pattern.to_string()}")
+                logger.debug(
+                    f"  ✗ Pattern too small after demotion (min size {min_size}): {current_pattern.to_string()}"
+                )
                 logger.debug("")
                 return None
 
@@ -1420,43 +1634,61 @@ class HouseholdDistributor:
                             available_count = len(pools[failed_category_idx])
 
                     # Demote directly to available count instead of one-by-one
-                    new_pattern = current_pattern.demote_to_count(failed_category_idx, available_count)
+                    new_pattern = current_pattern.demote_to_count(
+                        failed_category_idx, available_count
+                    )
 
                 # If intelligent demotion didn't work, try fallback priority order
                 if new_pattern is None:
-                    logger.debug(f"  → Intelligent demotion failed, trying fallback priority order")
+                    logger.debug(
+                        f"  → Intelligent demotion failed, trying fallback priority order"
+                    )
                     new_pattern = current_pattern.demote_once(fallback_priority)
 
                     if new_pattern is None:
-                        logger.debug(f"  ✗ Cannot demote further: {current_pattern.to_string()}")
+                        logger.debug(
+                            f"  ✗ Cannot demote further: {current_pattern.to_string()}"
+                        )
                         logger.debug("")
                         return None
 
                 # Safety checks apply to ALL demoted patterns (both intelligent and fallback)
                 # Check if the demoted pattern would result in a too-small household
-                min_size = self.config['demotion']['min_household_size']
+                min_size = self.config["demotion"]["min_household_size"]
                 if new_pattern.min_household_size() < min_size:
-                    logger.debug(f"  ✗ Demoted pattern too small (min size {min_size}): '{new_pattern.to_string()}'")
-                    logger.debug(f"  ✗ Skipping allocation attempt - would result in empty household")
+                    logger.debug(
+                        f"  ✗ Demoted pattern too small (min size {min_size}): '{new_pattern.to_string()}'"
+                    )
+                    logger.debug(
+                        f"  ✗ Skipping allocation attempt - would result in empty household"
+                    )
                     logger.debug("")
                     return None
 
                 # Validate the new pattern against demotion validation rules
-                validation_rules = self.config.get('demotion', {}).get('validation_rules', [])
+                validation_rules = self.config.get("demotion", {}).get(
+                    "validation_rules", []
+                )
                 if validation_rules and not new_pattern.validate_against_rules(
                     validation_rules, self.category_name_to_idx
                 ):
-                    logger.debug(f"  ✗ Demoted pattern violates validation rules: {new_pattern.to_string()}")
+                    logger.debug(
+                        f"  ✗ Demoted pattern violates validation rules: {new_pattern.to_string()}"
+                    )
                     logger.debug("")
                     return None
 
-                logger.debug(f"  → Demoted pattern: '{current_pattern.to_string()}' → '{new_pattern.to_string()}'")
+                logger.debug(
+                    f"  → Demoted pattern: '{current_pattern.to_string()}' → '{new_pattern.to_string()}'"
+                )
 
                 # Check if we should switch to a different rule for this demoted pattern
                 if demotion_rules and new_pattern.to_string() in demotion_rules:
                     new_rule_name = demotion_rules[new_pattern.to_string()]
                     if new_rule_name != rule_name:
-                        logger.debug(f"  → Switching rule: '{rule_name}' → '{new_rule_name}'")
+                        logger.debug(
+                            f"  → Switching rule: '{rule_name}' → '{new_rule_name}'"
+                        )
                         rule_name = new_rule_name
 
                 logger.debug("")
@@ -1467,7 +1699,6 @@ class HouseholdDistributor:
                 return None
 
         return None
-
 
     def get_available_people_count(self) -> int:
         """Get the number of people currently available (not allocated)."""
@@ -1486,7 +1717,9 @@ class HouseholdDistributor:
 
         return counts
 
-    def mark_people_as_allocated(self, people: List['Person'], venue_type: str = "external"):
+    def mark_people_as_allocated(
+        self, people: List["Person"], venue_type: str = "external"
+    ):
         """
         Mark people as allocated (to venues, care homes, etc.) so they won't
         be allocated to households in subsequent rounds.
@@ -1520,19 +1753,16 @@ class HouseholdDistributor:
         logger.info(f"Marked {count} people as allocated to {venue_type}")
         return count
 
-
-    def _select_person_for_excess_with_rule(self, *args, **kwargs):
-        """Delegate to excess handler. See HouseholdExcessHandler._select_person_for_excess_with_rule for documentation."""
-        return self.excess_handler._select_person_for_excess_with_rule(*args, **kwargs)
-
-    def _get_person_category_name(self, person: 'Person') -> str:
+    def _get_person_category_name(self, person: "Person") -> str:
         """Get the category name for a person based on their attributes."""
         for cat in self.categories:
             if cat.matches(person):
                 return cat.name
         return "Unknown"
 
-    def _validate_category_index(self, category_name: str, log_level: str = "error") -> Optional[int]:
+    def _validate_category_index(
+        self, category_name: str, log_level: str = "error"
+    ) -> Optional[int]:
         """
         Validate and retrieve category index by name.
 
@@ -1551,8 +1781,9 @@ class HouseholdDistributor:
                 logger.warning(f"Unknown category '{category_name}'")
         return cat_idx
 
-    def _filter_households_by_patterns(self, target_patterns: List[str],
-                                       pattern_property: str = 'original_pattern') -> List[Venue]:
+    def _filter_households_by_patterns(
+        self, target_patterns: List[str], pattern_property: str = "original_pattern"
+    ) -> List[Venue]:
         """
         Filter households by matching patterns.
 
@@ -1570,7 +1801,7 @@ class HouseholdDistributor:
         matched_patterns = set()
         filtered = []
         for household in all_households:
-            pattern = household.properties.get(pattern_property, '')
+            pattern = household.properties.get(pattern_property, "")
             if pattern in target_set:
                 matched_patterns.add(pattern)
                 filtered.append(household)
@@ -1601,7 +1832,7 @@ class HouseholdDistributor:
             The household number for this geo_unit (1-indexed)
         """
         # Initialize logging dict if needed
-        if not hasattr(self, '_household_counts_by_geo_unit_log'):
+        if not hasattr(self, "_household_counts_by_geo_unit_log"):
             self._household_counts_by_geo_unit_log = {}
 
         # Log start of allocation for new geo_unit
@@ -1616,7 +1847,6 @@ class HouseholdDistributor:
         # Increment and return household count
         self._household_counts_by_geo_unit_log[geo_unit_code] += 1
         return self._household_counts_by_geo_unit_log[geo_unit_code]
-
 
     def _log_round_start(self, round_name: Optional[str], default_prefix: str) -> str:
         """
@@ -1638,49 +1868,9 @@ class HouseholdDistributor:
 
         return round_label
 
-    def _log_round_summary(self, round_label: str, stats: Dict, show_remaining: bool = True):
-        """
-        Log summary statistics for an allocation round.
-
-        Args:
-            round_label: Name of the round
-            stats: Statistics dictionary with round results
-            show_remaining: If True, show remaining people by category
-        """
-        logger.info("=" * 60)
-        logger.info(f"{round_label} complete!")
-
-        # Log round-specific metrics based on what's in stats
-        if 'households_created' in stats:
-            logger.info(f"  Households created: {stats['households_created']:,}")
-        if 'households_modified' in stats:
-            logger.info(f"  Households modified: {stats['households_modified']:,}")
-        if 'households_promoted' in stats:
-            logger.info(f"  Households promoted: {stats['households_promoted']:,}")
-        if 'people_added' in stats:
-            logger.info(f"  People added: {stats['people_added']:,}")
-        if 'people_allocated_this_round' in stats:
-            logger.info(f"  People allocated this round: {stats['people_allocated_this_round']:,}")
-        if 'households_with_demotion' in stats and stats['households_with_demotion'] > 0:
-            logger.info(f"  Households using demotion: {stats['households_with_demotion']:,}")
-
-        # Always show totals
-        logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
-        logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
-
-        # Show remaining by category if requested
-        if show_remaining:
-            remaining_by_category = self.get_available_people_by_category()
-            logger.info("")
-            logger.info("  Remaining by category:")
-            for cat_name in [cat.name for cat in self.categories]:
-                count = remaining_by_category.get(cat_name, 0)
-                logger.info(f"    {cat_name}: {count:,}")
-
-        logger.info("=" * 60)
-
-    def _allocate_person_to_household(self, household: Venue, person: Person,
-                                      pool: Optional[List[Person]] = None):
+    def _allocate_person_to_household(
+        self, household: Venue, person: Person, pool: Optional[List[Person]] = None
+    ):
         """
         Add person to household, mark as allocated, and optionally remove from pool.
 
@@ -1704,22 +1894,6 @@ class HouseholdDistributor:
                         pool.pop(i)
                         break
 
-    def allocate_excess_to_households(self, *args, **kwargs):
-        """Delegate to excess handler. See HouseholdExcessHandler.allocate_excess_to_households for documentation."""
-        return self.excess_handler.allocate_excess_to_households(*args, **kwargs)
-
-    def allocate_overflow_to_households(self, *args, **kwargs):
-        """Delegate to excess handler. See HouseholdExcessHandler.allocate_overflow_to_households for documentation."""
-        return self.excess_handler.allocate_overflow_to_households(*args, **kwargs)
-
-    def promote_and_allocate(self, *args, **kwargs):
-        """Delegate to promoter. See HouseholdPromoter.promote_and_allocate for documentation."""
-        return self.promoter.promote_and_allocate(*args, **kwargs)
-
-    def promote_with_rules(self, *args, **kwargs):
-        """Delegate to promoter. See HouseholdPromoter.promote_with_rules for documentation."""
-        return self.promoter.promote_with_rules(*args, **kwargs)
-
     def _sample_from_distribution(self, distribution_config: Dict) -> int:
         """
         Sample a number from a configured distribution.
@@ -1730,11 +1904,11 @@ class HouseholdDistributor:
         Returns:
             int: Number sampled from the distribution
         """
-        dist_type = distribution_config.get('type', 'weighted')
+        dist_type = distribution_config.get("type", "weighted")
 
-        if dist_type == 'weighted':
+        if dist_type == "weighted":
             # Weighted discrete distribution
-            probs = distribution_config.get('probabilities', {})
+            probs = distribution_config.get("probabilities", {})
 
             # Convert string keys to integers and normalize probabilities
             values = []
@@ -1753,11 +1927,11 @@ class HouseholdDistributor:
             # Sample using numpy choice
             return np.random.choice(values, p=normalized_weights)
 
-        elif dist_type == 'poisson':
+        elif dist_type == "poisson":
             # Zero-truncated Poisson distribution, capped at max value
-            mean = distribution_config.get('mean', 1.0)
-            max_val = distribution_config.get('max', 10)  # Default cap at 10
-            min_val = distribution_config.get('min', 0)   # Default min at 0 (allow zero)
+            mean = distribution_config.get("mean", 1.0)
+            max_val = distribution_config.get("max", 10)  # Default cap at 10
+            min_val = distribution_config.get("min", 0)  # Default min at 0 (allow zero)
 
             # Calculate probabilities for each value
             values = list(range(min_val, max_val + 1))
@@ -1770,7 +1944,7 @@ class HouseholdDistributor:
                     # Include zero
                     p = np.exp(-λ)
                 else:
-                    p = np.exp(-λ) * (λ ** n) / math.factorial(n)
+                    p = np.exp(-λ) * (λ**n) / math.factorial(n)
                 probs.append(p)
 
             # Normalize probabilities
@@ -1780,10 +1954,10 @@ class HouseholdDistributor:
             # Sample from distribution
             return np.random.choice(values, p=probs)
 
-        elif dist_type == 'normal':
+        elif dist_type == "normal":
             # Normal (Gaussian) distribution
-            mean = distribution_config.get('mean', 1.0)
-            std = distribution_config.get('std', 0.5)
+            mean = distribution_config.get("mean", 1.0)
+            std = distribution_config.get("std", 0.5)
 
             # Sample from normal distribution
             value = np.random.normal(mean, std)
@@ -1795,8 +1969,9 @@ class HouseholdDistributor:
             logger.warning(f"Unknown distribution type '{dist_type}', defaulting to 0")
             return 0
 
-    def _check_constraints_if_added(self, household: Venue, add_category: str,
-                                     constraints: List[Dict]) -> bool:
+    def _check_constraints_if_added(
+        self, household: Venue, add_category: str, constraints: List[Dict]
+    ) -> bool:
         """
         Check if adding one more person of add_category would violate constraints.
 
@@ -1813,12 +1988,142 @@ class HouseholdDistributor:
 
         # Simulate adding one more person
         simulated_composition = dict(current_composition)
-        simulated_composition[add_category] = simulated_composition.get(add_category, 0) + 1
+        simulated_composition[add_category] = (
+            simulated_composition.get(add_category, 0) + 1
+        )
 
         # Use unified validator
-        is_valid, error = self.relationship_rules.validate_composition(simulated_composition, constraints)
-        
+        is_valid, error = self.relationship_rules.validate_composition(
+            simulated_composition, constraints
+        )
+
         if not is_valid and error:
             logger.debug(f"  {error}")
-            
+
         return is_valid
+
+    # Explicit delegation keeps the public API on the distributor while the
+    # implementations remain grouped by allocation concern.
+    def _calculate_balanced_distribution(
+        self,
+        geo_unit_code: str,
+        pattern: CompositionPattern,
+        num_households: int,
+        max_household_size: Optional[int],
+    ) -> List[int]:
+        return _household_rounds._calculate_balanced_distribution(
+            self, geo_unit_code, pattern, num_households, max_household_size
+        )
+
+    def distribute_households_round(
+        self,
+        pattern_filter: Optional[List[str]] = None,
+        pattern_assumptions: Optional[Dict[str, str]] = None,
+        max_households: Optional[int] = None,
+        max_household_size: Optional[int] = None,
+        allocate_flexible: bool = False,
+        refresh_pools: bool = False,
+        round_name: Optional[str] = None,
+        rule_name: Optional[str] = None,
+        demotion_rules: Optional[Dict[str, str]] = None,
+        interpretation: Optional[str] = None,
+    ):
+        return _household_rounds.distribute_households_round(
+            self,
+            pattern_filter,
+            pattern_assumptions,
+            max_households,
+            max_household_size,
+            allocate_flexible,
+            refresh_pools,
+            round_name,
+            rule_name,
+            demotion_rules,
+            interpretation,
+        )
+
+    def _allocate_balanced_distribution(
+        self, pattern: CompositionPattern, pools, target_size: int
+    ):
+        return _household_rounds._allocate_balanced_distribution(
+            self, pattern, pools, target_size
+        )
+
+    def _adding_person_satisfies_rules(
+        self, household, category_name: str, validation_rules: List[Dict]
+    ) -> bool:
+        return _household_promotion._adding_person_satisfies_rules(
+            self, household, category_name, validation_rules
+        )
+
+    def _get_households_by_geo_unit(self) -> Dict[str, List]:
+        return _household_promotion._get_households_by_geo_unit(self)
+
+    def _get_households_by_pattern(self) -> Dict[str, List]:
+        return _household_promotion._get_households_by_pattern(self)
+
+    def reset_indexes(self):
+        return _household_promotion.reset_indexes(self)
+
+    def promote_and_allocate(
+        self,
+        target_categories: List[str],
+        max_households: Optional[int] = None,
+        refresh_pools: bool = False,
+        round_name: Optional[str] = None,
+    ):
+        return _household_promotion.promote_and_allocate(
+            self, target_categories, refresh_pools, round_name
+        )
+
+    def promote_with_rules(
+        self,
+        promotion_rules: List[Dict],
+        refresh_pools: bool = False,
+        round_name: Optional[str] = None,
+    ):
+        return _household_promotion.promote_with_rules(
+            self, promotion_rules, refresh_pools, round_name
+        )
+
+    def allocate_excess_to_households(
+        self,
+        target_patterns: List[str],
+        add_category: str,
+        constraints: Optional[List[Dict]] = None,
+        max_per_household: Optional[int] = None,
+        add_distribution: Optional[Dict] = None,
+        refresh_pools: bool = False,
+        round_name: Optional[str] = None,
+        rule_name: Optional[str] = None,
+    ):
+        return _household_excess.allocate_excess_to_households(
+            self,
+            target_patterns,
+            add_category,
+            constraints,
+            max_per_household,
+            add_distribution,
+            refresh_pools,
+            round_name,
+            rule_name,
+        )
+
+    def allocate_overflow_to_households(
+        self,
+        target_patterns: List[str],
+        add_category: str,
+        pattern_bias: Optional[Dict[str, float]] = None,
+        refresh_pools: bool = False,
+        round_name: Optional[str] = None,
+    ):
+        return _household_excess.allocate_overflow_to_households(
+            self, target_patterns, add_category, pattern_bias, refresh_pools, round_name
+        )
+
+    def _select_person_for_excess_with_rule(
+        self, household: Venue, candidates: List["Person"], add_category: str, rule
+    ) -> Optional["Person"]:
+        return _household_excess._select_person_for_excess_with_rule(
+            self, household, candidates, add_category, rule
+        )

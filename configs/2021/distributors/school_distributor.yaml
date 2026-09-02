@@ -360,9 +360,9 @@ validation:
 #
 # EXAMPLE USAGE IN CODE:
 #
-#   from distributors import Distributor
+#   from may.venue_distributor import distributor_from_yaml
 #
-#   distributor = Distributor.from_yaml("yaml/distributors/school_distributor.yaml")
+#   distributor = distributor_from_yaml("yaml/distributors/school_distributor.yaml")
 #   distributor.allocate(world)
 #
 #   # Access allocated school:

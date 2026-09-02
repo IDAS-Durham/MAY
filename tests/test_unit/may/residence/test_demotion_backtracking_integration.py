@@ -391,7 +391,7 @@ class TestDistributeHouseholdsRound:
         """Load counts from CSV, allocate patterns → households created."""
         self._setup_full_distributor(distributor)
 
-        stats = distributor.round_distributor.distribute_households_round(
+        stats = distributor.distribute_households_round(
             round_name="Test Round 1"
         )
 
@@ -403,7 +403,7 @@ class TestDistributeHouseholdsRound:
         """pattern_filter=['0 0 2 0'] → only adult-couple households created."""
         self._setup_full_distributor(distributor)
 
-        stats = distributor.round_distributor.distribute_households_round(
+        stats = distributor.distribute_households_round(
             pattern_filter=["0 0 2 0"],
             round_name="Adult Pairs Only",
             rule_name="Adult pair"
@@ -423,7 +423,7 @@ class TestDistributeHouseholdsRound:
         """max_households=1 → stops after 1 even if more are needed."""
         self._setup_full_distributor(distributor)
 
-        stats = distributor.round_distributor.distribute_households_round(
+        stats = distributor.distribute_households_round(
             max_households=1,
             round_name="Limited Round"
         )
@@ -435,7 +435,7 @@ class TestDistributeHouseholdsRound:
         self._setup_full_distributor(distributor)
 
         # First round: allocate some
-        stats1 = distributor.round_distributor.distribute_households_round(
+        stats1 = distributor.distribute_households_round(
             pattern_filter=["0 0 2 0"],
             round_name="Round 1",
             rule_name="Adult pair"
@@ -443,7 +443,7 @@ class TestDistributeHouseholdsRound:
         allocated_after_r1 = stats1['total_people_allocated']
 
         # Second round with refresh
-        stats2 = distributor.round_distributor.distribute_households_round(
+        stats2 = distributor.distribute_households_round(
             pattern_filter=["0 0 1 0"],
             round_name="Round 2",
             refresh_pools=True
@@ -458,7 +458,7 @@ class TestDistributeHouseholdsRound:
         """Verify round_stats dict has correct keys and values."""
         self._setup_full_distributor(distributor)
 
-        stats = distributor.round_distributor.distribute_households_round(
+        stats = distributor.distribute_households_round(
             round_name="Stats Test",
             max_households=2
         )
@@ -492,7 +492,7 @@ class TestBalancedDistribution:
 
         pattern = CompositionPattern.from_string("0 >=0 >=0 0")
 
-        sizes = distributor.round_distributor._calculate_balanced_distribution(
+        sizes = distributor._calculate_balanced_distribution(
             "SGU_001", pattern, num_households=5, max_household_size=None
         )
 
@@ -508,7 +508,7 @@ class TestBalancedDistribution:
 
         pattern = CompositionPattern.from_string("0 >=0 >=0 0")
 
-        sizes = distributor.round_distributor._calculate_balanced_distribution(
+        sizes = distributor._calculate_balanced_distribution(
             "SGU_001", pattern, num_households=4, max_household_size=None
         )
 
@@ -525,7 +525,7 @@ class TestBalancedDistribution:
 
         pattern = CompositionPattern.from_string("0 >=0 >=0 0")
 
-        sizes = distributor.round_distributor._calculate_balanced_distribution(
+        sizes = distributor._calculate_balanced_distribution(
             "SGU_001", pattern, num_households=5, max_household_size=3
         )
 
@@ -542,7 +542,7 @@ class TestBalancedDistribution:
 
         pattern = CompositionPattern.from_string("0 >=0 >=0 0")  # Both flexible
 
-        selections, failed_cat = distributor.round_distributor._allocate_balanced_distribution(
+        selections, failed_cat = distributor._allocate_balanced_distribution(
             pattern, pools, target_size=5
         )
 
@@ -573,7 +573,7 @@ class TestBalancedDistribution:
 
         pattern = CompositionPattern.from_string("1 >=0 2 0")
 
-        selections, failed_cat = distributor.round_distributor._allocate_balanced_distribution(
+        selections, failed_cat = distributor._allocate_balanced_distribution(
             pattern, pools, target_size=5
         )
 

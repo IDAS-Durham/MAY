@@ -40,7 +40,7 @@ pool:
   activity: "primary_activity"
 ```
 
-`network_type` selects the algorithm used to build edges. Five types are registered:
+`network_type` selects the algorithm used to build edges. Five built-in types are supported:
 
 - **`activity_peers`** — connects people who share the same venue activity. Requires `pool_type: "activity"` and `pool.activity` naming the `activity_map` key to match on (e.g. `"primary_activity"`). Uses the fast random builder.
 - **`intra_geo_unit`** — connects people within the same geographical unit. Requires `pool_type: "geographic"` and `pool.level` naming the hierarchy level (e.g. `"SGU"`, `"MGU"`). Uses the fast random builder.

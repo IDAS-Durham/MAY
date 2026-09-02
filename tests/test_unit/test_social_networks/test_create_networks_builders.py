@@ -8,21 +8,43 @@ by the create_networks tests.
 """
 import pytest
 
-from may.social_networks import network_type_builders, SocialNetworkBuilder
+from may.social_networks import SocialNetworkBuilder
+from may.social_networks import social_networks
 
 
-# Registration
-
-def test_local_social_network_registered():
-    assert "local_social_network" in network_type_builders
-
-
-def test_spatial_social_network_registered():
-    assert "spatial_social_network" in network_type_builders
-
-
-def test_bounded_distance_registered():
-    assert "bounded_distance" in network_type_builders
+@pytest.mark.parametrize("network_type", [
+    "activity_peers",
+    "intra_geo_unit",
+    "local_social_network",
+    "spatial_social_network",
+    "bounded_distance",
+])
+def test_builtin_network_type_dispatch(monkeypatch, network_type):
+    called = []
+    builder_name = {
+        "activity_peers": "build_activity_peers",
+        "intra_geo_unit": "build_intra_geo_unit",
+        "local_social_network": "build_local_social_network",
+        "spatial_social_network": "build_spatial_social_network",
+        "bounded_distance": "build_bounded_distance",
+    }[network_type]
+    monkeypatch.setattr(
+        social_networks,
+        builder_name,
+        lambda world, config: called.append(config["network_type"]),
+    )
+    pool_type = "activity" if network_type == "activity_peers" else "geographic"
+    config = {
+        "networks": [{
+            "network_type": network_type,
+            "pool_type": pool_type,
+            "pool": {},
+            "mean_count": 1,
+            "storage_key": "contacts",
+        }]
+    }
+    SocialNetworkBuilder(None, config).build_all()
+    assert called == [network_type]
 
 
 # local_social_network end-to-end

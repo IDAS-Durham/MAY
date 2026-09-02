@@ -11,9 +11,9 @@ import yaml
 
 from may.population.person import Person
 from may.venue_distributor import DISTRIBUTOR_TYPES, distributor_from_yaml
-from may.venue_distributor.fallbacks import FALLBACK_STRATEGIES
-from may.venue_distributor.matcher import SELECT_VENUE_STRATEGIES
-from may.venue_distributor.special_cases import SPECIAL_CASE_STRATEGIES
+from may.venue_distributor._allocation import (
+    FALLBACK_STRATEGIES, SELECT_VENUE_STRATEGIES, SPECIAL_CASE_STRATEGIES,
+)
 from may.venue_distributor.venue_distributor import VenueDistributor
 
 
@@ -66,7 +66,7 @@ def _selector(strategy):
         "venue_type": "company",
         "allocation": {"strategy": strategy},
     })
-    return d.matcher
+    return d.allocation
 
 
 def test_unknown_allocation_strategy_raises():
@@ -118,7 +118,7 @@ def _special_case(rule):
         "venue_type": "company",
         "special_cases": {"enabled": True, "cases": [{"name": "c", "allocation_rule": rule}]},
     })
-    return d.special_cases
+    return d.allocation
 
 
 def test_unknown_special_case_strategy_raises():
@@ -181,7 +181,7 @@ def test_unknown_fallback_strategy_raises():
     })
 
     with pytest.raises(ValueError, match="Unknown fallback.strategy"):
-        d.fallbacks.handle_fallbacks([Person(age=30, sex="m")], [], world=None)
+        d.allocation.handle_fallbacks([Person(age=30, sex="m")], [], world=None)
 
 
 def test_skip_is_still_a_no_op():
@@ -191,5 +191,5 @@ def test_skip_is_still_a_no_op():
     })
     people = [Person(age=30, sex="m")]
 
-    assert d.fallbacks.handle_fallbacks(people, [], world=None) == people
+    assert d.allocation.handle_fallbacks(people, [], world=None) == people
     assert "skip" in FALLBACK_STRATEGIES

@@ -11,8 +11,8 @@ The rules below name the type the writer chooses and the values that survive
 its cast, so a column can be checked as it is assembled.
 """
 
-INT32_MIN = -(2 ** 31)
-INT32_MAX = 2 ** 31 - 1
+INT32_MIN = -(2**31)
+INT32_MAX = 2**31 - 1
 FLOAT32_MAX = 3.4028234663852886e38
 
 
@@ -77,8 +77,7 @@ def value_problem(kind, value):
                 return None
             return f"{value!r} overflows a 32-bit float column"
         return (
-            f"{value!r} ({type(value).__name__}) cannot be stored in a "
-            f"float column"
+            f"{value!r} ({type(value).__name__}) cannot be stored in a " f"float column"
         )
 
     if isinstance(value, str):

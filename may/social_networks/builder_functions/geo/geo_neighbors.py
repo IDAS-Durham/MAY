@@ -6,7 +6,7 @@ Using libpysal DistanceBand (fast, requires projected coordinates for accuracy).
 
 import numpy as np
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy.typing as npt
 
@@ -46,13 +46,17 @@ def _km_to_degrees_adjusted(radius_km: float, coordinates: np.ndarray) -> float:
 
     return radius_km / km_per_degree
 
-from typing import Callable, Any
-from functools import wraps
+
 import logging
 
-type GraphCreator = Callable[[Any],Any]
+if TYPE_CHECKING:
+    from may.geography import GeographicalUnit
+
+type GraphCreator = Callable[[Any], Any]
 
 neighbour_finders: dict[str, GraphCreator] = {}
+
+
 def register_neighbour_finder(name: str):
     """
     Decorator to register a neighbour finding method in the neighbour_finders registry.
@@ -69,15 +73,17 @@ def register_neighbour_finder(name: str):
         ...     return {}
         >>> neighbours = neighbour_finders["my_method"](units, 10.0)
     """
+
     def decorator(func: GraphCreator):
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
-        neighbour_finders[name] = wrapper
-        return wrapper
+        neighbour_finders[name] = func
+        return func
+
     return decorator
 
-def _filter_units_with_valid_coords(geo_units: list['GeographicalUnit']) -> list['GeographicalUnit']:
+
+def _filter_units_with_valid_coords(
+    geo_units: list["GeographicalUnit"],
+) -> list["GeographicalUnit"]:
     """
     Filter geographical units to only those with valid coordinates.
 
@@ -90,12 +96,15 @@ def _filter_units_with_valid_coords(geo_units: list['GeographicalUnit']) -> list
     # Filter units with valid coordinates
     units_with_coords = []
     for unit in geo_units:
-        coords = getattr(unit, 'coordinates', None)
+        coords = getattr(unit, "coordinates", None)
         if coords is not None and not (np.isnan(coords[0]) or np.isnan(coords[1])):
             units_with_coords.append(unit)
     return units_with_coords
 
-def _extract_coordinates(geo_units: list['GeographicalUnit']) -> [npt.NDArray, list["GeographicalUnits"]]:
+
+def _extract_coordinates(
+    geo_units: list["GeographicalUnit"],
+) -> tuple[npt.NDArray, list["GeographicalUnit"]]:
     """
     Extract coordinates from geographical units as a numpy array.
 
@@ -117,16 +126,19 @@ def _extract_coordinates(geo_units: list['GeographicalUnit']) -> [npt.NDArray, l
         return None, None
 
     # unit.coordinates is (lat, lon); libpysal/cKDTree expect (x, y) = (lon, lat), so swap.
-    coordinates = np.array([
-        unit.coordinates[::-1]  # (lat, lon) -> (lon, lat)
-        for unit in units_with_coords
-    ])
+    coordinates = np.array(
+        [
+            unit.coordinates[::-1]  # (lat, lon) -> (lon, lat)
+            for unit in units_with_coords
+        ]
+    )
 
     return coordinates, units_with_coords
 
-@register_neighbour_finder('libpysal')
+
+@register_neighbour_finder("libpysal")
 def _find_neighbours_libpysal(
-    geo_units: list['GeographicalUnit'],
+    geo_units: list["GeographicalUnit"],
     radius_km: float,
 ) -> dict[id, list[id]]:
     """
@@ -155,7 +167,9 @@ def _find_neighbours_libpysal(
     threshold_degrees = _km_to_degrees_adjusted(radius_km, coordinates)
 
     # Build distance band weights
-    dist_weights = weights.DistanceBand.from_array(coordinates, threshold=threshold_degrees)
+    dist_weights = weights.DistanceBand.from_array(
+        coordinates, threshold=threshold_degrees
+    )
 
     # Build neighbour dict
     neighbours = {}
@@ -163,13 +177,16 @@ def _find_neighbours_libpysal(
         neighbour_indices = dist_weights.neighbors.get(i, [])
         neighbours[unit.id] = [units_with_coords[idx].id for idx in neighbour_indices]
 
-    logger.info(f"Found neighbours for {len(neighbours)} units within ~{radius_km}km radius")
+    logger.info(
+        f"Found neighbours for {len(neighbours)} units within ~{radius_km}km radius"
+    )
     avg_neighbours = np.mean([len(n) for n in neighbours.values()])
     logger.info(f"Average neighbours per unit: {avg_neighbours:.1f}")
 
     return neighbours
 
-def find_neighbours(*args, method='libpysal', **kwargs) -> dict[id, list[id]]:
+
+def find_neighbours(*args, method="libpysal", **kwargs) -> dict[id, list[id]]:
     """
     Find neighbouring geographical units within a specified radius.
 
@@ -194,11 +211,10 @@ def find_neighbours(*args, method='libpysal', **kwargs) -> dict[id, list[id]]:
     find_neighbours_method = neighbour_finders[method]
     if find_neighbours_method is None:
         raise ValueError(f"Unknown method: {method}")
-    return find_neighbours_method(*args, **kwargs)        
+    return find_neighbours_method(*args, **kwargs)
 
-def build_neighbour_network(
-        neighbours: dict[str, list[str]]
-        ) -> "nx.Graph":
+
+def build_neighbour_network(neighbours: dict[str, list[str]]) -> "nx.Graph":
     """
     Build a NetworkX graph from a neighbour dictionary.
 
@@ -229,7 +245,9 @@ def build_neighbour_network(
             if not G.has_edge(unit_name, neighbour_name):
                 G.add_edge(unit_name, neighbour_name)
 
-    logger.info(f"Built network: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+    logger.info(
+        f"Built network: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges"
+    )
 
     return G
 
@@ -243,7 +261,7 @@ if __name__ == "__main__":
     # Load medieval geography
     geo = Geography(
         data_dir="world_specific_code/MedievalYaml/data/geography",
-        levels=["MBD_Temp_ID", "County", "Country"]
+        levels=["MBD_Temp_ID", "County", "Country"],
     )
     geo.load_from_csv()
 
@@ -254,15 +272,18 @@ if __name__ == "__main__":
     # Find neighbours within 10km radius
     radius = 10.0  # km
     neighbours = find_neighbours(sgu_units, method="libpysal", radius_km=radius)
-    
+
     # Build network
     logger.info(f"\n--- Building neighbour network ---")
     G = build_neighbour_network(neighbours)
 
     # Network statistics
     import networkx as nx
+
     logger.info(f"Network statistics:")
     logger.info(f"  Nodes: {G.number_of_nodes()}")
     logger.info(f"  Edges: {G.number_of_edges()}")
-    logger.info(f"  Average degree: {2 * G.number_of_edges() / G.number_of_nodes():.1f}")
+    logger.info(
+        f"  Average degree: {2 * G.number_of_edges() / G.number_of_nodes():.1f}"
+    )
     logger.info(f"  Connected components: {nx.number_connected_components(G)}")

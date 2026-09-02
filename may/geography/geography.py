@@ -4,16 +4,24 @@ from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 logger = logging.getLogger("geography")
 
+
 class Geography:
     """
     Main geography container. Loads and manages hierarchical geographical units.
     Generic implementation that works with any geography structure.
     """
-    def __init__(self, data_dir="data/geography", levels=None, filters=None,
-                 hierarchy_file=None, coord_files=None):
+
+    def __init__(
+        self,
+        data_dir="data/geography",
+        levels=None,
+        filters=None,
+        hierarchy_file=None,
+        coord_files=None,
+    ):
         self.data_dir = data_dir
-        self.units = {}           # All units by name: {name: GeographicalUnit}
-        self.units_by_id = {}     # All units by ID: {id: GeographicalUnit}
+        self.units = {}  # All units by name: {name: GeographicalUnit}
+        self.units_by_id = {}  # All units by ID: {id: GeographicalUnit}
 
         # Hierarchy levels (most granular to least granular). Required: callers
         # pass the scenario's configured labels.
@@ -67,11 +75,11 @@ class Geography:
         """
         codes = set()
         try:
-            with open(file_path, 'r', encoding='utf-8-sig') as f:
+            with open(file_path, "r", encoding="utf-8-sig") as f:
                 for line in f:
                     line = line.strip()
                     # Skip empty lines and comments
-                    if line and not line.startswith('#'):
+                    if line and not line.startswith("#"):
                         codes.add(line)
             logger.info(f"Loaded {len(codes)} codes from {file_path}")
         except FileNotFoundError:
@@ -110,17 +118,18 @@ class Geography:
         # Verify that all configured levels exist in the CSV
         missing_levels = [lvl for lvl in self.levels if lvl not in hierarchy_df.columns]
         if missing_levels:
-            logger.error(f"Hierarchy file is missing columns for configured levels: {missing_levels}")
+            logger.error(
+                f"Hierarchy file is missing columns for configured levels: {missing_levels}"
+            )
             logger.info(f"Available columns: {hierarchy_df.columns.tolist()}")
             raise ValueError(f"Missing columns {missing_levels} in {hierarchy_paths}")
 
         # Reject rows that are missing a value at any configured level; a
         # blank/NaN cell would create a ghost unit named "nan" and corrupt the
         # parent chain.
-        invalid_mask = hierarchy_df[self.levels].isna().any(axis=1) | \
-            hierarchy_df[self.levels].apply(
-                lambda col: col.astype(str).str.strip() == "", axis=0
-            ).any(axis=1)
+        invalid_mask = hierarchy_df[self.levels].isna().any(axis=1) | hierarchy_df[
+            self.levels
+        ].apply(lambda col: col.astype(str).str.strip() == "", axis=0).any(axis=1)
         if invalid_mask.any():
             invalid_count = int(invalid_mask.sum())
             logger.warning(
@@ -130,14 +139,16 @@ class Geography:
             hierarchy_df = hierarchy_df[~invalid_mask].reset_index(drop=True)
 
         # 2. Apply filters if specified
-        if self.filters and self.filters.get('codes'):
-            filter_level = self.filters['level']
-            filter_names = set(self.filters['codes'])  # 'codes' key holds names
+        if self.filters and self.filters.get("codes"):
+            filter_level = self.filters["level"]
+            filter_names = set(self.filters["codes"])  # 'codes' key holds names
 
             if filter_level not in hierarchy_df.columns:
-                logger.error(f"Filter level '{filter_level}' not found in hierarchy columns.")
+                logger.error(
+                    f"Filter level '{filter_level}' not found in hierarchy columns."
+                )
                 raise ValueError(f"Invalid filter level: {filter_level}")
-            
+
             filter_col = filter_level
 
             # Filter the hierarchy to only include rows with these names
@@ -167,11 +178,9 @@ class Geography:
                 os.path.join(self.data_dir, p)
                 for p in as_path_list(file_spec, f"geography.coord_files.{level}")
             ]
-            coord_df = load_stacked_csv(
-                coord_paths, label=f"{level} coordinates"
-            )
+            coord_df = load_stacked_csv(coord_paths, label=f"{level} coordinates")
             self._validate_coord_columns(coord_df, coord_paths, level)
-            for _candidate in ('geo_unit', level.lower(), level):
+            for _candidate in ("geo_unit", level.lower(), level):
                 if _candidate in coord_df.columns:
                     name_col = _candidate
                     break
@@ -189,10 +198,11 @@ class Geography:
             wanted = names_per_level[level]
             if wanted:
                 coord_df = coord_df[coord_df[name_col].isin(wanted)]
-            coords[level] = dict(zip(
-                coord_df[name_col],
-                zip(coord_df['latitude'], coord_df['longitude'])
-            ))
+            coords[level] = dict(
+                zip(
+                    coord_df[name_col], zip(coord_df["latitude"], coord_df["longitude"])
+                )
+            )
             logger.info(f"Loaded {len(coords[level])} coordinates for {level}")
 
         # 4. Create all units from hierarchy
@@ -281,7 +291,7 @@ class Geography:
     def add_geo_units(self, units):
         for unit in units:
             self.add_geo_unit(unit)
-        
+
     def get_unit(self, name):
         """Get a unit by its name (or `code` in datasets that use codes as names)."""
         return self.units.get(name)
@@ -318,11 +328,10 @@ class Geography:
     def __eq__(self, other):
         if not isinstance(other, Geography):
             return NotImplemented
-        for attribute in ['units', 'levels']:
+        for attribute in ["units", "levels"]:
             if getattr(self, attribute) != getattr(other, attribute):
                 return False
         return True
 
     def __hash__(self):
         return hash((self.data_dir, tuple(self.levels)))
-

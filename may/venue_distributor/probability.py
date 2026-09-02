@@ -30,5 +30,5 @@ def probability_cache_key(prob_config):
     Built from the raw config values so the distributor (which loads) and the
     filtering manager (which reads) cannot drift apart.
     """
-    paths = as_path_list(prob_config.get('file_path'), "probability_config.file_path")
-    return (tuple(paths), prob_config.get('probability_column'))
+    paths = as_path_list(prob_config.get("file_path"), "probability_config.file_path")
+    return (tuple(paths), prob_config.get("probability_column"))

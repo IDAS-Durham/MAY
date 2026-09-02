@@ -8,7 +8,6 @@ Simplified attribute assignment configuration:
 - Cleaner, more user-friendly configuration format
 """
 
-import yaml
 import logging
 from collections import defaultdict
 from typing import Dict, List, Any, Optional
@@ -18,6 +17,7 @@ from functools import lru_cache
 from may.residence.composition_pattern import CompositionPattern
 from may.attribute_assignment.strategies import validate_assignment_config
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger("may.attribute_assignment.config")
 
@@ -63,21 +63,6 @@ def _pattern_matches_cached(actual: str, template: str) -> bool:
 
 
 @dataclass
-class DataSourceConfig:
-    """
-    Configuration for a data source.
-
-    Data sources provide probability distributions for attribute values
-    based on context (e.g., geographical unit code, first person's ethnicity, etc.).
-    """
-    name: str
-    type: str
-    description: str
-    files: List[Dict[str, Any]] = field(default_factory=list)
-    config: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class MatchingRule:
     """
     A rule for matching household patterns.
@@ -87,6 +72,7 @@ class MatchingRule:
     - original pattern only
     - both actual AND original patterns (conditional matching)
     """
+
     actual_patterns: List[str] = field(default_factory=list)
     original_patterns: List[str] = field(default_factory=list)
     description: str = ""
@@ -102,7 +88,7 @@ class MatchingRule:
         Returns:
             True if household matches this rule
         """
-        original_pattern = household.properties.get('original_pattern', '')
+        original_pattern = household.properties.get("original_pattern", "")
 
         # Compute actual pattern from household members
         actual_pattern = self._compute_actual_pattern(household)
@@ -110,11 +96,15 @@ class MatchingRule:
         if verbose:
             logger.debug(f"      Testing matching rule:")
             logger.debug(f"        Description: {self.description}")
-            logger.debug(f"        Household: original='{original_pattern}', actual='{actual_pattern}'")
+            logger.debug(
+                f"        Household: original='{original_pattern}', actual='{actual_pattern}'"
+            )
 
         # If both actual and original are specified, BOTH must match
         if self.actual_patterns and self.original_patterns:
-            actual_match = self._matches_any_pattern(actual_pattern, self.actual_patterns)
+            actual_match = self._matches_any_pattern(
+                actual_pattern, self.actual_patterns
+            )
             original_match = original_pattern in self.original_patterns
 
             if verbose:
@@ -140,7 +130,9 @@ class MatchingRule:
         # No patterns specified - always matches
         return True
 
-    def _matches_any_pattern(self, actual_pattern: str, template_patterns: List[str]) -> bool:
+    def _matches_any_pattern(
+        self, actual_pattern: str, template_patterns: List[str]
+    ) -> bool:
         """
         Check if actual pattern matches any of the template patterns.
         Uses CompositionPattern for flexible matching with >=, <=, etc.
@@ -161,14 +153,14 @@ class MatchingRule:
             Pattern string like "2 0 2 0" (counts per category)
         """
         # Check if pattern is already cached on the household
-        cached_pattern = household.properties.get('_cached_actual_pattern')
+        cached_pattern = household.properties.get("_cached_actual_pattern")
         if cached_pattern is not None:
             return cached_pattern
 
         # Get age categories from household properties
-        age_categories = household.properties.get('_age_categories', [])
+        age_categories = household.properties.get("_age_categories", [])
         if not age_categories:
-            return ''
+            return ""
 
         # Build category name → index mapping
         category_indices = {cat.name: i for i, cat in enumerate(age_categories)}
@@ -180,17 +172,23 @@ class MatchingRule:
         for person in members:
             # Get person's household category from activity_map
             # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
-            if "residence" in person.activity_map and "household" in person.activity_map["residence"] and person.activity_map["residence"]["household"]:
-                subset_name = person.activity_map["residence"]["household"][0].subset_name
+            if (
+                "residence" in person.activity_map
+                and "household" in person.activity_map["residence"]
+                and person.activity_map["residence"]["household"]
+            ):
+                subset_name = person.activity_map["residence"]["household"][
+                    0
+                ].subset_name
 
                 if subset_name in category_indices:
                     counts[category_indices[subset_name]] += 1
 
         # Return as space-separated string
-        pattern = ' '.join(str(c) for c in counts)
+        pattern = " ".join(str(c) for c in counts)
 
         # Cache the pattern on the household for future lookups
-        household.properties['_cached_actual_pattern'] = pattern
+        household.properties["_cached_actual_pattern"] = pattern
 
         return pattern
 
@@ -213,6 +211,7 @@ class HouseholdStructure:
     """
     Household structure with flexible matching rules.
     """
+
     name: str
     description: str
     matching_rules: List[MatchingRule] = field(default_factory=list)
@@ -242,10 +241,11 @@ class Role:
     """
     Role definition - maps to household subsets instead of conditions.
     """
+
     name: str
     description: str
     subsets: List[str]  # List of subset names this role applies to
-    role_type: str = "general" # primary, secondary, extra, or general
+    role_type: str = "general"  # primary, secondary, extra, or general
 
     def matches(self, person, verbose: bool = False) -> bool:
         """
@@ -268,13 +268,17 @@ class Role:
                 residence_subset = subsets[0]
                 break
 
-        if residence_subset is None:  # Check for None explicitly, not truthiness (Subset has __len__)
+        if (
+            residence_subset is None
+        ):  # Check for None explicitly, not truthiness (Subset has __len__)
             return False
 
         person_subset = residence_subset.subset_name
 
         if verbose:
-            logger.debug(f"        Testing role '{self.name}': person_subset='{person_subset}', role_subsets={self.subsets}")
+            logger.debug(
+                f"        Testing role '{self.name}': person_subset='{person_subset}', role_subsets={self.subsets}"
+            )
 
         return person_subset in self.subsets
 
@@ -284,11 +288,12 @@ class AssignmentRule:
     """
     Simplified assignment rule.
     """
+
     role: str  # Can also be list of roles (parsed from config)
     priority: int
     description: str
     assignment: Dict[str, Any]
-    dependencies: List[str] = field(default_factory=list) # Roles this rule depends on
+    dependencies: List[str] = field(default_factory=list)  # Roles this rule depends on
 
     def applies_to_role(self, role_name: str) -> bool:
         """Check if this rule applies to a role."""
@@ -302,6 +307,7 @@ class StructureAssignmentRules:
     """
     Assignment rules for a specific household structure.
     """
+
     structure_name: str
     description: str
     rules: List[AssignmentRule] = field(default_factory=list)
@@ -321,25 +327,25 @@ def _extract_role_dependencies(assignment: Dict[str, Any]) -> List[str]:
     """
     deps: List[str] = []
 
-    inherit_from = assignment.get('inherit_from') or {}
+    inherit_from = assignment.get("inherit_from") or {}
     if isinstance(inherit_from, dict):
         # Forward inheritance uses 'roles' (list); reverse uses 'role' (string).
-        if 'roles' in inherit_from:
-            deps.extend(inherit_from['roles'])
-        elif 'role' in inherit_from:
-            deps.append(inherit_from['role'])
+        if "roles" in inherit_from:
+            deps.extend(inherit_from["roles"])
+        elif "role" in inherit_from:
+            deps.append(inherit_from["role"])
 
-    partner_role = assignment.get('partner_role')
+    partner_role = assignment.get("partner_role")
     if partner_role:
         deps.append(partner_role)
 
     # `exclude` lists live inside declarative logic `then` blocks; each entry is a
     # "role.attr" reference to a role this one must differ from.
-    for entry in assignment.get('logic') or []:
-        then = entry.get('then') if isinstance(entry, dict) else None
+    for entry in assignment.get("logic") or []:
+        then = entry.get("then") if isinstance(entry, dict) else None
         if isinstance(then, dict):
-            for ref in then.get('exclude') or []:
-                deps.append(ref.split('.', 1)[0])
+            for ref in then.get("exclude") or []:
+                deps.append(ref.split(".", 1)[0])
 
     return deps
 
@@ -358,14 +364,13 @@ class AttributeAssignmentConfig:
         """Load configuration from YAML."""
         self.config_path = Path(pr.resolve(str(config_path)))
 
-        with open(self.config_path, 'r', encoding='utf-8-sig') as f:
-            self.raw_config = yaml.safe_load(f)
+        self.raw_config = load_yaml(self.config_path)
 
         # Parse sections
         self.attributes = self._parse_attributes()
         # Primary produced attribute (single-output configs have exactly one).
-        self.attribute_name = self.attributes[0]['name']
-        self.produced_attributes = [a['name'] for a in self.attributes]
+        self.attribute_name = self.attributes[0]["name"]
+        self.produced_attributes = [a["name"] for a in self.attributes]
         self.assignment_level = self._parse_assignment_level()
         self.residence_venue_types = self._parse_residence_venue_types()
         self.filters = self._parse_filters()
@@ -385,10 +390,14 @@ class AttributeAssignmentConfig:
         self._category_lookup_cache = {}
         self._build_category_lookup_structures()
 
-        logger.info(f"Loaded config for '{self.attribute_name}' from {self.config_path}")
+        logger.info(
+            f"Loaded config for '{self.attribute_name}' from {self.config_path}"
+        )
         logger.info(f"  Assignment level: {self.assignment_level}")
         if self.required_attributes:
-            logger.info(f"  Required attributes: {list(self.required_attributes.keys())}")
+            logger.info(
+                f"  Required attributes: {list(self.required_attributes.keys())}"
+            )
         if self.categories:
             logger.info(f"  Categories: {len(self.categories)}")
         logger.info(f"  Roles: {len(self.roles)}")
@@ -403,20 +412,20 @@ class AttributeAssignmentConfig:
         config (assignment_level, residence_venue_types) lives under `step:`.
         A top-level singular `attribute:` block raises a clear error.
         """
-        if 'attribute' in self.raw_config:
+        if "attribute" in self.raw_config:
             raise ValueError(
                 "top-level 'attribute:' block is retired. Declare the "
                 "produced attribute(s) as an 'attributes:' list and step config "
                 "under 'step:'."
             )
-        raw = self.raw_config.get('attributes')
+        raw = self.raw_config.get("attributes")
         if not raw or not isinstance(raw, list):
             raise ValueError(
                 "config needs an 'attributes:' list declaring the produced "
                 "attribute(s), e.g. `attributes:\\n  - name: ethnicity`."
             )
         for entry in raw:
-            if not isinstance(entry, dict) or 'name' not in entry:
+            if not isinstance(entry, dict) or "name" not in entry:
                 raise ValueError(
                     f"each 'attributes' entry needs a 'name', got {entry!r}"
                 )
@@ -424,18 +433,22 @@ class AttributeAssignmentConfig:
 
     def _parse_assignment_level(self) -> str:
         """Parse assignment level: 'person' or 'person_by_residence'."""
-        return self.raw_config.get('step', {}).get('assignment_level', 'person_by_residence')
+        return self.raw_config.get("step", {}).get(
+            "assignment_level", "person_by_residence"
+        )
 
     def _parse_residence_venue_types(self) -> List[str]:
         """Residence venue types assigned by household structure (default ['household']).
 
         Other residence types fall through to venue_assignment_rules.
         """
-        return self.raw_config.get('step', {}).get('residence_venue_types', ['household'])
+        return self.raw_config.get("step", {}).get(
+            "residence_venue_types", ["household"]
+        )
 
     def _parse_filters(self) -> Dict[str, Any]:
         """Parse filters (e.g., activity-based filtering)."""
-        return self.raw_config.get('filters', {})
+        return self.raw_config.get("filters", {})
 
     def _parse_required_attributes(self) -> Dict[str, Any]:
         """Parse required attributes (dependencies).
@@ -449,7 +462,7 @@ class AttributeAssignmentConfig:
         Returned as a dict keyed by name for internal lookup. The mapping form
         (`name: {...}`) raises a clear error.
         """
-        raw_attrs = self.raw_config.get('required_attributes', [])
+        raw_attrs = self.raw_config.get("required_attributes", [])
         if not raw_attrs:
             return {}
 
@@ -462,20 +475,22 @@ class AttributeAssignmentConfig:
 
         result = {}
         for attr in raw_attrs:
-            if 'name' not in attr:
-                raise ValueError(f"Required attribute entry missing 'name' field: {attr}")
-            name = attr['name']
-            result[name] = {k: v for k, v in attr.items() if k != 'name'}
+            if "name" not in attr:
+                raise ValueError(
+                    f"Required attribute entry missing 'name' field: {attr}"
+                )
+            name = attr["name"]
+            result[name] = {k: v for k, v in attr.items() if k != "name"}
         return result
 
     def _parse_categories(self) -> List[Dict[str, Any]]:
         """Parse categories (e.g., age bands)."""
-        return self.raw_config.get('categories', [])
+        return self.raw_config.get("categories", [])
 
     def _parse_roles(self) -> Dict[str, Role]:
         """Parse role definitions."""
         roles = {}
-        roles_config = self.raw_config.get('roles', {})
+        roles_config = self.raw_config.get("roles", {})
 
         for role_name, role_data in roles_config.items():
             if not isinstance(role_data, dict):
@@ -485,22 +500,22 @@ class AttributeAssignmentConfig:
             # The config builder writes the type AS the name prefix
             # (primary_/secondary_/extra_) and omits the explicit key, but
             # hand-authored configs may still use arbitrary names + explicit type.
-            role_type = role_data.get('type')
+            role_type = role_data.get("type")
             if not role_type:
-                if role_name.startswith('primary_'):
-                    role_type = 'primary'
-                elif role_name.startswith('secondary_'):
-                    role_type = 'secondary'
-                elif role_name.startswith('extra_'):
-                    role_type = 'extra'
+                if role_name.startswith("primary_"):
+                    role_type = "primary"
+                elif role_name.startswith("secondary_"):
+                    role_type = "secondary"
+                elif role_name.startswith("extra_"):
+                    role_type = "extra"
                 else:
-                    role_type = 'general'
+                    role_type = "general"
 
             roles[role_name] = Role(
                 name=role_name,
-                description=role_data.get('description', ''),
-                subsets=role_data.get('subsets', []),
-                role_type=role_type
+                description=role_data.get("description", ""),
+                subsets=role_data.get("subsets", []),
+                role_type=role_type,
             )
 
         return roles
@@ -508,7 +523,7 @@ class AttributeAssignmentConfig:
     def _parse_household_structures(self) -> Dict[str, HouseholdStructure]:
         """Parse household structure definitions."""
         structures = {}
-        structures_config = self.raw_config.get('household_structures', {})
+        structures_config = self.raw_config.get("household_structures", {})
 
         for struct_name, struct_data in structures_config.items():
             if not isinstance(struct_data, dict):
@@ -516,67 +531,59 @@ class AttributeAssignmentConfig:
 
             # Parse matching rules
             matching_rules = []
-            for rule_data in struct_data.get('matching_rules', []):
-                matching_rules.append(MatchingRule(
-                    actual_patterns=rule_data.get('actual', []),
-                    original_patterns=rule_data.get('original', []),
-                    description=rule_data.get('description', '')
-                ))
+            for rule_data in struct_data.get("matching_rules", []):
+                matching_rules.append(
+                    MatchingRule(
+                        actual_patterns=rule_data.get("actual", []),
+                        original_patterns=rule_data.get("original", []),
+                        description=rule_data.get("description", ""),
+                    )
+                )
 
             structures[struct_name] = HouseholdStructure(
                 name=struct_name,
-                description=struct_data.get('description', ''),
-                matching_rules=matching_rules
+                description=struct_data.get("description", ""),
+                matching_rules=matching_rules,
             )
 
         return structures
 
-    def _parse_data_sources(self) -> Dict[str, DataSourceConfig]:
-        """Parse data sources into DataSourceConfig objects."""
-        sources = {}
-        sources_config = self.raw_config.get('data_sources', {})
-
-        for source_name, source_data in sources_config.items():
-            sources[source_name] = DataSourceConfig(
-                name=source_name,
-                type=source_data.get('type', 'csv_lookup'),
-                description=source_data.get('description', ''),
-                files=source_data.get('files', []),
-                config=source_data
-            )
-
-        return sources
+    def _parse_data_sources(self) -> Dict[str, Dict[str, Any]]:
+        """Keep source settings in their validated YAML shape."""
+        return self.raw_config.get("data_sources", {})
 
     def _parse_assignment_rules(self) -> Dict[str, StructureAssignmentRules]:
         """Parse structure-based assignment rules."""
         structure_rules = {}
-        rules_config = self.raw_config.get('assignment_rules', {})
+        rules_config = self.raw_config.get("assignment_rules", {})
 
         for structure_name, struct_rules_data in rules_config.items():
             if not isinstance(struct_rules_data, dict):
                 continue
 
             rules = []
-            for i, rule_data in enumerate(struct_rules_data.get('rules', [])):
-                assignment_data = rule_data.get('assignment', {})
+            for i, rule_data in enumerate(struct_rules_data.get("rules", [])):
+                assignment_data = rule_data.get("assignment", {})
                 # Fail loudly on keys no strategy reads (dead config / typos).
                 validate_assignment_config(
                     assignment_data,
                     where=f"{self.config_path.name}: assignment_rules."
-                          f"{structure_name}.rules[{i}]",
+                    f"{structure_name}.rules[{i}]",
                 )
 
                 # Ordering dependencies derived from every cross-role reference
                 # (inherit_from/partner_role/exclude).
                 dependencies = _extract_role_dependencies(assignment_data)
 
-                rules.append(AssignmentRule(
-                    role=rule_data.get('role'),  # Can be string or list
-                    priority=rule_data.get('priority', 999),
-                    description=rule_data.get('description', ''),
-                    assignment=assignment_data,
-                    dependencies=list(set(dependencies))
-                ))
+                rules.append(
+                    AssignmentRule(
+                        role=rule_data.get("role"),  # Can be string or list
+                        priority=rule_data.get("priority", 999),
+                        description=rule_data.get("description", ""),
+                        assignment=assignment_data,
+                        dependencies=list(set(dependencies)),
+                    )
+                )
 
             # Sort rules by priority
             rules.sort(key=lambda r: r.priority)
@@ -587,14 +594,15 @@ class AttributeAssignmentConfig:
 
             structure_rules[structure_name] = StructureAssignmentRules(
                 structure_name=structure_name,
-                description=struct_rules_data.get('description', ''),
-                rules=rules
+                description=struct_rules_data.get("description", ""),
+                rules=rules,
             )
 
         return structure_rules
 
-    def _validate_role_dependencies(self, structure_name: str,
-                                    rules: List[AssignmentRule]) -> None:
+    def _validate_role_dependencies(
+        self, structure_name: str, rules: List[AssignmentRule]
+    ) -> None:
         """
         Reject unorderable cross-role references in one structure.
 
@@ -628,8 +636,9 @@ class AttributeAssignmentConfig:
 
         self._raise_on_dependency_cycle(structure_name, defined_roles, edges)
 
-    def _raise_on_dependency_cycle(self, structure_name: str, roles: set,
-                                   edges: Dict[str, set]) -> None:
+    def _raise_on_dependency_cycle(
+        self, structure_name: str, roles: set, edges: Dict[str, set]
+    ) -> None:
         """Raise if the role dependency graph has a cycle."""
         WHITE, GRAY, BLACK = 0, 1, 2
         color = {role: WHITE for role in roles}
@@ -640,7 +649,7 @@ class AttributeAssignmentConfig:
             path.append(role)
             for dep in edges.get(role, ()):
                 if color[dep] == GRAY:
-                    cycle = path[path.index(dep):] + [dep]
+                    cycle = path[path.index(dep) :] + [dep]
                     raise ValueError(
                         f"{self.config_path.name}: assignment_rules."
                         f"{structure_name}: cross-role references form a cycle "
@@ -658,26 +667,28 @@ class AttributeAssignmentConfig:
 
     def _parse_venue_assignment_rules(self) -> List[Dict[str, Any]]:
         """Parse venue assignment rules."""
-        rules = self.raw_config.get('venue_assignment_rules', [])
+        rules = self.raw_config.get("venue_assignment_rules", [])
         for i, rule in enumerate(rules):
             validate_assignment_config(
-                (rule or {}).get('assignment', {}),
+                (rule or {}).get("assignment", {}),
                 where=f"{self.config_path.name}: venue_assignment_rules[{i}]",
             )
         return rules
 
     def _parse_settings(self) -> Dict[str, Any]:
         """Parse settings."""
-        return self.raw_config.get('settings', {})
+        return self.raw_config.get("settings", {})
 
-    def get_household_structure(self, household, verbose: bool = False) -> Optional[str]:
+    def get_household_structure(
+        self, household, verbose: bool = False
+    ) -> Optional[str]:
         """
         Classify household structure.
         Returns first matching structure.
         """
         # Check if structure is already cached (only when not verbose)
         if not verbose:
-            cached_structure = household.properties.get('_cached_household_structure')
+            cached_structure = household.properties.get("_cached_household_structure")
             if cached_structure is not None:
                 return cached_structure
 
@@ -688,7 +699,7 @@ class AttributeAssignmentConfig:
             if structure.matches(household, verbose=verbose):
                 # Cache the result (only when not verbose to avoid caching debug runs)
                 if not verbose:
-                    household.properties['_cached_household_structure'] = struct_name
+                    household.properties["_cached_household_structure"] = struct_name
                 return struct_name
 
         if verbose:
@@ -696,13 +707,18 @@ class AttributeAssignmentConfig:
 
         # Cache None result as well
         if not verbose:
-            household.properties['_cached_household_structure'] = None
+            household.properties["_cached_household_structure"] = None
 
         return None
 
-    def get_person_role(self, person, household_structure: str,
-                       assigned_roles: List[str], verbose: bool = False,
-                       person_category: str = None) -> Optional[str]:
+    def get_person_role(
+        self,
+        person,
+        household_structure: str,
+        assigned_roles: List[str],
+        verbose: bool = False,
+        person_category: str = None,
+    ) -> Optional[str]:
         """
         Determine person's role based on their subset and household structure.
 
@@ -722,7 +738,9 @@ class AttributeAssignmentConfig:
         # Get assignment rules for this structure
         if household_structure not in self.assignment_rules:
             if verbose:
-                logger.debug(f"      No assignment rules for structure '{household_structure}'")
+                logger.debug(
+                    f"      No assignment rules for structure '{household_structure}'"
+                )
             return None
 
         struct_rules = self.assignment_rules[household_structure]
@@ -755,7 +773,9 @@ class AttributeAssignmentConfig:
                 if person_category in role.subsets:
                     matched = True
                 elif verbose:
-                    logger.debug(f"        ✗ Category '{person_category}' not in role subsets {role.subsets}")
+                    logger.debug(
+                        f"        ✗ Category '{person_category}' not in role subsets {role.subsets}"
+                    )
             else:
                 # Otherwise use internal lookup
                 if role.matches(person, verbose=verbose):
@@ -768,45 +788,49 @@ class AttributeAssignmentConfig:
             role_count = assigned_roles.count(role_name)
 
             # Determine if we should assign this role based on count and explicit type
-            if role.role_type == 'primary' and role_count == 0:
+            if role.role_type == "primary" and role_count == 0:
                 if verbose:
                     logger.debug(f"      ✓ Assigned role '{role_name}' (primary)")
                 return role_name
-                
-            elif role.role_type == 'secondary' and role_count == 0:
+
+            elif role.role_type == "secondary" and role_count == 0:
                 # Check if a primary role for the same subset was already assigned
                 has_primary = False
                 for assigned_name in assigned_roles:
                     assigned_role = self.roles.get(assigned_name)
-                    if assigned_role and assigned_role.role_type == 'primary':
+                    if assigned_role and assigned_role.role_type == "primary":
                         # Check if subsets overlap (e.g., both apply to 'Adults')
                         if set(assigned_role.subsets) & set(role.subsets):
                             has_primary = True
                             break
-                            
+
                 if has_primary:
                     if verbose:
                         logger.debug(f"      ✓ Assigned role '{role_name}' (secondary)")
                     return role_name
-                    
-            elif role.role_type == 'extra':
+
+            elif role.role_type == "extra":
                 # Check if both primary and secondary for the same subset were assigned
                 has_primary = False
                 has_secondary = False
                 for assigned_name in assigned_roles:
                     assigned_role = self.roles.get(assigned_name)
                     if assigned_role:
-                        if assigned_role.role_type == 'primary' and (set(assigned_role.subsets) & set(role.subsets)):
+                        if assigned_role.role_type == "primary" and (
+                            set(assigned_role.subsets) & set(role.subsets)
+                        ):
                             has_primary = True
-                        if assigned_role.role_type == 'secondary' and (set(assigned_role.subsets) & set(role.subsets)):
+                        if assigned_role.role_type == "secondary" and (
+                            set(assigned_role.subsets) & set(role.subsets)
+                        ):
                             has_secondary = True
-                            
+
                 if has_primary and has_secondary:
                     if verbose:
                         logger.debug(f"      ✓ Assigned role '{role_name}' (extra)")
                     return role_name
-                    
-            elif role.role_type == 'general':
+
+            elif role.role_type == "general":
                 if verbose:
                     logger.debug(f"      ✓ Assigned role '{role_name}'")
                 return role_name
@@ -815,8 +839,9 @@ class AttributeAssignmentConfig:
             logger.debug(f"      ✗ No role matched")
         return None
 
-    def get_assignment_rule(self, household_structure: str, role: str,
-                           verbose: bool = False) -> Optional[AssignmentRule]:
+    def get_assignment_rule(
+        self, household_structure: str, role: str, verbose: bool = False
+    ) -> Optional[AssignmentRule]:
         """
         Get assignment rule for a role within a structure.
         """
@@ -843,22 +868,24 @@ class AttributeAssignmentConfig:
         # Group categories by attribute name for faster filtering
         categories_by_attr = {}
         for category in self.categories:
-            attr = category.get('attribute')
+            attr = category.get("attribute")
             if attr not in categories_by_attr:
                 categories_by_attr[attr] = []
             categories_by_attr[attr].append(category)
 
         # For numerical categories (like age), sort by min value for binary search
         for attr, cats in list(categories_by_attr.items()):
-            numerical_cats = [c for c in cats if c.get('type') == 'numerical']
+            numerical_cats = [c for c in cats if c.get("type") == "numerical"]
             if numerical_cats:
                 # Sort by min value
-                numerical_cats.sort(key=lambda c: c['numerical']['min'])
-                categories_by_attr[attr + '_numerical'] = numerical_cats
+                numerical_cats.sort(key=lambda c: c["numerical"]["min"])
+                categories_by_attr[attr + "_numerical"] = numerical_cats
 
         self._categories_by_attr = categories_by_attr
 
-    def get_category_for_value(self, value: Any, attribute_name: str = "age") -> Optional[Dict[str, Any]]:
+    def get_category_for_value(
+        self, value: Any, attribute_name: str = "age"
+    ) -> Optional[Dict[str, Any]]:
         """
         Find which category a value falls into.
 
@@ -877,12 +904,12 @@ class AttributeAssignmentConfig:
         result = None
 
         # Use pre-filtered categories
-        numerical_cats = self._categories_by_attr.get(attribute_name + '_numerical', [])
+        numerical_cats = self._categories_by_attr.get(attribute_name + "_numerical", [])
         if numerical_cats and isinstance(value, (int, float)):
             # For numerical, iterate through sorted categories (typically just 4-5)
             for category in numerical_cats:
-                min_val = category['numerical']['min']
-                max_val = category['numerical'].get('max')
+                min_val = category["numerical"]["min"]
+                max_val = category["numerical"].get("max")
 
                 if max_val is None:
                     # No upper limit
@@ -896,8 +923,8 @@ class AttributeAssignmentConfig:
             # For categorical, check all categories for this attribute
             cats = self._categories_by_attr.get(attribute_name, [])
             for category in cats:
-                if category.get('type') == 'categorical':
-                    allowed = category.get('categorical', {}).get('allowed_values', [])
+                if category.get("type") == "categorical":
+                    allowed = category.get("categorical", {}).get("allowed_values", [])
                     if value in allowed:
                         result = category
                         break
@@ -913,16 +940,16 @@ class AttributeAssignmentConfig:
         Returns:
             First assignment rule from 'person' structure or None
         """
-        if 'person' not in self.assignment_rules:
+        if "person" not in self.assignment_rules:
             return None
 
-        person_rules = self.assignment_rules['person']
+        person_rules = self.assignment_rules["person"]
         if not person_rules.rules:
             return None
 
         return person_rules.rules[0]
 
     @classmethod
-    def from_yaml(cls, config_path: Path) -> 'AttributeAssignmentConfig':
+    def from_yaml(cls, config_path: Path) -> "AttributeAssignmentConfig":
         """Load configuration from YAML file."""
         return cls(config_path)

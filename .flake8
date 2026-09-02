@@ -1,0 +1,5 @@
+[flake8]
+max-line-length = 88
+# Black owns formatting; these rules are either incompatible with Black or
+# are intentional in modules that support optional dependencies.
+extend-ignore = E203, E402, E501, F541

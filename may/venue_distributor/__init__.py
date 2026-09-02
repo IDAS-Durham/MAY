@@ -13,9 +13,9 @@ Functions:
     distributor_from_yaml: Factory function to load the appropriate distributor from YAML
 """
 
-import yaml
 from pathlib import Path
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 from .venue_distributor import VenueDistributor
 from .multi_venue_distributor import MultiVenueDistributor
@@ -25,15 +25,24 @@ from .property_matching_distributor import PropertyMatchingDistributor
 from .route_distributor import RouteDistributor
 
 DISTRIBUTOR_TYPES = {
-    'single_venue': VenueDistributor,
-    'multi_venue': MultiVenueDistributor,
-    'social_contact_visit': SocialContactVisitDistributor,
-    'resident_linked': ResidentLinkedDistributor,
-    'property_matching': PropertyMatchingDistributor,
-    'route': RouteDistributor,
+    "single_venue": VenueDistributor,
+    "multi_venue": MultiVenueDistributor,
+    "social_contact_visit": SocialContactVisitDistributor,
+    "resident_linked": ResidentLinkedDistributor,
+    "property_matching": PropertyMatchingDistributor,
+    "route": RouteDistributor,
 }
 
-__all__ = ['VenueDistributor', 'MultiVenueDistributor', 'SocialContactVisitDistributor', 'ResidentLinkedDistributor', 'PropertyMatchingDistributor', 'RouteDistributor', 'distributor_from_yaml', 'DISTRIBUTOR_TYPES']
+__all__ = [
+    "VenueDistributor",
+    "MultiVenueDistributor",
+    "SocialContactVisitDistributor",
+    "ResidentLinkedDistributor",
+    "PropertyMatchingDistributor",
+    "RouteDistributor",
+    "distributor_from_yaml",
+    "DISTRIBUTOR_TYPES",
+]
 
 
 def distributor_from_yaml(yaml_path: str):
@@ -59,10 +68,9 @@ def distributor_from_yaml(yaml_path: str):
     """
     # Read YAML to check distributor_type
     yaml_path = Path(pr.resolve(str(yaml_path)))
-    with open(yaml_path, 'r', encoding='utf-8-sig') as f:
-        config = yaml.safe_load(f)
+    config = load_yaml(yaml_path)
 
-    distributor_type = config.get('distributor_type', 'single_venue')
+    distributor_type = config.get("distributor_type", "single_venue")
 
     # `distributor_type` decides which of six config schemas the rest of the file is
     # written in, so an unrecognised one is a mistake rather than an instruction.

@@ -1,6 +1,6 @@
 """
 Extended unit tests for strategies.py, covering the 4 untested strategies
-and the StrategyFactory completeness.
+and complete strategy-dispatch coverage.
 
 Covers:
 - ProbabilisticConditionsStrategy: independent Bernoulli sampling, empty conditions,
@@ -10,7 +10,7 @@ Covers:
 - GUSamplerStrategy: workplace→home fallback, batch/sequential, missing data
 - CategoricalSamplerStrategy: single sampling, batch grouping, normalization,
   zero/negative totals, missing data
-- StrategyFactory: all 9 registered types
+- strategy dispatch: all 9 built-in types
 """
 import pytest
 import logging
@@ -21,7 +21,7 @@ from may.attribute_assignment.strategies import (
     GUSamplerStrategy,
     CategoricalSamplerStrategy,
     ConstantStrategy,
-    StrategyFactory,
+    create_strategy,
     ProbabilisticStrategy,
     PartnershipStrategy,
     InheritanceStrategy,
@@ -1064,10 +1064,10 @@ class TestCategoricalSamplerStrategy:
         result = strategy.assign(MinimalPerson(), MinimalVenue(), {"attribute_name": "sector"})
         assert result in {"A", "B"}
 
-# StrategyFactory: complete registration tests
+# Strategy dispatch: complete built-in coverage
 
-class TestStrategyFactoryComplete:
-    """All 9 strategy types must be registered and instantiable."""
+class TestStrategyDispatchComplete:
+    """All 9 strategy types must be instantiable."""
 
     def test_all_nine_strategies_registered(self):
         dm = SimpleDataManager()
@@ -1089,15 +1089,12 @@ class TestStrategyFactoryComplete:
         }
         for strategy_type, expected_class in all_types:
             config = {"strategy": strategy_type, **required_extra.get(strategy_type, {})}
-            instance = StrategyFactory.create_strategy(config, dm)
+            instance = create_strategy(config, dm)
             assert isinstance(instance, expected_class), (
                 f"Expected {expected_class.__name__} for '{strategy_type}', "
                 f"got {type(instance).__name__}"
             )
 
-    def test_strategy_map_has_exactly_nine_entries(self):
-        """Guard against accidentally removing a strategy registration."""
-        assert len(StrategyFactory._strategy_map) == 9
 
 
 # ConstantStrategy batch consistency

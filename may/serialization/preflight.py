@@ -66,8 +66,9 @@ def venue_property_gaps(serialization_config, venues_config, venues_data_dir):
     return gaps
 
 
-def warn_about_venue_property_gaps(serialization_config, venues_config,
-                                   venues_data_dir):
+def warn_about_venue_property_gaps(
+    serialization_config, venues_config, venues_data_dir
+):
     """
     Log a warning for each configured venue property missing from the files.
 
@@ -76,9 +77,7 @@ def warn_about_venue_property_gaps(serialization_config, venues_config,
     again for any property that reaches the end of the build unset.
     """
     try:
-        gaps = venue_property_gaps(
-            serialization_config, venues_config, venues_data_dir
-        )
+        gaps = venue_property_gaps(serialization_config, venues_config, venues_data_dir)
     except Exception as exc:
         # The comparison is advisory, so any failure inside it leaves the
         # run free to continue.
