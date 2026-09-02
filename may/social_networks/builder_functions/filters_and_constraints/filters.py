@@ -19,7 +19,6 @@ import numpy as np
 import numba as nb
 import logging
 from dataclasses import dataclass
-from functools import wraps
 from typing import Optional, Callable, Any
 
 from may.utils.attribute_access import get_attribute
@@ -44,12 +43,8 @@ def register_pool_type(name: str):
     """
 
     def decorator(func: PoolTypeBuilder):
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
-
-        pool_type_builders[name] = wrapper
-        return wrapper
+        pool_type_builders[name] = func
+        return func
 
     return decorator
 

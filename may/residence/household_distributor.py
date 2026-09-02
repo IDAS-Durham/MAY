@@ -1868,56 +1868,6 @@ class HouseholdDistributor:
 
         return round_label
 
-    def _log_round_summary(
-        self, round_label: str, stats: Dict, show_remaining: bool = True
-    ):
-        """
-        Log summary statistics for an allocation round.
-
-        Args:
-            round_label: Name of the round
-            stats: Statistics dictionary with round results
-            show_remaining: If True, show remaining people by category
-        """
-        logger.info("=" * 60)
-        logger.info(f"{round_label} complete!")
-
-        # Log round-specific metrics based on what's in stats
-        if "households_created" in stats:
-            logger.info(f"  Households created: {stats['households_created']:,}")
-        if "households_modified" in stats:
-            logger.info(f"  Households modified: {stats['households_modified']:,}")
-        if "households_promoted" in stats:
-            logger.info(f"  Households promoted: {stats['households_promoted']:,}")
-        if "people_added" in stats:
-            logger.info(f"  People added: {stats['people_added']:,}")
-        if "people_allocated_this_round" in stats:
-            logger.info(
-                f"  People allocated this round: {stats['people_allocated_this_round']:,}"
-            )
-        if (
-            "households_with_demotion" in stats
-            and stats["households_with_demotion"] > 0
-        ):
-            logger.info(
-                f"  Households using demotion: {stats['households_with_demotion']:,}"
-            )
-
-        # Always show totals
-        logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
-        logger.info(f"  People remaining: {stats['total_people_remaining']:,}")
-
-        # Show remaining by category if requested
-        if show_remaining:
-            remaining_by_category = self.get_available_people_by_category()
-            logger.info("")
-            logger.info("  Remaining by category:")
-            for cat_name in [cat.name for cat in self.categories]:
-                count = remaining_by_category.get(cat_name, 0)
-                logger.info(f"    {cat_name}: {count:,}")
-
-        logger.info("=" * 60)
-
     def _allocate_person_to_household(
         self, household: Venue, person: Person, pool: Optional[List[Person]] = None
     ):

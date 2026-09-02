@@ -1,5 +1,4 @@
 from typing import Callable, Any
-from functools import wraps
 import logging
 
 logger = logging.getLogger("create_clustered_graph")
@@ -40,12 +39,8 @@ def register_graph_creator(name: str):
     """
 
     def decorator(func: GraphCreator):
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
-
-        graph_creators[name] = wrapper
-        return wrapper
+        graph_creators[name] = func
+        return func
 
     return decorator
 

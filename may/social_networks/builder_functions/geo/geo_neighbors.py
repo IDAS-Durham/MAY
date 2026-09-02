@@ -47,7 +47,6 @@ def _km_to_degrees_adjusted(radius_km: float, coordinates: np.ndarray) -> float:
     return radius_km / km_per_degree
 
 
-from functools import wraps
 import logging
 
 if TYPE_CHECKING:
@@ -76,12 +75,8 @@ def register_neighbour_finder(name: str):
     """
 
     def decorator(func: GraphCreator):
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return func(*args, **kwargs)
-
-        neighbour_finders[name] = wrapper
-        return wrapper
+        neighbour_finders[name] = func
+        return func
 
     return decorator
 

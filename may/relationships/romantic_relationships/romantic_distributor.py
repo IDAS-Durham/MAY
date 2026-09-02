@@ -228,14 +228,6 @@ class RomanticDistributor:
             f"{len(self._msoa_codes)} MSOA marginals"
         )
 
-    def _age_to_band_idx(self, age: int) -> Optional[int]:
-        for i, (start, end) in enumerate(self._prevalence_bands):
-            if start <= age <= end:
-                return i
-        if self._prevalence_bands and age > self._prevalence_bands[-1][1]:
-            return len(self._prevalence_bands) - 1
-        return None
-
     def _age_array_to_band_idx(self, ages: np.ndarray) -> np.ndarray:
         """Vectorized band lookup. Returns -1 for ages below the first band."""
         out = np.full(ages.shape, -1, dtype=np.int64)
