@@ -30,12 +30,6 @@ def test_whitespace_handling():
     assert cp1.requirements == [("gte", 2), ("lte", 3), ("exact", 4), ("exact", 0)]
     assert cp1.to_string() == ">=2 <=3 4 0"
 
-def test_instance_caching():
-    # Calling from_string twice should return the identical object
-    cp1 = CompositionPattern.from_string(">=2 >=0 2 0")
-    cp2 = CompositionPattern.from_string(">=2 >=0 2 0")
-    assert cp1 is cp2
-
 def test_to_string_round_trip():
     cp = CompositionPattern(original_pattern="custom", requirements=[("exact", 1), ("gte", 0)])
     assert cp.to_string() == "1 >=0"

@@ -12,7 +12,7 @@ from may.population import PopulationManager, PopulationError
 from may.world import World, setup_households
 from may.residence.household_distributor import HouseholdError
 from may.attribute_assignment import AttributeAssignmentError
-from may.venue_distributor import VenueDistributor
+from may.venue_distributor import distributor_from_yaml
 from may.venue_child_creator import VenueChildCreator
 from may.social_networks import SocialNetworkBuilder
 from may.serialization.preflight import warn_about_venue_property_gaps
@@ -313,7 +313,7 @@ def main(args=None):
                     logger.info("")
                     logger.info(f"[DISTRIBUTOR] {step_config}")
                     try:
-                        distributor = VenueDistributor.from_yaml(step_config)
+                        distributor = distributor_from_yaml(step_config)
                         distributor.allocate(world)
 
                     except Exception as e:

@@ -581,23 +581,3 @@ class VenueDistributor(BaseDistributor):
                 p_filter['is_nested'] = False
             processed.append(p_filter)
         return processed
-
-    @classmethod
-    def from_yaml(cls, yaml_path: str):
-        """
-        Create appropriate distributor from YAML file path.
-
-        This is a factory method that automatically selects the correct distributor type
-        based on the 'distributor_type' field in the YAML:
-        - "multi_venue" -> MultiVenueDistributor
-        - "single_venue" or missing -> VenueDistributor
-
-        Args:
-            yaml_path: Path to distributor YAML file
-
-        Returns:
-            Instance of VenueDistributor or MultiVenueDistributor
-        """
-        # Import here to avoid circular dependency
-        from . import distributor_from_yaml
-        return distributor_from_yaml(yaml_path)

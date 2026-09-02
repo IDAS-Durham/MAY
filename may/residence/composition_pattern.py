@@ -52,13 +52,10 @@ class CompositionPattern:
     requirements: List[Tuple[str, int]]  # List of (operator, count) for each category
     # operator can be "exact", "gte" (>=), or "lte" (<=)
 
-    # Object cache for CompositionPattern instances
-    _instance_cache = {}
-
     @classmethod
     def from_string(cls, pattern: str) -> 'CompositionPattern':
         """
-        Parse a composition pattern string (with object-level caching).
+        Parse a composition pattern string.
 
         Args:
             pattern: Pattern string like ">=2 >=0 2 <=2"
@@ -67,21 +64,9 @@ class CompositionPattern:
             CompositionPattern object
         """
         pattern = pattern.strip()
-        if pattern in cls._instance_cache:
-            return cls._instance_cache[pattern]
-
         # Use cached parsing function for internal requirements
         requirements_tuple = _parse_pattern_cached(pattern)
-        instance = cls(original_pattern=pattern, requirements=list(requirements_tuple))
-        
-        # Cache the instance
-        cls._instance_cache[pattern] = instance
-        return instance
-
-    def __post_init__(self):
-        """Initialize cached properties."""
-        self._string_repr = None
-        self._min_size = None
+        return cls(original_pattern=pattern, requirements=list(requirements_tuple))
 
     def get_min_count(self, category_idx: int) -> int:
         """Get minimum required count for a category."""
@@ -112,10 +97,8 @@ class CompositionPattern:
         return operator in ("gte", "lte")
 
     def min_household_size(self) -> int:
-        """Calculate minimum household size required (with caching)."""
-        if self._min_size is None:
-            self._min_size = sum(self.get_min_count(i) for i in range(len(self.requirements)))
-        return self._min_size
+        """Calculate minimum household size required."""
+        return sum(self.get_min_count(i) for i in range(len(self.requirements)))
 
     def validate_against_rules(self, validation_rules: List[Dict],
                               category_name_to_idx: Dict[str, int]) -> bool:
@@ -333,7 +316,5 @@ class CompositionPattern:
         return f"Pattern({self.to_string()})"
 
     def to_string(self) -> str:
-        """Get current pattern as string (with lazy caching)."""
-        if self._string_repr is None:
-            self._string_repr = self._requirements_to_string(self.requirements)
-        return self._string_repr
+        """Get current pattern as string."""
+        return self._requirements_to_string(self.requirements)

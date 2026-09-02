@@ -576,8 +576,3 @@ class RouteDistributor(BaseDistributor):
             logger.warning(
                 f"  Legs skipped (no geo unit): {self._stats['legs_skipped_no_geo']:,}"
             )
-
-    @classmethod
-    def from_yaml(cls, yaml_path: str):
-        from . import distributor_from_yaml
-        return distributor_from_yaml(yaml_path)
