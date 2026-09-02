@@ -39,7 +39,7 @@ def register_pool_type(name: str):
         >>> @register_pool_type("my_pool")
         ... def build_my_pool(world, pool_config):
         ...     return [list_of_people]
-        >>> pool_type_builders["my_pool"](world, config)
+        >>> pool_type_builders[MY_POOL]
     """
 
     def decorator(func: PoolTypeBuilder):

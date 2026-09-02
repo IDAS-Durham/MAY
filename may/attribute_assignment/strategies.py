@@ -162,7 +162,7 @@ def validate_assignment_config(
 
     Raises:
         ValueError: naming the unknown keys, the strategy, and the allowed
-        set, so a stale key (e.g. `context`) breaks the build at load time.
+            set, so a stale key (e.g. `context`) breaks the build at load time.
     """
     if not isinstance(config, dict):
         raise ValueError(

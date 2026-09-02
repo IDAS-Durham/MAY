@@ -48,7 +48,7 @@ class MultiVenueDistributor(BaseDistributor):
     Features:
     - Handles any number of venue types
     - Assigns N closest venues per type to each person
-    - Stores in nested dict: activity_map[key][venue_type] = [subsets]
+    - Stores subsets in a nested activity-to-venue mapping.
     - Configurable age filtering
     - Distance-based venue selection with spatial indexing
     """

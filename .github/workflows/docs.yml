@@ -36,4 +36,6 @@ jobs:
 
       - name: Build and deploy
         working-directory: docs
+        env:
+          DISABLE_MKDOCS_2_WARNING: "true"
         run: mkdocs gh-deploy --force --remote-branch gavin_docs --config-file mkdocs.yml

@@ -35,7 +35,7 @@ def register_graph_creator(name: str):
         >>> @register_graph_creator("my_graph")
         ... def create_my_graph(n_nodes: int, **kwargs):
         ...     return nx.complete_graph(n_nodes)
-        >>> G = graph_creators["my_graph"](10)
+        >>> G = graph_creators[MY_GRAPH]
     """
 
     def decorator(func: GraphCreator):
