@@ -98,7 +98,7 @@ class ResidentLinkedDistributor(BaseDistributor):
                 continue
 
             # C. Group by household units if configured
-            visitor_units = self._group_visitors_optimized(eligible_people)
+            visitor_units = self._group_visitors(eligible_people)
 
             if not visitor_units:
                 continue
@@ -110,7 +110,7 @@ class ResidentLinkedDistributor(BaseDistributor):
             if not unit_venues:
                 continue
 
-            links_created = self._allocate_batch_optimized(visitor_units, unit_venues)
+            links_created = self._allocate_batch(visitor_units, unit_venues)
             total_links += links_created
             total_venues_processed += len(unit_venues)
 
@@ -142,7 +142,7 @@ class ResidentLinkedDistributor(BaseDistributor):
         needed_attrs = list(set(needed_attrs))
         self._build_population_arrays(world.people, needed_attrs)
 
-    def _allocate_batch_optimized(self, visitor_units: List[List], venues: List) -> int:
+    def _allocate_batch(self, visitor_units: List[List], venues: List) -> int:
         """
         Fast pairing logic for a batch of venues and visitors.
         """
@@ -255,18 +255,17 @@ class ResidentLinkedDistributor(BaseDistributor):
             v_geo = v_geo.parent
         return False
 
-    def _group_visitors_optimized(self, people: List) -> List[List]:
-        """Vectorized grouping of people into units."""
+    def _group_visitors(self, people: List) -> List[List]:
+        """Group people into visitor units."""
         if self.link_level != "household":
             return [[p] for p in people]
 
-        # Group by household ID using the vectorized array
-        # This is much faster than Python dictionary iteration for large lists
+        # Read household IDs from the prepared population arrays, then group
+        # the original Person objects by those IDs.
         p_indices = [self.person_id_to_index[p.id] for p in people]
         hh_ids = self.population_arrays["residence.id"][p_indices]
 
-        # Dictionary approach is still fine for LGU-sized batches
-        # but we use hh_ids array for attribute access
+        # The dictionary groups the original Person objects for this batch.
         hh_to_members = {}
         for i, person in enumerate(people):
             hh_id = hh_ids[i]

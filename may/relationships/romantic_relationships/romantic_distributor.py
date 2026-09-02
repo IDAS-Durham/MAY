@@ -381,7 +381,7 @@ class RomanticDistributor:
         cell_prob = np.where(sums > 0, cell_prob / sums, target_nat[:, :, None, :])
         return cell_prob
 
-    def _sample_orientations_vectorized(
+    def _sample_orientations_batched(
         self,
         arrays: Dict[str, np.ndarray],
         sex_arr: np.ndarray,
@@ -629,7 +629,7 @@ class RomanticDistributor:
             compatibility = self.config.get("sexual_orientations", {}).get(
                 "compatibility", {}
             )
-            orientations = self._sample_orientations_vectorized(
+            orientations = self._sample_orientations_batched(
                 arrays,
                 arrays["sex"].astype(np.int64),
                 band_arr,

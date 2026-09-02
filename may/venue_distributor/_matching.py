@@ -224,7 +224,7 @@ class _MatchingMixin:
         v_idx = self.venue_id_to_idx.get(v_id)
 
         if v_idx is None:
-            return self.venue_accepts_person_slow(person, venue, attribute_rules)
+            return self.venue_accepts_person_uncached(person, venue, attribute_rules)
 
         # Separate loops and pre-defined lists avoid dictionary lookups on 'rule'
         for rule in self.numerical_match_rules:
@@ -252,7 +252,7 @@ class _MatchingMixin:
 
         return True
 
-    def venue_accepts_person_slow(
+    def venue_accepts_person_uncached(
         self, person, venue, attribute_rules: List[Dict]
     ) -> bool:
         """Fallback for venues without cache."""

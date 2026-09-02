@@ -101,7 +101,7 @@ class _FilteringMixin:
 
         if is_pre_processed:
             for filter_rule in filters:
-                person_value = self._get_person_value_optimized(person, filter_rule)
+                person_value = self._get_person_value_preprocessed(person, filter_rule)
                 if person_value is None:
                     return False
 
@@ -120,7 +120,7 @@ class _FilteringMixin:
                     return False
             return True
 
-    def _get_person_value_optimized(self, person, filter_rule: Dict) -> Any:
+    def _get_person_value_preprocessed(self, person, filter_rule: Dict) -> Any:
         """Get value using pre-processed filter rule information."""
         # Check for direct attributes for speed
         attr = filter_rule["attribute"]
