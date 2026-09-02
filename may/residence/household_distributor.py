@@ -10,6 +10,7 @@ This module handles:
 
 import os
 import logging
+import time
 import yaml
 import math
 import numpy as np
@@ -26,8 +27,8 @@ from may.residence.relationship_rules import RelationshipRulesValidator
 from may.utils import path_resolver as pr
 from may.residence.models import Category
 from may.residence.composition_pattern import CompositionPattern
-from . import _household_excess, _household_promotion, _household_rounds
 from may.utils.attribute_access import get_attribute
+from . import _household_excess, _household_promotion, _household_rounds
 
 logger = logging.getLogger("household")
 
@@ -275,7 +276,7 @@ class HouseholdDistributor:
         for idx, cat in enumerate(self.categories):
             attr = cat.attribute
             val = get_attribute(person, attr)
-            
+
             if val is None:
                 continue
 
@@ -457,7 +458,7 @@ class HouseholdDistributor:
         # Remove selected people from pools
         selected_ids = {p.id for p in all_selected}
         self.allocated_people.update(selected_ids)
-        
+
         for p in all_selected:
             cat_idx = self._get_person_category_idx(p)
             try:
@@ -1295,7 +1296,7 @@ class HouseholdDistributor:
                 # Take N IDs from the front of the dictionary
                 # Dict preserves order in Python 3.7+, so this is equivalent to list slicing
                 ids_to_remove = list(islice(pool.keys(), count))
-                
+
                 for pid in ids_to_remove:
                     person = pool.pop(pid)
                     selected_people.append(person)
@@ -1788,23 +1789,93 @@ class HouseholdDistributor:
 
         # Use unified validator
         is_valid, error = self.relationship_rules.validate_composition(simulated_composition, constraints)
-        
+
         if not is_valid and error:
             logger.debug(f"  {error}")
-            
+
         return is_valid
 
 
-    # Implemented in private function modules; assignments preserve the distributor API.
-    _calculate_balanced_distribution = _household_rounds._calculate_balanced_distribution
-    distribute_households_round = _household_rounds.distribute_households_round
-    _allocate_balanced_distribution = _household_rounds._allocate_balanced_distribution
-    _adding_person_satisfies_rules = _household_promotion._adding_person_satisfies_rules
-    _get_households_by_geo_unit = _household_promotion._get_households_by_geo_unit
-    _get_households_by_pattern = _household_promotion._get_households_by_pattern
-    reset_indexes = _household_promotion.reset_indexes
-    promote_and_allocate = _household_promotion.promote_and_allocate
-    promote_with_rules = _household_promotion.promote_with_rules
-    allocate_excess_to_households = _household_excess.allocate_excess_to_households
-    allocate_overflow_to_households = _household_excess.allocate_overflow_to_households
-    _select_person_for_excess_with_rule = _household_excess._select_person_for_excess_with_rule
+    # Explicit delegation keeps the public API on the distributor while the
+    # implementations remain grouped by allocation concern.
+    def _calculate_balanced_distribution(self, geo_unit_code: str, pattern: CompositionPattern,
+                                         num_households: int, max_household_size: Optional[int]) -> List[int]:
+        return _household_rounds._calculate_balanced_distribution(
+            self, geo_unit_code, pattern, num_households, max_household_size
+        )
+
+    def distribute_households_round(self, pattern_filter: Optional[List[str]] = None,
+                                    pattern_assumptions: Optional[Dict[str, str]] = None,
+                                    max_households: Optional[int] = None,
+                                    max_household_size: Optional[int] = None,
+                                    allocate_flexible: bool = False,
+                                    refresh_pools: bool = False,
+                                    round_name: Optional[str] = None,
+                                    rule_name: Optional[str] = None,
+                                    demotion_rules: Optional[Dict[str, str]] = None,
+                                    interpretation: Optional[str] = None):
+        return _household_rounds.distribute_households_round(
+            self, pattern_filter, pattern_assumptions, max_households,
+            max_household_size, allocate_flexible, refresh_pools, round_name,
+            rule_name, demotion_rules, interpretation
+        )
+
+    def _allocate_balanced_distribution(self, pattern: CompositionPattern, pools, target_size: int):
+        return _household_rounds._allocate_balanced_distribution(self, pattern, pools, target_size)
+
+    def _adding_person_satisfies_rules(self, household, category_name: str,
+                                       validation_rules: List[Dict]) -> bool:
+        return _household_promotion._adding_person_satisfies_rules(
+            self, household, category_name, validation_rules
+        )
+
+    def _get_households_by_geo_unit(self) -> Dict[str, List]:
+        return _household_promotion._get_households_by_geo_unit(self)
+
+    def _get_households_by_pattern(self) -> Dict[str, List]:
+        return _household_promotion._get_households_by_pattern(self)
+
+    def reset_indexes(self):
+        return _household_promotion.reset_indexes(self)
+
+    def promote_and_allocate(self, target_categories: List[str],
+                             max_households: Optional[int] = None,
+                             refresh_pools: bool = False,
+                             round_name: Optional[str] = None):
+        return _household_promotion.promote_and_allocate(
+            self, target_categories, refresh_pools, round_name
+        )
+
+    def promote_with_rules(self, promotion_rules: List[Dict],
+                           refresh_pools: bool = False,
+                           round_name: Optional[str] = None):
+        return _household_promotion.promote_with_rules(
+            self, promotion_rules, refresh_pools, round_name
+        )
+
+    def allocate_excess_to_households(self, target_patterns: List[str], add_category: str,
+                                      constraints: Optional[List[Dict]] = None,
+                                      max_per_household: Optional[int] = None,
+                                      add_distribution: Optional[Dict] = None,
+                                      refresh_pools: bool = False,
+                                      round_name: Optional[str] = None,
+                                      rule_name: Optional[str] = None):
+        return _household_excess.allocate_excess_to_households(
+            self, target_patterns, add_category, constraints, max_per_household,
+            add_distribution, refresh_pools, round_name, rule_name
+        )
+
+    def allocate_overflow_to_households(self, target_patterns: List[str], add_category: str,
+                                        pattern_bias: Optional[Dict[str, float]] = None,
+                                        refresh_pools: bool = False,
+                                        round_name: Optional[str] = None):
+        return _household_excess.allocate_overflow_to_households(
+            self, target_patterns, add_category, pattern_bias, refresh_pools, round_name
+        )
+
+    def _select_person_for_excess_with_rule(self, household: Venue,
+                                            candidates: List['Person'],
+                                            add_category: str, rule) -> Optional['Person']:
+        return _household_excess._select_person_for_excess_with_rule(
+            self, household, candidates, add_category, rule
+        )
