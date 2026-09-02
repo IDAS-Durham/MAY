@@ -1,7 +1,7 @@
 import logging
 import random
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 from .base_distributor import BaseDistributor
 from ._allocation import VenueAllocation
 
@@ -295,70 +295,3 @@ class ResidentLinkedDistributor(BaseDistributor):
             hh_to_members[hh_id].append(person)
 
         return list(hh_to_members.values())
-
-    def _get_venue_geo_match(self, venue, geo_unit_name: str) -> bool:
-        """
-        Check if venue belongs to the target geographical unit.
-        """
-        geo_level = self.config.get("geography_level", self.batch_geo_level)
-        v_geo = venue.geographical_unit
-        if not v_geo:
-            return False
-
-        # Traversal to target level
-        unit = v_geo
-        while unit and unit.level != geo_level:
-            unit = unit.parent
-
-        return unit.name == geo_unit_name if unit else False
-
-    def _link_unit_to_venue(
-        self, members: List, venue, resident_id: Optional[int] = None
-    ):
-        """
-        Link all members of a unit to a venue in their activity map.
-
-        Args:
-            members: List of Person objects in the visitor unit
-            venue: Target Venue
-            resident_id: Optional ID of the resident being visited
-        """
-        activity_key = self.activity_map_key
-        venue_type = self.target_venue_type
-
-        # Get or create subset in venue for visiting
-        # We include the resident_id in the subset name for tracking/debugging
-        base_subset_key = self.config.get("subset_key", "visitor")
-        subset_key = (
-            f"{base_subset_key}_for_{resident_id}"
-            if resident_id is not None
-            else base_subset_key
-        )
-
-        from may.population import Subset
-
-        if subset_key not in venue.subsets:
-            subset = Subset(
-                venue=venue, subset_index=len(venue.subsets), subset_name=subset_key
-            )
-            venue.subsets[subset_key] = subset
-        else:
-            subset = venue.subsets[subset_key]
-
-        for p in members:
-            # Initialize leisure dict if not exists
-            if activity_key not in p.activity_map:
-                p.activity_map[activity_key] = {}
-
-            # Add venue to the list for this type
-            if venue_type not in p.activity_map[activity_key]:
-                p.activity_map[activity_key][venue_type] = []
-
-            # Use JuneZero structure: list of subsets
-            if subset not in p.activity_map[activity_key][venue_type]:
-                p.activity_map[activity_key][venue_type].append(subset)
-                subset.add_member(p)
-
-            # Ensure activity is in p.activities
-            if activity_key not in p.activities:
-                p.add_activity(activity_key)

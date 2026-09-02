@@ -934,25 +934,6 @@ class AttributeAssigner:
 
         return result
 
-    def _get_person_category(self, person) -> str:
-        """
-        Get person's category (subset name) from their household activity.
-
-        Args:
-            person: Person object
-
-        Returns:
-            Category name or "unknown"
-        """
-        # UNIFIED STRUCTURE: activity_map['residence']['household'] = [subsets]
-        if (
-            "residence" in person.activity_map
-            and "household" in person.activity_map["residence"]
-            and person.activity_map["residence"]["household"]
-        ):
-            return person.activity_map["residence"]["household"][0].subset_name
-        return "unknown"
-
     def _get_person_residence_venue(self, person):
         """Get residence venue for a person (e.g., household, pub, care home)."""
         # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
