@@ -101,7 +101,7 @@ class RouteDistributor(BaseDistributor):
         if self.catchment is not None:
             self.max_access_km = float(self.catchment["max_access_km"])
             self.access_speed_kmh = float(self.catchment["access_speed_kmh"])
-        self._catchment_cache = {}   # mgu name -> (served_mgu, access_min) | None
+        self._catchment_cache = {}  # mgu name -> (served_mgu, access_min) | None
         self._served_names: List[str] = []
         self._served_coords = None
 
@@ -121,10 +121,10 @@ class RouteDistributor(BaseDistributor):
             self.pool_max_duration = int(pr_cfg["max_duration_min"])
 
         # Lazy state, populated in allocate()
-        self._prepared = False       # routing table loaded + catchment indexed
-        self._legs_index = None      # (origin, dest, mode_class) -> [leg dicts]
-        self._line_to_venue = {}     # line_id -> Venue (lazy cache)
-        self._unit_id_cache = {}     # geo-unit name -> unit id (or -1)
+        self._prepared = False  # routing table loaded + catchment indexed
+        self._legs_index = None  # (origin, dest, mode_class) -> [leg dicts]
+        self._line_to_venue = {}  # line_id -> Venue (lazy cache)
+        self._unit_id_cache = {}  # geo-unit name -> unit id (or -1)
         self._stats = Counter()
 
         logger.info(
@@ -135,6 +135,7 @@ class RouteDistributor(BaseDistributor):
     # ---------------------------------------------------------------- helpers
     def _resolve_path(self, p: str) -> str:
         from may.utils import path_resolver as pr
+
         resolved = pr.resolve(p)
         path = Path(resolved)
         if path.is_absolute() or path.exists():
@@ -170,8 +171,15 @@ class RouteDistributor(BaseDistributor):
             df = df[df["mode_class"].isin(mode_classes_keep)]
 
         # Required columns + the per-leg metadata columns the config asked for.
-        required = {"origin_mgu", "dest_mgu", "mode_class", "leg_idx", "line_id",
-                    "board_mgu", "alight_mgu"}
+        required = {
+            "origin_mgu",
+            "dest_mgu",
+            "mode_class",
+            "leg_idx",
+            "line_id",
+            "board_mgu",
+            "alight_mgu",
+        }
         missing = required - set(df.columns)
         if missing:
             raise ValueError(f"legs table {legs_path} missing columns: {missing}")
@@ -187,11 +195,15 @@ class RouteDistributor(BaseDistributor):
         df = df.sort_values(["origin_mgu", "dest_mgu", "mode_class", "leg_idx"])
         index: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = defaultdict(list)
         cols = ["leg_idx", "line_id", "board_mgu", "alight_mgu"] + meta_cols
-        for row in df[["origin_mgu", "dest_mgu", "mode_class", *cols]].itertuples(index=False):
+        for row in df[["origin_mgu", "dest_mgu", "mode_class", *cols]].itertuples(
+            index=False
+        ):
             key = (row.origin_mgu, row.dest_mgu, row.mode_class)
             entry = {c: getattr(row, c) for c in cols}
             index[key].append(entry)
-        logger.info(f"  Indexed {len(df):,} legs across {len(index):,} (O,D,class) routes")
+        logger.info(
+            f"  Indexed {len(df):,} legs across {len(index):,} (O,D,class) routes"
+        )
         return dict(index)
 
     # ------------------------------------------------------------- pool rule
@@ -217,11 +229,13 @@ class RouteDistributor(BaseDistributor):
         """Great-circle km between two units' centroids."""
         if a == b:
             return 0.0
-        return self._haversine_distance(self._coords(geography, a), self._coords(geography, b))
+        return self._haversine_distance(
+            self._coords(geography, a), self._coords(geography, b)
+        )
 
     def _build_catchment(self, geography) -> None:
         """Index the MGUs the routing table actually serves, from the table."""
-        served = ({k[0] for k in self._legs_index} | {k[1] for k in self._legs_index})
+        served = {k[0] for k in self._legs_index} | {k[1] for k in self._legs_index}
         names, coords = [], []
         for name in sorted(served):
             unit = geography.get_unit(name)
@@ -242,16 +256,23 @@ class RouteDistributor(BaseDistributor):
             return self._catchment_cache[name]
         result = None
         unit = geography.get_unit(name)
-        if unit is not None and unit.coordinates is not None and self._served_coords is not None:
+        if (
+            unit is not None
+            and unit.coordinates is not None
+            and self._served_coords is not None
+        ):
             d = self._haversine_distance_vectorized(
-                tuple(unit.coordinates), self._served_coords)
+                tuple(unit.coordinates), self._served_coords
+            )
             i = int(d.argmin())
             if d[i] <= self.max_access_km:
                 result = (self._served_names[i], d[i] / self.access_speed_kmh * 60.0)
         self._catchment_cache[name] = result
         return result
 
-    def _pool_legs(self, geography, origin: str, dest: str) -> Optional[List[Dict[str, Any]]]:
+    def _pool_legs(
+        self, geography, origin: str, dest: str
+    ) -> Optional[List[Dict[str, Any]]]:
         """Derive this journey's single shared-pool leg, or None if out of range.
 
         Riders travelling between the same pair of corridor-level units share a
@@ -261,7 +282,10 @@ class RouteDistributor(BaseDistributor):
         the same place ride together regardless of where they get off.
         """
         dist_km = self._distance_km(geography, origin, dest)
-        if self.pool_max_distance_km is not None and dist_km > self.pool_max_distance_km:
+        if (
+            self.pool_max_distance_km is not None
+            and dist_km > self.pool_max_distance_km
+        ):
             # Too far to be a plausible daily journey by this mode.
             return None
 
@@ -272,23 +296,34 @@ class RouteDistributor(BaseDistributor):
             if o_unit is None or d_unit is None:
                 return None
             if o_unit != d_unit:
-                line_id = (f"{self.pool_id_prefix}_{self.pool_corridor_level.lower()}_"
-                           f"{_slug(o_unit)}__{_slug(d_unit)}")
+                line_id = (
+                    f"{self.pool_id_prefix}_{self.pool_corridor_level.lower()}_"
+                    f"{_slug(o_unit)}__{_slug(d_unit)}"
+                )
 
         minutes = dist_km / self.pool_speed_kmh * 60.0
-        duration = max(self.pool_min_duration,
-                       min(self.pool_max_duration, int(ceil(minutes))))
-        return [{
-            "leg_idx": 0,
-            "line_id": line_id,
-            "board_mgu": origin,
-            "alight_mgu": dest,
-            "t_board_min": 0,
-            "t_alight_min": duration,
-        }]
+        duration = max(
+            self.pool_min_duration, min(self.pool_max_duration, int(ceil(minutes)))
+        )
+        return [
+            {
+                "leg_idx": 0,
+                "line_id": line_id,
+                "board_mgu": origin,
+                "alight_mgu": dest,
+                "t_board_min": 0,
+                "t_alight_min": duration,
+            }
+        ]
 
-    def _legs_for(self, geography, origin: str, dest: str, mode_class: str,
-                  count_misses: bool = True):
+    def _legs_for(
+        self,
+        geography,
+        origin: str,
+        dest: str,
+        mode_class: str,
+        count_misses: bool = True,
+    ):
         """(legs, journey_fields) from whichever source the config configured.
 
         journey_fields are per-journey facts recorded on every leg, alongside
@@ -316,12 +351,17 @@ class RouteDistributor(BaseDistributor):
         # A wide catchment can otherwise put someone on a train for a trip whose
         # station legs cost more than going straight there. Nobody does that.
         access = o[1] + d[1]
-        if access > self._distance_km(geography, origin, dest) / self.access_speed_kmh * 60.0:
+        if (
+            access
+            > self._distance_km(geography, origin, dest) / self.access_speed_kmh * 60.0
+        ):
             if count_misses:
                 self._stats["misses_access_exceeds_direct"] += 1
             return None, no_access
-        return (self._legs_index.get((o[0], d[0], mode_class)),
-                {"access_min": round(o[1], 1), "egress_min": round(d[1], 1)})
+        return (
+            self._legs_index.get((o[0], d[0], mode_class)),
+            {"access_min": round(o[1], 1), "egress_min": round(d[1], 1)},
+        )
 
     def _derive_key(self, person, world, source: Dict[str, Any]) -> Optional[str]:
         """Derive an MGU-name key for a person from a configured source.
@@ -463,7 +503,8 @@ class RouteDistributor(BaseDistributor):
         # The class label we'll look up in the routing table.
         mapped_class = (
             self.class_map.get(self.class_filter, self.class_filter)
-            if self.class_filter is not None else None
+            if self.class_filter is not None
+            else None
         )
 
         for person in people:
@@ -476,7 +517,8 @@ class RouteDistributor(BaseDistributor):
 
             person_class = self._get_person_class(person)
             mode_class = (
-                mapped_class if mapped_class is not None
+                mapped_class
+                if mapped_class is not None
                 else self.class_map.get(person_class, person_class)
             )
 
@@ -484,7 +526,9 @@ class RouteDistributor(BaseDistributor):
                 self._apply_miss(person)
                 continue
 
-            legs, journey_fields = self._legs_for(world.geography, origin, dest, mode_class)
+            legs, journey_fields = self._legs_for(
+                world.geography, origin, dest, mode_class
+            )
             if not legs:
                 self._apply_miss(person)
                 continue

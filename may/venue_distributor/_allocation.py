@@ -3,9 +3,16 @@
 import numpy as np
 from typing import Tuple
 
-FALLBACK_STRATEGIES = {'skip', 'relax_distance', 'relax_capacity', 'assign_closest'}
-SPECIAL_CASE_STRATEGIES = {'closest', 'random'}
-SELECT_VENUE_STRATEGIES = {'random', 'closest', 'proportional', 'closest_balanced', 'largest_capacity'}
+FALLBACK_STRATEGIES = {"skip", "relax_distance", "relax_capacity", "assign_closest"}
+SPECIAL_CASE_STRATEGIES = {"closest", "random"}
+SELECT_VENUE_STRATEGIES = {
+    "random",
+    "closest",
+    "proportional",
+    "closest_balanced",
+    "largest_capacity",
+}
+
 
 def _multinomial_capacity_draw(remaining: np.ndarray, n: int) -> Tuple[np.ndarray, int]:
     """Place n people across venues, weighted by remaining capacity.
@@ -37,6 +44,7 @@ def _multinomial_capacity_draw(remaining: np.ndarray, n: int) -> Tuple[np.ndarra
         to_place -= int(take.sum())
     return placed, to_place
 
+
 from ._filtering import _FilteringMixin
 from ._fallbacks import _FallbackMixin
 from ._special_cases import _SpecialCasesMixin
@@ -45,7 +53,15 @@ from ._strategies import _AllocationMixin
 from ._reporting import _ReportingMixin
 from may.utils.attribute_access import get_attribute
 
-class VenueAllocation(_FilteringMixin, _FallbackMixin, _SpecialCasesMixin, _MatchingMixin, _AllocationMixin, _ReportingMixin):
+
+class VenueAllocation(
+    _FilteringMixin,
+    _FallbackMixin,
+    _SpecialCasesMixin,
+    _MatchingMixin,
+    _AllocationMixin,
+    _ReportingMixin,
+):
     """Single internal owner for venue allocation state and behavior."""
 
     def __init__(self, owner):
@@ -59,9 +75,12 @@ class VenueAllocation(_FilteringMixin, _FallbackMixin, _SpecialCasesMixin, _Matc
         self.categorical_match_rules = []
         self.attribute_index_built = False
         self.venue_id_to_idx = {}
-        eligibility = self.config.get('eligibility', {})
-        self.attribute_names = [r.get('name') for r in eligibility.get('attributes', [])]
+        eligibility = self.config.get("eligibility", {})
+        self.attribute_names = [
+            r.get("name") for r in eligibility.get("attributes", [])
+        ]
         self.attr_getters = [
             lambda p, attr=name: get_attribute(p, attr)
-            for name in self.attribute_names if name
+            for name in self.attribute_names
+            if name
         ]

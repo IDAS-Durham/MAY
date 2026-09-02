@@ -7,7 +7,12 @@ import logging
 from typing import TYPE_CHECKING
 
 from .graph.graph_relationship_builder import GraphRelationshipBuilder
-from .geo.geo_neighbors import find_neighbours, _extract_coordinates, _km_to_degrees_adjusted, EARTH_RADIUS_KM
+from .geo.geo_neighbors import (
+    find_neighbours,
+    _extract_coordinates,
+    _km_to_degrees_adjusted,
+    EARTH_RADIUS_KM,
+)
 from .store import store_contacts
 
 import random
@@ -16,7 +21,6 @@ import numba as nb
 
 if TYPE_CHECKING:
     from may.geography import Geography, GeographicalUnit
-    from may.world import World
     from may.population import Person
 
 logger = logging.getLogger("create networks")
@@ -58,8 +62,9 @@ def _build_people_csr(units):
     return all_people, unit_starts, unit_ends, unit_people_flat, person_unit
 
 
-def _store_contacts_from_matrix(all_people, all_connections, storage_key,
-                                activity_config=None):
+def _store_contacts_from_matrix(
+    all_people, all_connections, storage_key, activity_config=None
+):
     """
     Symmetrise a directed (N, k) connection matrix and store contacts via store_contacts.
 
@@ -98,23 +103,25 @@ def _store_contacts_from_matrix(all_people, all_connections, storage_key,
 
     total_connections = 0
     for i, person in enumerate(all_people):
-        contact_indices = all_dst[starts[i]:ends[i]]
+        contact_indices = all_dst[starts[i] : ends[i]]
         contacts = [all_people[int(j)] for j in contact_indices]
         store_contacts(person, contacts, storage_key, activity_config)
         total_connections += len(contacts)
 
     avg_deg = total_connections / N if N > 0 else 0.0
-    logger.info(f"Stored {storage_key!r}: {total_connections:,} connections, avg ~{avg_deg:.1f} per person")
+    logger.info(
+        f"Stored {storage_key!r}: {total_connections:,} connections, avg ~{avg_deg:.1f} per person"
+    )
 
 
 @nb.njit(parallel=True, cache=True)
 def _local_ws_build_lattice(
-    unit_starts,        # (U,) int32 — start index per geo_unit in the flat people array
-    unit_ends,          # (U,) int32 — end index (exclusive)
-    unit_people_flat,   # (N,) int32 — global person indices, contiguous per unit
-    person_unit,        # (N,) int32 — geo_unit index for each person
-    all_connections,    # (N, k) int32 — output; -1 = empty slot
-    k,                  # int32 — target connections per person
+    unit_starts,  # (U,) int32 — start index per geo_unit in the flat people array
+    unit_ends,  # (U,) int32 — end index (exclusive)
+    unit_people_flat,  # (N,) int32 — global person indices, contiguous per unit
+    person_unit,  # (N,) int32 — geo_unit index for each person
+    all_connections,  # (N, k) int32 — output; -1 = empty slot
+    k,  # int32 — target connections per person
 ):
     """
     Build an intra-SGU ring lattice: each person connects to their k nearest
@@ -132,19 +139,19 @@ def _local_ws_build_lattice(
         local_i = i - unit_starts[g]
         effective_k = k if k < unit_size else unit_size - 1
         for slot in range(effective_k):
-            offset = slot + 1           # +1, +2, +3, ... (forward-only)
+            offset = slot + 1  # +1, +2, +3, ... (forward-only)
             neighbor_local = (local_i + offset) % unit_size
             all_connections[i, slot] = unit_starts[g] + neighbor_local
 
 
 @nb.njit(parallel=True, cache=True)
 def _local_ws_rewire(
-    unit_starts,        # (U,) int32
-    unit_ends,          # (U,) int32
-    unit_people_flat,   # (N,) int32
-    person_unit,        # (N,) int32
-    all_connections,    # (N, k) int32 — modified in-place
-    rewire_prob,        # float64
+    unit_starts,  # (U,) int32
+    unit_ends,  # (U,) int32
+    unit_people_flat,  # (N,) int32
+    person_unit,  # (N,) int32
+    all_connections,  # (N, k) int32 — modified in-place
+    rewire_prob,  # float64
 ):
     """
     Rewire each intra-SGU connection with probability rewire_prob to a random
@@ -170,8 +177,7 @@ def _local_ws_rewire(
 
 
 def _collate_people_in_geo_units(
-        geography: "Geography",
-        geo_unit_ids: set["GeographicalUnit"]
+    geography: "Geography", geo_unit_ids: set["GeographicalUnit"]
 ) -> set["Person"]:
     """
     Collect all people from a set of geographical units.
@@ -191,13 +197,13 @@ def _collate_people_in_geo_units(
 
 
 def _build_local_social_network(
-        geography: "Geography",
-        mean_connections_per_person: float,
-        clustering_level: float,
-        geo_unit_level: str = None,
-        storage_key: str = "social_contacts_local",
-        activity_config: dict = None,
-        **kwargs,
+    geography: "Geography",
+    mean_connections_per_person: float,
+    clustering_level: float,
+    geo_unit_level: str = None,
+    storage_key: str = "social_contacts_local",
+    activity_config: dict = None,
+    **kwargs,
 ) -> None:
     """
     Build a Watts-Strogatz social network within each smallest geographical unit.
@@ -220,7 +226,9 @@ def _build_local_social_network(
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
     units = list(geography.get_units_by_level(geo_unit_level).values())
-    all_people, unit_starts, unit_ends, unit_people_flat, person_unit = _build_people_csr(units)
+    all_people, unit_starts, unit_ends, unit_people_flat, person_unit = (
+        _build_people_csr(units)
+    )
 
     if not all_people:
         logger.warning("build_local_social_network: no people found — skipping")
@@ -229,28 +237,44 @@ def _build_local_social_network(
     N = len(all_people)
     k = int(mean_connections_per_person)
     lattice_k = max(1, k // 2)
-    logger.info(f"Building local social network: {N:,} people across {len(units)} SGUs, k={k}")
+    logger.info(
+        f"Building local social network: {N:,} people across {len(units)} SGUs, k={k}"
+    )
 
     all_connections = np.full((N, lattice_k), -1, dtype=np.int32)
-    _local_ws_build_lattice(unit_starts, unit_ends, unit_people_flat, person_unit,
-                            all_connections, np.int32(lattice_k))
+    _local_ws_build_lattice(
+        unit_starts,
+        unit_ends,
+        unit_people_flat,
+        person_unit,
+        all_connections,
+        np.int32(lattice_k),
+    )
 
     rewire_prob = np.float64(1.0 - clustering_level)
     if rewire_prob > 0.0:
-        _local_ws_rewire(unit_starts, unit_ends, unit_people_flat, person_unit,
-                         all_connections, rewire_prob)
+        _local_ws_rewire(
+            unit_starts,
+            unit_ends,
+            unit_people_flat,
+            person_unit,
+            all_connections,
+            rewire_prob,
+        )
 
-    _store_contacts_from_matrix(all_people, all_connections, storage_key, activity_config)
+    _store_contacts_from_matrix(
+        all_people, all_connections, storage_key, activity_config
+    )
 
 
 def _allocate_random_bounded_distance_contacts(
-        geography: "Geography",
-        radius_km: float,
-        mean_connections_per_person: float,
-        geo_unit_level=None,
-        storage_key: str = None,
-        method: str = 'libpysal',
-        **kwargs,
+    geography: "Geography",
+    radius_km: float,
+    mean_connections_per_person: float,
+    geo_unit_level=None,
+    storage_key: str = None,
+    method: str = "libpysal",
+    **kwargs,
 ) -> None:
     """
     Allocates contacts randomly to people within a specified radius.
@@ -259,7 +283,7 @@ def _allocate_random_bounded_distance_contacts(
     Faster than the graph-based _build_bounded_distance_social_network.
     """
     if storage_key is None:
-        storage_key = f'social_contacts_radius_{radius_km}'
+        storage_key = f"social_contacts_radius_{radius_km}"
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
 
@@ -268,24 +292,28 @@ def _allocate_random_bounded_distance_contacts(
 
     rng_generator = np.random.default_rng()
     for geo_unit_id, connected_ids in geo_unit_neighbours.items():
-        people_to_connect_to = list(_collate_people_in_geo_units(geography, connected_ids))
+        people_to_connect_to = list(
+            _collate_people_in_geo_units(geography, connected_ids)
+        )
         people_to_connect_from = geography.units_by_id[geo_unit_id].get_people()
         if people_to_connect_to and people_to_connect_from:
             for person in people_to_connect_from:
-                contacts = random.sample(people_to_connect_to,
-                    k=rng_generator.poisson(lam=mean_connections_per_person))
+                contacts = random.sample(
+                    people_to_connect_to,
+                    k=rng_generator.poisson(lam=mean_connections_per_person),
+                )
                 store_contacts(person, contacts, storage_key)
 
 
 def _build_bounded_distance_social_network(
-        geography: "Geography",
-        radius_km: float,
-        mean_connections_per_person: float,
-        clustering_level: float,
-        geo_unit_level: str = None,
-        storage_key: str = None,
-        method: str = 'libpysal',
-        **kwargs,
+    geography: "Geography",
+    radius_km: float,
+    mean_connections_per_person: float,
+    clustering_level: float,
+    geo_unit_level: str = None,
+    storage_key: str = None,
+    method: str = "libpysal",
+    **kwargs,
 ) -> None:
     """
     Build a network of contacts between people in geo_units within a specified radius.
@@ -314,7 +342,9 @@ def _build_bounded_distance_social_network(
         geo_unit_level = geography.levels[0]
 
     geo_units = geography.get_units_by_level(geo_unit_level)
-    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km=radius_km, method=method)
+    geo_unit_neighbours = find_neighbours(
+        list(geo_units.values()), radius_km=radius_km, method=method
+    )
 
     for geo_unit_id, connected_ids in geo_unit_neighbours.items():
         people_in_network = _collate_people_in_geo_units(geography, connected_ids)
@@ -329,15 +359,15 @@ def _build_bounded_distance_social_network(
 
 @nb.njit(parallel=True, cache=True)
 def _spatial_ws_build_lattice(
-    neighbor_starts,    # (U,) int32 — start index per geo_unit in neighbor_flat
-    neighbor_ends,      # (U,) int32 — end index
-    neighbor_flat,      # (M,) int32 — neighbour geo_unit indices, sorted nearest→furthest
-    unit_starts,        # (U,) int32 — start index per geo_unit in unit_people_flat
-    unit_ends,          # (U,) int32 — end index
-    unit_people_flat,   # (N,) int32 — global person indices, contiguous per unit
-    person_unit,        # (N,) int32 — geo_unit index for each person
-    all_connections,    # (N, k) int32 — output; -1 = empty slot
-    k,                  # int32 — connections per person
+    neighbor_starts,  # (U,) int32 — start index per geo_unit in neighbor_flat
+    neighbor_ends,  # (U,) int32 — end index
+    neighbor_flat,  # (M,) int32 — neighbour geo_unit indices, sorted nearest→furthest
+    unit_starts,  # (U,) int32 — start index per geo_unit in unit_people_flat
+    unit_ends,  # (U,) int32 — end index
+    unit_people_flat,  # (N,) int32 — global person indices, contiguous per unit
+    person_unit,  # (N,) int32 — geo_unit index for each person
+    all_connections,  # (N, k) int32 — output; -1 = empty slot
+    k,  # int32 — connections per person
 ):
     """
     Build spatial W-S lattice: each person connects to k nearest inter-unit people.
@@ -376,15 +406,15 @@ def _spatial_ws_build_lattice(
 
 @nb.njit(parallel=True, cache=True)
 def _spatial_ws_rewire(
-    all_connections,    # (N, k) int32 — modified in-place
-    neighbor_starts,    # (U,) int32
-    neighbor_ends,      # (U,) int32
-    neighbor_flat,      # (M,) int32
-    unit_starts,        # (U,) int32
-    unit_ends,          # (U,) int32
-    unit_people_flat,   # (N,) int32
-    person_unit,        # (N,) int32
-    rewire_prob,        # float64
+    all_connections,  # (N, k) int32 — modified in-place
+    neighbor_starts,  # (U,) int32
+    neighbor_ends,  # (U,) int32
+    neighbor_flat,  # (M,) int32
+    unit_starts,  # (U,) int32
+    unit_ends,  # (U,) int32
+    unit_people_flat,  # (N,) int32
+    person_unit,  # (N,) int32
+    rewire_prob,  # float64
 ):
     """Rewire each connection with probability rewire_prob to a random eligible person."""
     n_people = len(person_unit)
@@ -419,14 +449,14 @@ def _haversine_km(lon1_deg, lat1_deg, lon2_deg, lat2_deg):
 
 
 def _build_spatial_social_network(
-        geography: "Geography",
-        min_radius_km: float,
-        max_radius_km: float,
-        mean_connections_per_person: int = 6,
-        clustering_level: float = 0.7,
-        geo_unit_level: str = None,
-        storage_key: str = None,
-        activity_config: dict = None,
+    geography: "Geography",
+    min_radius_km: float,
+    max_radius_km: float,
+    mean_connections_per_person: int = 6,
+    clustering_level: float = 0.7,
+    geo_unit_level: str = None,
+    storage_key: str = None,
+    activity_config: dict = None,
 ) -> None:
     """
     Build an inter-geo-unit social network using a Spatial Watts-Strogatz algorithm.
@@ -454,19 +484,23 @@ def _build_spatial_social_network(
     if geo_unit_level is None:
         geo_unit_level = geography.levels[0]
     if storage_key is None:
-        storage_key = f'social_contacts_spatial_{min_radius_km}_{max_radius_km}'
+        storage_key = f"social_contacts_spatial_{min_radius_km}_{max_radius_km}"
 
     geo_units_dict = geography.get_units_by_level(geo_unit_level)
     geo_units_list = list(geo_units_dict.values())
 
     coordinates, units_with_coords = _extract_coordinates(geo_units_list)
     if coordinates is None:
-        logger.warning("build_spatial_social_network: no units with valid coordinates — skipping")
+        logger.warning(
+            "build_spatial_social_network: no units with valid coordinates — skipping"
+        )
         return
 
     U = len(units_with_coords)
-    logger.info(f"Building spatial social network: {U} geo_units, "
-                f"annulus [{min_radius_km}, {max_radius_km}] km, k={mean_connections_per_person}")
+    logger.info(
+        f"Building spatial social network: {U} geo_units, "
+        f"annulus [{min_radius_km}, {max_radius_km}] km, k={mean_connections_per_person}"
+    )
 
     max_deg = _km_to_degrees_adjusted(max_radius_km, coordinates) * 1.2
     tree = cKDTree(coordinates)
@@ -479,8 +513,10 @@ def _build_spatial_social_network(
             all_neighbors.append([])
             continue
         dists = _haversine_km(
-            coordinates[i, 0], coordinates[i, 1],
-            coordinates[cands, 0], coordinates[cands, 1],
+            coordinates[i, 0],
+            coordinates[i, 1],
+            coordinates[cands, 0],
+            coordinates[cands, 1],
         )
         mask = (dists >= min_radius_km) & (dists <= max_radius_km)
         valid_cands = cands[mask]
@@ -503,8 +539,9 @@ def _build_spatial_social_network(
     avg_nb = np.mean([len(n) for n in all_neighbors])
     logger.info(f"  Neighbour units per geo_unit: avg {avg_nb:.1f}")
 
-    all_people, unit_starts_arr, unit_ends_arr, unit_people_flat, person_unit = \
+    all_people, unit_starts_arr, unit_ends_arr, unit_people_flat, person_unit = (
         _build_people_csr(units_with_coords)
+    )
 
     if not all_people:
         logger.warning("build_spatial_social_network: no people found — skipping")
@@ -517,18 +554,31 @@ def _build_spatial_social_network(
     lattice_k = max(1, k // 2)
     all_connections = np.full((N, lattice_k), -1, dtype=np.int32)
     _spatial_ws_build_lattice(
-        neighbor_starts, neighbor_ends, neighbor_flat,
-        unit_starts_arr, unit_ends_arr, unit_people_flat,
-        person_unit, all_connections, np.int32(lattice_k),
+        neighbor_starts,
+        neighbor_ends,
+        neighbor_flat,
+        unit_starts_arr,
+        unit_ends_arr,
+        unit_people_flat,
+        person_unit,
+        all_connections,
+        np.int32(lattice_k),
     )
 
     rewire_prob = np.float64(1.0 - clustering_level)
     if rewire_prob > 0.0:
         _spatial_ws_rewire(
             all_connections,
-            neighbor_starts, neighbor_ends, neighbor_flat,
-            unit_starts_arr, unit_ends_arr, unit_people_flat,
-            person_unit, rewire_prob,
+            neighbor_starts,
+            neighbor_ends,
+            neighbor_flat,
+            unit_starts_arr,
+            unit_ends_arr,
+            unit_people_flat,
+            person_unit,
+            rewire_prob,
         )
 
-    _store_contacts_from_matrix(all_people, all_connections, storage_key, activity_config)
+    _store_contacts_from_matrix(
+        all_people, all_connections, storage_key, activity_config
+    )

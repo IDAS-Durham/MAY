@@ -8,8 +8,13 @@ from may.residence.composition_pattern import CompositionPattern
 logger = logging.getLogger("household")
 
 
-def _calculate_balanced_distribution(self, geo_unit_code: str, pattern: CompositionPattern,
-                                    num_households: int, max_household_size: Optional[int]) -> List[int]:
+def _calculate_balanced_distribution(
+    self,
+    geo_unit_code: str,
+    pattern: CompositionPattern,
+    num_households: int,
+    max_household_size: Optional[int],
+) -> List[int]:
     """
     Calculate balanced household sizes for flexible patterns.
 
@@ -25,7 +30,7 @@ def _calculate_balanced_distribution(self, geo_unit_code: str, pattern: Composit
     Returns:
         List of target sizes for each household
     """
-    min_size = pattern.min_household_size() # Calculate once
+    min_size = pattern.min_household_size()  # Calculate once
     if geo_unit_code not in self.person_pool_by_geo_unit:
         return [min_size] * num_households
 
@@ -41,10 +46,14 @@ def _calculate_balanced_distribution(self, geo_unit_code: str, pattern: Composit
         if max_count is None or max_count > 0:
             total_available += pool_size
             if pool_size > 0:
-                logger.debug(f"  Category {self.categories[cat_idx].name}: {pool_size} available (max_count={max_count})")
+                logger.debug(
+                    f"  Category {self.categories[cat_idx].name}: {pool_size} available (max_count={max_count})"
+                )
         else:
             if pool_size > 0:
-                logger.debug(f"  Category {self.categories[cat_idx].name}: {pool_size} available but EXCLUDED by pattern (max_count={max_count})")
+                logger.debug(
+                    f"  Category {self.categories[cat_idx].name}: {pool_size} available but EXCLUDED by pattern (max_count={max_count})"
+                )
 
     # Strategy: Fill households to capacity to allocate as many people as possible
     if max_household_size:
@@ -70,21 +79,28 @@ def _calculate_balanced_distribution(self, geo_unit_code: str, pattern: Composit
     else:
         sizes = [max(min_size, s) for s in sizes]
 
-    logger.debug(f"Balanced distribution for {num_households} households in {geo_unit_code}:")
-    logger.debug(f"  Total available: {total_available}, Target sizes: {sizes[:10]}{'...' if len(sizes) > 10 else ''}")
+    logger.debug(
+        f"Balanced distribution for {num_households} households in {geo_unit_code}:"
+    )
+    logger.debug(
+        f"  Total available: {total_available}, Target sizes: {sizes[:10]}{'...' if len(sizes) > 10 else ''}"
+    )
     return sizes
 
-def distribute_households_round(self,
-                               pattern_filter: Optional[List[str]] = None,
-                               pattern_assumptions: Optional[Dict[str, str]] = None,
-                               max_households: Optional[int] = None,
-                               max_household_size: Optional[int] = None,
-                               allocate_flexible: bool = False,
-                               refresh_pools: bool = False,
-                               round_name: Optional[str] = None,
-                               rule_name: Optional[str] = None,
-                               demotion_rules: Optional[Dict[str, str]] = None,
-                               interpretation: Optional[str] = None):
+
+def distribute_households_round(
+    self,
+    pattern_filter: Optional[List[str]] = None,
+    pattern_assumptions: Optional[Dict[str, str]] = None,
+    max_households: Optional[int] = None,
+    max_household_size: Optional[int] = None,
+    allocate_flexible: bool = False,
+    refresh_pools: bool = False,
+    round_name: Optional[str] = None,
+    rule_name: Optional[str] = None,
+    demotion_rules: Optional[Dict[str, str]] = None,
+    interpretation: Optional[str] = None,
+):
     """
     Distribute households in a single round with optional filtering.
 
@@ -127,8 +143,8 @@ def distribute_households_round(self,
     self._prepare_person_pools(refresh=refresh_pools)
 
     # Get config
-    demotion_enabled = self.config['demotion']['enabled']
-    max_attempts = self.config['demotion']['max_attempts']
+    demotion_enabled = self.config["demotion"]["enabled"]
+    max_attempts = self.config["demotion"]["max_attempts"]
 
     # Track round statistics
     round_start_allocated = len(self.allocated_people)
@@ -154,7 +170,8 @@ def distribute_households_round(self,
             if pattern_set is None or pattern_str in pattern_set:
                 if interpretation is not None:
                     count = self._mixture_quota(
-                        geo_unit_code, pattern_str, interpretation, count)
+                        geo_unit_code, pattern_str, interpretation, count
+                    )
                 total_households_to_allocate += count
 
     # Progress tracking
@@ -177,7 +194,8 @@ def distribute_households_round(self,
             # quota of the census count.
             if interpretation is not None:
                 count = self._mixture_quota(
-                    geo_unit_code, pattern_str, interpretation, count)
+                    geo_unit_code, pattern_str, interpretation, count
+                )
                 if count == 0:
                     continue
 
@@ -187,7 +205,9 @@ def distribute_households_round(self,
             actual_pattern_str = pattern_assumptions.get(pattern_str, pattern_str)
 
             if actual_pattern_str != pattern_str:
-                logger.debug(f"Using assumption for pattern '{pattern_str}': '{actual_pattern_str}'")
+                logger.debug(
+                    f"Using assumption for pattern '{pattern_str}': '{actual_pattern_str}'"
+                )
 
             # Create pattern from assumption, but preserve census pattern for rule matching
             pattern = CompositionPattern.from_string(actual_pattern_str)
@@ -199,8 +219,12 @@ def distribute_households_round(self,
             if max_household_size is not None:
                 pattern_min_size = pattern.min_household_size()
                 if max_household_size < pattern_min_size:
-                    logger.error(f"ERROR: max_household_size ({max_household_size}) is less than pattern '{actual_pattern_str}' minimum size ({pattern_min_size})")
-                    raise ValueError(f"max_household_size ({max_household_size}) cannot be less than pattern minimum size ({pattern_min_size}) for pattern '{actual_pattern_str}'")
+                    logger.error(
+                        f"ERROR: max_household_size ({max_household_size}) is less than pattern '{actual_pattern_str}' minimum size ({pattern_min_size})"
+                    )
+                    raise ValueError(
+                        f"max_household_size ({max_household_size}) cannot be less than pattern minimum size ({pattern_min_size}) for pattern '{actual_pattern_str}'"
+                    )
 
             # PRE-CALCULATE balanced distribution if allocate_flexible is True
             balanced_sizes = None
@@ -213,43 +237,76 @@ def distribute_households_round(self,
             for i in range(count):
                 # Check if we've hit the household limit
                 if max_households is not None and households_created >= max_households:
-                    logger.info(f"Reached maximum household limit ({max_households}) for {round_label}")
+                    logger.info(
+                        f"Reached maximum household limit ({max_households}) for {round_label}"
+                    )
                     break
 
                 # Get balanced size for this household if using balanced distribution
-                target_size = balanced_sizes[i] if balanced_sizes and i < len(balanced_sizes) else None
+                target_size = (
+                    balanced_sizes[i]
+                    if balanced_sizes and i < len(balanced_sizes)
+                    else None
+                )
 
                 if demotion_enabled:
-                    household = self._attempt_with_demotion(geo_unit_code, pattern, max_attempts, max_household_size, allocate_flexible, target_size, rule_name, demotion_rules)
+                    household = self._attempt_with_demotion(
+                        geo_unit_code,
+                        pattern,
+                        max_attempts,
+                        max_household_size,
+                        allocate_flexible,
+                        target_size,
+                        rule_name,
+                        demotion_rules,
+                    )
                 else:
-                    household, _ = self._allocate_household_with_rules(geo_unit_code, pattern, max_household_size, allocate_flexible, target_size, rule_name)
+                    household, _ = self._allocate_household_with_rules(
+                        geo_unit_code,
+                        pattern,
+                        max_household_size,
+                        allocate_flexible,
+                        target_size,
+                        rule_name,
+                    )
 
                 if household:
                     # Get the actual pattern that was used (may have been demoted)
-                    actual_pattern_used = household.properties.get('allocation_pattern')
+                    actual_pattern_used = household.properties.get("allocation_pattern")
 
                     # Check if we used demotion
                     # Compare the actual pattern used vs the initial pattern requested (assumption)
                     if actual_pattern_used != actual_pattern_str:
                         total_demoted += 1
-                        logger.debug(f"DEBUG -> DEMOTION DETECTED: {actual_pattern_used} != {actual_pattern_str}")
+                        logger.debug(
+                            f"DEBUG -> DEMOTION DETECTED: {actual_pattern_used} != {actual_pattern_str}"
+                        )
 
                     # Override original_pattern with CSV pattern (not assumption)
                     # This ensures excess allocation can target by CSV pattern
                     if actual_pattern_str != pattern_str:
-                        household.properties['original_pattern'] = pattern_str
+                        household.properties["original_pattern"] = pattern_str
 
                     # Household is already added to VenueManager via create_venue()
                     total_created += 1
                     households_created += 1
                 else:
-                    logger.debug(f"  Failed to allocate household {i+1}/{count} of type '{pattern_str}' in {geo_unit_code}")
+                    logger.debug(
+                        f"  Failed to allocate household {i+1}/{count} of type '{pattern_str}' in {geo_unit_code}"
+                    )
 
                 # Update progress counter and log at intervals
                 households_processed += 1
-                if households_processed % progress_interval == 0 or households_processed == total_households_to_allocate:
-                    percent_complete = (households_processed / total_households_to_allocate) * 100
-                    logger.info(f"  Progress: {households_processed}/{total_households_to_allocate} households processed ({percent_complete:.1f}%) - {households_created} created")
+                if (
+                    households_processed % progress_interval == 0
+                    or households_processed == total_households_to_allocate
+                ):
+                    percent_complete = (
+                        households_processed / total_households_to_allocate
+                    ) * 100
+                    logger.info(
+                        f"  Progress: {households_processed}/{total_households_to_allocate} households processed ({percent_complete:.1f}%) - {households_created} created"
+                    )
 
                 # Time-based heartbeat: the 10% ticks can be an hour apart on
                 # large geo units, which looks like a hang. Every 30s report
@@ -259,7 +316,7 @@ def distribute_households_round(self,
                 if now - last_heartbeat >= 30:
                     last_heartbeat = now
                     rate = households_processed / (now - round_start)
-                    prep = getattr(self, 'candidate_prep_stats', {})
+                    prep = getattr(self, "candidate_prep_stats", {})
                     logger.info(
                         f"  [heartbeat] {households_processed:,} processed "
                         f"({rate:.1f} households/s), at {geo_unit_code} pattern '{pattern_str}'; "
@@ -281,25 +338,32 @@ def distribute_households_round(self,
     all_households = self.venue_manager.get_venues_by_type("household")
 
     round_stats = {
-        'round_name': round_label,
-        'round_number': self.current_round,
-        'households_created': households_created,
-        'households_requested': total_requested,
-        'households_with_demotion': total_demoted,
-        'people_allocated_this_round': len(self.allocated_people) - round_start_allocated,
-        'total_households': len(all_households),
-        'total_people_allocated': len(self.allocated_people),
-        'total_people_remaining': len(self.population.get_all_people()) - len(self.allocated_people)
+        "round_name": round_label,
+        "round_number": self.current_round,
+        "households_created": households_created,
+        "households_requested": total_requested,
+        "households_with_demotion": total_demoted,
+        "people_allocated_this_round": len(self.allocated_people)
+        - round_start_allocated,
+        "total_households": len(all_households),
+        "total_people_allocated": len(self.allocated_people),
+        "total_people_remaining": len(self.population.get_all_people())
+        - len(self.allocated_people),
     }
 
     # Log summary (with additional round-specific info first)
     logger.info("=" * 60)
     logger.info(f"{round_label} complete!")
     logger.info(f"  Requested households (filtered): {total_requested:,}")
-    logger.info(f"  Created households: {total_created:,} ({100*total_created/max(total_requested,1):.1f}%)")
+    logger.info(
+        f"  Created households: {total_created:,} "
+        f"({100 * total_created / max(total_requested, 1):.1f}%)"
+    )
     if total_demoted > 0:
         logger.info(f"  Households using demotion: {total_demoted:,}")
-    logger.info(f"  People allocated this round: {round_stats['people_allocated_this_round']:,}")
+    logger.info(
+        f"  People allocated this round: {round_stats['people_allocated_this_round']:,}"
+    )
     logger.info(f"  Total households so far: {round_stats['total_households']:,}")
     logger.info(f"  Total people allocated: {len(self.allocated_people):,}")
     logger.info(f"  People remaining: {round_stats['total_people_remaining']:,}")
@@ -307,8 +371,10 @@ def distribute_households_round(self,
 
     return round_stats
 
-def _allocate_balanced_distribution(self, pattern: CompositionPattern,
-                                   pools, target_size: int):
+
+def _allocate_balanced_distribution(
+    self, pattern: CompositionPattern, pools, target_size: int
+):
     """
     Calculate balanced allocation using proportional distribution.
 
@@ -342,11 +408,15 @@ def _allocate_balanced_distribution(self, pattern: CompositionPattern,
 
         cat_name = self.categories[cat_idx].name
         logger.debug(f"\nCategory {cat_idx} ({cat_name}):")
-        logger.debug(f"  min_count: {min_count}, max_count: {max_count}, available: {available}")
+        logger.debug(
+            f"  min_count: {min_count}, max_count: {max_count}, available: {available}"
+        )
 
         # Check minimum availability
         if available < min_count:
-            logger.debug(f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available")
+            logger.debug(
+                f"  ✗ INSUFFICIENT: Need {min_count}, only {available} available"
+            )
             return (None, cat_idx)
 
         if max_count is not None:
@@ -356,7 +426,9 @@ def _allocate_balanced_distribution(self, pattern: CompositionPattern,
             fixed_total += max_count
         else:
             # Flexible category - defer allocation
-            logger.debug(f"  → FLEXIBLE category: deferring (min: {min_count}, available: {available})")
+            logger.debug(
+                f"  → FLEXIBLE category: deferring (min: {min_count}, available: {available})"
+            )
             flexible_categories.append((cat_idx, min_count, available))
 
     logger.debug(f"\n--- FIRST PASS COMPLETE ---")
@@ -366,11 +438,15 @@ def _allocate_balanced_distribution(self, pattern: CompositionPattern,
     # Second pass: distribute remaining capacity proportionally across flexible categories
     remaining_capacity = target_size - fixed_total
     logger.debug(f"\n--- SECOND PASS: Proportional allocation ---")
-    logger.debug(f"Remaining capacity: {remaining_capacity} (target: {target_size} - fixed: {fixed_total})")
+    logger.debug(
+        f"Remaining capacity: {remaining_capacity} (target: {target_size} - fixed: {fixed_total})"
+    )
 
     if remaining_capacity < 0:
         # Can't meet target - fixed categories already exceed it
-        logger.debug(f"✗ ERROR: Fixed categories ({fixed_total}) exceed target size ({target_size})")
+        logger.debug(
+            f"✗ ERROR: Fixed categories ({fixed_total}) exceed target size ({target_size})"
+        )
         return (None, None)
 
     # Calculate proportional allocation based on availability
@@ -389,12 +465,18 @@ def _allocate_balanced_distribution(self, pattern: CompositionPattern,
             # Proportional share of remaining capacity
             proportion = available / total_available
             allocated = int(remaining_capacity * proportion)
-            logger.debug(f"  proportion: {proportion:.3f} ({available}/{total_available})")
-            logger.debug(f"  raw allocation: {allocated} ({remaining_capacity} * {proportion:.3f})")
+            logger.debug(
+                f"  proportion: {proportion:.3f} ({available}/{total_available})"
+            )
+            logger.debug(
+                f"  raw allocation: {allocated} ({remaining_capacity} * {proportion:.3f})"
+            )
 
             # Ensure we meet minimum and don't exceed available
             allocated = max(min_count, min(allocated, available))
-            logger.debug(f"  initial allocation: {allocated} (after min/max constraints)")
+            logger.debug(
+                f"  initial allocation: {allocated} (after min/max constraints)"
+            )
         else:
             proportion = 0
             allocated = min_count
@@ -405,14 +487,18 @@ def _allocate_balanced_distribution(self, pattern: CompositionPattern,
     # Calculate shortfall and distribute remainder
     current_total = sum(alloc for _, alloc, _, _ in flexible_allocations)
     shortfall = remaining_capacity - current_total
-    logger.debug(f"\nShortfall check: allocated {current_total}, need {remaining_capacity}, shortfall: {shortfall}")
+    logger.debug(
+        f"\nShortfall check: allocated {current_total}, need {remaining_capacity}, shortfall: {shortfall}"
+    )
 
     if shortfall > 0:
         logger.debug(f"Distributing {shortfall} remaining slots...")
         # Sort by proportion (highest first) to prioritize categories with more availability
         flexible_allocations.sort(key=lambda x: x[3], reverse=True)
 
-        for i, (cat_idx, allocated, available, proportion) in enumerate(flexible_allocations):
+        for i, (cat_idx, allocated, available, proportion) in enumerate(
+            flexible_allocations
+        ):
             if shortfall == 0:
                 break
 
@@ -421,8 +507,15 @@ def _allocate_balanced_distribution(self, pattern: CompositionPattern,
             if can_take > 0:
                 give = min(can_take, shortfall)
                 cat_name = self.categories[cat_idx].name
-                logger.debug(f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})")
-                flexible_allocations[i] = (cat_idx, allocated + give, available, proportion)
+                logger.debug(
+                    f"  {cat_name}: giving {give} more (was {allocated}, now {allocated + give})"
+                )
+                flexible_allocations[i] = (
+                    cat_idx,
+                    allocated + give,
+                    available,
+                    proportion,
+                )
                 shortfall -= give
 
     # Add all flexible allocations to selections
@@ -438,4 +531,3 @@ def _allocate_balanced_distribution(self, pattern: CompositionPattern,
     logger.debug(f"Selections: {selections}")
 
     return (selections, None)
-

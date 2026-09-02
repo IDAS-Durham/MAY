@@ -58,33 +58,35 @@ class RomanticDistributor:
     def __init__(self, world, config: str | dict):
         self.world = world
         self.config = self._load_config(config)
-        self.name = self.config['name']
+        self.name = self.config["name"]
 
-        orient_config = self.config.get('sexual_orientations', {})
+        orient_config = self.config.get("sexual_orientations", {})
         self.orientation_names = orient_config.get(
-            'types', ['heterosexual', 'homosexual', 'bisexual']
+            "types", ["heterosexual", "homosexual", "bisexual"]
         )
         self._n_orients = len(self.orientation_names)
 
         # YAML-fallback age groups (only used when data sources are absent).
         self.age_groups: List[Dict] = []
-        for group_str in orient_config.get('age_adjustments', {}).keys():
-            if '-' in group_str:
-                start, end = map(int, group_str.split('-'))
-                self.age_groups.append({'name': group_str, 'start': start, 'end': end})
-            elif '+' in group_str:
-                start = int(group_str.replace('+', ''))
-                self.age_groups.append({'name': group_str, 'start': start, 'end': 200})
-        self.age_groups.append({'name': 'all_ages_default', 'start': 0, 'end': 200})
-        self.age_groups.sort(key=lambda x: x['start'])
+        for group_str in orient_config.get("age_adjustments", {}).keys():
+            if "-" in group_str:
+                start, end = map(int, group_str.split("-"))
+                self.age_groups.append({"name": group_str, "start": start, "end": end})
+            elif "+" in group_str:
+                start = int(group_str.replace("+", ""))
+                self.age_groups.append({"name": group_str, "start": start, "end": 200})
+        self.age_groups.append({"name": "all_ages_default", "start": 0, "end": 200})
+        self.age_groups.sort(key=lambda x: x["start"])
 
-        storage = self.config.get('storage', {})
-        self.orientation_key = storage.get('orientation_key', 'sexual_orientation')
-        self.status_key = storage.get('status_key', 'relationship_status')
+        storage = self.config.get("storage", {})
+        self.orientation_key = storage.get("orientation_key", "sexual_orientation")
+        self.status_key = storage.get("status_key", "relationship_status")
 
         # Eligibility predicate (same global_filters shape as distributors): a
         # person must pass ALL filters to be assigned an orientation.
-        self.global_filters = self.config.get('eligibility', {}).get('global_filters', [])
+        self.global_filters = self.config.get("eligibility", {}).get(
+            "global_filters", []
+        )
 
         # Data-source state (set by _load_data_sources when configured).
         self._use_data_sources = False
@@ -98,7 +100,7 @@ class RomanticDistributor:
         self._msoa_codes: List[str] = []
         self._msoa_idx_by_code: Dict[str, int] = {}
 
-        ds = self.config.get('data_sources')
+        ds = self.config.get("data_sources")
         if ds:
             self._load_data_sources(ds)
 
@@ -114,9 +116,9 @@ class RomanticDistributor:
         return config
 
     def _load_data_sources(self, ds: Dict):
-        demo_src = ds.get('demographic_distribution', {})
-        geo_src = ds.get('geo_distribution', {})
-        prev_path = pr.resolve(demo_src.get('path', '')) or None
+        demo_src = ds.get("demographic_distribution", {})
+        geo_src = ds.get("geo_distribution", {})
+        prev_path = pr.resolve(demo_src.get("path", "")) or None
         if not prev_path or not os.path.exists(prev_path):
             raise ValueError(
                 f"{self.name}: data_sources declared but demographic_distribution.path "
@@ -126,11 +128,15 @@ class RomanticDistributor:
 
         # geo_distribution.path may name one file or several (one per nation);
         # the files are stacked into a single geo_unit -> shares table.
-        area_spec = geo_src.get('path')
-        area_paths = [
-            pr.resolve(p) for p in
-            as_path_list(area_spec, f"{self.name}: geo_distribution.path")
-        ] if area_spec else []
+        area_spec = geo_src.get("path")
+        area_paths = (
+            [
+                pr.resolve(p)
+                for p in as_path_list(area_spec, f"{self.name}: geo_distribution.path")
+            ]
+            if area_spec
+            else []
+        )
         absent = [p for p in area_paths if not os.path.exists(p)]
         if not area_paths or absent:
             raise ValueError(
@@ -139,7 +145,7 @@ class RomanticDistributor:
                 f"YAML probabilities path instead."
             )
 
-        geo_level = geo_src.get('geo_level')
+        geo_level = geo_src.get("geo_level")
         if not geo_level:
             raise ValueError(
                 f"{self.name}: data_sources.geo_distribution needs 'geo_level' (the "
@@ -155,32 +161,38 @@ class RomanticDistributor:
 
         bands_seen: List[str] = []
         for r in rows:
-            band = r['age_group'].strip()
+            band = r["age_group"].strip()
             if band not in bands_seen:
                 bands_seen.append(band)
 
         def _parse_band(b: str) -> Tuple[int, int]:
-            if '-' in b:
-                start, end = map(int, b.split('-'))
+            if "-" in b:
+                start, end = map(int, b.split("-"))
                 return start, end
-            if '+' in b:
-                return int(b.replace('+', '')), 200
+            if "+" in b:
+                return int(b.replace("+", "")), 200
             raise ValueError(f"Unrecognized age band: {b!r}")
 
         self._prevalence_band_names = bands_seen
         self._prevalence_bands = [_parse_band(b) for b in bands_seen]
 
         n_bands = len(bands_seen)
-        prevalence_table = np.zeros((N_SEXES, n_bands, self._n_orients), dtype=np.float64)
+        prevalence_table = np.zeros(
+            (N_SEXES, n_bands, self._n_orients), dtype=np.float64
+        )
         band_idx_by_name = {name: i for i, name in enumerate(bands_seen)}
         orient_idx_by_name = {name: i for i, name in enumerate(self.orientation_names)}
         for r in rows:
-            sex_code = SEX_MALE if r['sex'].strip().lower().startswith('m') else SEX_FEMALE
-            b = band_idx_by_name[r['age_group'].strip()]
-            o_name = r['orientation'].strip()
+            sex_code = (
+                SEX_MALE if r["sex"].strip().lower().startswith("m") else SEX_FEMALE
+            )
+            b = band_idx_by_name[r["age_group"].strip()]
+            o_name = r["orientation"].strip()
             if o_name not in orient_idx_by_name:
                 continue
-            prevalence_table[sex_code, b, orient_idx_by_name[o_name]] = float(r['probability'])
+            prevalence_table[sex_code, b, orient_idx_by_name[o_name]] = float(
+                r["probability"]
+            )
         # Defensive renormalization per (sex, band).
         sums = prevalence_table.sum(axis=2, keepdims=True)
         prevalence_table = np.where(sums > 0, prevalence_table / sums, 0.0)
@@ -188,11 +200,11 @@ class RomanticDistributor:
 
         # MSOA marginals
         area_df = load_stacked_csv(
-            area_paths, label=f"{self.name}: geo_distribution", key_column='geo_unit'
+            area_paths, label=f"{self.name}: geo_distribution", key_column="geo_unit"
         )
         msoa_rows: Dict[str, np.ndarray] = {}
-        for row in area_df.to_dict('records'):
-            code = str(row['geo_unit']).strip()
+        for row in area_df.to_dict("records"):
+            code = str(row["geo_unit"]).strip()
             arr = np.zeros(self._n_orients, dtype=np.float64)
             for i, name in enumerate(self.orientation_names):
                 if name in row:
@@ -203,7 +215,9 @@ class RomanticDistributor:
 
         self._msoa_codes = sorted(msoa_rows.keys())
         self._msoa_idx_by_code = {c: i for i, c in enumerate(self._msoa_codes)}
-        msoa_table = np.zeros((len(self._msoa_codes), self._n_orients), dtype=np.float64)
+        msoa_table = np.zeros(
+            (len(self._msoa_codes), self._n_orients), dtype=np.float64
+        )
         for code, arr in msoa_rows.items():
             msoa_table[self._msoa_idx_by_code[code]] = arr
         self._msoa_table = msoa_table
@@ -241,11 +255,11 @@ class RomanticDistributor:
         regardless of population.
         """
         cache: Dict[str, int] = {}
-        geo = getattr(self.world, 'geography', None)
+        geo = getattr(self.world, "geography", None)
         if geo is None:
             return cache
         # Try the geography levels declared by the world.
-        for level_name in getattr(geo, 'levels', []) or []:
+        for level_name in getattr(geo, "levels", []) or []:
             try:
                 units = geo.get_units_by_level(level_name)
             except Exception:
@@ -266,7 +280,7 @@ class RomanticDistributor:
         return cache
 
     def _msoa_idx_for_person(self, person, sgu_cache: Dict[str, int]) -> int:
-        unit = getattr(person, 'geographical_unit', None)
+        unit = getattr(person, "geographical_unit", None)
         if unit is None:
             return -1
         # Fast path: SGU cache hit.
@@ -282,12 +296,14 @@ class RomanticDistributor:
             return -1
         return self._msoa_idx_by_code.get(ancestor.name, -1)
 
-    def _build_cell_table(self,
-                          sex_arr: np.ndarray,
-                          band_arr: np.ndarray,
-                          msoa_arr: np.ndarray,
-                          max_iter: int = 50,
-                          tol: float = 1e-4) -> np.ndarray:
+    def _build_cell_table(
+        self,
+        sex_arr: np.ndarray,
+        band_arr: np.ndarray,
+        msoa_arr: np.ndarray,
+        max_iter: int = 50,
+        tol: float = 1e-4,
+    ) -> np.ndarray:
         """Build a (sex, band, msoa, orientation) probability table via IPF.
 
         The cell table is initialized as ``cell_pop[s,b,m] · P_nat[s,b,o]``
@@ -315,14 +331,14 @@ class RomanticDistributor:
 
         # Initial cell counts, target marginals.
         target_nat = self._prevalence_table  # (n_sexes, n_bands, n_orients)
-        target_msoa = self._msoa_table       # (n_msoas, n_orients)
+        target_msoa = self._msoa_table  # (n_msoas, n_orients)
 
         cell_count = cell_pop[..., None] * target_nat[:, :, None, :]
 
-        sb_pop = cell_pop.sum(axis=2, keepdims=True)               # (S, B, 1)
-        msoa_pop = cell_pop.sum(axis=(0, 1))[:, None]              # (M, 1)
-        target_msoa_count = msoa_pop * target_msoa                # (M, O)
-        target_nat_count = sb_pop * target_nat                    # (S, B, O)
+        sb_pop = cell_pop.sum(axis=2, keepdims=True)  # (S, B, 1)
+        msoa_pop = cell_pop.sum(axis=(0, 1))[:, None]  # (M, 1)
+        target_msoa_count = msoa_pop * target_msoa  # (M, O)
+        target_nat_count = sb_pop * target_nat  # (S, B, O)
 
         # Convergence criterion: max relative change in cell_count between
         # iterations. This works whether the two marginals are mutually
@@ -333,19 +349,17 @@ class RomanticDistributor:
         prev_count = cell_count.copy()
         for it in range(max_iter):
             # Step A: rescale to MSOA marginal.
-            current_msoa = cell_count.sum(axis=(0, 1))            # (M, O)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                ratio_a = np.where(current_msoa > 0,
-                                   target_msoa_count / current_msoa,
-                                   1.0)
+            current_msoa = cell_count.sum(axis=(0, 1))  # (M, O)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio_a = np.where(
+                    current_msoa > 0, target_msoa_count / current_msoa, 1.0
+                )
             cell_count = cell_count * ratio_a[None, None, :, :]
 
             # Step B: rescale to (sex, band) marginal.
-            current_nat = cell_count.sum(axis=2)                  # (S, B, O)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                ratio_b = np.where(current_nat > 0,
-                                   target_nat_count / current_nat,
-                                   1.0)
+            current_nat = cell_count.sum(axis=2)  # (S, B, O)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio_b = np.where(current_nat > 0, target_nat_count / current_nat, 1.0)
             cell_count = cell_count * ratio_b[:, :, None, :]
 
             denom = np.maximum(prev_count, 1e-12)
@@ -363,7 +377,7 @@ class RomanticDistributor:
             )
 
         # Convert counts → probabilities; empty cells fall back to P_nat.
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             cell_prob = np.where(
                 cell_pop[..., None] > 0,
                 cell_count / np.maximum(cell_pop[..., None], 1.0),
@@ -375,14 +389,16 @@ class RomanticDistributor:
         cell_prob = np.where(sums > 0, cell_prob / sums, target_nat[:, :, None, :])
         return cell_prob
 
-    def _sample_orientations_vectorized(self,
-                                        arrays: Dict[str, np.ndarray],
-                                        sex_arr: np.ndarray,
-                                        band_arr: np.ndarray,
-                                        msoa_arr: np.ndarray,
-                                        partner_sex_arr: np.ndarray,
-                                        cell_prob: np.ndarray,
-                                        compatibility: Dict[str, Dict[str, List[str]]]) -> np.ndarray:
+    def _sample_orientations_vectorized(
+        self,
+        arrays: Dict[str, np.ndarray],
+        sex_arr: np.ndarray,
+        band_arr: np.ndarray,
+        msoa_arr: np.ndarray,
+        partner_sex_arr: np.ndarray,
+        cell_prob: np.ndarray,
+        compatibility: Dict[str, Dict[str, List[str]]],
+    ) -> np.ndarray:
         """Cell-batched np.random.choice, one call per unique group.
 
         Groups are keyed on ``(sex, band, msoa, partner_sex)``. Singles share
@@ -390,7 +406,7 @@ class RomanticDistributor:
         get the unfiltered cell distribution. Coupled people get the cell
         distribution with incompatible orientations zeroed and renormalized.
         """
-        n = arrays['n']
+        n = arrays["n"]
         n_orients = self._n_orients
         orientations = np.zeros(n, dtype=np.int8)
 
@@ -399,28 +415,29 @@ class RomanticDistributor:
         # (n_msoas≈7k, n_bands≈9) the key stays well below 2**31.
         n_bands = len(self._prevalence_band_names)
         n_msoas = len(self._msoa_codes)
-        ps_card = 3      # -1 (no partner), 0 (female), 1 (male)
+        ps_card = 3  # -1 (no partner), 0 (female), 1 (male)
         sex_card = N_SEXES
 
         key = (
             (sex_arr.astype(np.int64) * (n_bands + 1) + (band_arr.astype(np.int64) + 1))
-            * (n_msoas + 1) + (msoa_arr.astype(np.int64) + 1)
+            * (n_msoas + 1)
+            + (msoa_arr.astype(np.int64) + 1)
         ) * ps_card + (partner_sex_arr.astype(np.int64) + 1)
 
         # `argsort + diff` groups via vectorized array ops over the whole key array.
-        order = np.argsort(key, kind='stable')
+        order = np.argsort(key, kind="stable")
         sorted_key = key[order]
         boundaries = np.concatenate(([0], np.flatnonzero(np.diff(sorted_key)) + 1, [n]))
 
         # Compatibility lookup per (own_sex, partner_sex) → boolean mask of valid orientations.
         compat_mask = np.ones((sex_card, ps_card, n_orients), dtype=bool)
         for own_code in (SEX_MALE, SEX_FEMALE):
-            own_name = 'male' if own_code == SEX_MALE else 'female'
+            own_name = "male" if own_code == SEX_MALE else "female"
             for ps_code in (-1, SEX_FEMALE, SEX_MALE):
                 ps_idx = ps_code + 1
                 if ps_code < 0:
                     continue  # singles get the full mask
-                ps_name = 'male' if ps_code == SEX_MALE else 'female'
+                ps_name = "male" if ps_code == SEX_MALE else "female"
                 for o_idx, o_name in enumerate(self.orientation_names):
                     compat_sexes = compatibility.get(o_name, {}).get(own_name, [])
                     compat_mask[own_code, ps_idx, o_idx] = ps_name in compat_sexes
@@ -435,7 +452,7 @@ class RomanticDistributor:
             ps_idx = k % ps_card
             k //= ps_card
             m_plus_one = k % (n_msoas + 1)
-            k //= (n_msoas + 1)
+            k //= n_msoas + 1
             b_plus_one = k % (n_bands + 1)
             s_code = k // (n_bands + 1)
             m_idx = m_plus_one - 1
@@ -466,14 +483,16 @@ class RomanticDistributor:
                     forced[valid[0] if valid.size else 0] = 1.0
                     probs = forced
 
-            orientations[run] = np.random.choice(n_orients, size=n_run, p=probs).astype(np.int8)
+            orientations[run] = np.random.choice(n_orients, size=n_run, p=probs).astype(
+                np.int8
+            )
 
         return orientations
 
     def _yaml_base_probs(self, sex_code: int, age: int) -> np.ndarray:
-        orient_config = self.config.get('sexual_orientations', {})
-        s_name = 'male' if sex_code == SEX_MALE else 'female'
-        base = orient_config.get('probabilities', {}).get(s_name, {})
+        orient_config = self.config.get("sexual_orientations", {})
+        s_name = "male" if sex_code == SEX_MALE else "female"
+        base = orient_config.get("probabilities", {}).get(s_name, {})
         probs = np.array(
             [base.get(name, 0.0) for name in self.orientation_names],
             dtype=np.float64,
@@ -485,8 +504,8 @@ class RomanticDistributor:
             probs[0] = 1.0
 
         for group in self.age_groups:
-            if group['start'] <= age <= group['end']:
-                adj = orient_config.get('age_adjustments', {}).get(group['name'], {})
+            if group["start"] <= age <= group["end"]:
+                adj = orient_config.get("age_adjustments", {}).get(group["name"], {})
                 for i, name in enumerate(self.orientation_names):
                     if name in adj:
                         probs[i] *= adj[name]
@@ -499,25 +518,26 @@ class RomanticDistributor:
             probs[0] = 1.0
         return probs
 
-    def _sample_orientations_yaml(self,
-                                  adults: List,
-                                  arrays: Dict[str, np.ndarray]) -> np.ndarray:
-        n = arrays['n']
+    def _sample_orientations_yaml(
+        self, adults: List, arrays: Dict[str, np.ndarray]
+    ) -> np.ndarray:
+        n = arrays["n"]
         orientations = np.zeros(n, dtype=np.int8)
-        compatibility = self.config.get('sexual_orientations', {}).get('compatibility', {})
-        sex = arrays['sex']
-        cohabiting_couple = arrays['cohabiting_couple']
-        ids = arrays['ids']
+        compatibility = self.config.get("sexual_orientations", {}).get(
+            "compatibility", {}
+        )
+        sex = arrays["sex"]
+        cohabiting_couple = arrays["cohabiting_couple"]
         n_orients = self._n_orients
 
         id_to_sex = {
-            p.id: (SEX_MALE if p.sex.lower().startswith('m') else SEX_FEMALE)
+            p.id: (SEX_MALE if p.sex.lower().startswith("m") else SEX_FEMALE)
             for p in self.world.population.people
         }
 
         for idx, person in enumerate(adults):
             s_code = int(sex[idx])
-            s_name = 'male' if s_code == SEX_MALE else 'female'
+            s_name = "male" if s_code == SEX_MALE else "female"
             probs = self._yaml_base_probs(s_code, int(person.age))
 
             partner_id = cohabiting_couple[idx]
@@ -525,7 +545,7 @@ class RomanticDistributor:
             if partner_id >= 0:
                 partner_sex_code = id_to_sex.get(int(partner_id))
                 if partner_sex_code is not None:
-                    ps_name = 'male' if partner_sex_code == SEX_MALE else 'female'
+                    ps_name = "male" if partner_sex_code == SEX_MALE else "female"
                     for i, o_name in enumerate(self.orientation_names):
                         if ps_name not in compatibility.get(o_name, {}).get(s_name, []):
                             probs[i] = 0.0
@@ -534,9 +554,10 @@ class RomanticDistributor:
             if total > 0:
                 probs = probs / total
             elif partner_id >= 0 and partner_sex_code is not None:
-                ps_name = 'male' if partner_sex_code == SEX_MALE else 'female'
+                ps_name = "male" if partner_sex_code == SEX_MALE else "female"
                 valid = [
-                    i for i, o_name in enumerate(self.orientation_names)
+                    i
+                    for i, o_name in enumerate(self.orientation_names)
                     if ps_name in compatibility.get(o_name, {}).get(s_name, [])
                 ]
                 probs = np.zeros(n_orients)
@@ -557,19 +578,19 @@ class RomanticDistributor:
         fails the filter.
         """
         for f in self.global_filters:
-            val = get_attribute(person, f['attribute'])
+            val = get_attribute(person, f["attribute"])
             if val is None:
                 return False
-            if f.get('type', 'numerical') == 'numerical':
-                lo, hi = f.get('min'), f.get('max')
+            if f.get("type", "numerical") == "numerical":
+                lo, hi = f.get("min"), f.get("max")
                 if lo is not None and val < lo:
                     return False
                 if hi is not None and val > hi:
                     return False
             else:  # categorical
-                if 'value' in f and val != f['value']:
+                if "value" in f and val != f["value"]:
                     return False
-                if 'values' in f and val not in f['values']:
+                if "values" in f and val not in f["values"]:
                     return False
         return True
 
@@ -581,8 +602,7 @@ class RomanticDistributor:
         logger.info("=" * 60)
 
         eligible_people = [
-            p for p in self.world.population.people
-            if self._passes_filters(p)
+            p for p in self.world.population.people if self._passes_filters(p)
         ]
         n = len(eligible_people)
         logger.info(f"Processing {n:,} eligible people")
@@ -598,23 +618,28 @@ class RomanticDistributor:
             )
 
             t0 = time.time()
-            band_arr = self._age_array_to_band_idx(arrays['age'])
+            band_arr = self._age_array_to_band_idx(arrays["age"])
             msoa_arr = np.fromiter(
                 (self._msoa_idx_for_person(p, sgu_cache) for p in eligible_people),
-                dtype=np.int64, count=n,
+                dtype=np.int64,
+                count=n,
             )
-            partner_sex_arr = self._build_partner_sex_array(arrays['cohabiting_couple'])
+            partner_sex_arr = self._build_partner_sex_array(arrays["cohabiting_couple"])
             logger.info(f"Built per-person index arrays in {time.time() - t0:.2f}s")
 
             t0 = time.time()
-            cell_prob = self._build_cell_table(arrays['sex'].astype(np.int64), band_arr, msoa_arr)
+            cell_prob = self._build_cell_table(
+                arrays["sex"].astype(np.int64), band_arr, msoa_arr
+            )
             logger.info(f"IPF cell table built in {time.time() - t0:.2f}s")
 
             t0 = time.time()
-            compatibility = self.config.get('sexual_orientations', {}).get('compatibility', {})
+            compatibility = self.config.get("sexual_orientations", {}).get(
+                "compatibility", {}
+            )
             orientations = self._sample_orientations_vectorized(
                 arrays,
-                arrays['sex'].astype(np.int64),
+                arrays["sex"].astype(np.int64),
                 band_arr,
                 msoa_arr,
                 partner_sex_arr,
@@ -625,7 +650,9 @@ class RomanticDistributor:
         else:
             t0 = time.time()
             orientations = self._sample_orientations_yaml(eligible_people, arrays)
-            logger.info(f"Sampled {n:,} orientations in {time.time() - t0:.2f}s (YAML path)")
+            logger.info(
+                f"Sampled {n:,} orientations in {time.time() - t0:.2f}s (YAML path)"
+            )
 
         self._write_results(eligible_people, arrays, orientations)
 
@@ -641,24 +668,24 @@ class RomanticDistributor:
 
         for i, person in enumerate(adults):
             ids[i] = person.id
-            sex[i] = SEX_MALE if person.sex.lower().startswith('m') else SEX_FEMALE
+            sex[i] = SEX_MALE if person.sex.lower().startswith("m") else SEX_FEMALE
             age[i] = person.age
-            cc = person.properties.get('cohabiting_couple')
+            cc = person.properties.get("cohabiting_couple")
             if cc and isinstance(cc, list) and len(cc) > 0:
                 cohabiting_couple[i] = cc[0]
 
         return {
-            'ids': ids,
-            'sex': sex,
-            'age': age,
-            'cohabiting_couple': cohabiting_couple,
-            'n': n,
+            "ids": ids,
+            "sex": sex,
+            "age": age,
+            "cohabiting_couple": cohabiting_couple,
+            "n": n,
         }
 
     def _build_partner_sex_array(self, cohabiting_couple: np.ndarray) -> np.ndarray:
         """For each adult, return the sex code of their partner, or -1 if none."""
         id_to_sex = {
-            p.id: (SEX_MALE if p.sex.lower().startswith('m') else SEX_FEMALE)
+            p.id: (SEX_MALE if p.sex.lower().startswith("m") else SEX_FEMALE)
             for p in self.world.population.people
         }
         out = np.full(cohabiting_couple.shape, -1, dtype=np.int64)
@@ -670,10 +697,18 @@ class RomanticDistributor:
         return out
 
     def _write_results(self, adults: List, arrays: Dict, orientations: np.ndarray):
-        cohabiting_couple_ids = arrays['cohabiting_couple']
+        cohabiting_couple_ids = arrays["cohabiting_couple"]
         for i, person in enumerate(adults):
-            person.properties[self.orientation_key] = self.orientation_names[orientations[i]]
+            person.properties[self.orientation_key] = self.orientation_names[
+                orientations[i]
+            ]
             if cohabiting_couple_ids[i] >= 0:
-                person.properties[self.status_key] = {'type': 'exclusive', 'consensual': True}
+                person.properties[self.status_key] = {
+                    "type": "exclusive",
+                    "consensual": True,
+                }
             else:
-                person.properties[self.status_key] = {'type': 'no_partner', 'consensual': True}
+                person.properties[self.status_key] = {
+                    "type": "no_partner",
+                    "consensual": True,
+                }

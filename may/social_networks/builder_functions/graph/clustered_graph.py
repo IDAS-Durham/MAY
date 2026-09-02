@@ -17,9 +17,11 @@ def _require_networkx():
     return nx
 
 
-type GraphCreator = Callable[[Any],Any]
+type GraphCreator = Callable[[Any], Any]
 
 graph_creators: dict[str, GraphCreator] = {}
+
+
 def register_graph_creator(name: str):
     """
     Decorator to register a graph creation method in the graph_creators registry.
@@ -36,16 +38,22 @@ def register_graph_creator(name: str):
         ...     return nx.complete_graph(n_nodes)
         >>> G = graph_creators["my_graph"](10)
     """
+
     def decorator(func: GraphCreator):
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return func(*args, **kwargs)
+
         graph_creators[name] = wrapper
         return wrapper
+
     return decorator
 
+
 @register_graph_creator("watts_strogatz")
-def create_clustered_graph_watts_strogatz(n_nodes: int , k: int = 4, clustering_level: float =0.5, **kwargs):
+def create_clustered_graph_watts_strogatz(
+    n_nodes: int, k: int = 4, clustering_level: float = 0.5, **kwargs
+):
     """
     Create a random graph with controllable clustering according to the watts strogatz algorithm.
 
@@ -69,8 +77,11 @@ def create_clustered_graph_watts_strogatz(n_nodes: int , k: int = 4, clustering_
     p = 1.0 - clustering_level
     return nx.watts_strogatz_graph(round(n_nodes), round(k), p, **kwargs)
 
+
 @register_graph_creator("connected_watts_strogatz")
-def create_clustered_graph_connected_watts_strogatz(n_nodes: int, k: int =4, clustering_level: float=0.5, **kwargs):
+def create_clustered_graph_connected_watts_strogatz(
+    n_nodes: int, k: int = 4, clustering_level: float = 0.5, **kwargs
+):
     """
     Return a connected Watts-Strogatz small-world graph.
 
@@ -103,8 +114,11 @@ def create_clustered_graph_connected_watts_strogatz(n_nodes: int, k: int =4, clu
     p = 1.0 - clustering_level
     return nx.connected_watts_strogatz_graph(n_nodes, k, p, tries=100)
 
+
 @register_graph_creator("barabasi_albert")
-def create_clustered_barabasi_albert_graph(n_nodes: int, num_first_connections: int = 1, **kwargs):
+def create_clustered_barabasi_albert_graph(
+    n_nodes: int, num_first_connections: int = 1, **kwargs
+):
     """Returns a random graph using Barabási–Albert preferential attachment
 
     A graph of n nodes is grown by attaching new nodes each with num_first_connections
@@ -115,41 +129,47 @@ def create_clustered_barabasi_albert_graph(n_nodes: int, num_first_connections: 
 
 
 @register_graph_creator("random_regular_graph")
-def create_clustered_graph_random_regular_graph(n_nodes: int, d:int = 4, **kwargs):
+def create_clustered_graph_random_regular_graph(n_nodes: int, d: int = 4, **kwargs):
     """Returns a random regular graph.
 
     Returns a random d-regular graph on n nodes. A regular graph is a graph where each node has the same number 'd' neighbors.
     The resulting graph has no self-loops or parallel edges.
-    
+
     """
     nx = _require_networkx()
-    if d > n_nodes-1:
-        logger.error("Cannot have more neighbours than the number of nodes. Rounding down so that the degree of each node is equal to n-1")
+    if d > n_nodes - 1:
+        logger.error(
+            "Cannot have more neighbours than the number of nodes. Rounding down so that the degree of each node is equal to n-1"
+        )
         d = n_nodes - 1
     return nx.random_regular_graph(round(d), n_nodes, **kwargs)
 
+
 @register_graph_creator("gnm_random_graph")
-def create_clustered_graph_gnm_random_graph(n_nodes, avg_edges_per_node=4,**kwargs):
+def create_clustered_graph_gnm_random_graph(n_nodes, avg_edges_per_node=4, **kwargs):
     """Returns a G_n,m random graph.
-    
+
     Returns a graph where a graph with n nodes and m edges is chosen uniformly from the set of all possible graphs.
     """
     nx = _require_networkx()
     if avg_edges_per_node > n_nodes - 1:
-        logger.error("Should not have an average number of edges greater than the number of nodes. Rounding down to n-1 edges per node.")
-        tot_edges = int((n_nodes - 1)*n_nodes / 2)
+        logger.error(
+            "Should not have an average number of edges greater than the number of nodes. Rounding down to n-1 edges per node."
+        )
+        tot_edges = int((n_nodes - 1) * n_nodes / 2)
     else:
-        tot_edges = round(avg_edge_per_node * n_nodes / 2)
+        tot_edges = round(avg_edges_per_node * n_nodes / 2)
     return nx.gnm_random_graph(n_nodes, tot_edges, **kwargs)
 
+
 @register_graph_creator("gnp_random_graph")
-def create_clustered_graph_gnp_random_graph(n_nodes, avg_edges_per_node=4,**kwargs):
+def create_clustered_graph_gnp_random_graph(n_nodes, avg_edges_per_node=4, **kwargs):
     nx = _require_networkx()
-    probability_of_each_edge = float(avg_edge_per_node) / (n_nodes-1)
+    probability_of_each_edge = float(avg_edges_per_node) / (n_nodes - 1)
     return nx.gnp_random_graph(n_nodes, probability_of_each_edge, **kwargs)
 
 
-def create_clustered_graph(*args, algorithm: str='watts_strogatz', **kwargs):
+def create_clustered_graph(*args, algorithm: str = "watts_strogatz", **kwargs):
     """
     Create a random graph according to a given algorithm.
 

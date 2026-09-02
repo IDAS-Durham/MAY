@@ -9,15 +9,17 @@ from may.geography.venue import Venue
 logger = logging.getLogger("household")
 
 
-def allocate_excess_to_households(self,
-                                  target_patterns: List[str],
-                                  add_category: str,
-                                  constraints: Optional[List[Dict]] = None,
-                                  max_per_household: Optional[int] = None,
-                                  add_distribution: Optional[Dict] = None,
-                                  refresh_pools: bool = False,
-                                  round_name: Optional[str] = None,
-                                  rule_name: Optional[str] = None):
+def allocate_excess_to_households(
+    self,
+    target_patterns: List[str],
+    add_category: str,
+    constraints: Optional[List[Dict]] = None,
+    max_per_household: Optional[int] = None,
+    add_distribution: Optional[Dict] = None,
+    refresh_pools: bool = False,
+    round_name: Optional[str] = None,
+    rule_name: Optional[str] = None,
+):
     """
     Allocate excess people to existing households created in previous steps.
 
@@ -58,10 +60,10 @@ def allocate_excess_to_households(self,
         if not rule:
             logger.error(f"Unknown relationship rule '{rule_name}'")
             return {
-                'round_name': round_label,
-                'people_added': 0,
-                'households_modified': 0,
-                'error': f"Unknown relationship rule '{rule_name}'"
+                "round_name": round_label,
+                "people_added": 0,
+                "households_modified": 0,
+                "error": f"Unknown relationship rule '{rule_name}'",
             }
 
     # Refresh pools if requested
@@ -72,10 +74,10 @@ def allocate_excess_to_households(self,
     add_cat_idx = self._validate_category_index(add_category)
     if add_cat_idx is None:
         return {
-            'round_name': round_label,
-            'people_added': 0,
-            'households_modified': 0,
-            'error': f"Unknown category '{add_category}'"
+            "round_name": round_label,
+            "people_added": 0,
+            "households_modified": 0,
+            "error": f"Unknown category '{add_category}'",
         }
 
     # Filter households by target patterns
@@ -84,11 +86,7 @@ def allocate_excess_to_households(self,
 
     if not target_households:
         logger.warning("No households found matching target patterns")
-        return {
-            'round_name': round_label,
-            'people_added': 0,
-            'households_modified': 0
-        }
+        return {"round_name": round_label, "people_added": 0, "households_modified": 0}
 
     # Shuffle households for fairness
     np.random.shuffle(target_households)
@@ -124,7 +122,9 @@ def allocate_excess_to_households(self,
             target_to_add = self._sample_from_distribution(add_distribution)
         else:
             # Default: fill to max allowed
-            target_to_add = max_per_household if max_per_household is not None else float('inf')
+            target_to_add = (
+                max_per_household if max_per_household is not None else float("inf")
+            )
 
         # Apply max_per_household limit
         if max_per_household is not None:
@@ -134,7 +134,7 @@ def allocate_excess_to_households(self,
         added_to_this_household = 0
 
         # Handle infinity case (fill to max) vs finite target
-        if target_to_add == float('inf'):
+        if target_to_add == float("inf"):
             # Fill to capacity (until pool empty or constraints violated)
             while available_people:
                 # Check if adding this person would violate constraints
@@ -156,7 +156,9 @@ def allocate_excess_to_households(self,
                 else:
                     # No rule - take first available person
                     # available_people is now a dict, take first value
-                    person = next(iter(available_people.values()))  # Always take first (already shuffled)
+                    person = next(
+                        iter(available_people.values())
+                    )  # Always take first (already shuffled)
 
                 # Add the person
                 self._allocate_person_to_household(household, person, available_people)
@@ -189,7 +191,9 @@ def allocate_excess_to_households(self,
                 else:
                     # No rule - take first available person
                     # available_people is now a dict, take first value
-                    person = next(iter(available_people.values()))  # Always take first (already shuffled)
+                    person = next(
+                        iter(available_people.values())
+                    )  # Always take first (already shuffled)
 
                 # Add the person
                 self._allocate_person_to_household(household, person, available_people)
@@ -199,22 +203,30 @@ def allocate_excess_to_households(self,
 
         if added_to_this_household > 0:
             households_modified += 1
-            logger.debug(f"Added {added_to_this_household} {add_category} to household {household.id}")
+            logger.debug(
+                f"Added {added_to_this_household} {add_category} to household {household.id}"
+            )
 
         # Log progress at intervals
-        if households_processed % progress_interval == 0 or households_processed == total_households:
+        if (
+            households_processed % progress_interval == 0
+            or households_processed == total_households
+        ):
             percent_complete = (households_processed / total_households) * 100
-            logger.info(f"  Progress: {households_processed}/{total_households} households processed ({percent_complete:.1f}%) - {households_modified} modified, {people_added} people added")
+            logger.info(
+                f"  Progress: {households_processed}/{total_households} households processed ({percent_complete:.1f}%) - {households_modified} modified, {people_added} people added"
+            )
 
     # Statistics
     stats = {
-        'round_name': round_label,
-        'round_number': self.current_round,
-        'people_added': people_added,
-        'households_modified': households_modified,
-        'target_households_count': len(target_households),
-        'total_people_allocated': len(self.allocated_people),
-        'total_people_remaining': len(self.population.get_all_people()) - len(self.allocated_people)
+        "round_name": round_label,
+        "round_number": self.current_round,
+        "people_added": people_added,
+        "households_modified": households_modified,
+        "target_households_count": len(target_households),
+        "total_people_allocated": len(self.allocated_people),
+        "total_people_remaining": len(self.population.get_all_people())
+        - len(self.allocated_people),
     }
 
     # Log summary
@@ -237,12 +249,15 @@ def allocate_excess_to_households(self,
 
     return stats
 
-def allocate_overflow_to_households(self,
-                                   target_patterns: List[str],
-                                   add_category: str,
-                                   pattern_bias: Optional[Dict[str, float]] = None,
-                                   refresh_pools: bool = False,
-                                   round_name: Optional[str] = None):
+
+def allocate_overflow_to_households(
+    self,
+    target_patterns: List[str],
+    add_category: str,
+    pattern_bias: Optional[Dict[str, float]] = None,
+    refresh_pools: bool = False,
+    round_name: Optional[str] = None,
+):
     """
     Allocate ALL remaining people from a category to existing households,
     IGNORING max household size constraints (overflow mode).
@@ -279,10 +294,10 @@ def allocate_overflow_to_households(self,
     add_cat_idx = self._validate_category_index(add_category)
     if add_cat_idx is None:
         return {
-            'round_name': round_label,
-            'people_added': 0,
-            'households_modified': 0,
-            'error': f"Unknown category '{add_category}'"
+            "round_name": round_label,
+            "people_added": 0,
+            "households_modified": 0,
+            "error": f"Unknown category '{add_category}'",
         }
 
     # Group households by geo_unit and pattern
@@ -290,14 +305,18 @@ def allocate_overflow_to_households(self,
     households_by_geo_unit_pattern = {}
     for household in filtered_households:
         geo_unit_code = household.geographical_unit.name
-        original_pattern = household.properties.get('original_pattern', '')
+        original_pattern = household.properties.get("original_pattern", "")
         key = (geo_unit_code, original_pattern)
         if key not in households_by_geo_unit_pattern:
             households_by_geo_unit_pattern[key] = []
         households_by_geo_unit_pattern[key].append(household)
 
-    total_eligible_households = sum(len(hhs) for hhs in households_by_geo_unit_pattern.values())
-    logger.info(f"Found {total_eligible_households} eligible households across {len(households_by_geo_unit_pattern)} geo_unit-pattern combinations")
+    total_eligible_households = sum(
+        len(hhs) for hhs in households_by_geo_unit_pattern.values()
+    )
+    logger.info(
+        f"Found {total_eligible_households} eligible households across {len(households_by_geo_unit_pattern)} geo_unit-pattern combinations"
+    )
 
     # Track statistics
     people_added = 0
@@ -325,7 +344,9 @@ def allocate_overflow_to_households(self,
 
         # Convert to list for complex indexing in overflow mode
         available_people = list(pool_dict.values())
-        logger.debug(f"geo_unit {geo_unit_code}: {len(available_people)} {add_category} available")
+        logger.debug(
+            f"geo_unit {geo_unit_code}: {len(available_people)} {add_category} available"
+        )
 
         # Get all households in this geo_unit across all patterns
         geo_unit_households_by_pattern = {}
@@ -361,7 +382,9 @@ def allocate_overflow_to_households(self,
         # Distribute remainder to highest-weight patterns
         remainder = total_to_allocate - allocated_so_far
         if remainder > 0:
-            sorted_patterns = sorted(pattern_weights.keys(), key=lambda p: pattern_weights[p], reverse=True)
+            sorted_patterns = sorted(
+                pattern_weights.keys(), key=lambda p: pattern_weights[p], reverse=True
+            )
             for i in range(remainder):
                 pattern = sorted_patterns[i % len(sorted_patterns)]
                 pattern_allocations[pattern] += 1
@@ -413,7 +436,9 @@ def allocate_overflow_to_households(self,
 
                 if added_to_hh > 0:
                     households_modified += 1
-                    logger.debug(f"Added {added_to_hh} {add_category} to household {household.id} (pattern: {pattern}, now size: {household.size()})")
+                    logger.debug(
+                        f"Added {added_to_hh} {add_category} to household {household.id} (pattern: {pattern}, now size: {household.size()})"
+                    )
 
         # Remove allocated people from pool dictionary
         if global_people_index > 0:
@@ -422,18 +447,24 @@ def allocate_overflow_to_households(self,
                 pool_dict.pop(pid, None)
 
         # Log progress at intervals
-        if geo_units_processed % progress_interval == 0 or geo_units_processed == total_geo_units:
+        if (
+            geo_units_processed % progress_interval == 0
+            or geo_units_processed == total_geo_units
+        ):
             percent_complete = (geo_units_processed / total_geo_units) * 100
-            logger.info(f"  Progress: {geo_units_processed}/{total_geo_units} geo_units processed ({percent_complete:.1f}%) - {households_modified} households modified, {people_added} people added")
+            logger.info(
+                f"  Progress: {geo_units_processed}/{total_geo_units} geo_units processed ({percent_complete:.1f}%) - {households_modified} households modified, {people_added} people added"
+            )
 
     # Statistics
     stats = {
-        'round_name': round_label,
-        'round_number': self.current_round,
-        'people_added': people_added,
-        'households_modified': households_modified,
-        'total_people_allocated': len(self.allocated_people),
-        'total_people_remaining': len(self.population.get_all_people()) - len(self.allocated_people)
+        "round_name": round_label,
+        "round_number": self.current_round,
+        "people_added": people_added,
+        "households_modified": households_modified,
+        "total_people_allocated": len(self.allocated_people),
+        "total_people_remaining": len(self.population.get_all_people())
+        - len(self.allocated_people),
     }
 
     # Get remaining people by category
@@ -455,10 +486,10 @@ def allocate_overflow_to_households(self,
 
     return stats
 
-def _select_person_for_excess_with_rule(self, household: Venue,
-                                       candidates: List['Person'],
-                                       add_category: str,
-                                       rule) -> Optional['Person']:
+
+def _select_person_for_excess_with_rule(
+    self, household: Venue, candidates: List["Person"], add_category: str, rule
+) -> Optional["Person"]:
     """
     Select a person to add to an existing household using relationship rules.
 
@@ -479,7 +510,7 @@ def _select_person_for_excess_with_rule(self, household: Venue,
 
     # Map each rule role to its category names
     for role_name, role_config in rule.roles.items():
-        category_names = role_config['categories']
+        category_names = role_config["categories"]
         existing_people_by_role[role_name] = []
 
         # Find all household members that belong to this role's categories
@@ -491,7 +522,7 @@ def _select_person_for_excess_with_rule(self, household: Venue,
     # Find which role the person being added belongs to
     current_role = None
     for role_name, role_config in rule.roles.items():
-        if add_category in role_config['categories']:
+        if add_category in role_config["categories"]:
             current_role = role_name
             break
 
@@ -501,7 +532,9 @@ def _select_person_for_excess_with_rule(self, household: Venue,
 
     if not current_role:
         # Category not in any role - just return first candidate
-        logger.debug(f"Category '{add_category}' not found in rule roles, using first candidate")
+        logger.debug(
+            f"Category '{add_category}' not found in rule roles, using first candidate"
+        )
         return candidate_list[0] if candidate_list else None
 
     rr = self.relationship_rules
@@ -515,16 +548,20 @@ def _select_person_for_excess_with_rule(self, household: Venue,
     # gap), still subject to the role's numerical constraints, and flag the
     # cohabiting couple. Falls back to the plain selection when no
     # couple-compatible-and-role-valid candidate exists.
-    role_count = (rule.roles.get(current_role) or {}).get('count')
+    role_count = (rule.roles.get(current_role) or {}).get("count")
     pair_constraint = self._find_pair_constraint_for_role(
         rule, current_role, role_count
     )
     existing_partners = existing_people_by_role.get(current_role, [])
-    required_count = (pair_constraint or {}).get('require_exact_count') or 2
-    if pair_constraint is not None and required_count == 2 and len(existing_partners) == 1:
+    required_count = (pair_constraint or {}).get("require_exact_count") or 2
+    if (
+        pair_constraint is not None
+        and required_count == 2
+        and len(existing_partners) == 1
+    ):
         partner = existing_partners[0]
         geo_unit_code = getattr(
-            getattr(household, 'geographical_unit', None), 'name', None
+            getattr(household, "geographical_unit", None), "name", None
         )
         pool = rr.couple_compatible_candidates(
             partner, candidate_list, pair_constraint, geo_unit_code=geo_unit_code
@@ -538,9 +575,9 @@ def _select_person_for_excess_with_rule(self, household: Venue,
                 show_detailed_logs=False,
             )
             if person is not None:
-                if pair_constraint.get('creates_romantic_couple', False):
-                    person.properties['cohabiting_couple'] = [partner.id]
-                    partner.properties['cohabiting_couple'] = [person.id]
+                if pair_constraint.get("creates_romantic_couple", False):
+                    person.properties["cohabiting_couple"] = [partner.id]
+                    partner.properties["cohabiting_couple"] = [person.id]
                 return person
         # else: fall through to the plain (un-coupled) selection below.
 
@@ -550,8 +587,7 @@ def _select_person_for_excess_with_rule(self, household: Venue,
         existing_people_by_role=existing_people_by_role,
         constraints=rule.constraints,
         current_role=current_role,
-        show_detailed_logs=False  # Keep logs minimal for performance
+        show_detailed_logs=False,  # Keep logs minimal for performance
     )
 
     return person
-

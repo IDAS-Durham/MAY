@@ -46,12 +46,14 @@ def _resolve_attribute(path: str, nested_properties: bool = True) -> Getter:
         )
 
     if path.startswith(_RESIDENCE_PREFIX):
-        parts = tuple(path[len(_RESIDENCE_PREFIX):].split("."))
+        parts = tuple(path[len(_RESIDENCE_PREFIX) :].split("."))
 
         def from_residence(person: Any) -> Any:
             residence = _part(person, "residence", False)
-            return None if residence is _MISSING else _walk(
-                residence, parts, nested_properties
+            return (
+                None
+                if residence is _MISSING
+                else _walk(residence, parts, nested_properties)
             )
 
         return from_residence

@@ -28,17 +28,21 @@ def parse_constraints(constraints: list) -> list:
     for entry in constraints:
         constraint_type = entry.get("type")
         if constraint_type == "numerical_attribute_difference":
-            result.append(ConnectionFilter(
-                attribute=entry["attribute"],
-                match="range",
-                range=entry["max_difference"],
-            ))
+            result.append(
+                ConnectionFilter(
+                    attribute=entry["attribute"],
+                    match="range",
+                    range=entry["max_difference"],
+                )
+            )
         elif constraint_type == "categorical_attribute_match":
-            result.append(ConnectionFilter(
-                attribute=entry["attribute"],
-                match="same",
-                range=None,
-            ))
+            result.append(
+                ConnectionFilter(
+                    attribute=entry["attribute"],
+                    match="same",
+                    range=None,
+                )
+            )
         else:
             raise ValueError(
                 f"Unknown constraint type '{constraint_type}'. "

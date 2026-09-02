@@ -65,12 +65,13 @@ class CompositionPattern:
     - exactly 2 people in category 2 (Adults)
     - 2 or fewer people in category 3 (Old Adults)
     """
+
     original_pattern: str
     requirements: List[Tuple[str, int]]  # List of (operator, count) for each category
     # operator can be "exact", "gte" (>=), or "lte" (<=)
 
     @classmethod
-    def from_string(cls, pattern: str) -> 'CompositionPattern':
+    def from_string(cls, pattern: str) -> "CompositionPattern":
         """
         Parse a composition pattern string.
 
@@ -117,8 +118,9 @@ class CompositionPattern:
         """Calculate minimum household size required."""
         return sum(self.get_min_count(i) for i in range(len(self.requirements)))
 
-    def validate_against_rules(self, validation_rules: List[Dict],
-                              category_name_to_idx: Dict[str, int]) -> bool:
+    def validate_against_rules(
+        self, validation_rules: List[Dict], category_name_to_idx: Dict[str, int]
+    ) -> bool:
         """
         Validate this pattern against a list of validation rules.
 
@@ -131,42 +133,46 @@ class CompositionPattern:
         """
         for rule in validation_rules:
             # Extract rule components
-            condition = rule.get('condition', {})
-            requirement = rule.get('requirement', {})
-            rule_name = rule.get('name', 'Unnamed rule')
+            condition = rule.get("condition", {})
+            requirement = rule.get("requirement", {})
+            rule_name = rule.get("name", "Unnamed rule")
 
             # Get category indices
-            cond_category = condition.get('category')
+            cond_category = condition.get("category")
             if cond_category not in category_name_to_idx:
-                logger.warning(f"Rule '{rule_name}': Unknown category '{cond_category}'")
+                logger.warning(
+                    f"Rule '{rule_name}': Unknown category '{cond_category}'"
+                )
                 continue
-            
+
             cond_cat_idx = category_name_to_idx[cond_category]
             cond_count = self.get_min_count(cond_cat_idx)
-            
+
             # Evaluate condition
-            cond_operator = condition.get('operator')
-            cond_value = condition.get('value')
+            cond_operator = condition.get("operator")
+            cond_value = condition.get("value")
             if not _evaluate_operator(cond_count, cond_operator, cond_value):
-                continue # Condition not met, skip to next rule
+                continue  # Condition not met, skip to next rule
 
             # Condition met, check requirement(s)
             # requirement can be a single dict or a list of dicts (OR condition)
             req_list = requirement if isinstance(requirement, list) else [requirement]
-            
+
             any_req_met = False
             for req in req_list:
-                req_category = req.get('category')
+                req_category = req.get("category")
                 if req_category not in category_name_to_idx:
-                    logger.warning(f"Rule '{rule_name}': Unknown category '{req_category}'")
+                    logger.warning(
+                        f"Rule '{rule_name}': Unknown category '{req_category}'"
+                    )
                     continue
 
                 req_cat_idx = category_name_to_idx[req_category]
                 req_count = self.get_min_count(req_cat_idx)
-                
-                req_operator = req.get('operator')
-                req_value = req.get('value')
-                
+
+                req_operator = req.get("operator")
+                req_value = req.get("value")
+
                 if _evaluate_operator(req_count, req_operator, req_value):
                     any_req_met = True
                     break
@@ -178,7 +184,7 @@ class CompositionPattern:
 
         return True
 
-    def demote_once(self, priority_order: List[int]) -> Optional['CompositionPattern']:
+    def demote_once(self, priority_order: List[int]) -> Optional["CompositionPattern"]:
         """
         Attempt to demote this pattern by reducing requirements.
 
@@ -203,20 +209,22 @@ class CompositionPattern:
                 new_requirements[cat_idx] = ("gte", count - 1)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
-                    requirements=new_requirements
+                    requirements=new_requirements,
                 )
             elif operator == "exact" and count > 0:
                 # Reduce exact N to (N-1)
                 new_requirements[cat_idx] = ("exact", count - 1)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
-                    requirements=new_requirements
+                    requirements=new_requirements,
                 )
 
         # Couldn't demote further
         return None
 
-    def demote_to_count(self, cat_idx: int, target_count: int) -> Optional['CompositionPattern']:
+    def demote_to_count(
+        self, cat_idx: int, target_count: int
+    ) -> Optional["CompositionPattern"]:
         """
         Demote a specific category directly to a target count.
 
@@ -242,21 +250,19 @@ class CompositionPattern:
             new_requirements = list(self.requirements)
             new_requirements[cat_idx] = ("gte", target_count)
             return CompositionPattern(
-                original_pattern=self.original_pattern,
-                requirements=new_requirements
+                original_pattern=self.original_pattern, requirements=new_requirements
             )
         elif operator == "exact" and target_count < current_count:
             new_requirements = list(self.requirements)
             new_requirements[cat_idx] = ("exact", target_count)
             return CompositionPattern(
-                original_pattern=self.original_pattern,
-                requirements=new_requirements
+                original_pattern=self.original_pattern, requirements=new_requirements
             )
 
         # No demotion needed or possible
         return None
 
-    def promote_once(self, priority_order: List[int]) -> Optional['CompositionPattern']:
+    def promote_once(self, priority_order: List[int]) -> Optional["CompositionPattern"]:
         """
         Attempt to promote this pattern by relaxing requirements to allow more people.
 
@@ -285,7 +291,7 @@ class CompositionPattern:
                 new_requirements[cat_idx] = ("gte", count)
                 return CompositionPattern(
                     original_pattern=self.original_pattern,
-                    requirements=new_requirements
+                    requirements=new_requirements,
                 )
 
         # Couldn't promote further (all categories already flexible)

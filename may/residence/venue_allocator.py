@@ -18,8 +18,9 @@ from may.utils.attribute_access import get_attribute
 logger = logging.getLogger("venue_allocator")
 
 
-def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
-                            population, venues, household_distributor) -> Dict:
+def _allocate_to_venue_type(
+    venue_type: str, allocation_config: Dict, population, venues, household_distributor
+) -> Dict:
     """
     Allocate people to a specific venue type.
 
@@ -33,15 +34,17 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
     Returns:
         dict: Statistics about this allocation
     """
-    description = allocation_config.get('description', '')
+    description = allocation_config.get("description", "")
     if description:
         logger.info(f"  {description}")
 
     # Attribute-aware allocation is gated purely on whether this step's
     # capacity_config supplies per-slot column_mappings. The presence of the
     # buckets is the switch.
-    capacity_config = allocation_config.get('capacity_config') or {}
-    column_mappings = capacity_config.get('attribute_capacities', {}).get('column_mappings')
+    capacity_config = allocation_config.get("capacity_config") or {}
+    column_mappings = capacity_config.get("attribute_capacities", {}).get(
+        "column_mappings"
+    )
 
     # If per-slot buckets are defined, delegate to attribute-aware allocation
     if column_mappings:
@@ -50,7 +53,7 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
             allocation_config=allocation_config,
             population=population,
             venues=venues,
-            household_distributor=household_distributor
+            household_distributor=household_distributor,
         )
 
     # Otherwise, use simple allocation
@@ -59,17 +62,17 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
     if not venue_list:
         logger.warning(f"  No venues found for type '{venue_type}'")
         return {
-            'venues': 0,
-            'allocated': 0,
-            'capacity_used': 0,
-            'total_capacity': 0,
-            'capacity_pct': 0
+            "venues": 0,
+            "allocated": 0,
+            "capacity_used": 0,
+            "total_capacity": 0,
+            "capacity_pct": 0,
         }
 
     logger.info(f"  Found {len(venue_list)} {venue_type} venues")
 
     # Calculate total capacity
-    capacity_property = allocation_config.get('capacity_property', 'capacity')
+    capacity_property = allocation_config.get("capacity_property", "capacity")
     total_capacity = 0
 
     for venue in venue_list:
@@ -82,35 +85,35 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
     if total_capacity == 0:
         logger.warning(f"  No capacity found (check '{capacity_property}' property)")
         return {
-            'venues': len(venue_list),
-            'allocated': 0,
-            'capacity_used': 0,
-            'total_capacity': 0,
-            'capacity_pct': 0
+            "venues": len(venue_list),
+            "allocated": 0,
+            "capacity_used": 0,
+            "total_capacity": 0,
+            "capacity_pct": 0,
         }
 
     # Get eligible people
-    eligibility = allocation_config.get('eligibility', {})
+    eligibility = allocation_config.get("eligibility", {})
     eligible_people = _get_eligible_people(
         population=population,
         household_distributor=household_distributor,
-        eligibility=eligibility
+        eligibility=eligibility,
     )
 
     logger.info(f"  Found {len(eligible_people)} eligible people")
 
     if not eligible_people:
         return {
-            'venues': len(venue_list),
-            'allocated': 0,
-            'capacity_used': 0,
-            'total_capacity': total_capacity,
-            'capacity_pct': 0
+            "venues": len(venue_list),
+            "allocated": 0,
+            "capacity_used": 0,
+            "total_capacity": total_capacity,
+            "capacity_pct": 0,
         }
 
     # Apply strategy (sort eligible people)
-    strategy = allocation_config.get('strategy', 'random')
-    strategy_config = allocation_config.get('strategy_config') or {}
+    strategy = allocation_config.get("strategy", "random")
+    strategy_config = allocation_config.get("strategy_config") or {}
     eligible_people = _apply_strategy(eligible_people, strategy, strategy_config)
 
     # Determine how many to allocate
@@ -170,21 +173,26 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
 
         # Store residents in venue properties and add to venue subsets
         if venue_residents:
-            if 'residents' not in venue.properties:
-                venue.properties['residents'] = []
-            venue.properties['residents'].extend(venue_residents)
+            if "residents" not in venue.properties:
+                venue.properties["residents"] = []
+            venue.properties["residents"].extend(venue_residents)
 
             # Get subset_key from config (default to None)
-            subset_key = allocation_config.get('subset_key', None)
+            subset_key = allocation_config.get("subset_key", None)
 
             # Add people to venue's subset system so they're counted properly
             for person in venue_residents:
                 venue.add_to_subset(person, subset_key=subset_key)
 
         # Log progress at intervals
-        if venues_processed % progress_interval == 0 or venues_processed == total_venues:
+        if (
+            venues_processed % progress_interval == 0
+            or venues_processed == total_venues
+        ):
             percent_complete = (venues_processed / total_venues) * 100
-            logger.info(f"    Progress: {venues_processed}/{total_venues} venues processed ({percent_complete:.1f}%) - {len(allocated_people)} people allocated so far")
+            logger.info(
+                f"    Progress: {venues_processed}/{total_venues} venues processed ({percent_complete:.1f}%) - {len(allocated_people)} people allocated so far"
+            )
 
         if len(allocated_people) >= people_to_allocate:
             break
@@ -194,18 +202,20 @@ def _allocate_to_venue_type(venue_type: str, allocation_config: Dict,
         household_distributor.mark_people_as_allocated(allocated_people, venue_type)
 
     # Calculate statistics
-    capacity_pct = (len(allocated_people) / total_capacity * 100) if total_capacity > 0 else 0
+    capacity_pct = (
+        (len(allocated_people) / total_capacity * 100) if total_capacity > 0 else 0
+    )
 
     logger.info(f"  Allocated {len(allocated_people)} people")
     logger.info(f"  Capacity used: {capacity_pct:.1f}%")
 
     return {
-        'venues': len(venue_list),
-        'allocated': len(allocated_people),
-        'capacity_used': len(allocated_people),
-        'total_capacity': total_capacity,
-        'capacity_pct': capacity_pct,
-        'remaining_eligible': len(eligible_people) - len(allocated_people)
+        "venues": len(venue_list),
+        "allocated": len(allocated_people),
+        "capacity_used": len(allocated_people),
+        "total_capacity": total_capacity,
+        "capacity_pct": capacity_pct,
+        "remaining_eligible": len(eligible_people) - len(allocated_people),
     }
 
 
@@ -242,8 +252,11 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
     # Handle empty eligibility (no filtering)
     if not eligibility:
         # Return all unallocated people
-        return [p for p in population.get_all_people()
-                if p.id not in household_distributor.allocated_people]
+        return [
+            p
+            for p in population.get_all_people()
+            if p.id not in household_distributor.allocated_people
+        ]
 
     # Criteria are read from the list form; any other shape yields none.
     criteria_list = eligibility if isinstance(eligibility, list) else []
@@ -257,9 +270,11 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
         meets_criteria = True
         for criterion in criteria_list:
             # Get attribute name
-            attr_name = criterion.get('attribute')
+            attr_name = criterion.get("attribute")
             if not attr_name:
-                logger.warning(f"Eligibility criterion missing 'attribute' key: {criterion}")
+                logger.warning(
+                    f"Eligibility criterion missing 'attribute' key: {criterion}"
+                )
                 continue
 
             # Get the attribute value from person
@@ -271,10 +286,10 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
                 break
 
             # Check if this is a range check or exact match
-            if 'min' in criterion or 'max' in criterion:
+            if "min" in criterion or "max" in criterion:
                 # Range check
-                min_value = criterion.get('min')
-                max_value = criterion.get('max')
+                min_value = criterion.get("min")
+                max_value = criterion.get("max")
 
                 if min_value is not None and person_value < min_value:
                     meets_criteria = False
@@ -283,17 +298,17 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
                     meets_criteria = False
                     break
 
-            elif 'value' in criterion:
+            elif "value" in criterion:
                 # Exact match
-                expected_value = criterion['value']
+                expected_value = criterion["value"]
                 if person_value != expected_value:
                     meets_criteria = False
                     break
 
-            elif 'value_by_attribute' in criterion:
+            elif "value_by_attribute" in criterion:
                 # Categorical variation (e.g., different max by sex)
-                variation_attr = criterion['value_by_attribute'].get('attribute')
-                variation_values = criterion['value_by_attribute'].get('values', {})
+                variation_attr = criterion["value_by_attribute"].get("attribute")
+                variation_values = criterion["value_by_attribute"].get("values", {})
 
                 if variation_attr:
                     variation_value = get_attribute(person, variation_attr)
@@ -303,7 +318,9 @@ def _get_eligible_people(population, household_distributor, eligibility) -> List
                         meets_criteria = False
                         break
             else:
-                logger.warning(f"Eligibility criterion has no recognized constraint: {criterion}")
+                logger.warning(
+                    f"Eligibility criterion has no recognized constraint: {criterion}"
+                )
 
         if meets_criteria:
             eligible.append(person)
@@ -326,8 +343,8 @@ def _build_age_weight_lookup(bands) -> Dict[int, float]:
 
     lookup: Dict[int, float] = {}
     for band in bands:
-        age_range = band.get('range')
-        weight = band.get('weight')
+        age_range = band.get("range")
+        weight = band.get("weight")
         if age_range is None or weight is None:
             raise ValueError(f"age_weighted band needs 'range' and 'weight': {band}")
 
@@ -392,7 +409,7 @@ def _apply_strategy(people: List, strategy: str, strategy_config: Dict) -> List:
     elif strategy == "youngest_first":
         people.sort(key=lambda p: p.age)
     elif strategy == "age_weighted":
-        return _weighted_order(people, strategy_config.get('bands'))
+        return _weighted_order(people, strategy_config.get("bands"))
     else:
         logger.warning(f"Unknown strategy '{strategy}', using random")
         np.random.shuffle(people)
@@ -420,11 +437,13 @@ def _check_attribute_constraints(person, venue, attribute_constraints: Dict) -> 
         # Get the attribute value from the person
         person_value = get_attribute(person, attr_name)
         if person_value is None:
-            logger.debug(f"Person {person.id} has no attribute '{attr_name}', skipping constraint check")
+            logger.debug(
+                f"Person {person.id} has no attribute '{attr_name}', skipping constraint check"
+            )
             continue
 
         # Get min constraint from venue
-        min_column = constraint_config.get('min_column')
+        min_column = constraint_config.get("min_column")
         if min_column:
             min_value = venue.properties.get(min_column)
             if min_value is not None:
@@ -437,7 +456,7 @@ def _check_attribute_constraints(person, venue, attribute_constraints: Dict) -> 
                         return False
 
         # Get max constraint from venue
-        max_column = constraint_config.get('max_column')
+        max_column = constraint_config.get("max_column")
         if max_column:
             max_value = venue.properties.get(max_column)
             if max_value is not None:
@@ -452,8 +471,9 @@ def _check_attribute_constraints(person, venue, attribute_constraints: Dict) -> 
     return True
 
 
-def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
-                               population, venues, household_distributor) -> Dict:
+def _allocate_with_attributes(
+    venue_type: str, allocation_config: Dict, population, venues, household_distributor
+) -> Dict:
     """
     Allocate people to venues using attribute-aware capacity matching.
 
@@ -474,14 +494,16 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
     # Read capacity config from this allocation step. Each step owns its own
     # capacity rules.
-    capacity_config = allocation_config.get('capacity_config') or {}
+    capacity_config = allocation_config.get("capacity_config") or {}
     if not capacity_config:
         logger.warning(
             f"  No capacity_config on the allocation step for {venue_type}, "
             "falling back to simple allocation"
         )
         # Fall back to simple mode (no column_mappings → simple gate)
-        return _allocate_to_venue_type(venue_type, allocation_config, population, venues, household_distributor)
+        return _allocate_to_venue_type(
+            venue_type, allocation_config, population, venues, household_distributor
+        )
 
     # Cache on the venue manager so post-allocation reporting/debug code
     venues.capacity_configs[venue_type] = capacity_config
@@ -491,30 +513,34 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     if not venue_list:
         logger.warning(f"  No venues found for type '{venue_type}'")
         return {
-            'venues': 0,
-            'allocated': 0,
-            'capacity_used': 0,
-            'total_capacity': 0,
-            'capacity_pct': 0
+            "venues": 0,
+            "allocated": 0,
+            "capacity_used": 0,
+            "total_capacity": 0,
+            "capacity_pct": 0,
         }
 
     logger.info(f"  Found {len(venue_list)} {venue_type} venues")
 
     # Get column mappings from capacity config
-    attr_capacities = capacity_config.get('attribute_capacities', {})
-    column_mappings = attr_capacities.get('column_mappings', {})
+    attr_capacities = capacity_config.get("attribute_capacities", {})
+    column_mappings = attr_capacities.get("column_mappings", {})
 
     if not column_mappings:
-        logger.warning(f"  No column_mappings in capacity_config, falling back to simple allocation")
-        return _allocate_to_venue_type(venue_type, allocation_config, population, venues, household_distributor)
+        logger.warning(
+            f"  No column_mappings in capacity_config, falling back to simple allocation"
+        )
+        return _allocate_to_venue_type(
+            venue_type, allocation_config, population, venues, household_distributor
+        )
 
     # Get attribute constraints (if any)
-    attribute_constraints = capacity_config.get('attribute_constraints', {})
+    attribute_constraints = capacity_config.get("attribute_constraints", {})
     if attribute_constraints:
         logger.info(f"  Attribute constraints configured:")
         for attr_name, constraint_config in attribute_constraints.items():
-            min_col = constraint_config.get('min_column', 'N/A')
-            max_col = constraint_config.get('max_column', 'N/A')
+            min_col = constraint_config.get("min_column", "N/A")
+            max_col = constraint_config.get("max_column", "N/A")
             logger.info(f"    {attr_name}: min_column={min_col}, max_column={max_col}")
 
     # Calculate total capacity across all attribute slots
@@ -528,24 +554,24 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
     logger.info(f"  Total attribute-based capacity: {total_capacity}")
 
     # Get general eligibility criteria
-    eligibility = allocation_config.get('eligibility', {})
+    eligibility = allocation_config.get("eligibility", {})
 
     # Get eligible people (broad filter)
     eligible_people = _get_eligible_people(
         population=population,
         household_distributor=household_distributor,
-        eligibility=eligibility
+        eligibility=eligibility,
     )
 
     logger.info(f"  Found {len(eligible_people)} eligible people (pre-filtered)")
 
     if not eligible_people:
         return {
-            'venues': len(venue_list),
-            'allocated': 0,
-            'capacity_used': 0,
-            'total_capacity': total_capacity,
-            'capacity_pct': 0
+            "venues": len(venue_list),
+            "allocated": 0,
+            "capacity_used": 0,
+            "total_capacity": total_capacity,
+            "capacity_pct": 0,
         }
 
     # Group people by attributes (age_band, sex)
@@ -556,14 +582,14 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
             match = True
 
             # Check age_band
-            if 'age_band' in criteria:
-                min_age, max_age = criteria['age_band']
+            if "age_band" in criteria:
+                min_age, max_age = criteria["age_band"]
                 if not (min_age <= person.age <= max_age):
                     match = False
 
             # Check sex
-            if 'sex' in criteria:
-                if criteria['sex'] != person.sex:
+            if "sex" in criteria:
+                if criteria["sex"] != person.sex:
                     match = False
 
             if match:
@@ -578,11 +604,12 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
         logger.info(f"    {attr_slot}: {len(people)} people")
 
     # Apply strategy to each attribute group
-    strategy = allocation_config.get('strategy', 'random')
-    strategy_config = allocation_config.get('strategy_config') or {}
+    strategy = allocation_config.get("strategy", "random")
+    strategy_config = allocation_config.get("strategy_config") or {}
     for attr_slot in people_by_attributes:
         people_by_attributes[attr_slot] = _apply_strategy(
-            people_by_attributes[attr_slot], strategy, strategy_config)
+            people_by_attributes[attr_slot], strategy, strategy_config
+        )
 
     # Pre-group people by geographical unit AND attribute slot
     # Structure: {(column_name, geo_unit): deque([person, ...])}
@@ -639,7 +666,9 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                         continue
 
                     # Check if person meets venue-specific attribute constraints
-                    if not _check_attribute_constraints(candidate, venue, attribute_constraints):
+                    if not _check_attribute_constraints(
+                        candidate, venue, attribute_constraints
+                    ):
                         # Person doesn't meet constraints, skip them
                         continue
 
@@ -664,18 +693,18 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
 
             # Store residents in venue (by attribute slot) and add to venue subsets
             if venue_residents:
-                if 'residents' not in venue.properties:
-                    venue.properties['residents'] = []
-                venue.properties['residents'].extend(venue_residents)
+                if "residents" not in venue.properties:
+                    venue.properties["residents"] = []
+                venue.properties["residents"].extend(venue_residents)
 
                 # Also track by slot
-                slot_key = f'residents_{column_name}'
+                slot_key = f"residents_{column_name}"
                 if slot_key not in venue.properties:
                     venue.properties[slot_key] = []
                 venue.properties[slot_key].extend(venue_residents)
 
                 # Get subset_key from config (default to None)
-                subset_key = allocation_config.get('subset_key', None)
+                subset_key = allocation_config.get("subset_key", None)
 
                 # Add people to venue's subset system so they're counted properly
                 for person in venue_residents:
@@ -684,9 +713,14 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
                     # setattr(person, f'{venue_type}_venue', venue)
 
         # Log progress at intervals
-        if venues_processed % progress_interval == 0 or venues_processed == total_venues:
+        if (
+            venues_processed % progress_interval == 0
+            or venues_processed == total_venues
+        ):
             percent_complete = (venues_processed / total_venues) * 100
-            logger.info(f"    Progress: {venues_processed}/{total_venues} venues processed ({percent_complete:.1f}%) - {len(allocated_people)} people allocated so far")
+            logger.info(
+                f"    Progress: {venues_processed}/{total_venues} venues processed ({percent_complete:.1f}%) - {len(allocated_people)} people allocated so far"
+            )
 
     # Mark allocated people
     if allocated_people:
@@ -698,7 +732,9 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
         logger.info(f"    {attr_slot}: {count} allocated")
 
     # Calculate statistics
-    capacity_pct = (len(allocated_people) / total_capacity * 100) if total_capacity > 0 else 0
+    capacity_pct = (
+        (len(allocated_people) / total_capacity * 100) if total_capacity > 0 else 0
+    )
 
     logger.info(f"  Total allocated: {len(allocated_people)} people")
     logger.info(f"  Capacity used: {capacity_pct:.1f}%")
@@ -710,10 +746,10 @@ def _allocate_with_attributes(venue_type: str, allocation_config: Dict,
             logger.info(f"    {attr_slot}: {len(people)} remaining")
 
     return {
-        'venues': len(venue_list),
-        'allocated': len(allocated_people),
-        'capacity_used': len(allocated_people),
-        'total_capacity': total_capacity,
-        'capacity_pct': capacity_pct,
-        'allocation_by_attribute': allocation_stats
+        "venues": len(venue_list),
+        "allocated": len(allocated_people),
+        "capacity_used": len(allocated_people),
+        "total_capacity": total_capacity,
+        "capacity_pct": capacity_pct,
+        "allocation_by_attribute": allocation_stats,
     }

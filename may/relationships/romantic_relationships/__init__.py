@@ -7,6 +7,4 @@ and relationship dynamics including exclusive, non-exclusive, and affair relatio
 
 from .romantic_distributor import RomanticDistributor
 
-__all__ = [
-    'RomanticDistributor'
-]
+__all__ = ["RomanticDistributor"]

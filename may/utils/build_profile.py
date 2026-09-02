@@ -48,10 +48,19 @@ class _Stage:
     """One measured stage and its children."""
 
     __slots__ = (
-        "name", "kind", "detail", "children",
-        "wall_seconds", "rss_before", "rss_after",
-        "counters_before", "counters_after", "coverage_after",
-        "status", "error", "_t0",
+        "name",
+        "kind",
+        "detail",
+        "children",
+        "wall_seconds",
+        "rss_before",
+        "rss_after",
+        "counters_before",
+        "counters_after",
+        "coverage_after",
+        "status",
+        "error",
+        "_t0",
     )
 
     def __init__(self, name, kind, detail):

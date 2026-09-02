@@ -45,28 +45,28 @@ def build_filters(config):
     Returns:
         Filter dictionary with 'level' and 'codes' keys, or None if no filter
     """
-    geo_config = config.get('geography', {})
+    geo_config = config.get("geography", {})
 
-    if geo_config.get('load_all', False):
+    if geo_config.get("load_all", False):
         return None
 
-    filter_config = geo_config.get('filter', {})
-    if not filter_config or not filter_config.get('level'):
+    filter_config = geo_config.get("filter", {})
+    if not filter_config or not filter_config.get("level"):
         return None
 
-    level = filter_config['level']
+    level = filter_config["level"]
     codes = []
 
     # Load codes from file if specified
-    if filter_config.get('file'):
-        codes = list(Geography.load_codes_from_file(filter_config['file']))
+    if filter_config.get("file"):
+        codes = list(Geography.load_codes_from_file(filter_config["file"]))
     # Otherwise use inline codes
-    elif filter_config.get('codes'):
-        codes = filter_config['codes']
+    elif filter_config.get("codes"):
+        codes = filter_config["codes"]
 
     # Only return filter if we have codes
     if codes:
-        return {'level': level, 'codes': codes}
+        return {"level": level, "codes": codes}
 
     return None
 
@@ -88,22 +88,24 @@ def setup_geography(config=None):
     filters = build_filters(config)
 
     if filters:
-        logger.info(f"Using filter: {filters['level']} with {len(filters['codes'])} codes")
+        logger.info(
+            f"Using filter: {filters['level']} with {len(filters['codes'])} codes"
+        )
     else:
         logger.info("Loading all geographical units (no filters)")
 
     # Get data directory and levels from config
-    geo_config = config.get('geography', {})
-    data_dir = pr.resolve(geo_config.get('data_dir', 'data/geography'))
-    levels = geo_config.get('levels')  # required; Geography fails loud if absent
+    geo_config = config.get("geography", {})
+    data_dir = pr.resolve(geo_config.get("data_dir", "data/geography"))
+    levels = geo_config.get("levels")  # required; Geography fails loud if absent
 
     # File keys are explicit: hierarchy_file is a path or list of paths,
     # coord_files maps level label -> path or list of paths. Both accept
     # ${...} templating; relative paths resolve against data_dir.
-    hierarchy_file = _resolve_spec(geo_config.get('hierarchy_file'))
+    hierarchy_file = _resolve_spec(geo_config.get("hierarchy_file"))
     coord_files = {
         level: _resolve_spec(spec)
-        for level, spec in (geo_config.get('coord_files') or {}).items()
+        for level, spec in (geo_config.get("coord_files") or {}).items()
     }
 
     # Create Geography object

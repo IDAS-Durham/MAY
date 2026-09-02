@@ -36,13 +36,13 @@ _OPEN_BAND_MAX = 200
 def _parse_age_band(label):
     """Parse an age band such as "16-24", "65-+" or "65+". None if unparseable."""
     try:
-        if label.endswith('+') and '-' not in label:
+        if label.endswith("+") and "-" not in label:
             return int(label[:-1]), _OPEN_BAND_MAX
-        parts = label.split('-')
+        parts = label.split("-")
         if len(parts) != 2:
             return None
         low = int(parts[0])
-        high = _OPEN_BAND_MAX if parts[1].endswith('+') else int(parts[1])
+        high = _OPEN_BAND_MAX if parts[1].endswith("+") else int(parts[1])
         return low, high
     except (ValueError, AttributeError):
         return None
@@ -51,7 +51,7 @@ def _parse_age_band(label):
 def _parse_numerical_band(label):
     """Parse a numerical band such as "1.5-3.0". None if unparseable."""
     try:
-        parts = label.split('-')
+        parts = label.split("-")
         if len(parts) != 2:
             return None
         return float(parts[0]), float(parts[1])
@@ -82,9 +82,9 @@ class MultiVenueDistributor(BaseDistributor):
         super().__init__(config_file=config_path, config_dict=config_dict)
 
         # Extract configuration
-        self.activity_map_key = self.config.get('activity_map_key')
-        self.subset_key = self.config.get('subset_key', 'default')
-        self.venue_types = self.config.get('venue_types', [])
+        self.activity_map_key = self.config.get("activity_map_key")
+        self.subset_key = self.config.get("subset_key", "default")
+        self.venue_types = self.config.get("venue_types", [])
 
         # Validation
         if not self.activity_map_key:
@@ -93,8 +93,8 @@ class MultiVenueDistributor(BaseDistributor):
             raise ValueError("venue_types must be specified in configuration")
 
         # Venue selection config
-        venue_selection = self.config.get('venue_selection', {})
-        self.default_venue_count = venue_selection.get('count', 5)
+        venue_selection = self.config.get("venue_selection", {})
+        self.default_venue_count = venue_selection.get("count", 5)
 
         # How the candidate pool is defined:
         #   'count'    — the N venues nearest the geo unit's coordinates. Every
@@ -102,17 +102,17 @@ class MultiVenueDistributor(BaseDistributor):
         #                them receive the same N.
         #   'geo_unit' — every venue of that type in the unit, from which each
         #                person draws their own set of `count`.
-        self.consider_by = venue_selection.get('consider_by', 'count')
-        if self.consider_by not in ('count', 'geo_unit'):
+        self.consider_by = venue_selection.get("consider_by", "count")
+        if self.consider_by not in ("count", "geo_unit"):
             raise ValueError(
                 "MultiVenueDistributor: "
                 f"venue_selection.consider_by must be 'count' or 'geo_unit', "
                 f"got {self.consider_by!r}."
             )
 
-        self.selection_strategy = self.config.get('allocation', {}).get('strategy')
-        if self.consider_by == 'geo_unit':
-            if self.selection_strategy not in ('random', 'closest_balanced'):
+        self.selection_strategy = self.config.get("allocation", {}).get("strategy")
+        if self.consider_by == "geo_unit":
+            if self.selection_strategy not in ("random", "closest_balanced"):
                 raise ValueError(
                     "MultiVenueDistributor: "
                     f"venue_selection.consider_by 'geo_unit' requires "
@@ -129,24 +129,31 @@ class MultiVenueDistributor(BaseDistributor):
             )
 
         # Per-venue-type configuration
-        self.venue_type_config = self.config.get('venue_type_config', {})
+        self.venue_type_config = self.config.get("venue_type_config", {})
 
         # Load participation data for venue types that have it
-        self.participation_data = {}  # venue_type -> {data, row_filters, probability_column}
+        self.participation_data = (
+            {}
+        )  # venue_type -> {data, row_filters, probability_column}
         for venue_type, type_config in self.venue_type_config.items():
-            if 'participation_filter' in type_config:
-                self._load_participation_data(venue_type, type_config['participation_filter'])
+            if "participation_filter" in type_config:
+                self._load_participation_data(
+                    venue_type, type_config["participation_filter"]
+                )
 
         # Eligibility config
-        eligibility = self.config.get('eligibility', {})
+        eligibility = self.config.get("eligibility", {})
         self.min_age = None
         self.max_age = None
         # Extract age filters from global filters
-        global_filters = eligibility.get('global_filters', [])
+        global_filters = eligibility.get("global_filters", [])
         for filter_rule in global_filters:
-            if filter_rule.get('attribute') == 'age' and filter_rule.get('type') == 'numerical':
-                self.min_age = filter_rule.get('min')
-                self.max_age = filter_rule.get('max')
+            if (
+                filter_rule.get("attribute") == "age"
+                and filter_rule.get("type") == "numerical"
+            ):
+                self.min_age = filter_rule.get("min")
+                self.max_age = filter_rule.get("max")
                 break
 
         logger.info("Initialized MultiVenueDistributor")
@@ -154,8 +161,14 @@ class MultiVenueDistributor(BaseDistributor):
         logger.info(f"  venue_types: {self.venue_types}")
         logger.info(f"  subset_key: '{self.subset_key}'")
         logger.info(f"  default_venue_count: {self.default_venue_count}")
-        logger.info(f"  consider_by: '{self.consider_by}'"
-                    + (f", strategy: '{self.selection_strategy}'" if self.selection_strategy else ""))
+        logger.info(
+            f"  consider_by: '{self.consider_by}'"
+            + (
+                f", strategy: '{self.selection_strategy}'"
+                if self.selection_strategy
+                else ""
+            )
+        )
 
         # Log per-venue-type overrides
         for venue_type in self.venue_types:
@@ -170,7 +183,9 @@ class MultiVenueDistributor(BaseDistributor):
 
     def _get_venue_count_for_type(self, venue_type: str) -> int:
         """Get the number of venues to assign for a specific type, including overrides."""
-        return self.venue_type_config.get(venue_type, {}).get('count', self.default_venue_count)
+        return self.venue_type_config.get(venue_type, {}).get(
+            "count", self.default_venue_count
+        )
 
     def _load_participation_data(self, venue_type: str, filter_config: Dict):
         """
@@ -180,18 +195,22 @@ class MultiVenueDistributor(BaseDistributor):
             venue_type: Type of venue
             filter_config: Participation filter configuration from YAML
         """
-        data_file = pr.resolve(filter_config.get('data_file', '')) or None
+        data_file = pr.resolve(filter_config.get("data_file", "")) or None
         if not data_file:
-            logger.warning(f"No data_file specified for {venue_type} participation filter")
+            logger.warning(
+                f"No data_file specified for {venue_type} participation filter"
+            )
             return
 
         try:
             # Load CSV
             df = pd.read_csv(data_file)
-            logger.info(f"Loaded participation data for '{venue_type}': {len(df)} rows from {data_file}")
+            logger.info(
+                f"Loaded participation data for '{venue_type}': {len(df)} rows from {data_file}"
+            )
 
-            row_filters = filter_config.get('row_filters', [])
-            prob_config = filter_config.get('probability_column', {})
+            row_filters = filter_config.get("row_filters", [])
+            prob_config = filter_config.get("probability_column", {})
 
             # Build lookup index
             # Index structure: {(filter_val1, filter_val2, ...): {sex: prob}}
@@ -201,55 +220,57 @@ class MultiVenueDistributor(BaseDistributor):
                 # Extract filter keys from this row
                 filter_keys = []
                 for filter_cfg in row_filters:
-                    csv_column = filter_cfg.get('csv_column')
+                    csv_column = filter_cfg.get("csv_column")
                     value = row.get(csv_column)
                     filter_keys.append(str(value))
 
                 # Build probability dict for this row
                 # If using column_template, we need all possible values
-                if 'column_template' in prob_config:
+                if "column_template" in prob_config:
                     # Extract all probability columns (e.g., pct_male, pct_female)
                     prob_dict = {}
-                    template = prob_config['column_template']
-                    person_attr = prob_config.get('person_attribute')
-
+                    template = prob_config["column_template"]
                     # Try to infer possible values from columns
                     # For "pct_{value}", extract all columns matching pattern
-                    prefix = template.split('{')[0]  # e.g., "pct_"
+                    prefix = template.split("{")[0]  # e.g., "pct_"
                     for col in row.index:
                         if col.startswith(prefix):
                             # Extract the value part: "pct_male" -> "male"
-                            attr_value = col[len(prefix):]
+                            attr_value = col[len(prefix) :]
                             prob_dict[attr_value] = float(row[col])
 
                     lookup_index[tuple(filter_keys)] = prob_dict
 
-                elif 'column_name' in prob_config:
+                elif "column_name" in prob_config:
                     # Fixed column - single probability value
-                    column_name = prob_config['column_name']
+                    column_name = prob_config["column_name"]
                     lookup_index[tuple(filter_keys)] = float(row[column_name])
 
-            logger.info(f"Built participation lookup index for '{venue_type}': {len(lookup_index)} entries")
+            logger.info(
+                f"Built participation lookup index for '{venue_type}': {len(lookup_index)} entries"
+            )
 
             # Store the lookup index and configuration
             self.participation_data[venue_type] = {
-                'lookup_index': lookup_index,
-                'row_filters': row_filters,
-                'probability_column': prob_config,
-                'ranges': self._build_participation_ranges(lookup_index, row_filters),
+                "lookup_index": lookup_index,
+                "row_filters": row_filters,
+                "probability_column": prob_config,
+                "ranges": self._build_participation_ranges(lookup_index, row_filters),
             }
 
         except Exception as e:
             logger.error(f"Failed to load participation data for '{venue_type}': {e}")
             # Mark as failed so _should_allocate_venue_type returns False (fail-closed)
             self.participation_data[venue_type] = {
-                'lookup_index': {},
-                'row_filters': filter_config.get('row_filters', []),
-                'probability_column': filter_config.get('probability_column', {}),
-                'ranges': {},
+                "lookup_index": {},
+                "row_filters": filter_config.get("row_filters", []),
+                "probability_column": filter_config.get("probability_column", {}),
+                "ranges": {},
             }
 
-    def _build_participation_ranges(self, lookup_index: Dict, row_filters: List[Dict]) -> Dict:
+    def _build_participation_ranges(
+        self, lookup_index: Dict, row_filters: List[Dict]
+    ) -> Dict:
         """
         Pre-parse the bands each range filter can match, keyed by filter position.
 
@@ -260,10 +281,10 @@ class MultiVenueDistributor(BaseDistributor):
         ranges = {}
 
         for filter_idx, filter_cfg in enumerate(row_filters):
-            match_type = filter_cfg.get('match_type', 'exact')
-            if match_type == 'age_range':
+            match_type = filter_cfg.get("match_type", "exact")
+            if match_type == "age_range":
                 parse = _parse_age_band
-            elif match_type == 'numerical_range':
+            elif match_type == "numerical_range":
                 parse = _parse_numerical_band
             else:
                 continue
@@ -303,9 +324,9 @@ class MultiVenueDistributor(BaseDistributor):
             True if all filters match, False otherwise
         """
         for filter_config in row_filters:
-            person_attr = filter_config.get('person_attribute')
-            csv_column = filter_config.get('csv_column')
-            match_type = filter_config.get('match_type', 'exact')
+            person_attr = filter_config.get("person_attribute")
+            csv_column = filter_config.get("csv_column")
+            match_type = filter_config.get("match_type", "exact")
 
             # Get person attribute value
             person_value = get_attribute(person, person_attr)
@@ -318,22 +339,22 @@ class MultiVenueDistributor(BaseDistributor):
                 return False
 
             # Apply match type
-            if match_type == 'age_range':
+            if match_type == "age_range":
                 # Parse "16-24", "65-+", or "65+" formats
                 try:
                     csv_str = str(csv_value)
-                    if csv_str.endswith('+') and '-' not in csv_str:
+                    if csv_str.endswith("+") and "-" not in csv_str:
                         # Standalone "65+" format
                         min_val = int(csv_str[:-1])
                         max_val = 200  # Arbitrary high value
                         if not (min_val <= person_value <= max_val):
                             return False
                     else:
-                        parts = csv_str.split('-')
+                        parts = csv_str.split("-")
                         if len(parts) == 2:
                             min_val = int(parts[0])
                             # Handle "65-+" format
-                            if parts[1].endswith('+'):
+                            if parts[1].endswith("+"):
                                 max_val = 200  # Arbitrary high value
                             else:
                                 max_val = int(parts[1])
@@ -345,10 +366,10 @@ class MultiVenueDistributor(BaseDistributor):
                 except (ValueError, AttributeError):
                     return False
 
-            elif match_type == 'numerical_range':
+            elif match_type == "numerical_range":
                 # Parse numerical ranges "0-1000"
                 try:
-                    parts = str(csv_value).split('-')
+                    parts = str(csv_value).split("-")
                     if len(parts) == 2:
                         min_val = float(parts[0])
                         max_val = float(parts[1])
@@ -359,7 +380,7 @@ class MultiVenueDistributor(BaseDistributor):
                 except (ValueError, AttributeError):
                     return False
 
-            elif match_type == 'exact':
+            elif match_type == "exact":
                 # Exact match
                 if str(person_value).lower() != str(csv_value).lower():
                     return False
@@ -370,7 +391,9 @@ class MultiVenueDistributor(BaseDistributor):
 
         return True
 
-    def _get_probability_for_person(self, person, row, prob_config: Dict) -> Optional[float]:
+    def _get_probability_for_person(
+        self, person, row, prob_config: Dict
+    ) -> Optional[float]:
         """
         Get participation probability for a person from a CSV row.
 
@@ -387,9 +410,9 @@ class MultiVenueDistributor(BaseDistributor):
             Probability value (0.0 to 1.0) or None if not found
         """
         # Option 1: Column template (e.g., "pct_{sex}")
-        if 'column_template' in prob_config:
-            template = prob_config['column_template']
-            person_attr = prob_config.get('person_attribute')
+        if "column_template" in prob_config:
+            template = prob_config["column_template"]
+            person_attr = prob_config.get("person_attribute")
 
             if person_attr:
                 person_value = get_attribute(person, person_attr)
@@ -398,10 +421,10 @@ class MultiVenueDistributor(BaseDistributor):
 
                 # Replace {value} or {attribute_name} in template
                 lower_value = str(person_value).lower()
-                if '{value}' in template:
-                    column_name = template.replace('{value}', lower_value)
-                elif f'{{{person_attr}}}' in template:
-                    column_name = template.replace(f'{{{person_attr}}}', lower_value)
+                if "{value}" in template:
+                    column_name = template.replace("{value}", lower_value)
+                elif f"{{{person_attr}}}" in template:
+                    column_name = template.replace(f"{{{person_attr}}}", lower_value)
                 else:
                     column_name = template
 
@@ -412,8 +435,8 @@ class MultiVenueDistributor(BaseDistributor):
                     return None
 
         # Option 2: Fixed column name
-        elif 'column_name' in prob_config:
-            column_name = prob_config['column_name']
+        elif "column_name" in prob_config:
+            column_name = prob_config["column_name"]
             if column_name in row:
                 return float(row[column_name])
             else:
@@ -440,16 +463,16 @@ class MultiVenueDistributor(BaseDistributor):
             return True
 
         participation_config = self.participation_data[venue_type]
-        lookup_index = participation_config['lookup_index']
-        row_filters = participation_config['row_filters']
-        prob_config = participation_config['probability_column']
-        ranges = participation_config['ranges']
+        lookup_index = participation_config["lookup_index"]
+        row_filters = participation_config["row_filters"]
+        prob_config = participation_config["probability_column"]
+        ranges = participation_config["ranges"]
 
         # Build lookup key from person attributes
         lookup_keys = []
         for filter_idx, filter_cfg in enumerate(row_filters):
-            person_attr = filter_cfg.get('person_attribute')
-            match_type = filter_cfg.get('match_type', 'exact')
+            person_attr = filter_cfg.get("person_attribute")
+            match_type = filter_cfg.get("match_type", "exact")
 
             # Get person attribute value
             person_value = get_attribute(person, person_attr)
@@ -459,7 +482,7 @@ class MultiVenueDistributor(BaseDistributor):
             # Find matching CSV value based on match_type
             csv_value = None
 
-            if match_type == 'exact':
+            if match_type == "exact":
                 csv_value = str(person_value)
             else:
                 for low, high, label in ranges.get(filter_idx, ()):
@@ -484,7 +507,7 @@ class MultiVenueDistributor(BaseDistributor):
 
         if isinstance(prob_value, dict):
             # Template-based: select probability by person attribute
-            person_attr = prob_config.get('person_attribute')
+            person_attr = prob_config.get("person_attribute")
             attr_value = get_attribute(person, person_attr)
             if attr_value is not None:
                 probability = prob_value.get(str(attr_value).lower())
@@ -509,7 +532,9 @@ class MultiVenueDistributor(BaseDistributor):
         logger.info(f"Processing venue types: {self.venue_types}")
 
         # Build spatial indices for each venue type using base class method
-        self._build_spatial_indices({vt: world.venues_by_type(vt) for vt in self.venue_types})
+        self._build_spatial_indices(
+            {vt: world.venues_by_type(vt) for vt in self.venue_types}
+        )
 
         # Get eligible people
         eligible_people = self._get_eligible_people(world)
@@ -524,7 +549,6 @@ class MultiVenueDistributor(BaseDistributor):
 
         # Always log the allocation summary; all valid MAY worlds use this diagnostic.
         self._log_summary(world)
-
 
     def _get_eligible_people(self, world) -> List:
         """
@@ -580,11 +604,14 @@ class MultiVenueDistributor(BaseDistributor):
         weights are shared; what differs between people is the draw, not the
         distribution it is drawn from.
         """
-        if self.selection_strategy != 'closest_balanced':
+        if self.selection_strategy != "closest_balanced":
             return None
-        dists = np.array([
-            self._haversine_distance(coords, self._get_venue_location(v)) for v in pool
-        ])
+        dists = np.array(
+            [
+                self._haversine_distance(coords, self._get_venue_location(v))
+                for v in pool
+            ]
+        )
         return 1.0 / (dists + 0.1)
 
     def _sample_option_sets(self, pool_size: int, weights, n_people: int, count: int):
@@ -621,7 +648,7 @@ class MultiVenueDistributor(BaseDistributor):
         # sort lowest, which is a bias toward low pool indices, not a sample:
         # over 133k people against 450 venues it gave the first venues ~4,400
         # people each and the last ones 1.
-        order = np.argsort(idx, axis=1, kind='stable')
+        order = np.argsort(idx, axis=1, kind="stable")
         by_value = np.take_along_axis(idx, order, axis=1)
         first_sorted = np.ones(idx.shape, dtype=bool)
         first_sorted[:, 1:] = by_value[:, 1:] != by_value[:, :-1]
@@ -630,7 +657,7 @@ class MultiVenueDistributor(BaseDistributor):
 
         # A stable argsort on the negated mask brings each row's distinct
         # entries to the front, still in draw order.
-        rank = np.argsort(~is_first, axis=1, kind='stable')
+        rank = np.argsort(~is_first, axis=1, kind="stable")
         picked = np.take_along_axis(idx, rank[:, :count], axis=1)
         n_unique = is_first.sum(axis=1)
         valid = np.arange(count)[None, :] < n_unique[:, None]
@@ -651,27 +678,41 @@ class MultiVenueDistributor(BaseDistributor):
                 continue
             people_by_unit.setdefault(unit, []).append(person)
 
-        logger.info(f"Batching {len(people)} people into {len(people_by_unit)} "
-                    f"unique {level} units (per-person draws)")
+        logger.info(
+            f"Batching {len(people)} people into {len(people_by_unit)} "
+            f"unique {level} units (per-person draws)"
+        )
 
-        pools_by_type = {vt: self._build_geo_unit_pools(world, vt) for vt in self.venue_types}
+        pools_by_type = {
+            vt: self._build_geo_unit_pools(world, vt) for vt in self.venue_types
+        }
 
         venue_dicts = {}
         for unit, unit_people in people_by_unit.items():
-            coords = unit.coordinates if (unit.coordinates and len(unit.coordinates) == 2) else None
+            coords = (
+                unit.coordinates
+                if (unit.coordinates and len(unit.coordinates) == 2)
+                else None
+            )
 
             for venue_type in self.venue_types:
                 pool = pools_by_type[venue_type].get(unit.name, [])
                 if not pool:
                     continue
 
-                takers = [p for p in unit_people if self._should_allocate_venue_type(p, venue_type)]
+                takers = [
+                    p
+                    for p in unit_people
+                    if self._should_allocate_venue_type(p, venue_type)
+                ]
                 if not takers:
                     continue
 
                 count = self._get_venue_count_for_type(venue_type)
                 weights = self._pool_weights(coords, pool) if coords else None
-                sampled = self._sample_option_sets(len(pool), weights, len(takers), count)
+                sampled = self._sample_option_sets(
+                    len(pool), weights, len(takers), count
+                )
 
                 subset_cache = {}
 
@@ -719,7 +760,7 @@ class MultiVenueDistributor(BaseDistributor):
             people: List of eligible people
             world: World object
         """
-        if self.consider_by == 'geo_unit':
+        if self.consider_by == "geo_unit":
             self._allocate_venues_by_geo_unit(people, world)
             return
 
@@ -733,7 +774,9 @@ class MultiVenueDistributor(BaseDistributor):
                 people_by_geo_unit[geo_unit] = []
             people_by_geo_unit[geo_unit].append(person)
 
-        logger.info(f"Batching {len(people)} people into {len(people_by_geo_unit)} unique geo_units")
+        logger.info(
+            f"Batching {len(people)} people into {len(people_by_geo_unit)} unique geo_units"
+        )
 
         # Step 2: For each unique geo_unit, query spatial index once per venue_type
         geo_unit_venue_cache = {}  # (geo_unit, venue_type) -> [venues]
@@ -741,8 +784,10 @@ class MultiVenueDistributor(BaseDistributor):
         for geo_unit in people_by_geo_unit.keys():
             # Get geo_unit coordinates
             if geo_unit.coordinates is None or len(geo_unit.coordinates) != 2:
-                logger.warning(f"Geo unit {geo_unit.name} has invalid coordinates ({getattr(geo_unit, 'coordinates', None)}), "
-                               f"skipping {len(people_by_geo_unit[geo_unit])} people")
+                logger.warning(
+                    f"Geo unit {geo_unit.name} has invalid coordinates ({getattr(geo_unit, 'coordinates', None)}), "
+                    f"skipping {len(people_by_geo_unit[geo_unit])} people"
+                )
                 continue
 
             coords = list(geo_unit.coordinates)
@@ -797,9 +842,14 @@ class MultiVenueDistributor(BaseDistributor):
 
                 # Update progress tracking
                 people_processed += 1
-                if people_processed % progress_interval == 0 or people_processed == total_people:
+                if (
+                    people_processed % progress_interval == 0
+                    or people_processed == total_people
+                ):
                     percent_complete = (people_processed / total_people) * 100
-                    logger.info(f"  Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated")
+                    logger.info(
+                        f"  Progress: {people_processed}/{total_people} people processed ({percent_complete:.1f}%) - {allocated_count} allocated"
+                    )
 
         logger.info(f"Allocated venues to {allocated_count} people")
 
@@ -818,11 +868,13 @@ class MultiVenueDistributor(BaseDistributor):
             return venue.subsets[self.subset_key]
 
         # Create new subset — use max existing index + 1 to avoid collisions after deletions
-        subset_index = (max(s.subset_index for s in venue.subsets.values()) + 1) if venue.subsets else 0
+        subset_index = (
+            (max(s.subset_index for s in venue.subsets.values()) + 1)
+            if venue.subsets
+            else 0
+        )
         subset = Subset(
-            venue=venue,
-            subset_index=subset_index,
-            subset_name=self.subset_key
+            venue=venue, subset_index=subset_index, subset_name=self.subset_key
         )
         venue.subsets[self.subset_key] = subset
 
@@ -849,8 +901,12 @@ class MultiVenueDistributor(BaseDistributor):
         logger.info(f"Breakdown by venue type:")
         for vtype, count in type_counts.items():
             if venue_count_stats[vtype]:
-                avg_venues = sum(venue_count_stats[vtype]) / len(venue_count_stats[vtype])
-                logger.info(f"  - {vtype}: {count} people (avg {avg_venues:.1f} venues/person)")
+                avg_venues = sum(venue_count_stats[vtype]) / len(
+                    venue_count_stats[vtype]
+                )
+                logger.info(
+                    f"  - {vtype}: {count} people (avg {avg_venues:.1f} venues/person)"
+                )
             else:
                 logger.info(f"  - {vtype}: {count} people")
 

@@ -28,7 +28,9 @@ class World:
         household_distributor (HouseholdDistributor): The household distributor for allocation logic
     """
 
-    def __init__(self, geography=None, population=None, venues=None, household_distributor=None):
+    def __init__(
+        self, geography=None, population=None, venues=None, household_distributor=None
+    ):
         """
         Initialize a World object.
 
@@ -46,9 +48,12 @@ class World:
         # Register residence types from venue configuration with Person class
         if venues:
             from may.population.person import Person
+
             residence_types = venues.get_residence_types()
             Person.register_residence_types(residence_types)
-            logger.info(f"Registered {len(residence_types)} residence types: {residence_types}")
+            logger.info(
+                f"Registered {len(residence_types)} residence types: {residence_types}"
+            )
 
     def get_all_residences(self):
         """
@@ -101,11 +106,21 @@ class World:
         return []
 
     def __repr__(self):
-        geo_str = f"{len(self.geography.get_all_units())} units" if self.geography else "no geography"
-        pop_str = f"{len(self.population.get_all_people()):,} people" if self.population else "no population"
+        geo_str = (
+            f"{len(self.geography.get_all_units())} units"
+            if self.geography
+            else "no geography"
+        )
+        pop_str = (
+            f"{len(self.population.get_all_people()):,} people"
+            if self.population
+            else "no population"
+        )
 
         if self.venues:
-            total_venues = sum(len(d) for d in self.venues.venues_by_type_and_id.values())
+            total_venues = sum(
+                len(d) for d in self.venues.venues_by_type_and_id.values()
+            )
             households = self.get_residences_by_type("household")
             household_str = f"{len(households)} households"
             other_venues = total_venues - len(households)
@@ -125,33 +140,39 @@ class World:
         stats = {}
 
         if self.geography:
-            stats['geography'] = {
-                'total_units': len(self.geography.get_all_units()),
-                'units_by_level': {
+            stats["geography"] = {
+                "total_units": len(self.geography.get_all_units()),
+                "units_by_level": {
                     level: len(self.geography.get_units_by_level(level))
                     for level in self.geography.levels
-                }
+                },
             }
 
         if self.population:
-            stats['population'] = self.population.get_statistics()
+            stats["population"] = self.population.get_statistics()
 
         if self.venues:
-            stats['venues'] = {
-                'total_venues': sum(len(d) for d in self.venues.venues_by_type_and_id.values()),
-                'venue_types': len(self.venues.get_venue_types())
+            stats["venues"] = {
+                "total_venues": sum(
+                    len(d) for d in self.venues.venues_by_type_and_id.values()
+                ),
+                "venue_types": len(self.venues.get_venue_types()),
             }
 
         if self.household_distributor:
             households = self.get_residences_by_type("household")
             total_allocated = len(self.household_distributor.allocated_people)
-            total_people = sum(len(pool) for pool in self.household_distributor.person_pool_by_geo_unit.values())
-            stats['households'] = {
-                'total_households': len(households),
-                'people_allocated': total_allocated,
-                'people_unallocated': total_people - total_allocated,
-                'allocation_rate': total_allocated / max(total_people, 1),
-                'average_household_size': sum(h.size() for h in households) / max(len(households), 1)
+            total_people = sum(
+                len(pool)
+                for pool in self.household_distributor.person_pool_by_geo_unit.values()
+            )
+            stats["households"] = {
+                "total_households": len(households),
+                "people_allocated": total_allocated,
+                "people_unallocated": total_people - total_allocated,
+                "allocation_rate": total_allocated / max(total_people, 1),
+                "average_household_size": sum(h.size() for h in households)
+                / max(len(households), 1),
             }
 
         return stats
@@ -173,9 +194,9 @@ class World:
         from may.attribute_assignment import assign_attributes
 
         logger.info("")
-        logger.info("="*60)
+        logger.info("=" * 60)
         logger.info(f"Assigning attributes...")
-        logger.info("="*60)
+        logger.info("=" * 60)
 
         # Get geo units from geography if not provided
         # Include all hierarchy levels (SGU, MGU, LGU) for efficient filtering across all data sources
@@ -196,9 +217,9 @@ class World:
                 current = unit
                 while current.parent:
                     geo_units.add(current.parent.name)
-                    geo_units_by_level.setdefault(
-                        current.parent.level, set()
-                    ).add(current.parent.name)
+                    geo_units_by_level.setdefault(current.parent.level, set()).add(
+                        current.parent.name
+                    )
                     current = current.parent
 
         # Run attribute assignment
@@ -206,7 +227,7 @@ class World:
             venue_manager=self.venues,
             config_path=config_path,
             geo_units=geo_units,
-            geo_units_by_level=geo_units_by_level
+            geo_units_by_level=geo_units_by_level,
         )
 
         return stats
@@ -281,8 +302,11 @@ def setup_households(geo, population, venues, config, strategy_file=None):
     # Defaulting these pointed every scenario at one scenario's layout, and the
     # loader then reported a missing file the config never named. The defect is
     # the absent key, so say that instead.
-    missing = [k for k in ("data_dir", "config_file", "data_file")
-               if not household_config.get(k)]
+    missing = [
+        k
+        for k in ("data_dir", "config_file", "data_file")
+        if not household_config.get(k)
+    ]
     if missing:
         raise HouseholdError(
             f"households: block is missing {missing}. Each must name a path; the "
@@ -295,7 +319,11 @@ def setup_households(geo, population, venues, config, strategy_file=None):
         venue_manager=venues,
         data_dir=pr.resolve(household_config["data_dir"]),
         config_file=pr.resolve(household_config["config_file"]),
-        rules_file=pr.resolve(household_config.get("rules_file")) if household_config.get("rules_file") else None,
+        rules_file=(
+            pr.resolve(household_config.get("rules_file"))
+            if household_config.get("rules_file")
+            else None
+        ),
     )
 
     # Load household data. data_file may be a single file or a list of files

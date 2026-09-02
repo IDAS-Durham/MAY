@@ -8,6 +8,7 @@ from may.population import Subset
 
 logger = logging.getLogger("venue")
 
+
 class Venue:
     """
     Represents a place where people live, work, learn, or receive services.
@@ -30,15 +31,15 @@ class Venue:
     """
 
     __slots__ = [
-        '_id',
-        'name',
-        'type',
-        'geographical_unit',
-        'coordinates',
-        'properties',
-        'subsets',
-        'parent',      # Parent venue (e.g., School for a Classroom)
-        'children',    # List of child venues (e.g., Classrooms for a School)
+        "_id",
+        "name",
+        "type",
+        "geographical_unit",
+        "coordinates",
+        "properties",
+        "subsets",
+        "parent",  # Parent venue (e.g., School for a Classroom)
+        "children",  # List of child venues (e.g., Classrooms for a School)
     ]
 
     _next_venue_id: int = 0
@@ -57,24 +58,27 @@ class Venue:
     def id(self) -> int:
         return self._id
 
-    def __init__(self,
-                 name: str,
-                 venue_type,
-                 geographical_unit,
-                 coordinates=None,
-                 properties: dict=None,
-                 subsets: dict[str, Subset] = None,
-                 parent=None,
-                 children=None,
-                 ):
+    def __init__(
+        self,
+        name: str,
+        venue_type,
+        geographical_unit,
+        coordinates=None,
+        properties: dict = None,
+        subsets: dict[str, Subset] = None,
+        parent=None,
+        children=None,
+    ):
         self._id = Venue._allocate_id()
-        self.name = name                # Name of the venue (e.g., "St Mary's Hospital")
-        self.type = venue_type          # Type of venue (e.g., "hospital", "school")
+        self.name = name  # Name of the venue (e.g., "St Mary's Hospital")
+        self.type = venue_type  # Type of venue (e.g., "hospital", "school")
         self.geographical_unit = geographical_unit  # Reference to GeographicalUnit
         self.coordinates = coordinates  # Optional (latitude, longitude) tuple
         self.properties = properties if properties is not None else {}
-        self.subsets = subsets if subsets is not None else {} # dict(subset_name, Subset object)
-        self.parent = parent            # Parent venue reference
+        self.subsets = (
+            subsets if subsets is not None else {}
+        )  # dict(subset_name, Subset object)
+        self.parent = parent  # Parent venue reference
         self.children = children if children is not None else []  # List of child venues
 
     def get_capacity_for_attributes(self, capacity_config, **attributes):
@@ -99,11 +103,11 @@ class Venue:
             return 0
 
         # Get attribute capacities config
-        attr_capacities = capacity_config.get('attribute_capacities', {})
+        attr_capacities = capacity_config.get("attribute_capacities", {})
         if not attr_capacities:
             return 0
 
-        column_mappings = attr_capacities.get('column_mappings', {})
+        column_mappings = attr_capacities.get("column_mappings", {})
         if not column_mappings:
             return 0
 
@@ -114,8 +118,8 @@ class Venue:
             # Check each attribute provided by caller
             for attr_name, attr_value in attributes.items():
                 # Handle age -> age_band mapping
-                if attr_name == 'age' and 'age_band' in criteria:
-                    min_val, max_val = criteria['age_band']
+                if attr_name == "age" and "age_band" in criteria:
+                    min_val, max_val = criteria["age_band"]
                     if not (min_val <= attr_value <= max_val):
                         match = False
                         break
@@ -154,8 +158,8 @@ class Venue:
         return f"<Venue #{self.id}: {self.name} ({self.type}) in {geo_name}>"
 
     def __eq__(self, other):
-        """Tests the equality of two Venue objects. """
-        for attribute in ['id', 'name', 'type', 'geographic_unit', 'coordinates']:
+        """Tests the equality of two Venue objects."""
+        for attribute in ["id", "name", "type", "geographic_unit", "coordinates"]:
             if hasattr(self, attribute) ^ hasattr(other, attribute):
                 return False
             elif hasattr(self, attribute) and hasattr(other, attribute):
@@ -170,12 +174,14 @@ class Venue:
 
     @property
     def num_members(self):
-        total=0
+        total = 0
         for subset in self.subsets.values():
             total += subset.num_members
         return total
 
-    def add_to_subset(self, person, subset_key=None, activity_name=None, activity_type=None):
+    def add_to_subset(
+        self, person, subset_key=None, activity_name=None, activity_type=None
+    ):
         """
         Add a person to a subset of this venue and register the activity.
 
@@ -192,8 +198,8 @@ class Venue:
         # Use 'residence' for all residence types, venue type otherwise
         if activity_name is None:
             # Check if this venue is a residence type
-            is_residence = self.properties.get('is_residence', False)
-            activity_name = 'residence' if is_residence else self.type
+            is_residence = self.properties.get("is_residence", False)
+            activity_name = "residence" if is_residence else self.type
 
         # If no subset_key specified, use the first existing subset or create one
         if subset_key is None:
@@ -206,9 +212,7 @@ class Venue:
         if subset_key not in self.subsets:
             subset_index = len(self.subsets)
             self.subsets[subset_key] = Subset(
-                venue=self,
-                subset_index=subset_index,
-                subset_name=str(subset_key)
+                venue=self, subset_index=subset_index, subset_name=str(subset_key)
             )
 
         subset = self.subsets[subset_key]
@@ -238,8 +242,7 @@ class Venue:
         # venue ID, so multiple distinct subsets at the same venue can both
         # be recorded - e.g. one per feast at a venue hosting several fairs)
         subset_already_added = any(
-            s is subset
-            for s in person.activity_map[activity_name][venue_type_key]
+            s is subset for s in person.activity_map[activity_name][venue_type_key]
         )
         if not subset_already_added:
             person.activity_map[activity_name][venue_type_key].append(subset)
@@ -311,7 +314,10 @@ class Venue:
         for subset_key, subset in self.subsets.items():
             if exclude_subset_keys is not None and subset_key in exclude_subset_keys:
                 continue
-            if include_subset_keys is not None and subset_key not in include_subset_keys:
+            if (
+                include_subset_keys is not None
+                and subset_key not in include_subset_keys
+            ):
                 continue
             members.extend(list(subset.members))
         return members
@@ -352,7 +358,7 @@ class Venue:
         """
         # Get categories from properties if not provided
         if categories is None:
-            categories = self.properties.get('_age_categories', [])
+            categories = self.properties.get("_age_categories", [])
 
         if not categories:
             return {}

@@ -26,9 +26,9 @@ from .strategies import create_strategy
 from .assigner import AttributeAssigner, AttributeAssignmentError, assign_attributes
 
 __all__ = [
-    'AttributeAssignmentConfig',
-    'create_strategy',
-    'AttributeAssigner',
-    'AttributeAssignmentError',
-    'assign_attributes',
+    "AttributeAssignmentConfig",
+    "create_strategy",
+    "AttributeAssigner",
+    "AttributeAssignmentError",
+    "assign_attributes",
 ]

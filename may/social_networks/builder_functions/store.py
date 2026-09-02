@@ -6,8 +6,9 @@ person.activity_map.
 """
 
 
-def store_contacts(person, contacts, storage_key: str,
-                   activity_config: dict | None = None) -> None:
+def store_contacts(
+    person, contacts, storage_key: str, activity_config: dict | None = None
+) -> None:
     """
     Write contacts into person.properties[storage_key], accumulating across calls.
 
@@ -31,7 +32,9 @@ def store_contacts(person, contacts, storage_key: str,
                 if activity_key not in person.activity_map:
                     person.activity_map[activity_key] = {}
                 target = person.activity_map[activity_key]
-                for venue_type, subsets in contact.activity_map[contact_activity_key].items():
+                for venue_type, subsets in contact.activity_map[
+                    contact_activity_key
+                ].items():
                     if venue_type not in target:
                         target[venue_type] = list(subsets)
                     else:

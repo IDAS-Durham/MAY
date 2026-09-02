@@ -13,9 +13,7 @@ import numba as nb
 
 from .clustered_graph import create_clustered_graph, _require_networkx
 from ..filters_and_constraints.filters import (
-    ConnectionFilter,
     build_local_attribute_arrays,
-    check_connection_filters,
     encode_connection_filters_for_numba,
 )
 from ..store import store_contacts
@@ -126,6 +124,7 @@ class GraphRelationshipBuilder:
         clustering_level (float): Target clustering coefficient (0.0 to 1.0).
         storage_key (str): Key used to store relationships in person.properties.
     """
+
     def __init__(
         self,
         people: list[Person],
@@ -176,7 +175,9 @@ class GraphRelationshipBuilder:
         nx = _require_networkx()
 
         logger.debug(f"Building graph-based relationships for {self.n_people:,} people")
-        logger.debug(f"  mean_connections_per_person={self.mean_connections_per_person}, clustering_level={self.clustering_level}")
+        logger.debug(
+            f"  mean_connections_per_person={self.mean_connections_per_person}, clustering_level={self.clustering_level}"
+        )
 
         # Ensure number of people is above 2
         if self.n_people < 2:
@@ -187,7 +188,9 @@ class GraphRelationshipBuilder:
         # Cap k at the graph maximum (n_people - 1) and reject negative values
         if k > (self.n_people - 1):
             max_k = self.n_people - 1
-            logger.warning(f'Average connections {k} exceeds the max possible for the graph n_people-1={max_k}. Reducing to the max possible')
+            logger.warning(
+                f"Average connections {k} exceeds the max possible for the graph n_people-1={max_k}. Reducing to the max possible"
+            )
             k = max_k
 
         if k < 0:
@@ -197,31 +200,46 @@ class GraphRelationshipBuilder:
         # Generate the clustered graph
         G = create_clustered_graph(
             n_nodes=self.n_people,
-            k=min(self.mean_connections_per_person, self.n_people-1),
+            k=min(self.mean_connections_per_person, self.n_people - 1),
             clustering_level=self.clustering_level,
             **self.kwargs,
         )
 
         # Apply connection filters with Numba-accelerated rewiring on rejection
         if self.connection_filters:
-            local_attr_arrays = build_local_attribute_arrays(self.people, self.connection_filters)
-            stacked, match_types, attr_indices, range_values = encode_connection_filters_for_numba(
-                self.connection_filters, local_attr_arrays
+            local_attr_arrays = build_local_attribute_arrays(
+                self.people, self.connection_filters
             )
-            adj = nx.to_scipy_sparse_array(G, nodelist=range(self.n_people), format='csr', dtype=np.int32)
+            stacked, match_types, attr_indices, range_values = (
+                encode_connection_filters_for_numba(
+                    self.connection_filters, local_attr_arrays
+                )
+            )
+            adj = nx.to_scipy_sparse_array(
+                G, nodelist=range(self.n_people), format="csr", dtype=np.int32
+            )
             edge_array = np.array(list(G.edges()), dtype=np.int32)
             rng_seed = int(np.random.randint(0, 2**31))
             kept_array = _apply_filters_and_rewire(
-                edge_array, adj.indices, adj.indptr, self.n_people,
-                stacked, match_types, attr_indices, range_values,
-                self.max_rewire_attempts, rng_seed,
+                edge_array,
+                adj.indices,
+                adj.indptr,
+                self.n_people,
+                stacked,
+                match_types,
+                attr_indices,
+                range_values,
+                self.max_rewire_attempts,
+                rng_seed,
             )
             G = nx.Graph()
             G.add_nodes_from(range(self.n_people))
             G.add_edges_from(kept_array.tolist())
 
         # Convert graph edges to relationships (Person objects)
-        relationships: dict[int, list[Person]] = {person.id: [] for person in self.people}
+        relationships: dict[int, list[Person]] = {
+            person.id: [] for person in self.people
+        }
 
         for node_u, node_v in G.edges():
             person_u = self.people[node_u]
@@ -241,11 +259,15 @@ class GraphRelationshipBuilder:
 
         try:
             actual_clustering = nx.average_clustering(G)
-            logger.debug(f"Built {total_connections:,} total connections "
-                       f"(avg {avg_actual:.1f} per person, clustering={actual_clustering:.3f})")
+            logger.debug(
+                f"Built {total_connections:,} total connections "
+                f"(avg {avg_actual:.1f} per person, clustering={actual_clustering:.3f})"
+            )
         except Exception:
-            logger.debug(f"Built {total_connections:,} total connections "
-                       f"(avg {avg_actual:.1f} per person)")
+            logger.debug(
+                f"Built {total_connections:,} total connections "
+                f"(avg {avg_actual:.1f} per person)"
+            )
 
         return relationships
 
@@ -286,36 +308,43 @@ class GraphRelationshipBuilder:
 
 
 if __name__ == "__main__":
-    import networkx as nx
     import time
-    
+
     logging.basicConfig(level=logging.INFO)
 
     start_time = time.perf_counter()
     # Create sample population
     logger.info("Creating sample population...")
-    people = [Person(age=25 + i % 50, sex='male' if i % 2 == 0 else 'female')
-              for i in range(10000000)]
+    people = [
+        Person(age=25 + i % 50, sex="male" if i % 2 == 0 else "female")
+        for i in range(10000000)
+    ]
 
-    laptime=time.perf_counter()
-    logger.info(f"Created sample population of {len(people):,} people in {laptime-start_time:.2g} s")
+    laptime = time.perf_counter()
+    logger.info(
+        f"Created sample population of {len(people):,} people in {laptime-start_time:.2g} s"
+    )
 
     # Build relationships with different clustering levels
     for clustering in [0.001, 0.1, 0.5]:
-        laptime=time.perf_counter()
+        laptime = time.perf_counter()
         logger.info(f"\n--- Clustering level: {clustering} ---")
         relationships = GraphRelationshipBuilder.build_graph_relationships(
             people,
             mean_connections_per_person=6,
             clustering_level=clustering,
             storage_key=f"contacts_{clustering}",
-            store=True
+            store=True,
         )
-        
+
         # Show sample relationships
         if len(people) >= 5:
             sample_people = sample(people, 5)
             for sample_person in sample_people:
                 contacts = sample_person.properties.get(f"contacts_{clustering}", [])
-                logger.info(f"Person {sample_person.id} has {len(contacts)} contacts: {contacts[:10]}...")
-        logger.info(f"Building relationships took {time.perf_counter() - laptime:.2g} s")
+                logger.info(
+                    f"Person {sample_person.id} has {len(contacts)} contacts: {contacts[:10]}..."
+                )
+        logger.info(
+            f"Building relationships took {time.perf_counter() - laptime:.2g} s"
+        )

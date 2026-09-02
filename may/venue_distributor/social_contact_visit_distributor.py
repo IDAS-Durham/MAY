@@ -47,35 +47,39 @@ class SocialContactVisitDistributor:
             raise ValueError("Must provide either config_file or config_dict")
 
         # Core configuration
-        self.activity_map_key = self.config.get('activity_map_key', 'visit_social_contact')
-        self.activity_type = self.config.get('activity_type', 'household')
+        self.activity_map_key = self.config.get(
+            "activity_map_key", "visit_social_contact"
+        )
+        self.activity_type = self.config.get("activity_type", "household")
 
         # Source configuration - where to find social contacts
-        source_config = self.config.get('source', {})
-        self.source_property_key = source_config.get('property_key', 'social_contacts')
+        source_config = self.config.get("source", {})
+        self.source_property_key = source_config.get("property_key", "social_contacts")
 
         # Subset configuration - which subset to add visitors to
-        self.subset_key = self.config.get('subset_key', 'visitor')
+        self.subset_key = self.config.get("subset_key", "visitor")
 
         # Optional limits
-        self.max_contacts = self.config.get('max_contacts', None)
+        self.max_contacts = self.config.get("max_contacts", None)
 
         # Eligibility filters
-        self.eligibility = self.config.get('eligibility', {})
-        self.global_filters = self.eligibility.get('global_filters', [])
+        self.eligibility = self.config.get("eligibility", {})
+        self.global_filters = self.eligibility.get("global_filters", [])
 
         # Statistics
         self.stats = {
-            'people_processed': 0,
-            'people_with_contacts': 0,
-            'total_visits_assigned': 0,
-            'contacts_without_residence': 0
+            "people_processed": 0,
+            "people_with_contacts": 0,
+            "total_visits_assigned": 0,
+            "contacts_without_residence": 0,
         }
 
-        logger.info(f"Initialized SocialContactVisitDistributor: "
-                   f"activity_map_key='{self.activity_map_key}', "
-                   f"source='{self.source_property_key}', "
-                   f"max_contacts={self.max_contacts}")
+        logger.info(
+            f"Initialized SocialContactVisitDistributor: "
+            f"activity_map_key='{self.activity_map_key}', "
+            f"source='{self.source_property_key}', "
+            f"max_contacts={self.max_contacts}"
+        )
 
     def _load_config(self, config_path: str) -> Dict:
         """Load and parse YAML configuration file."""
@@ -92,11 +96,11 @@ class SocialContactVisitDistributor:
             True if person passes all filters
         """
         for filter_config in self.global_filters:
-            attribute = filter_config.get('attribute', '')
+            attribute = filter_config.get("attribute", "")
 
             # Get attribute value (support nested attributes)
-            if attribute.startswith('properties.'):
-                prop_name = attribute.split('.', 1)[1]
+            if attribute.startswith("properties."):
+                prop_name = attribute.split(".", 1)[1]
                 value = person.properties.get(prop_name)
             elif hasattr(person, attribute):
                 value = getattr(person, attribute)
@@ -104,16 +108,16 @@ class SocialContactVisitDistributor:
                 continue
 
             # Check filter conditions
-            if 'values' in filter_config:
-                if value not in filter_config['values']:
+            if "values" in filter_config:
+                if value not in filter_config["values"]:
                     return False
 
-            if 'min' in filter_config:
-                if value is None or value < filter_config['min']:
+            if "min" in filter_config:
+                if value is None or value < filter_config["min"]:
                     return False
 
-            if 'max' in filter_config:
-                if value is None or value > filter_config['max']:
+            if "max" in filter_config:
+                if value is None or value > filter_config["max"]:
                     return False
 
         return True
@@ -141,7 +145,7 @@ class SocialContactVisitDistributor:
         all_people = world.population.get_all_people()
 
         for person in all_people:
-            self.stats['people_processed'] += 1
+            self.stats["people_processed"] += 1
 
             # Check eligibility
             if not self._check_eligibility(person):
@@ -152,11 +156,11 @@ class SocialContactVisitDistributor:
             if not contact_ids:
                 continue
 
-            self.stats['people_with_contacts'] += 1
+            self.stats["people_with_contacts"] += 1
 
             # Limit contacts if configured
             if self.max_contacts and len(contact_ids) > self.max_contacts:
-                contact_ids = contact_ids[:self.max_contacts]
+                contact_ids = contact_ids[: self.max_contacts]
 
             # Initialize activity if needed
             if self.activity_map_key not in person.activities:
@@ -175,11 +179,11 @@ class SocialContactVisitDistributor:
                     continue
 
                 # Get contact's residence
-                residence_activity = contact.activity_map.get('residence', {})
+                residence_activity = contact.activity_map.get("residence", {})
 
                 # Try to find household or any residence type
                 residence_subsets = None
-                for venue_type in ['household', 'farm', 'manor', 'cottage']:
+                for venue_type in ["household", "farm", "manor", "cottage"]:
                     if venue_type in residence_activity:
                         residence_subsets = residence_activity[venue_type]
                         break
@@ -191,7 +195,7 @@ class SocialContactVisitDistributor:
                         residence_subsets = residence_activity[first_key]
 
                 if not residence_subsets:
-                    self.stats['contacts_without_residence'] += 1
+                    self.stats["contacts_without_residence"] += 1
                     continue
 
                 # Add contact's residence to this person's visit activity
@@ -200,19 +204,27 @@ class SocialContactVisitDistributor:
                     # ID, so distinct subsets at the same venue both record)
                     already_added = any(
                         s is subset
-                        for s in person.activity_map[self.activity_map_key][self.activity_type]
+                        for s in person.activity_map[self.activity_map_key][
+                            self.activity_type
+                        ]
                     )
                     if not already_added:
-                        person.activity_map[self.activity_map_key][self.activity_type].append(subset)
-                        self.stats['total_visits_assigned'] += 1
+                        person.activity_map[self.activity_map_key][
+                            self.activity_type
+                        ].append(subset)
+                        self.stats["total_visits_assigned"] += 1
 
         # Log results
         logger.info(f"Social contact visit allocation complete:")
         logger.info(f"  People processed: {self.stats['people_processed']:,}")
         logger.info(f"  People with contacts: {self.stats['people_with_contacts']:,}")
-        logger.info(f"  Total visit venues assigned: {self.stats['total_visits_assigned']:,}")
-        if self.stats['contacts_without_residence'] > 0:
-            logger.warning(f"  Contacts without residence: {self.stats['contacts_without_residence']:,}")
+        logger.info(
+            f"  Total visit venues assigned: {self.stats['total_visits_assigned']:,}"
+        )
+        if self.stats["contacts_without_residence"] > 0:
+            logger.warning(
+                f"  Contacts without residence: {self.stats['contacts_without_residence']:,}"
+            )
 
         return self.stats
 

@@ -41,6 +41,7 @@ class RelationshipRule:
     allocation step (`patterns:` / `target_patterns:`), the single source of
     truth.
     """
+
     name: str
     roles: Dict[str, Dict]  # role_name -> {categories: [...], count: ...}
     selection_order: List[str]
@@ -58,10 +59,12 @@ class RelationshipRulesValidator:
     4. Falls back to "best candidate" if no perfect match exists
     """
 
-    def __init__(self,
-                 categories: List,
-                 config_file: str = "data/households/relationship_rules.yaml",
-                 geography=None):
+    def __init__(
+        self,
+        categories: List,
+        config_file: str = "data/households/relationship_rules.yaml",
+        geography=None,
+    ):
         """
         Initialize relationship rules validator.
 
@@ -71,7 +74,9 @@ class RelationshipRulesValidator:
             geography: Optional Geography object (needed for per-MSOA same_category lookups)
         """
         self.categories = categories
-        self.category_name_to_idx = {cat.name: idx for idx, cat in enumerate(categories)}
+        self.category_name_to_idx = {
+            cat.name: idx for idx, cat in enumerate(categories)
+        }
         self.geography = geography
 
         # Load configuration
@@ -91,26 +96,26 @@ class RelationshipRulesValidator:
 
         # Statistics tracking
         self.stats = {
-            'best_candidate_selections': 0,
-            'same_category_pairs': 0,
-            'different_category_pairs': 0,
+            "best_candidate_selections": 0,
+            "same_category_pairs": 0,
+            "different_category_pairs": 0,
             # When a difference_reference is configured, pairs where exactly one
             # member holds the reference value count as directed; the rest are
             # undirected. directed == 0 at the end of a run usually means the
             # reference value matches nobody (e.g. 'Male' vs 'male').
-            'directed_pairs': 0,
-            'undirected_pairs': 0,
-            'numerical_attribute_differences': [],
-            'violations': {
-                'numerical_attribute_difference': 0,
-                'pair_numerical_attribute_diff': 0
+            "directed_pairs": 0,
+            "undirected_pairs": 0,
+            "numerical_attribute_differences": [],
+            "violations": {
+                "numerical_attribute_difference": 0,
+                "pair_numerical_attribute_diff": 0,
             },
             # Per-attribute breakdown of how the same_category_probability was
             # resolved during pair_matching. Keys are the categorical_attribute
             # name (e.g. "sex"); each entry tracks how often the per-area
             # source was used vs the YAML scalar fallback, and the empirical
             # distribution of probabilities the validator actually rolled against.
-            'same_category_lookup': {},
+            "same_category_lookup": {},
         }
 
     def _load_config(self, config_file: str):
@@ -124,17 +129,17 @@ class RelationshipRulesValidator:
             logger.warning("Relationship rules disabled")
             return
 
-        self.enabled = config.get('enabled', False)
-        self.selection_strategy = config.get('selection_strategy', {})
-        self.track_statistics = config.get('track_statistics', False)
+        self.enabled = config.get("enabled", False)
+        self.selection_strategy = config.get("selection_strategy", {})
+        self.track_statistics = config.get("track_statistics", False)
 
         # Parse rules
-        for rule_config in config.get('rules', []):
+        for rule_config in config.get("rules", []):
             rule = RelationshipRule(
-                name=rule_config.get('name', 'Unnamed rule'),
-                roles=rule_config.get('roles', {}),
-                selection_order=rule_config.get('selection_order', []),
-                constraints=rule_config.get('constraints', [])
+                name=rule_config.get("name", "Unnamed rule"),
+                roles=rule_config.get("roles", {}),
+                selection_order=rule_config.get("selection_order", []),
+                constraints=rule_config.get("constraints", []),
             )
             self.rules.append(rule)
 
@@ -144,17 +149,17 @@ class RelationshipRulesValidator:
         # here, not surface as a KeyError mid-allocation.
         for rule in self.rules:
             for c in rule.constraints:
-                if c.get('type') != 'pair_matching':
+                if c.get("type") != "pair_matching":
                     continue
-                ref = (c.get('numerical_attribute') or {}).get('difference_reference')
-                if ref is not None and not {'attribute', 'value'} <= set(ref):
+                ref = (c.get("numerical_attribute") or {}).get("difference_reference")
+                if ref is not None and not {"attribute", "value"} <= set(ref):
                     raise ValueError(
                         f"Rule '{rule.name}': difference_reference requires "
                         f"'attribute' and 'value' keys, got {sorted(ref)}"
                     )
-                roles = c.get('roles')
+                roles = c.get("roles")
                 if roles is not None:
-                    if c.get('role') is not None:
+                    if c.get("role") is not None:
                         raise ValueError(
                             f"Rule '{rule.name}': pair_matching takes 'role' or "
                             f"'roles', not both."
@@ -162,8 +167,11 @@ class RelationshipRulesValidator:
                     # len(roles) == 2 passes for [role_A, role_A], and so does the
                     # subset test, but allocation then looks for "the other role"
                     # and raises StopIteration mid-build.
-                    if (len(roles) != 2 or len(set(roles)) != 2
-                            or not set(roles) <= set(rule.roles)):
+                    if (
+                        len(roles) != 2
+                        or len(set(roles)) != 2
+                        or not set(roles) <= set(rule.roles)
+                    ):
                         raise ValueError(
                             f"Rule '{rule.name}': pair_matching 'roles' must name "
                             f"exactly 2 different roles from {sorted(rule.roles)}, "
@@ -172,9 +180,9 @@ class RelationshipRulesValidator:
 
         # Accept either a single source ("same_category_source") or a list of
         # them ("same_category_sources") so simple cases stay terse.
-        sources = config.get('same_category_sources')
-        if sources is None and 'same_category_source' in config:
-            sources = [config['same_category_source']]
+        sources = config.get("same_category_sources")
+        if sources is None and "same_category_source" in config:
+            sources = [config["same_category_source"]]
         if sources:
             for source in sources:
                 self._load_same_category_source(source)
@@ -195,15 +203,21 @@ class RelationshipRulesValidator:
         keyed by attribute. A pair_matching rule whose `categorical_attribute.attribute`
         matches will then use the per-area value instead of its scalar fallback.
         """
-        attribute = source.get('attribute')
+        attribute = source.get("attribute")
         if not attribute:
             logger.warning("same_category_source missing required 'attribute'; skipped")
             return
-        spec = source.get('csv_path')
-        paths = [
-            pr.resolve(p) for p in
-            as_path_list(spec, f"same_category_source[{attribute}].csv_path")
-        ] if spec else []
+        spec = source.get("csv_path")
+        paths = (
+            [
+                pr.resolve(p)
+                for p in as_path_list(
+                    spec, f"same_category_source[{attribute}].csv_path"
+                )
+            ]
+            if spec
+            else []
+        )
         absent = [p for p in paths if not os.path.exists(p)]
         if not paths or absent:
             logger.warning(
@@ -212,43 +226,48 @@ class RelationshipRulesValidator:
             )
             return
 
-        geo_code_column = source.get('geo_code_column', 'geo_unit')
-        geo_level = source.get('geo_level')
+        geo_code_column = source.get("geo_code_column", "geo_unit")
+        geo_level = source.get("geo_level")
         if not geo_level:
             raise ValueError(
                 f"same_category_source[{attribute}] needs 'geo_level' (the geography "
                 f"level its codes refer to); there is no default."
             )
-        geo_levels = getattr(self.geography, 'levels', None)
+        geo_levels = getattr(self.geography, "levels", None)
         if geo_levels and geo_level not in geo_levels:
             raise ValueError(
                 f"same_category_source[{attribute}] geo_level '{geo_level}' is not a "
                 f"configured geography level {geo_levels}. "
                 f"An unmatched level silently degrades to the scalar fallback for every person."
             )
-        formula = source.get('formula') or []
+        formula = source.get("formula") or []
         if not formula:
             logger.warning(f"same_category_source[{attribute}] has no formula; skipped")
             return
 
         terms = []
         for term in formula:
-            col = term.get('column')
-            weight = float(term.get('weight', 1.0))
+            col = term.get("column")
+            weight = float(term.get("weight", 1.0))
             if col is None:
-                logger.warning(f"same_category_source[{attribute}] formula term missing 'column'; skipped term")
+                logger.warning(
+                    f"same_category_source[{attribute}] formula term missing 'column'; skipped term"
+                )
                 continue
             terms.append((col, weight))
         if not terms:
-            logger.warning(f"same_category_source[{attribute}] formula has no valid terms; skipped")
+            logger.warning(
+                f"same_category_source[{attribute}] formula has no valid terms; skipped"
+            )
             return
 
         table = load_stacked_csv(
-            paths, label=f"same_category_source[{attribute}]",
+            paths,
+            label=f"same_category_source[{attribute}]",
             key_column=geo_code_column,
         )
         by_code: Dict[str, float] = {}
-        for row in table.to_dict('records'):
+        for row in table.to_dict("records"):
             code = str(row[geo_code_column]).strip()
             p = sum(float(row[col]) * w for col, w in terms)
             by_code[code] = max(0.0, min(1.0, p))
@@ -263,10 +282,9 @@ class RelationshipRulesValidator:
             f"entries from {len(paths)} file(s): {paths}"
         )
 
-    def _resolve_same_category_prob(self,
-                                     attribute: str,
-                                     geo_unit_code: Optional[str],
-                                     default: float) -> float:
+    def _resolve_same_category_prob(
+        self, attribute: str, geo_unit_code: Optional[str], default: float
+    ) -> float:
         """Look up the per-area P(same-category pair) for a person's home geography.
 
         Walks from the candidate's home unit up to the configured geo_level for
@@ -307,16 +325,16 @@ class RelationshipRulesValidator:
     def _get_attribute_getter(self, attribute: str) -> Callable[[Person], Any]:
         """
         Create an efficient attribute getter for Person objects.
-        
+
         Args:
             attribute: Name of the attribute to get
-            
+
         Returns:
             Callable that takes a Person and returns the attribute value
         """
-        if attribute == 'age':
+        if attribute == "age":
             return lambda p: p.age
-        elif attribute == 'sex':
+        elif attribute == "sex":
             return lambda p: p.sex
         elif attribute in Person.__slots__:
             return attrgetter(attribute)
@@ -324,7 +342,9 @@ class RelationshipRulesValidator:
             # Fallback to shared utility (handles dot-notation, properties, residence)
             return lambda p: get_attribute(p, attribute)
 
-    def validate_composition(self, composition: Dict[str, int], constraints: List[Dict]) -> Tuple[bool, Optional[str]]:
+    def validate_composition(
+        self, composition: Dict[str, int], constraints: List[Dict]
+    ) -> Tuple[bool, Optional[str]]:
         """
         Validate a household composition against a set of constraints.
 
@@ -340,43 +360,54 @@ class RelationshipRulesValidator:
         """
         for constraint in constraints:
             # Category sum constraint
-            if 'category_sum' in constraint:
-                categories = constraint['category_sum']
-                max_sum = constraint.get('max')
+            if "category_sum" in constraint:
+                categories = constraint["category_sum"]
+                max_sum = constraint.get("max")
 
                 if max_sum is not None:
                     current_sum = sum(composition.get(cat, 0) for cat in categories)
                     if current_sum > max_sum:
-                        return False, f"Constraint violated: sum({categories}) = {current_sum} > {max_sum}"
+                        return (
+                            False,
+                            f"Constraint violated: sum({categories}) = {current_sum} > {max_sum}",
+                        )
 
             # Single category constraint
-            elif 'category' in constraint:
-                category = constraint['category']
-                max_count = constraint.get('max')
+            elif "category" in constraint:
+                category = constraint["category"]
+                max_count = constraint.get("max")
 
                 if max_count is not None:
                     current_count = composition.get(category, 0)
                     if current_count > max_count:
-                        return False, f"Constraint violated: {category} = {current_count} > {max_count}"
+                        return (
+                            False,
+                            f"Constraint violated: {category} = {current_count} > {max_count}",
+                        )
 
             # Household size constraint
-            elif 'household_size' in constraint:
-                max_size = constraint.get('max')
+            elif "household_size" in constraint:
+                max_size = constraint.get("max")
 
                 if max_size is not None:
                     current_size = sum(composition.values())
                     if current_size > max_size:
-                        return False, f"Constraint violated: household size = {current_size} > {max_size}"
+                        return (
+                            False,
+                            f"Constraint violated: household size = {current_size} > {max_size}",
+                        )
 
         return True, None
 
-    def validate_numerical_attribute_difference_constraint(self,
-                                          candidate: Person,
-                                          other_people: List[Person],
-                                          constraint: Dict,
-                                          log_rejection: bool = False,
-                                          cached_values: Optional[Dict] = None,
-                                          is_role_1: bool = True) -> Tuple[bool, float]:
+    def validate_numerical_attribute_difference_constraint(
+        self,
+        candidate: Person,
+        other_people: List[Person],
+        constraint: Dict,
+        log_rejection: bool = False,
+        cached_values: Optional[Dict] = None,
+        is_role_1: bool = True,
+    ) -> Tuple[bool, float]:
         """
         Validate numerical attribute difference constraint between candidate and other_people.
 
@@ -401,9 +432,9 @@ class RelationshipRulesValidator:
         if not other_people:
             return (True, 0.0)
 
-        attribute = constraint.get('attribute', 'age')  # Default to 'age'
-        min_diff = constraint.get('min_difference', 0)
-        max_diff = constraint.get('max_difference', 100)
+        attribute = constraint.get("attribute", "age")  # Default to 'age'
+        min_diff = constraint.get("min_difference", 0)
+        max_diff = constraint.get("max_difference", 100)
 
         # Override max based on categorical attribute if specified.
         #
@@ -419,12 +450,14 @@ class RelationshipRulesValidator:
         # role. When it names the *other* role (the existing members), the cap is
         # per-member, so we evaluate each member individually below. When it names
         # the candidate's own role, or is absent, the cap is read off the candidate.
-        max_diff_by_cat = constraint.get('max_difference_by_categorical_attribute', {})
+        max_diff_by_cat = constraint.get("max_difference_by_categorical_attribute", {})
         getter = self._get_attribute_getter(attribute)
 
-        cat_from = constraint.get('categorical_from')
-        candidate_role = constraint.get('role_1') if is_role_1 else constraint.get('role_2')
-        other_role = constraint.get('role_2') if is_role_1 else constraint.get('role_1')
+        cat_from = constraint.get("categorical_from")
+        candidate_role = (
+            constraint.get("role_1") if is_role_1 else constraint.get("role_2")
+        )
+        other_role = constraint.get("role_2") if is_role_1 else constraint.get("role_1")
         cat_keyed_on_other = (
             bool(max_diff_by_cat)
             and cat_from is not None
@@ -433,8 +466,8 @@ class RelationshipRulesValidator:
         )
 
         if max_diff_by_cat and not cat_keyed_on_other:
-            cat_attr_name = max_diff_by_cat.get('attribute')
-            cat_values = max_diff_by_cat.get('values', {})
+            cat_attr_name = max_diff_by_cat.get("attribute")
+            cat_values = max_diff_by_cat.get("values", {})
             cat_getter = self._get_attribute_getter(cat_attr_name)
             candidate_cat_value = cat_getter(candidate)
             if candidate_cat_value and candidate_cat_value in cat_values:
@@ -447,40 +480,50 @@ class RelationshipRulesValidator:
             # Per-member evaluation: the categorical cap comes from each existing
             # member of the other role (e.g. the existing parent's sex), so we
             # must compare against each member rather than a collapsed min/max.
-            cat_attr_name = max_diff_by_cat.get('attribute')
-            cat_values = max_diff_by_cat.get('values', {})
+            cat_attr_name = max_diff_by_cat.get("attribute")
+            cat_values = max_diff_by_cat.get("values", {})
             cat_getter = self._get_attribute_getter(cat_attr_name)
             worst_penalty = 0.0
             for p in other_people:
                 other_value = getter(p)
                 p_cat = cat_getter(p)
                 p_max_diff = cat_values.get(p_cat, max_diff) if p_cat else max_diff
-                diff = (candidate_value - other_value) if is_role_1 else (other_value - candidate_value)
+                diff = (
+                    (candidate_value - other_value)
+                    if is_role_1
+                    else (other_value - candidate_value)
+                )
                 if diff < min_diff:
                     worst_penalty = max(worst_penalty, min_diff - diff)
                     if log_rejection:
-                        logger.debug(f"      ✗ Rejected: {candidate} vs {p} - difference too small (diff={diff} < min={min_diff})")
+                        logger.debug(
+                            f"      ✗ Rejected: {candidate} vs {p} - difference too small (diff={diff} < min={min_diff})"
+                        )
                 elif diff > p_max_diff:
                     worst_penalty = max(worst_penalty, diff - p_max_diff)
                     if log_rejection:
-                        logger.debug(f"      ✗ Rejected: {candidate} vs {p} - difference too large (diff={diff} > max={p_max_diff} for {cat_attr_name}={p_cat})")
+                        logger.debug(
+                            f"      ✗ Rejected: {candidate} vs {p} - difference too large (diff={diff} > max={p_max_diff} for {cat_attr_name}={p_cat})"
+                        )
             if worst_penalty > 0:
                 return (False, worst_penalty)
             return (True, 0.0)
 
         # Use cached min/max values if provided
         if cached_values and attribute in cached_values:
-            max_value = cached_values[attribute]['max']
-            min_value = cached_values[attribute]['min']
+            max_value = cached_values[attribute]["max"]
+            min_value = cached_values[attribute]["min"]
         else:
             # For small lists (common in households), min/max are faster than numpy
-            if len(other_people) < 20: 
-                min_value = float('inf')
-                max_value = float('-inf')
+            if len(other_people) < 20:
+                min_value = float("inf")
+                max_value = float("-inf")
                 for p in other_people:
                     val = getter(p)
-                    if val < min_value: min_value = val
-                    if val > max_value: max_value = val
+                    if val < min_value:
+                        min_value = val
+                    if val > max_value:
+                        max_value = val
             else:
                 other_values = np.array([getter(p) for p in other_people])
                 max_value = other_values.max()
@@ -491,36 +534,43 @@ class RelationshipRulesValidator:
             if diff_min_possible < min_diff:
                 penalty = min_diff - diff_min_possible
                 if log_rejection:
-                    logger.debug(f"      ✗ Rejected: {candidate} - difference too small (diff={diff_min_possible} < min={min_diff})")
+                    logger.debug(
+                        f"      ✗ Rejected: {candidate} - difference too small (diff={diff_min_possible} < min={min_diff})"
+                    )
                 return (False, penalty)
 
             diff_max_possible = candidate_value - min_value
             if diff_max_possible > max_diff:
                 penalty = diff_max_possible - max_diff
                 if log_rejection:
-                    logger.debug(f"      ✗ Rejected: {candidate} - difference too large (diff={diff_max_possible} > max={max_diff}, penalty={penalty})")
+                    logger.debug(
+                        f"      ✗ Rejected: {candidate} - difference too large (diff={diff_max_possible} > max={max_diff}, penalty={penalty})"
+                    )
                 return (False, penalty)
         else:
             diff_min_possible = min_value - candidate_value
             if diff_min_possible < min_diff:
                 penalty = min_diff - diff_min_possible
                 if log_rejection:
-                    logger.debug(f"      ✗ Rejected: {candidate} - difference too small (diff={diff_min_possible} < min={min_diff})")
+                    logger.debug(
+                        f"      ✗ Rejected: {candidate} - difference too small (diff={diff_min_possible} < min={min_diff})"
+                    )
                 return (False, penalty)
 
             diff_max_possible = max_value - candidate_value
             if diff_max_possible > max_diff:
                 penalty = diff_max_possible - max_diff
                 if log_rejection:
-                    logger.debug(f"      ✗ Rejected: {candidate} - difference too large (diff={diff_max_possible} > max={max_diff}, penalty={penalty})")
+                    logger.debug(
+                        f"      ✗ Rejected: {candidate} - difference too large (diff={diff_max_possible} > max={max_diff}, penalty={penalty})"
+                    )
                 return (False, penalty)
 
         return (True, 0.0)
 
-    def _pair_diff(self,
-                   person1: Person,
-                   person2: Person,
-                   num_attr_config: Dict) -> Tuple[float, bool]:
+    def _pair_diff(
+        self, person1: Person, person2: Person, num_attr_config: Dict
+    ) -> Tuple[float, bool]:
         """Numeric difference of a pair, and whether it has a direction.
 
         A `difference_reference: {attribute, value}` names the minuend: when
@@ -529,21 +579,20 @@ class RelationshipRulesValidator:
         (no reference, or both/neither members hold the value) the difference
         is the absolute gap and the comparison is undirected.
         """
-        getter = self._get_attribute_getter(num_attr_config.get('attribute', 'age'))
+        getter = self._get_attribute_getter(num_attr_config.get("attribute", "age"))
         v1, v2 = getter(person1), getter(person2)
-        ref = num_attr_config.get('difference_reference')
+        ref = num_attr_config.get("difference_reference")
         if ref:
-            ref_getter = self._get_attribute_getter(ref['attribute'])
-            m1 = ref_getter(person1) == ref['value']
-            m2 = ref_getter(person2) == ref['value']
+            ref_getter = self._get_attribute_getter(ref["attribute"])
+            m1 = ref_getter(person1) == ref["value"]
+            m2 = ref_getter(person2) == ref["value"]
             if m1 != m2:
                 return (v1 - v2 if m1 else v2 - v1), True
         return abs(v1 - v2), False
 
-    def validate_pair_numerical_attribute_difference(self,
-                                      person1: Person,
-                                      person2: Person,
-                                      constraint: Dict) -> Tuple[bool, float]:
+    def validate_pair_numerical_attribute_difference(
+        self, person1: Person, person2: Person, constraint: Dict
+    ) -> Tuple[bool, float]:
         """
         Validate numerical attribute difference between pair members.
 
@@ -555,12 +604,12 @@ class RelationshipRulesValidator:
         Returns:
             Tuple of (is_valid, penalty_score)
         """
-        num_attr_config = constraint.get('numerical_attribute', {})
+        num_attr_config = constraint.get("numerical_attribute", {})
         if not num_attr_config:
             return (True, 0.0)
 
-        attribute = num_attr_config.get('attribute', 'age')
-        max_absolute = num_attr_config.get('max_absolute_difference', 100)
+        attribute = num_attr_config.get("attribute", "age")
+        max_absolute = num_attr_config.get("max_absolute_difference", 100)
 
         getter = self._get_attribute_getter(attribute)
         value1 = getter(person1)
@@ -573,10 +622,9 @@ class RelationshipRulesValidator:
 
         return (True, 0.0)
 
-    def calculate_pair_numerical_attribute_penalty(self,
-                                    person1: Person,
-                                    person2: Person,
-                                    constraint: Dict) -> float:
+    def calculate_pair_numerical_attribute_penalty(
+        self, person1: Person, person2: Person, constraint: Dict
+    ) -> float:
         """
         Calculate penalty score for pair numerical attribute difference.
 
@@ -590,12 +638,12 @@ class RelationshipRulesValidator:
         Returns:
             Penalty score (0.0 = perfect match)
         """
-        num_attr_config = constraint.get('numerical_attribute', {})
+        num_attr_config = constraint.get("numerical_attribute", {})
         if not num_attr_config:
             return 0.0
 
-        mean = num_attr_config.get('mean_difference', 3.0)
-        std = num_attr_config.get('std_difference', 5.0)
+        mean = num_attr_config.get("mean_difference", 3.0)
+        std = num_attr_config.get("std_difference", 5.0)
 
         # Directed pairs score their signed difference against a signed mean;
         # undirected pairs keep scoring the absolute gap against the same mean.
@@ -605,17 +653,19 @@ class RelationshipRulesValidator:
         z_score = abs(diff - mean) / max(std, 1.0)
 
         # Apply penalty mode
-        penalty_mode = self.selection_strategy.get('penalty_mode', 'squared')
-        if penalty_mode == 'squared':
-            return z_score ** 2
+        penalty_mode = self.selection_strategy.get("penalty_mode", "squared")
+        if penalty_mode == "squared":
+            return z_score**2
         else:
             return z_score
 
-    def couple_compatible_candidates(self,
-                                     existing_partner: Person,
-                                     candidates: List[Person],
-                                     pair_constraint: Dict,
-                                     geo_unit_code: Optional[str] = None) -> List[Person]:
+    def couple_compatible_candidates(
+        self,
+        existing_partner: Person,
+        candidates: List[Person],
+        pair_constraint: Dict,
+        geo_unit_code: Optional[str] = None,
+    ) -> List[Person]:
         """Filter ``candidates`` to those that could partner ``existing_partner``
         under a ``pair_matching`` constraint, best-match first.
 
@@ -638,14 +688,16 @@ class RelationshipRulesValidator:
         if not candidates:
             return []
 
-        cat_attr_config = pair_constraint.get('categorical_attribute', {})
-        cat_attribute = cat_attr_config.get('attribute', 'sex')
+        cat_attr_config = pair_constraint.get("categorical_attribute", {})
+        cat_attribute = cat_attr_config.get("attribute", "sex")
         fallback_prob = cat_attr_config.get(
-            'same_category_probability_fallback',
-            cat_attr_config.get('same_category_probability', 0.05),
+            "same_category_probability_fallback",
+            cat_attr_config.get("same_category_probability", 0.05),
         )
         same_category_prob = self._resolve_same_category_prob(
-            cat_attribute, geo_unit_code, default=fallback_prob,
+            cat_attribute,
+            geo_unit_code,
+            default=fallback_prob,
         )
         is_same_category = np.random.random() < same_category_prob
 
@@ -653,22 +705,24 @@ class RelationshipRulesValidator:
         partner_cat = cat_getter(existing_partner)
         if is_same_category:
             required_cat_value = partner_cat
-        elif cat_attribute == 'sex':
-            required_cat_value = 'male' if partner_cat == 'female' else 'female'
+        elif cat_attribute == "sex":
+            required_cat_value = "male" if partner_cat == "female" else "female"
         else:
             others = {cat_getter(p) for p in candidates if cat_getter(p) != partner_cat}
-            required_cat_value = np.random.choice(sorted(others)) if others else partner_cat
+            required_cat_value = (
+                np.random.choice(sorted(others)) if others else partner_cat
+            )
 
         # With a difference_reference, rank by distance to a gap sampled from
         # Normal(mean, std) rather than to the mean itself, because ranking on the
         # mean would give every couple the same gap instead of the configured
         # distribution (same reasoning as select_pair).
-        num_attr_config = pair_constraint.get('numerical_attribute', {})
+        num_attr_config = pair_constraint.get("numerical_attribute", {})
         target_diff = None
-        if num_attr_config.get('difference_reference'):
+        if num_attr_config.get("difference_reference"):
             target_diff = np.random.normal(
-                num_attr_config.get('mean_difference', 3.0),
-                num_attr_config.get('std_difference', 5.0),
+                num_attr_config.get("mean_difference", 3.0),
+                num_attr_config.get("std_difference", 5.0),
             )
 
         partner_id = existing_partner.id
@@ -694,12 +748,14 @@ class RelationshipRulesValidator:
         scored.sort(key=lambda t: t[0])
         return [p for _, p in scored]
 
-    def select_person_with_constraint(self,
-                                     candidates: List[Person],
-                                     existing_people_by_role: Dict[str, List[Person]],
-                                     constraints: List[Dict],
-                                     current_role: str,
-                                     show_detailed_logs: bool = False) -> Optional[Person]:
+    def select_person_with_constraint(
+        self,
+        candidates: List[Person],
+        existing_people_by_role: Dict[str, List[Person]],
+        constraints: List[Dict],
+        current_role: str,
+        show_detailed_logs: bool = False,
+    ) -> Optional[Person]:
         """
         Select a person from candidates that satisfies all constraints.
 
@@ -721,46 +777,48 @@ class RelationshipRulesValidator:
         if not candidates:
             return None
 
-        max_attempts = self.selection_strategy.get('max_attempts', 50)
-        use_best = self.selection_strategy.get('use_best_candidate', True)
+        max_attempts = self.selection_strategy.get("max_attempts", 50)
+        use_best = self.selection_strategy.get("use_best_candidate", True)
 
         # Filter constraints relevant to current_role
         relevant_constraints = []
         for c in constraints:
-            if c.get('type') == 'numerical_attribute_difference':
-                if c.get('role_1') == current_role:
+            if c.get("type") == "numerical_attribute_difference":
+                if c.get("role_1") == current_role:
                     relevant_constraints.append((c, True))
-                elif c.get('role_2') == current_role:
+                elif c.get("role_2") == current_role:
                     relevant_constraints.append((c, False))
 
         prioritized_candidates = candidates
         for constraint, is_role_1 in relevant_constraints:
-            pref_dist = constraint.get('preferred_distribution')
+            pref_dist = constraint.get("preferred_distribution")
             if pref_dist:
-                other_role = constraint.get('role_2') if is_role_1 else constraint.get('role_1')
+                other_role = (
+                    constraint.get("role_2") if is_role_1 else constraint.get("role_1")
+                )
                 other_people = existing_people_by_role.get(other_role, [])
                 if other_people:
-                    attribute = constraint.get('attribute', 'age')
+                    attribute = constraint.get("attribute", "age")
                     getter = self._get_attribute_getter(attribute)
-                    dist_type = pref_dist.get('type', 'normal')
+                    dist_type = pref_dist.get("type", "normal")
 
-                    if dist_type == 'normal':
-                        mean = pref_dist.get('mean', 30)
-                        std = pref_dist.get('std', 6)
+                    if dist_type == "normal":
+                        mean = pref_dist.get("mean", 30)
+                        std = pref_dist.get("std", 6)
                         target_diff = np.random.normal(mean, std)
                     else:
                         # Fallback to uniform if unknown type
-                        min_diff = constraint.get('min_difference', 16)
-                        max_diff = constraint.get('max_difference', 50)
+                        min_diff = constraint.get("min_difference", 16)
+                        max_diff = constraint.get("max_difference", 50)
                         target_diff = np.random.uniform(min_diff, max_diff)
 
                     # Clamp to valid range
-                    min_diff = constraint.get('min_difference', 16)
-                    max_diff = constraint.get('max_difference', 50)
+                    min_diff = constraint.get("min_difference", 16)
+                    max_diff = constraint.get("max_difference", 50)
                     target_diff = max(min_diff, min(max_diff, target_diff))
 
                     other_values = [getter(p) for p in other_people]
-                    
+
                     if is_role_1:
                         reference_value = max(other_values)
                         target_value = reference_value + target_diff
@@ -768,13 +826,19 @@ class RelationshipRulesValidator:
                         reference_value = min(other_values)
                         target_value = reference_value - target_diff
 
-                    tolerance = pref_dist.get('tolerance', std * 1.5 if dist_type == 'normal' else 10)
-                    
+                    tolerance = pref_dist.get(
+                        "tolerance", std * 1.5 if dist_type == "normal" else 10
+                    )
+
                     # Prioritized_candidates filter
                     new_prioritized = []
                     for p in prioritized_candidates:
                         p_val = getter(p)
-                        if target_value - tolerance <= p_val <= target_value + tolerance:
+                        if (
+                            target_value - tolerance
+                            <= p_val
+                            <= target_value + tolerance
+                        ):
                             new_prioritized.append(p)
                     prioritized_candidates = new_prioritized
 
@@ -782,30 +846,36 @@ class RelationshipRulesValidator:
                     if not prioritized_candidates:
                         prioritized_candidates = candidates
                         if show_detailed_logs:
-                            logger.debug(f"  ⚠ No candidates within ±{tolerance} of target {attribute}={target_value:.1f}, using all candidates")
+                            logger.debug(
+                                f"  ⚠ No candidates within ±{tolerance} of target {attribute}={target_value:.1f}, using all candidates"
+                            )
                     elif show_detailed_logs:
-                        logger.debug(f"  ℹ Prioritizing {len(prioritized_candidates)}/{len(candidates)} candidates near target {attribute}={target_value:.1f} (±{tolerance})")
+                        logger.debug(
+                            f"  ℹ Prioritizing {len(prioritized_candidates)}/{len(candidates)} candidates near target {attribute}={target_value:.1f} (±{tolerance})"
+                        )
 
         constraint_people_cache = {}
         constraint_value_cache = {}
         for constraint, is_role_1 in relevant_constraints:
-            other_role = constraint.get('role_2') if is_role_1 else constraint.get('role_1')
+            other_role = (
+                constraint.get("role_2") if is_role_1 else constraint.get("role_1")
+            )
             if other_role not in constraint_people_cache:
                 other_people = existing_people_by_role.get(other_role, [])
                 constraint_people_cache[other_role] = other_people
-                
+
                 # Pre-calculate min/max for numerical attributes
                 if other_people:
-                    attribute = constraint.get('attribute', 'age')
+                    attribute = constraint.get("attribute", "age")
                     getter = self._get_attribute_getter(attribute)
                     if other_role not in constraint_value_cache:
                         constraint_value_cache[other_role] = {}
-                        
+
                     if attribute not in constraint_value_cache[other_role]:
                         values = [getter(p) for p in other_people]
                         constraint_value_cache[other_role][attribute] = {
-                            'min': min(values),
-                            'max': max(values)
+                            "min": min(values),
+                            "max": max(values),
                         }
 
         shuffled_candidates = prioritized_candidates.copy()
@@ -821,14 +891,18 @@ class RelationshipRulesValidator:
             # Validate all relevant constraints
             all_valid = True
             for constraint, is_role_1 in relevant_constraints:
-                other_role = constraint.get('role_2') if is_role_1 else constraint.get('role_1')
+                other_role = (
+                    constraint.get("role_2") if is_role_1 else constraint.get("role_1")
+                )
                 other_people = constraint_people_cache.get(other_role, [])
 
                 is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                    candidate, other_people, constraint, 
+                    candidate,
+                    other_people,
+                    constraint,
                     log_rejection=show_detailed_logs,
                     cached_values=constraint_value_cache.get(other_role),
-                    is_role_1=is_role_1
+                    is_role_1=is_role_1,
                 )
 
                 if not is_valid:
@@ -839,30 +913,42 @@ class RelationshipRulesValidator:
             if all_valid:
                 if show_detailed_logs:
                     if candidates_rejected > 0:
-                        logger.debug(f"  ✓ Selected (tested {candidates_tested} candidates, rejected {candidates_rejected}): {candidate}")
+                        logger.debug(
+                            f"  ✓ Selected (tested {candidates_tested} candidates, rejected {candidates_rejected}): {candidate}"
+                        )
                     else:
                         logger.debug(f"  ✓ Selected on first try: {candidate}")
                 return candidate
 
         # No valid candidate found, use best candidate if enabled
-        if self.selection_strategy.get('log_violations', False):
-            logger.debug(f"No valid candidate found for {current_role} after {max_attempts} attempts. use_best_candidate={use_best}")
+        if self.selection_strategy.get("log_violations", False):
+            logger.debug(
+                f"No valid candidate found for {current_role} after {max_attempts} attempts. use_best_candidate={use_best}"
+            )
 
         if use_best:
             best_candidate = None
-            best_penalty = float('inf')
+            best_penalty = float("inf")
 
             for candidate in candidates:
                 total_penalty = 0.0
 
                 for constraint, is_role_1 in relevant_constraints:
-                    other_role = constraint.get('role_2') if is_role_1 else constraint.get('role_1')
+                    other_role = (
+                        constraint.get("role_2")
+                        if is_role_1
+                        else constraint.get("role_1")
+                    )
                     other_people = existing_people_by_role.get(other_role, [])
 
-                    is_valid, penalty = self.validate_numerical_attribute_difference_constraint(
-                        candidate, other_people, constraint,
-                        cached_values=constraint_value_cache.get(other_role),
-                        is_role_1=is_role_1
+                    is_valid, penalty = (
+                        self.validate_numerical_attribute_difference_constraint(
+                            candidate,
+                            other_people,
+                            constraint,
+                            cached_values=constraint_value_cache.get(other_role),
+                            is_role_1=is_role_1,
+                        )
                     )
                     total_penalty += penalty
 
@@ -871,29 +957,35 @@ class RelationshipRulesValidator:
                     best_candidate = candidate
 
             if best_candidate:
-                self.stats['best_candidate_selections'] += 1
-                self.stats['violations']['numerical_attribute_difference'] += 1
+                self.stats["best_candidate_selections"] += 1
+                self.stats["violations"]["numerical_attribute_difference"] += 1
 
-                logger.debug(f"⚠️  USING BEST CANDIDATE (VIOLATES CONSTRAINTS) for {current_role}: "
-                           f"age={best_candidate.age}, sex={best_candidate.sex}, "
-                           f"penalty={best_penalty:.2f}")
+                logger.debug(
+                    f"⚠️  USING BEST CANDIDATE (VIOLATES CONSTRAINTS) for {current_role}: "
+                    f"age={best_candidate.age}, sex={best_candidate.sex}, "
+                    f"penalty={best_penalty:.2f}"
+                )
 
                 return best_candidate
 
-        if self.selection_strategy.get('log_violations', False):
-            logger.debug(f"Returning None for {current_role} - no valid candidates and use_best_candidate=False")
+        if self.selection_strategy.get("log_violations", False):
+            logger.debug(
+                f"Returning None for {current_role} - no valid candidates and use_best_candidate=False"
+            )
 
         return None
 
-    def select_pair(self,
-                     candidates: List[Person],
-                     constraint: Dict,
-                     existing_people_by_role: Optional[Dict[str, List[Person]]] = None,
-                     constraints: Optional[List[Dict]] = None,
-                     current_role: Optional[str] = None,
-                     show_detailed_logs: bool = False,
-                     candidates_by_cat: Optional[Dict[Any, List[Person]]] = None,
-                     geo_unit_code: Optional[str] = None) -> Optional[Tuple[Person, Person]]:
+    def select_pair(
+        self,
+        candidates: List[Person],
+        constraint: Dict,
+        existing_people_by_role: Optional[Dict[str, List[Person]]] = None,
+        constraints: Optional[List[Dict]] = None,
+        current_role: Optional[str] = None,
+        show_detailed_logs: bool = False,
+        candidates_by_cat: Optional[Dict[Any, List[Person]]] = None,
+        geo_unit_code: Optional[str] = None,
+    ) -> Optional[Tuple[Person, Person]]:
         """
         Select 2 people from candidates to form a compatible pair.
 
@@ -929,73 +1021,85 @@ class RelationshipRulesValidator:
         # below is only used when the candidate's area is missing from it).
         # `same_category_probability` applies to worlds that have no source
         # configured (e.g. Medieval), where the scalar is the authoritative value.
-        cat_attr_config = constraint.get('categorical_attribute', {})
-        cat_attribute = cat_attr_config.get('attribute', 'sex')
+        cat_attr_config = constraint.get("categorical_attribute", {})
+        cat_attribute = cat_attr_config.get("attribute", "sex")
         fallback_prob = cat_attr_config.get(
-            'same_category_probability_fallback',
-            cat_attr_config.get('same_category_probability', 0.05),
+            "same_category_probability_fallback",
+            cat_attr_config.get("same_category_probability", 0.05),
         )
 
         # If a per-area source is configured for this categorical attribute,
         # override the scalar with the area-specific probability.
         same_category_prob = self._resolve_same_category_prob(
-            cat_attribute, geo_unit_code, default=fallback_prob,
+            cat_attribute,
+            geo_unit_code,
+            default=fallback_prob,
         )
 
         # Running counters (constant memory) for stage-1 diagnostics. We never
         # store the full per-call list. At England scale that would be tens of
         # millions of floats, and `mean / min / max` is all anyone reads.
-        attr_stats = self.stats['same_category_lookup'].setdefault(
+        attr_stats = self.stats["same_category_lookup"].setdefault(
             cat_attribute,
             {
-                'source_hits': 0,
-                'fallback_hits': 0,
-                'prob_sum': 0.0,
-                'prob_min': float('inf'),
-                'prob_max': float('-inf'),
-                'prob_n': 0,
+                "source_hits": 0,
+                "fallback_hits": 0,
+                "prob_sum": 0.0,
+                "prob_min": float("inf"),
+                "prob_max": float("-inf"),
+                "prob_n": 0,
             },
         )
-        if (cat_attribute in self._same_category_sources
-                and same_category_prob != fallback_prob):
-            attr_stats['source_hits'] += 1
+        if (
+            cat_attribute in self._same_category_sources
+            and same_category_prob != fallback_prob
+        ):
+            attr_stats["source_hits"] += 1
         else:
-            attr_stats['fallback_hits'] += 1
-        attr_stats['prob_sum'] += same_category_prob
-        if same_category_prob < attr_stats['prob_min']:
-            attr_stats['prob_min'] = same_category_prob
-        if same_category_prob > attr_stats['prob_max']:
-            attr_stats['prob_max'] = same_category_prob
-        attr_stats['prob_n'] += 1
+            attr_stats["fallback_hits"] += 1
+        attr_stats["prob_sum"] += same_category_prob
+        if same_category_prob < attr_stats["prob_min"]:
+            attr_stats["prob_min"] = same_category_prob
+        if same_category_prob > attr_stats["prob_max"]:
+            attr_stats["prob_max"] = same_category_prob
+        attr_stats["prob_n"] += 1
 
         is_same_category = np.random.random() < same_category_prob
 
         if show_detailed_logs:
-            pair_type = f"same-{cat_attribute}" if is_same_category else f"different-{cat_attribute}"
-            logger.debug(f"    Pair type: {pair_type} (prob={same_category_prob*100:.0f}%)")
+            pair_type = (
+                f"same-{cat_attribute}"
+                if is_same_category
+                else f"different-{cat_attribute}"
+            )
+            logger.debug(
+                f"    Pair type: {pair_type} (prob={same_category_prob*100:.0f}%)"
+            )
 
         # Get relevant numerical_attribute_difference constraints for this role
         relevant_constraints = []
         if current_role:
             for c in constraints:
-                if c.get('type') == 'numerical_attribute_difference':
-                    if c.get('role_1') == current_role:
+                if c.get("type") == "numerical_attribute_difference":
+                    if c.get("role_1") == current_role:
                         relevant_constraints.append((c, True))
-                    elif c.get('role_2') == current_role:
+                    elif c.get("role_2") == current_role:
                         relevant_constraints.append((c, False))
 
         if show_detailed_logs and relevant_constraints:
             for rc, is_role_1 in relevant_constraints:
-                other_role = rc.get('role_2') if is_role_1 else rc.get('role_1')
+                other_role = rc.get("role_2") if is_role_1 else rc.get("role_1")
                 other_people = existing_people_by_role.get(other_role, [])
                 if other_people:
-                    attribute = rc.get('attribute', 'age')
+                    attribute = rc.get("attribute", "age")
                     getter = self._get_attribute_getter(attribute)
                     values = [getter(p) for p in other_people]
-                    logger.debug(f"    {attribute.capitalize()} constraints: Both partners must be {rc.get('min_difference')}-{rc.get('max_difference')} {attribute} units older than {other_role} ({attribute}s: {values})")
+                    logger.debug(
+                        f"    {attribute.capitalize()} constraints: Both partners must be {rc.get('min_difference')}-{rc.get('max_difference')} {attribute} units older than {other_role} ({attribute}s: {values})"
+                    )
 
-        max_attempts = self.selection_strategy.get('max_attempts', 50)
-        use_best = self.selection_strategy.get('use_best_candidate', True)
+        max_attempts = self.selection_strategy.get("max_attempts", 50)
+        use_best = self.selection_strategy.get("use_best_candidate", True)
 
         # Pre-shuffle candidates once to avoid repeated random.choice() overhead
         shuffled_candidates = candidates.copy()
@@ -1003,7 +1107,7 @@ class RelationshipRulesValidator:
 
         # Pre-group candidates by categorical attribute AND cache attribute values
         cat_getter = self._get_attribute_getter(cat_attribute)
-        
+
         if candidates_by_cat is None:
             candidates_by_cat = defaultdict(list)
             candidate_cat_values = {}  # Cache categorical attribute values
@@ -1020,22 +1124,26 @@ class RelationshipRulesValidator:
         constraint_people_cache = {}
         constraint_value_cache = {}
         for rel_constraint, is_role_1 in relevant_constraints:
-            other_role = rel_constraint.get('role_2') if is_role_1 else rel_constraint.get('role_1')
+            other_role = (
+                rel_constraint.get("role_2")
+                if is_role_1
+                else rel_constraint.get("role_1")
+            )
             if other_role not in constraint_people_cache:
                 other_people = existing_people_by_role.get(other_role, [])
                 constraint_people_cache[other_role] = other_people
 
                 # Pre-compute min/max for numerical attributes
                 if other_people:
-                    attribute = rel_constraint.get('attribute', 'age')
+                    attribute = rel_constraint.get("attribute", "age")
                     getter = self._get_attribute_getter(attribute)
                     if other_role not in constraint_value_cache:
                         constraint_value_cache[other_role] = {}
                     if attribute not in constraint_value_cache[other_role]:
                         values = np.array([getter(p) for p in other_people])
                         constraint_value_cache[other_role][attribute] = {
-                            'min': values.min(),
-                            'max': values.max()
+                            "min": values.min(),
+                            "max": values.max(),
                         }
 
         # Try to find a valid couple
@@ -1052,17 +1160,25 @@ class RelationshipRulesValidator:
             # Validate first person against existing people (e.g., children)
             first_valid = True
             for rel_constraint, is_role_1 in relevant_constraints:
-                other_role = rel_constraint.get('role_2') if is_role_1 else rel_constraint.get('role_1')
+                other_role = (
+                    rel_constraint.get("role_2")
+                    if is_role_1
+                    else rel_constraint.get("role_1")
+                )
                 other_people = constraint_people_cache.get(other_role, [])
                 if other_people:
                     # Only log rejections if detailed logging is enabled
                     # Pass cached min/max values for performance
                     cached_vals = constraint_value_cache.get(other_role)
-                    is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                        first_person, other_people, rel_constraint,
-                        log_rejection=show_detailed_logs,
-                        cached_values=cached_vals,
-                        is_role_1=is_role_1
+                    is_valid, _ = (
+                        self.validate_numerical_attribute_difference_constraint(
+                            first_person,
+                            other_people,
+                            rel_constraint,
+                            log_rejection=show_detailed_logs,
+                            cached_values=cached_vals,
+                            is_role_1=is_role_1,
+                        )
                     )
                     if not is_valid:
                         first_valid = False
@@ -1073,20 +1189,30 @@ class RelationshipRulesValidator:
                 continue
 
             # Get categorical attribute value for first person
-            first_cat_value = candidate_cat_values[first_person.id] if candidate_cat_values is not None else cat_getter(first_person)
+            first_cat_value = (
+                candidate_cat_values[first_person.id]
+                if candidate_cat_values is not None
+                else cat_getter(first_person)
+            )
             if is_same_category:
                 required_cat_value = first_cat_value
             else:
                 # For binary attributes like sex, swap the value
                 # This is a simple heuristic - for more complex categories, you'd need a mapping
-                if cat_attribute == 'sex':
-                    required_cat_value = 'male' if first_cat_value == 'female' else 'female'
+                if cat_attribute == "sex":
+                    required_cat_value = (
+                        "male" if first_cat_value == "female" else "female"
+                    )
                 else:
                     # For non-binary categorical attributes, we can't easily determine "opposite"
                     # Use pre-computed categorical values from candidates_by_cat
                     all_cat_values = list(candidates_by_cat.keys())
                     other_values = [v for v in all_cat_values if v != first_cat_value]
-                    required_cat_value = np.random.choice(other_values) if other_values else first_cat_value
+                    required_cat_value = (
+                        np.random.choice(other_values)
+                        if other_values
+                        else first_cat_value
+                    )
 
             # Use pre-grouped candidates by categorical attribute
             remaining = candidates_by_cat.get(required_cat_value, [])
@@ -1106,8 +1232,8 @@ class RelationshipRulesValidator:
             # directed candidates and keep the one closest to a gap sampled
             # from Normal(mean, std), which makes the realised gaps follow the
             # configured distribution.
-            num_attr_config = constraint.get('numerical_attribute', {})
-            diff_ref = num_attr_config.get('difference_reference')
+            num_attr_config = constraint.get("numerical_attribute", {})
+            diff_ref = num_attr_config.get("difference_reference")
             target_diff = None
             best_directed = None  # (distance to sampled target gap, candidate)
             chosen = None
@@ -1121,22 +1247,32 @@ class RelationshipRulesValidator:
                 if not is_valid:
                     candidates_rejected += 1
                     if show_detailed_logs:
-                        logger.debug(f"      ✗ Rejected: Partner pair has age difference too large")
+                        logger.debug(
+                            f"      ✗ Rejected: Partner pair has age difference too large"
+                        )
                     continue
 
                 # Validate partner against existing people (e.g., children)
                 partner_valid = True
                 for rel_constraint, is_role_1 in relevant_constraints:
-                    other_role = rel_constraint.get('role_2') if is_role_1 else rel_constraint.get('role_1')
+                    other_role = (
+                        rel_constraint.get("role_2")
+                        if is_role_1
+                        else rel_constraint.get("role_1")
+                    )
                     other_people = constraint_people_cache.get(other_role, [])
                     if other_people:
                         # Pass cached min/max values for performance
                         cached_vals = constraint_value_cache.get(other_role)
-                        is_valid, _ = self.validate_numerical_attribute_difference_constraint(
-                            candidate, other_people, rel_constraint,
-                            log_rejection=show_detailed_logs,
-                            cached_values=cached_vals,
-                            is_role_1=is_role_1
+                        is_valid, _ = (
+                            self.validate_numerical_attribute_difference_constraint(
+                                candidate,
+                                other_people,
+                                rel_constraint,
+                                log_rejection=show_detailed_logs,
+                                cached_values=cached_vals,
+                                is_role_1=is_role_1,
+                            )
                         )
                         if not is_valid:
                             partner_valid = False
@@ -1147,12 +1283,14 @@ class RelationshipRulesValidator:
                     continue
 
                 if diff_ref is not None:
-                    diff, directed = self._pair_diff(first_person, candidate, num_attr_config)
+                    diff, directed = self._pair_diff(
+                        first_person, candidate, num_attr_config
+                    )
                     if directed:
                         if target_diff is None:
                             target_diff = np.random.normal(
-                                num_attr_config.get('mean_difference', 3.0),
-                                num_attr_config.get('std_difference', 5.0),
+                                num_attr_config.get("mean_difference", 3.0),
+                                num_attr_config.get("std_difference", 5.0),
                             )
                         dist = abs(diff - target_diff)
                         if best_directed is None or dist < best_directed[0]:
@@ -1170,17 +1308,25 @@ class RelationshipRulesValidator:
                 # Found a valid pair!
                 if show_detailed_logs:
                     if candidates_rejected > 0:
-                        logger.debug(f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})")
+                        logger.debug(
+                            f"    ✓ Found valid pair (tested {candidates_tested} candidates, rejected {candidates_rejected})"
+                        )
                     else:
                         logger.debug(f"    ✓ Found valid pair on first try")
                     if num_attr_config:
-                        num_attr = num_attr_config.get('attribute', 'age')
+                        num_attr = num_attr_config.get("attribute", "age")
                         getter = self._get_attribute_getter(num_attr)
                         val1 = getter(first_person)
                         val2 = getter(candidate)
-                        logger.debug(f"      Partner 1: {first_person} ({num_attr} {val1})")
-                        logger.debug(f"      Partner 2: {candidate} ({num_attr} {val2})")
-                        logger.debug(f"      {num_attr.capitalize()} difference: {abs(val1 - val2)}")
+                        logger.debug(
+                            f"      Partner 1: {first_person} ({num_attr} {val1})"
+                        )
+                        logger.debug(
+                            f"      Partner 2: {candidate} ({num_attr} {val2})"
+                        )
+                        logger.debug(
+                            f"      {num_attr.capitalize()} difference: {abs(val1 - val2)}"
+                        )
                     else:
                         logger.debug(f"      Partner 1: {first_person}")
                         logger.debug(f"      Partner 2: {candidate}")
@@ -1197,11 +1343,13 @@ class RelationshipRulesValidator:
         # No valid pair found, use best candidate
         if use_best and first_person is not None and remaining:
             best_partner = None
-            best_penalty = float('inf')
+            best_penalty = float("inf")
 
             for candidate in remaining:
-                is_valid, val_penalty = self.validate_pair_numerical_attribute_difference(
-                    first_person, candidate, constraint
+                is_valid, val_penalty = (
+                    self.validate_pair_numerical_attribute_difference(
+                        first_person, candidate, constraint
+                    )
                 )
                 attr_penalty = self.calculate_pair_numerical_attribute_penalty(
                     first_person, candidate, constraint
@@ -1213,40 +1361,44 @@ class RelationshipRulesValidator:
                     best_partner = candidate
 
             if best_partner:
-                self.stats['best_candidate_selections'] += 1
-                self.stats['violations']['pair_numerical_attribute_diff'] += 1
+                self.stats["best_candidate_selections"] += 1
+                self.stats["violations"]["pair_numerical_attribute_diff"] += 1
 
                 if self.track_statistics:
                     self._track_pair_stats(
-                        first_person, best_partner,
-                        constraint.get('numerical_attribute', {}), is_same_category
+                        first_person,
+                        best_partner,
+                        constraint.get("numerical_attribute", {}),
+                        is_same_category,
                     )
 
                 return (first_person, best_partner)
 
         return None
 
-    def _track_pair_stats(self,
-                          person1: Person,
-                          person2: Person,
-                          num_attr_config: Dict,
-                          is_same_category: bool):
+    def _track_pair_stats(
+        self,
+        person1: Person,
+        person2: Person,
+        num_attr_config: Dict,
+        is_same_category: bool,
+    ):
         """Record a formed pair: the numeric difference (signed when the pair
         is directed under a difference_reference) and the category counters."""
-        if num_attr_config and num_attr_config.get('attribute'):
+        if num_attr_config and num_attr_config.get("attribute"):
             try:
                 diff, directed = self._pair_diff(person1, person2, num_attr_config)
-                self.stats['numerical_attribute_differences'].append(diff)
-                if num_attr_config.get('difference_reference'):
-                    key = 'directed_pairs' if directed else 'undirected_pairs'
+                self.stats["numerical_attribute_differences"].append(diff)
+                if num_attr_config.get("difference_reference"):
+                    key = "directed_pairs" if directed else "undirected_pairs"
                     self.stats[key] += 1
             except (AttributeError, TypeError):
                 pass
 
         if is_same_category:
-            self.stats['same_category_pairs'] += 1
+            self.stats["same_category_pairs"] += 1
         else:
-            self.stats['different_category_pairs'] += 1
+            self.stats["different_category_pairs"] += 1
 
     def print_statistics(self):
         """Print statistics about relationship rule application."""
@@ -1258,37 +1410,59 @@ class RelationshipRulesValidator:
         logger.debug("=" * 60)
 
         # Best candidate selections
-        if self.stats['best_candidate_selections'] > 0:
-            logger.debug(f"Best candidate selections: {self.stats['best_candidate_selections']:,}")
+        if self.stats["best_candidate_selections"] > 0:
+            logger.debug(
+                f"Best candidate selections: {self.stats['best_candidate_selections']:,}"
+            )
 
         # Pair types
-        total_pairs = self.stats['same_category_pairs'] + self.stats['different_category_pairs']
+        total_pairs = (
+            self.stats["same_category_pairs"] + self.stats["different_category_pairs"]
+        )
         if total_pairs > 0:
             logger.debug(f"Pairs created: {total_pairs:,}")
-            logger.debug(f"  Same-category: {self.stats['same_category_pairs']:,} "
-                       f"({100*self.stats['same_category_pairs']/total_pairs:.1f}%)")
-            logger.debug(f"  Different-category: {self.stats['different_category_pairs']:,} "
-                       f"({100*self.stats['different_category_pairs']/total_pairs:.1f}%)")
+            logger.debug(
+                f"  Same-category: {self.stats['same_category_pairs']:,} "
+                f"({100*self.stats['same_category_pairs']/total_pairs:.1f}%)"
+            )
+            logger.debug(
+                f"  Different-category: {self.stats['different_category_pairs']:,} "
+                f"({100*self.stats['different_category_pairs']/total_pairs:.1f}%)"
+            )
 
         # Numerical attribute differences
-        if self.stats['numerical_attribute_differences']:
+        if self.stats["numerical_attribute_differences"]:
             import statistics as stats_module
+
             logger.debug(f"Partner numerical attribute differences:")
-            logger.debug(f"  Mean: {stats_module.mean(self.stats['numerical_attribute_differences']):.1f}")
-            logger.debug(f"  Median: {stats_module.median(self.stats['numerical_attribute_differences']):.1f}")
-            logger.debug(f"  Range: {min(self.stats['numerical_attribute_differences'])}-"
-                       f"{max(self.stats['numerical_attribute_differences'])}")
+            logger.debug(
+                f"  Mean: {stats_module.mean(self.stats['numerical_attribute_differences']):.1f}"
+            )
+            logger.debug(
+                f"  Median: {stats_module.median(self.stats['numerical_attribute_differences']):.1f}"
+            )
+            logger.debug(
+                f"  Range: {min(self.stats['numerical_attribute_differences'])}-"
+                f"{max(self.stats['numerical_attribute_differences'])}"
+            )
 
         # Directed vs undirected pairs (only meaningful with a difference_reference)
-        if self.stats['directed_pairs'] or self.stats['undirected_pairs']:
-            logger.debug(f"Directed pairs: {self.stats['directed_pairs']:,}, "
-                         f"undirected: {self.stats['undirected_pairs']:,}")
+        if self.stats["directed_pairs"] or self.stats["undirected_pairs"]:
+            logger.debug(
+                f"Directed pairs: {self.stats['directed_pairs']:,}, "
+                f"undirected: {self.stats['undirected_pairs']:,}"
+            )
         has_reference = any(
-            (c.get('numerical_attribute') or {}).get('difference_reference')
-            for rule in self.rules for c in rule.constraints
-            if c.get('type') == 'pair_matching'
+            (c.get("numerical_attribute") or {}).get("difference_reference")
+            for rule in self.rules
+            for c in rule.constraints
+            if c.get("type") == "pair_matching"
         )
-        if has_reference and self.stats['undirected_pairs'] and not self.stats['directed_pairs']:
+        if (
+            has_reference
+            and self.stats["undirected_pairs"]
+            and not self.stats["directed_pairs"]
+        ):
             logger.warning(
                 "difference_reference is configured but every formed pair was "
                 "undirected — the reference value probably matches nobody "
@@ -1296,10 +1470,10 @@ class RelationshipRulesValidator:
             )
 
         # Violations
-        total_violations = sum(self.stats['violations'].values())
+        total_violations = sum(self.stats["violations"].values())
         if total_violations > 0:
             logger.debug(f"Rule violations (resolved with best candidate):")
-            for violation_type, count in self.stats['violations'].items():
+            for violation_type, count in self.stats["violations"].items():
                 if count > 0:
                     logger.debug(f"  {violation_type}: {count:,}")
 

@@ -7,21 +7,23 @@ if TYPE_CHECKING:
 
 class Subset:
     """A subset of people within a particular Venue. For example, children in a household."""
-#    external = False
+
+    #    external = False
     __slots__ = (
         "venue",
         "subset_index",
-        'subset_name',
-        'members',
-        'member_metadata',
+        "subset_name",
+        "members",
+        "member_metadata",
     )
 
-    def __init__(self,
-                 venue: "Venue",
-                 subset_index: int,
-                 subset_name: str = None,
-                 members: set["Person"]=None,
-                 ):
+    def __init__(
+        self,
+        venue: "Venue",
+        subset_index: int,
+        subset_name: str = None,
+        members: set["Person"] = None,
+    ):
         """
         Args:
           venue (Venue): the location in which this subset is situated.
@@ -31,21 +33,30 @@ class Subset:
         """
         self.venue = venue
         self.subset_index = subset_index
-        self.subset_name = subset_name if subset_name is not None else str(self.subset_index)
-        self.members= members if members is not None else set()
+        self.subset_name = (
+            subset_name if subset_name is not None else str(self.subset_index)
+        )
+        self.members = members if members is not None else set()
         self.member_metadata = {}
 
     @property
     def spec(self):
         """ """
-        return self.venue.type , self.subset_index
+        return self.venue.type, self.subset_index
 
     def __len__(self):
         return len(self.members)
 
     def __str__(self):
-        return "Class : {} , subset_name : {}, venue.id : {}, venue_name : {}, subset_membership : {}, members_present : {}".format(type(self), self.subset_name, self.venue.id, self.venue.name, len(self.members), len(self))
-    
+        return "Class : {} , subset_name : {}, venue.id : {}, venue_name : {}, subset_membership : {}, members_present : {}".format(
+            type(self),
+            self.subset_name,
+            self.venue.id,
+            self.venue.name,
+            len(self.members),
+            len(self),
+        )
+
     def __eq__(self, other):
         if not self.num_members == other.num_members:
             return False
@@ -61,11 +72,11 @@ class Subset:
         return True
 
     def add_member(self, person: "Person"):
-        """ Add a person's membership to this subset"""
+        """Add a person's membership to this subset"""
         self.members.add(person)
 
     def remove_member(self, person: "Person"):
-        """ Add a person's membership to this subset"""
+        """Add a person's membership to this subset"""
         self.members.remove(person)
 
     @property

@@ -26,17 +26,16 @@ class Person:
     """
 
     _id_counter = 0
- 
-    __slots__ = [
-        'id',
-        'age',
-        'sex',
-        'geographical_unit',
-        'activities',
-        'properties',
-        'activity_map',
-    ]
 
+    __slots__ = [
+        "id",
+        "age",
+        "sex",
+        "geographical_unit",
+        "activities",
+        "properties",
+        "activity_map",
+    ]
 
     def __init__(
         self,
@@ -45,7 +44,7 @@ class Person:
         geographical_unit: Optional["GeographicalUnit"] = None,
         activities: Optional[set[str]] = None,
         properties: Optional[dict[str, Any]] = None,
-        activity_map: Optional[dict[str, dict[str, list["Subset"]]]] = None
+        activity_map: Optional[dict[str, dict[str, list["Subset"]]]] = None,
     ) -> None:
         """
         Initialize a Person.
@@ -82,7 +81,7 @@ class Person:
             self.activity_map = {}
         else:
             self.activity_map = dict(activity_map)
-       
+
     @classmethod
     def reset_counter(cls) -> None:
         """Reset the ID counter (useful for testing)."""
@@ -150,10 +149,10 @@ class Person:
         """
         Get the venue where this person resides.
         """
-        res_map = self.activity_map.get('residence')
+        res_map = self.activity_map.get("residence")
         if not res_map:
             return None
-            
+
         for subsets in res_map.values():
             if subsets:
                 return subsets[0].venue
@@ -164,10 +163,10 @@ class Person:
         """
         Get the type of residence this person lives in.
         """
-        res_map = self.activity_map.get('residence')
+        res_map = self.activity_map.get("residence")
         if not res_map:
             return None
-            
+
         for v_type, subsets in res_map.items():
             if subsets:
                 return v_type
@@ -213,12 +212,16 @@ class Person:
 
     def __repr__(self) -> str:
         """String representation of the Person."""
-        geo_unit_name = self.geographical_unit.name if self.geographical_unit else "None"
-        return (f"Person(id={self.id}, age={self.age}, sex={self.sex}, "
-                f"geographical_unit={geo_unit_name}, activities={self.activities})")
+        geo_unit_name = (
+            self.geographical_unit.name if self.geographical_unit else "None"
+        )
+        return (
+            f"Person(id={self.id}, age={self.age}, sex={self.sex}, "
+            f"geographical_unit={geo_unit_name}, activities={self.activities})"
+        )
 
     def __eq__(self, other) -> bool:
-        """ Method to determine if two Person objects are basically equal.
+        """Method to determine if two Person objects are basically equal.
 
         Treats two Persons with equal attributes but different IDs as equal
         (ID assignment order is ignored) / Gavin 21/Jan/26.
@@ -229,11 +232,12 @@ class Person:
             return False
         if self.geographical_unit != other.geographical_unit:
             return False
-        for attr in ['sex',
-                     'activities',
-                     'properties',
-                     'activity_map',
-                     ]:
+        for attr in [
+            "sex",
+            "activities",
+            "properties",
+            "activity_map",
+        ]:
             if getattr(self, attr) != getattr(other, attr):
                 return False
         return True
@@ -241,5 +245,3 @@ class Person:
     def __hash__(self) -> int:
         """Hash based on unique ID for use in sets/dicts."""
         return hash(self.id)
-
-

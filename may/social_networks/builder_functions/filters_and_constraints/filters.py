@@ -42,12 +42,15 @@ def register_pool_type(name: str):
         ...     return [list_of_people]
         >>> pool_type_builders["my_pool"](world, config)
     """
+
     def decorator(func: PoolTypeBuilder):
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return func(*args, **kwargs)
+
         pool_type_builders[name] = wrapper
         return wrapper
+
     return decorator
 
 
@@ -167,8 +170,9 @@ class PoolFilter:
     Numerical: person passes if min_value <= attr_value <= max_value.
     Categorical: person passes if attr_value in allowed_values.
     """
-    attribute: str              # dot-path, resolved via get_attribute
-    filter_type: str            # 'numerical' or 'categorical'
+
+    attribute: str  # dot-path, resolved via get_attribute
+    filter_type: str  # 'numerical' or 'categorical'
     min_value: Optional[float]
     max_value: Optional[float]
     allowed_values: Optional[set]
@@ -178,7 +182,7 @@ class PoolFilter:
         val = get_attribute(person, self.attribute)
         if val is None:
             return False
-        if self.filter_type == 'numerical':
+        if self.filter_type == "numerical":
             if self.min_value is not None and val < self.min_value:
                 return False
             if self.max_value is not None and val > self.max_value:
@@ -195,28 +199,29 @@ class ConnectionFilter:
     match='range': edge valid if abs(attr_u - attr_v) <= range.
     match='same':  edge valid if attr_u == attr_v.
     """
+
     attribute: str
-    match: str              # 'range' or 'same'
-    range: Optional[int]    # for 'range' only
+    match: str  # 'range' or 'same'
+    range: Optional[int]  # for 'range' only
 
 
 def parse_pool_filter(d: dict) -> PoolFilter:
-    filter_type = d.get('type', 'numerical')
-    allowed = d.get('allowed_values')
+    filter_type = d.get("type", "numerical")
+    allowed = d.get("allowed_values")
     return PoolFilter(
-        attribute=d['attribute'],
+        attribute=d["attribute"],
         filter_type=filter_type,
-        min_value=d.get('min'),
-        max_value=d.get('max'),
+        min_value=d.get("min"),
+        max_value=d.get("max"),
         allowed_values=set(allowed) if allowed is not None else None,
     )
 
 
 def parse_connection_filter(d: dict) -> ConnectionFilter:
     return ConnectionFilter(
-        attribute=d['attribute'],
-        match=d['match'],
-        range=d.get('range'),
+        attribute=d["attribute"],
+        match=d["match"],
+        range=d.get("range"),
     )
 
 
@@ -240,7 +245,7 @@ def build_attribute_arrays(
         if f.attribute in result:
             continue
         values = [get_attribute(p, f.attribute) for p in people]
-        if f.filter_type == 'numerical':
+        if f.filter_type == "numerical":
             arr = np.array(
                 [float(v) if v is not None else np.nan for v in values],
                 dtype=np.float32,
@@ -318,12 +323,15 @@ def apply_pool_filters(
         if len(current) == 0:
             break
         if f.attribute not in attr_arrays:
-            logger.warning(f"pool_filter attribute '{f.attribute}' not in attr_arrays; skipping")
+            logger.warning(
+                f"pool_filter attribute '{f.attribute}' not in attr_arrays; skipping"
+            )
             continue
         arr, encoding = attr_arrays[f.attribute]
-        if f.filter_type == 'numerical':
+        if f.filter_type == "numerical":
             current = _apply_numerical_filter_numba(
-                current, arr,
+                current,
+                arr,
                 float(f.min_value) if f.min_value is not None else 0.0,
                 float(f.max_value) if f.max_value is not None else 0.0,
                 f.min_value is not None,
@@ -356,7 +364,7 @@ def build_local_attribute_arrays(
         if f.attribute in result:
             continue
         values = [get_attribute(p, f.attribute) for p in people]
-        if f.match == 'range':
+        if f.match == "range":
             result[f.attribute] = np.array(
                 [float(v) if v is not None else np.nan for v in values],
                 dtype=np.float32,
@@ -379,10 +387,10 @@ def check_connection_filters(
         arr = local_attr_arrays[f.attribute]
         val_u = arr[local_idx_u]
         val_v = arr[local_idx_v]
-        if f.match == 'range':
+        if f.match == "range":
             if abs(val_u - val_v) > f.range:
                 return False
-        elif f.match == 'same':
+        elif f.match == "same":
             if val_u != val_v:
                 return False
     return True
@@ -416,7 +424,7 @@ def encode_connection_filters_for_numba(
         arr = local_attr_arrays.get(f.attribute)
         if arr is None:
             continue
-        if f.match == 'range':
+        if f.match == "range":
             match_types[col] = 0
             stacked[:, col] = arr.astype(np.float64)
             range_values[col] = float(f.range)

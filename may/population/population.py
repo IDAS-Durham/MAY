@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Population manager for MAY.
 
@@ -60,8 +61,9 @@ class PopulationManager:
         """
         return defaultdict(dict)
 
-    def load_demographics_from_csv(self, male_file="demographics_male.csv",
-                                     female_file="demographics_female.csv"):
+    def load_demographics_from_csv(
+        self, male_file="demographics_male.csv", female_file="demographics_female.csv"
+    ):
         """
         Load precise population demographics from matrix-style CSV files.
 
@@ -101,7 +103,9 @@ class PopulationManager:
 
         # Create a set of geo unit names that exist in our geography for fast lookup
         valid_geo_units = set(smallest_units_dict.keys())
-        logger.info(f"Filtering demographics to {len(valid_geo_units)} {smallest_level}s in loaded geography")
+        logger.info(
+            f"Filtering demographics to {len(valid_geo_units)} {smallest_level}s in loaded geography"
+        )
 
         try:
             male_df = load_stacked_csv(
@@ -115,13 +119,13 @@ class PopulationManager:
 
         # Ignore index column if it exists
         for _df in [male_df, female_df]:
-            if 'index' in _df.columns:
-                _df.drop(columns=['index'], inplace=True)
+            if "index" in _df.columns:
+                _df.drop(columns=["index"], inplace=True)
 
         # Every loaded geo unit must have a demographics row: a silent gap here
         # would build a plausible-looking world with people quietly missing.
         for sex_label, df in (("male", male_df), ("female", female_df)):
-            missing = valid_geo_units - set(df['geo_unit'].astype(str))
+            missing = valid_geo_units - set(df["geo_unit"].astype(str))
             if missing:
                 examples = sorted(missing)[:10]
                 raise PopulationError(
@@ -132,11 +136,12 @@ class PopulationManager:
                 )
 
         # Filter to only geo units in our geography BEFORE processing
-        male_df = male_df[male_df['geo_unit'].isin(valid_geo_units)]
-        female_df = female_df[female_df['geo_unit'].isin(valid_geo_units)]
+        male_df = male_df[male_df["geo_unit"].isin(valid_geo_units)]
+        female_df = female_df[female_df["geo_unit"].isin(valid_geo_units)]
 
-        logger.info(f"Filtered to {len(male_df)} male geo units and {len(female_df)} female geo units")
-
+        logger.info(
+            f"Filtered to {len(male_df)} male geo units and {len(female_df)} female geo units"
+        )
 
         # Load into nested dict structure: geo_unit -> age -> sex -> count
         # Named function keeps this pickle-compatible
@@ -145,19 +150,23 @@ class PopulationManager:
 
         logger.info("Processing male demographics...")
         # Convert male dataframe to long format for efficient processing
-        male_melted = male_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
-        male_melted['age'] = male_melted['age'].astype(int)
-        male_melted['count'] = male_melted['count'].fillna(0).astype(int)
+        male_melted = male_df.melt(
+            id_vars=["geo_unit"], var_name="age", value_name="count"
+        )
+        male_melted["age"] = male_melted["age"].astype(int)
+        male_melted["count"] = male_melted["count"].fillna(0).astype(int)
         # Filter out zero counts for efficiency
-        male_melted = male_melted[male_melted['count'] > 0]
+        male_melted = male_melted[male_melted["count"] > 0]
 
         logger.info("Processing female demographics...")
         # Convert female dataframe to long format
-        female_melted = female_df.melt(id_vars=['geo_unit'], var_name='age', value_name='count')
-        female_melted['age'] = female_melted['age'].astype(int)
-        female_melted['count'] = female_melted['count'].fillna(0).astype(int)
+        female_melted = female_df.melt(
+            id_vars=["geo_unit"], var_name="age", value_name="count"
+        )
+        female_melted["age"] = female_melted["age"].astype(int)
+        female_melted["count"] = female_melted["count"].fillna(0).astype(int)
         # Filter out zero counts for efficiency
-        female_melted = female_melted[female_melted['count'] > 0]
+        female_melted = female_melted[female_melted["count"] > 0]
 
         logger.info("Building demographic dictionary...")
         # Convert to numpy arrays for much faster iteration
@@ -170,7 +179,7 @@ class PopulationManager:
             age = int(row[1])
             count = int(row[2])
 
-            self.precise_demographics[geo_unit][age]['male'] = count
+            self.precise_demographics[geo_unit][age]["male"] = count
             total_people += count
 
         for row in female_values:
@@ -178,10 +187,12 @@ class PopulationManager:
             age = int(row[1])
             count = int(row[2])
 
-            self.precise_demographics[geo_unit][age]['female'] = count
+            self.precise_demographics[geo_unit][age]["female"] = count
             total_people += count
 
-        logger.info(f"Loaded precise demographics for {len(self.precise_demographics)} geographical units")
+        logger.info(
+            f"Loaded precise demographics for {len(self.precise_demographics)} geographical units"
+        )
         logger.info(f"Total people in demographics: {total_people:,}")
 
     def load_explicit_from_csv(self, filename: str, column_mapping: Dict[str, str]):
@@ -194,10 +205,10 @@ class PopulationManager:
 
         logger.info(f"Loading explicit population from {path}")
         df = pd.read_csv(path)
-        
+
         # Reset ID counter for consistency (at the entry point)
         Person.reset_counter()
-        
+
         self.load_explicit_from_df(df, column_mapping)
 
     def load_explicit_from_df(self, df: pd.DataFrame, column_mapping: Dict[str, str]):
@@ -205,56 +216,62 @@ class PopulationManager:
         Internal method to load population from a DataFrame.
         """
         target_to_csv = column_mapping
-        
+
         # Identify geographical column
         # Priority: 1. mapped 'geo_unit', 2. literal 'geo_unit', 3. any configured level label
         geo_levels = set(self.geography.levels)
-        geo_cols = {'geo_unit'}.union(geo_levels)
-        
-        mapped_geo_col = target_to_csv.get('geo_unit')
+        geo_cols = {"geo_unit"}.union(geo_levels)
+
+        mapped_geo_col = target_to_csv.get("geo_unit")
         actual_geo_col = None
-        
+
         if mapped_geo_col in df.columns:
             actual_geo_col = mapped_geo_col
         else:
             actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
-            
+
         if actual_geo_col is None:
-             raise ValueError(f"Missing required geographical column ('geo_unit' or one of {sorted(geo_levels)}) in population data")
+            raise ValueError(
+                f"Missing required geographical column ('geo_unit' or one of {sorted(geo_levels)}) in population data"
+            )
 
         people_count = 0
-        
+
         for row in df.itertuples(index=False):
             row_dict = row._asdict()
             properties = {}
             age = 0
             sex = "unknown"
-            
+
             # 1. Determine geographical unit
             geo_unit_name = row_dict.get(actual_geo_col)
             geo_unit = self.geography.get_unit(geo_unit_name) if geo_unit_name else None
-            
+
             if not geo_unit:
-                logger.warning(f"No geographical unit found for person in row (col: {actual_geo_col}, val: {geo_unit_name}). Skipping.")
+                logger.warning(
+                    f"No geographical unit found for person in row (col: {actual_geo_col}, val: {geo_unit_name}). Skipping."
+                )
                 continue
 
             # Extract known attributes
             for target, csv_col in target_to_csv.items():
                 if csv_col not in row_dict:
                     continue
-                
+
                 val = row_dict[csv_col]
-                if target == 'age':
+                if target == "age":
                     try:
                         age = int(float(val))
                     except (ValueError, TypeError):
                         age = 0
-                elif target == 'sex':
+                elif target == "sex":
                     sex = str(val).lower().strip() if pd.notna(val) else "unknown"
                     # Normalize common sex strings
-                    if sex in ['m', '1', 'male']: sex = 'male'
-                    elif sex in ['f', '2', 'female']: sex = 'female'
-                elif target == 'geo_unit':
+                    if sex in ["m", "1", "male"]:
+                        sex = "male"
+                    elif sex in ["f", "2", "female"]:
+                        sex = "female"
+                elif target == "geo_unit":
                     unit_name = str(val).strip()
                     found_unit = self.geography.get_unit(unit_name)
                     if found_unit:
@@ -274,12 +291,14 @@ class PopulationManager:
                     properties[col] = val
 
             # Create and add person
-            person = Person(age=age, sex=sex, geographical_unit=geo_unit, properties=properties)
+            person = Person(
+                age=age, sex=sex, geographical_unit=geo_unit, properties=properties
+            )
             self.add_person(person)
-            
+
             if geo_unit:
                 geo_unit.add_person(person)
-            
+
             people_count += 1
 
         logger.info(f"Successfully loaded {people_count:,} people from explicit data.")
@@ -303,8 +322,8 @@ class PopulationManager:
               * properties (dict, optional): a dict of properties of the Person, e.g. 'ethnicity', 'compliance', 'taste'.
               * activity_map (DefaultDict[str,list[Subset]], optional):
                 a dict mapping an activity (same string as in activities) to a list of potential Subsets the Person would
-                join to fulfil that activity. 
-                    
+                join to fulfil that activity.
+
         """
         if not self.precise_demographics:
             raise PopulationError(
@@ -352,9 +371,13 @@ class PopulationManager:
                 unit.add_person(person)
                 total_people += 1
 
-        logger.info(f"Generated {total_people:,} people across {geo_units_with_data} {smallest_level}s")
+        logger.info(
+            f"Generated {total_people:,} people across {geo_units_with_data} {smallest_level}s"
+        )
         if geo_units_with_data > 0:
-            logger.info(f"Average: {total_people / geo_units_with_data:.1f} people per {smallest_level}")
+            logger.info(
+                f"Average: {total_people / geo_units_with_data:.1f} people per {smallest_level}"
+            )
 
     def add_person(self, person: Person):
         self.people.append(person)
@@ -435,7 +458,7 @@ class PopulationManager:
         unit = self.geography.get_unit(geo_unit_code)
         if unit is None:
             return []
-        return unit.people if hasattr(unit, 'people') else []
+        return unit.people if hasattr(unit, "people") else []
 
     def get_statistics(self):
         """
@@ -465,15 +488,18 @@ class PopulationManager:
             activity_counts[activity] = len(self.get_people_by_activity(activity))
 
         return {
-            'total_population': len(self.people),
-            'mean_age': np.mean(ages),
-            'median_age': np.median(ages),
-            'min_age': np.min(ages),
-            'max_age': np.max(ages),
-            'sex_distribution': sex_counts,
-            'activity_counts': activity_counts
+            "total_population": len(self.people),
+            "mean_age": np.mean(ages),
+            "median_age": np.median(ages),
+            "min_age": np.min(ages),
+            "max_age": np.max(ages),
+            "sex_distribution": sex_counts,
+            "activity_counts": activity_counts,
         }
-    def load_batch_explicit_from_csv(self, data_dir: str, column_mapping: Dict[str, str]):
+
+    def load_batch_explicit_from_csv(
+        self, data_dir: str, column_mapping: Dict[str, str]
+    ):
         """
         Load individual-level population data from multiple MGU-level CSV files.
         """
@@ -481,35 +507,34 @@ class PopulationManager:
         mgu_units = self.geography.get_units_by_level(self.geography.levels[1])
         mgu_names = set(mgu_units.keys())
 
-        # 2. Identify all loaded smallest-level units for internal filtering
-        loaded_sgus = set(self.geography.get_units_by_level(self.geography.levels[0]).keys())
-        
         # Reset ID counter once for the whole batch
         Person.reset_counter()
-        
-        logger.info(f"Starting batch explicit population load for {len(mgu_names)} MGUs")
-        
+
+        logger.info(
+            f"Starting batch explicit population load for {len(mgu_names)} MGUs"
+        )
+
         total_files = 0
         for mgu_name in mgu_names:
             filename = f"{mgu_name}_pop.csv"
             path = os.path.join(data_dir, filename)
             if not os.path.exists(path):
-                 continue
-            
+                continue
+
             df = pd.read_csv(path)
             total_files += 1
-            
+
             # Filter rows by geographical unit to only keep what is in our geography
             # Check for any valid geo level column ('geo_unit' or any configured level)
             geo_levels = set(self.geography.levels)
-            geo_cols = {'geo_unit'}.union(geo_levels)
+            geo_cols = {"geo_unit"}.union(geo_levels)
             actual_geo_col = next((col for col in df.columns if col in geo_cols), None)
 
             if actual_geo_col and actual_geo_col in df.columns:
                 # We filter by whatever geographical units are currently loaded in the geography
                 loaded_units = set(self.geography.get_all_units().keys())
                 df = df[df[actual_geo_col].isin(loaded_units)]
-            
+
             self.load_explicit_from_df(df, column_mapping)
-            
+
         logger.info(f"Batch load complete. Processed {total_files} files.")

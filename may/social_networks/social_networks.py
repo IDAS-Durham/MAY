@@ -1,10 +1,11 @@
 """YAML-driven construction of the built-in social network types."""
 
 import logging
-from may.utils import path_resolver as pr
 from may.utils.yaml_loader import load_yaml
 
-from may.social_networks.builder_functions.filters_and_constraints.filters import pool_type_builders
+from may.social_networks.builder_functions.filters_and_constraints.filters import (
+    pool_type_builders,
+)
 from may.social_networks.builder_functions.numba_random import (
     build_activity_peers,
     build_intra_geo_unit,
@@ -46,9 +47,7 @@ class SocialNetworkBuilder:
         name = entry.get("name", "<unnamed>")
         for key in _REQUIRED_KEYS:
             if key not in entry:
-                raise ValueError(
-                    f"Network '{name}' missing required key '{key}'"
-                )
+                raise ValueError(f"Network '{name}' missing required key '{key}'")
         net_type = entry["network_type"]
         if net_type not in _NETWORK_TYPES:
             raise ValueError(
@@ -70,10 +69,12 @@ class SocialNetworkBuilder:
     def build_all(self) -> None:
         for entry in self.config.get("networks", []):
             network_name = entry.get("name", entry["storage_key"])
-            logger.info(f"Building network '{network_name}' "
-                        f"(network_type={entry['network_type']}, "
-                        f"pool_type={entry['pool_type']}, "
-                        f"storage_key={entry['storage_key']})")
+            logger.info(
+                f"Building network '{network_name}' "
+                f"(network_type={entry['network_type']}, "
+                f"pool_type={entry['pool_type']}, "
+                f"storage_key={entry['storage_key']})"
+            )
             if entry["network_type"] == "activity_peers":
                 build_activity_peers(self.world, entry)
             elif entry["network_type"] == "intra_geo_unit":

@@ -31,12 +31,13 @@ class Category:
         Category(name="Low Income", symbol="LI", attribute="income", type="numerical",
                 min_value=0, max_value=30000)
     """
+
     name: str
     symbol: str
-    attribute: str                      # e.g., "age", "income", "education"
-    type: str                           # "numerical" or "categorical"
-    min_value: Optional[float] = None   # For numerical types
-    max_value: Optional[float] = None   # For numerical types
+    attribute: str  # e.g., "age", "income", "education"
+    type: str  # "numerical" or "categorical"
+    min_value: Optional[float] = None  # For numerical types
+    max_value: Optional[float] = None  # For numerical types
     allowed_values: Optional[List[str]] = None  # For categorical types (future)
 
     def matches(self, entity: Any) -> bool:
@@ -60,7 +61,9 @@ class Category:
             return self.min_value <= attr_value <= self.max_value
         elif self.type == "categorical":
             if self.allowed_values is None:
-                raise ValueError(f"Category {self.name} is categorical but has no allowed_values")
+                raise ValueError(
+                    f"Category {self.name} is categorical but has no allowed_values"
+                )
             return attr_value in self.allowed_values
         else:
             raise ValueError(f"Unknown category type: {self.type}")
