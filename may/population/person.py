@@ -56,14 +56,8 @@ class Person:
             activities (set[str], optional): Set of activity names
             properties (dict, optional): Additional attributes
             activity_map (dict[str, dict[str, list[Subset]]], optional):
-              Nested dictionary mapping:
-                activity_name -> venue_type -> [subsets]
-              Examples:
-                - activity_map['residence']['household'] = [subset]
-                - activity_map['primary_activity']['own_land'] = [subset]
-                - activity_map['primary_activity']['lords_demesne'] = [subset]
-                - activity_map['leisure']['cinema'] = [subset1, subset2, subset3]
-              Default = {}.
+                Nested dictionary mapping activity names to venue types and subsets.
+                Default = {}.
 
         """
         self.id = Person._id_counter

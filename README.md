@@ -114,6 +114,6 @@ Python 3.13+ and the packages pinned in `requirements.txt` (`numpy`, `pandas`,
 
 ## License
 
-GNU General Public License v3.0. See [LICENSE](LICENSE).
+GNU General Public License v3.0. See [LICENSE](https://github.com/IDAS-Durham/MAY/blob/main/LICENSE).
 
 Copyright (C) 2026 Martha Correa. This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.

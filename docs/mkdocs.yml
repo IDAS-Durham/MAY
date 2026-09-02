@@ -15,6 +15,8 @@ plugins:
             show_submodules: true
             allow_inspection: true
             relative_crossrefs: true
+            docstring_options:
+              warn_missing_types: false
   - autorefs
   - search
   - awesome-nav

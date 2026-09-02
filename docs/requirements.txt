@@ -3,4 +3,4 @@ mkdocs-material
 mkdocstrings[python]
 mkdocs-autorefs
 mkdocs-awesome-nav
-mkdocs-gen-files
+mkdocs-gen-files<0.6

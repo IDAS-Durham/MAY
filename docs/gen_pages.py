@@ -26,5 +26,5 @@ for path in sorted(MAY_ROOT.rglob("*.py")):
 
     with mkdocs_gen_files.open(doc_path, "w") as documentation_file:
         documentation_file.write(
-            f"# {title}\n\n::: {module_path}\n    options:\n      docstring_style: google\n"
+            f"# {title}\n\n::: {module_path}\n    options:\n      docstring_style: google\n      docstring_options:\n        warn_missing_types: false\n"
         )

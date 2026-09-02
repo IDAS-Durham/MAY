@@ -1314,7 +1314,8 @@ class DataSourceManager:
 
         Args:
             source_name: Name of data source
-            *args, **kwargs: Arguments to pass to source's lookup method
+            args: Positional arguments to pass to the source's lookup method
+            kwargs: Keyword arguments to pass to the source's lookup method
 
         Returns:
             Probability distribution
