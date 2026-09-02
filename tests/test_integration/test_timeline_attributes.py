@@ -112,7 +112,7 @@ def test_person_by_residence_dependencies(fully_formed_world, test_dir):
     assigner = AttributeAssigner(config, data_manager)
     
     # We need to test the internal execution of _assign_household where topological sort happens
-    households = fully_formed_world.get_households()
+    households = fully_formed_world.get_residences_by_type("household")
     family_households = [h for h in households if h.size() >= 3] # e.g. a pattern holding >=1 adult and kids
     
     if family_households:

@@ -1257,14 +1257,7 @@ CategoricalSamplerStrategy = DrawStrategy
 GUSamplerStrategy = DrawStrategy
 
 
-class StrategyFactory:
-    """
-    Factory for creating strategy instances.
-
-    Maps strategy type strings to strategy classes.
-    """
-
-    _strategy_map = {
+_STRATEGIES = {
         'probabilistic': ProbabilisticStrategy,
         'partnership': PartnershipStrategy,
         'inheritance': InheritanceStrategy,
@@ -1276,22 +1269,11 @@ class StrategyFactory:
         'constant': ConstantStrategy,
     }
 
-    @classmethod
-    def create_strategy(cls, config: Dict[str, Any], data_manager) -> AssignmentStrategy:
-        """
-        Create strategy instance from configuration.
-
-        Args:
-            config: Strategy configuration dict
-            data_manager: DataSourceManager instance
-
-        Returns:
-            Strategy instance
-
-        Raises:
-            ValueError: If strategy type is unknown
-        """
-        validate_assignment_config(config)
-
-        strategy_class = cls._strategy_map.get(config['strategy'])
-        return strategy_class(config, data_manager)
+def create_strategy(config: Dict[str, Any], data_manager) -> AssignmentStrategy:
+    """Validate and instantiate one of the built-in assignment strategies."""
+    validate_assignment_config(config)
+    try:
+        strategy_class = _STRATEGIES[config['strategy']]
+    except KeyError:
+        raise ValueError(f"Unknown strategy type: {config.get('strategy')}") from None
+    return strategy_class(config, data_manager)

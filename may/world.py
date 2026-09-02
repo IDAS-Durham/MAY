@@ -50,17 +50,6 @@ class World:
             Person.register_residence_types(residence_types)
             logger.info(f"Registered {len(residence_types)} residence types: {residence_types}")
 
-    def get_households(self):
-        """
-        Get household-type residences (backwards compatible).
-
-        Returns:
-            List of Venue objects with type='household'
-        """
-        if self.venues:
-            return self.venues.get_venues_by_type("household")
-        return []
-
     def get_all_residences(self):
         """
         Get all residence venues (households, care homes, dorms, etc.).
@@ -117,7 +106,7 @@ class World:
 
         if self.venues:
             total_venues = sum(len(d) for d in self.venues.venues_by_type_and_id.values())
-            households = self.get_households()
+            households = self.get_residences_by_type("household")
             household_str = f"{len(households)} households"
             other_venues = total_venues - len(households)
             venue_str = f"{total_venues} venues ({household_str}, {other_venues} other)"
@@ -154,7 +143,7 @@ class World:
             }
 
         if self.household_distributor:
-            households = self.get_households()
+            households = self.get_residences_by_type("household")
             total_allocated = len(self.household_distributor.allocated_people)
             total_people = sum(len(pool) for pool in self.household_distributor.person_pool_by_geo_unit.values())
             stats['households'] = {

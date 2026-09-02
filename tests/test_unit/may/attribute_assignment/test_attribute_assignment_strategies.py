@@ -6,7 +6,7 @@ from may.attribute_assignment.strategies import (
     PartnershipStrategy,
     InheritanceStrategy,
     ReverseInheritanceStrategy,
-    StrategyFactory,
+    create_strategy,
 )
 
 
@@ -914,9 +914,9 @@ class TestReverseInheritanceStrategy:
         assert result in {"W", "A", "B"}
 
 
-# StrategyFactory Tests
+# Strategy dispatch tests
 
-class TestStrategyFactory:
+class TestStrategyDispatch:
     def test_creates_all_known_strategy_types(self):
         dm = SimpleDataManager()
         known_types = [
@@ -927,23 +927,23 @@ class TestStrategyFactory:
             ("constant", ConstantStrategy),
         ]
         for strategy_type, expected_class in known_types:
-            instance = StrategyFactory.create_strategy({"strategy": strategy_type}, dm)
+            instance = create_strategy({"strategy": strategy_type}, dm)
             assert isinstance(instance, expected_class), (
                 f"Expected {expected_class.__name__} for '{strategy_type}'"
             )
 
     def test_raises_on_unknown_strategy_type(self):
         with pytest.raises(ValueError, match="unknown strategy"):
-            StrategyFactory.create_strategy({"strategy": "nonexistent"}, SimpleDataManager())
+            create_strategy({"strategy": "nonexistent"}, SimpleDataManager())
 
     def test_raises_when_strategy_key_missing(self):
         with pytest.raises(ValueError, match="no 'strategy' field"):
-            StrategyFactory.create_strategy({}, SimpleDataManager())
+            create_strategy({}, SimpleDataManager())
 
     def test_raises_on_unread_keys(self):
         """Keys no strategy reads (e.g. the old `context`) fail loudly."""
         with pytest.raises(ValueError, match="does not read key.*context"):
-            StrategyFactory.create_strategy(
+            create_strategy(
                 {
                     "strategy": "probabilistic",
                     "data_source": "geo_distribution",
@@ -955,7 +955,7 @@ class TestStrategyFactory:
     def test_probabilistic_conditions_requires_selection_method(self):
         """No implicit default — selection_method must be declared."""
         with pytest.raises(ValueError, match="requires 'selection_method'"):
-            StrategyFactory.create_strategy(
+            create_strategy(
                 {"strategy": "probabilistic_conditions", "data_source": "x", "conditions": []},
                 SimpleDataManager(),
             )
@@ -963,7 +963,7 @@ class TestStrategyFactory:
     def test_probabilistic_conditions_rejects_unknown_selection_method(self):
         """An unknown selection_method fails at load, not deep in assign."""
         with pytest.raises(ValueError, match="unknown selection_method"):
-            StrategyFactory.create_strategy(
+            create_strategy(
                 {
                     "strategy": "probabilistic_conditions",
                     "data_source": "x",

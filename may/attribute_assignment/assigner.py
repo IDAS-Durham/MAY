@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from .assignment_config import AttributeAssignmentConfig
 from .data_sources import DataSourceManager
-from .strategies import StrategyFactory
+from .strategies import create_strategy
 from may.utils.attribute_access import get_attribute
 
 logger = logging.getLogger("may.attribute_assignment.assigner")
@@ -162,7 +162,7 @@ class AttributeAssigner:
         # Check cache
         if config_key not in self._strategy_cache:
             # Create new strategy
-            self._strategy_cache[config_key] = StrategyFactory.create_strategy(
+            self._strategy_cache[config_key] = create_strategy(
                 assignment_config, self.data_manager
             )
 

@@ -64,8 +64,8 @@ def test_venue_retrieval(geography, population_manager, venue_manager):
     """
     world = World(geography=geography, population=population_manager, venues=venue_manager)
     
-    # 1. get_households
-    sys_households = world.get_households()
+    # 1. household residences via the canonical residence lookup
+    sys_households = world.get_residences_by_type("household")
     assert isinstance(sys_households, list)
     
     # 2. get_all_residences
@@ -75,6 +75,8 @@ def test_venue_retrieval(geography, population_manager, venue_manager):
     # 3. by_type explicit wrapper
     sys_specific = world.get_residences_by_type("household")
     assert isinstance(sys_specific, list)
+    assert sys_specific == venue_manager.get_venues_by_type("household")
+    assert world.get_residences_by_type("missing_residence_type") == []
 
 def test_world_statistics_and_representation(geography, population_manager, venue_manager, household_distributor):
     """

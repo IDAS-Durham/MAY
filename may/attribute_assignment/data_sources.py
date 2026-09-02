@@ -1211,7 +1211,7 @@ class DataSourceManager:
     def _initialize_sources(self):
         """Initialize data sources from config (explicit type/format dispatch)."""
         for source_name, source_config in self.config.data_sources.items():
-            source_type = source_config.type
+            source_type = source_config.get('type', 'csv_lookup')
 
             if source_type == 'constant':
                 logger.debug(f"Skipping constant source: {source_name}")
@@ -1222,7 +1222,7 @@ class DataSourceManager:
                     "(expected 'csv_lookup')."
                 )
 
-            fmt = source_config.config.get('format')
+            fmt = source_config.get('format')
             cls = self._CSV_FORMATS.get(fmt)
             if cls is None:
                 raise ValueError(
@@ -1232,9 +1232,9 @@ class DataSourceManager:
 
             # MultiKeyLookupSource needs the assignment config for key/category resolution.
             if cls is MultiKeyLookupSource:
-                self.sources[source_name] = cls(source_name, source_config.config, self.config)
+                self.sources[source_name] = cls(source_name, source_config, self.config)
             else:
-                self.sources[source_name] = cls(source_name, source_config.config)
+                self.sources[source_name] = cls(source_name, source_config)
 
     def load_all(self, geo_units: Optional[set] = None,
                  geo_units_by_level: Optional[Dict[str, set]] = None):

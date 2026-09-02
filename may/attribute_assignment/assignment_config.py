@@ -63,21 +63,6 @@ def _pattern_matches_cached(actual: str, template: str) -> bool:
 
 
 @dataclass
-class DataSourceConfig:
-    """
-    Configuration for a data source.
-
-    Data sources provide probability distributions for attribute values
-    based on context (e.g., geographical unit code, first person's ethnicity, etc.).
-    """
-    name: str
-    type: str
-    description: str
-    files: List[Dict[str, Any]] = field(default_factory=list)
-    config: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class MatchingRule:
     """
     A rule for matching household patterns.
@@ -531,21 +516,9 @@ class AttributeAssignmentConfig:
 
         return structures
 
-    def _parse_data_sources(self) -> Dict[str, DataSourceConfig]:
-        """Parse data sources into DataSourceConfig objects."""
-        sources = {}
-        sources_config = self.raw_config.get('data_sources', {})
-
-        for source_name, source_data in sources_config.items():
-            sources[source_name] = DataSourceConfig(
-                name=source_name,
-                type=source_data.get('type', 'csv_lookup'),
-                description=source_data.get('description', ''),
-                files=source_data.get('files', []),
-                config=source_data
-            )
-
-        return sources
+    def _parse_data_sources(self) -> Dict[str, Dict[str, Any]]:
+        """Keep source settings in their validated YAML shape."""
+        return self.raw_config.get('data_sources', {})
 
     def _parse_assignment_rules(self) -> Dict[str, StructureAssignmentRules]:
         """Parse structure-based assignment rules."""

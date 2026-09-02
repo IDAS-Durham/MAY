@@ -93,13 +93,6 @@ class MinimalHousehold:
         self.geographical_unit = geographical_unit
 
 
-class MinimalDataSourceConfig:
-    """Mimics the config object returned by _parse_data_sources."""
-    def __init__(self, source_type, config):
-        self.type = source_type
-        self.config = config
-
-
 class MinimalAssignmentConfig:
     """Mimics AttributeAssignmentConfig for MultiKeyLookupSource."""
     def __init__(self, required_attributes=None, categories=None):
@@ -913,7 +906,7 @@ class TestDataSourceManagerRouting:
         config = MinimalAssignmentConfig()
         config.data_sources = {}
         for name, (source_type, source_config) in data_sources.items():
-            config.data_sources[name] = MinimalDataSourceConfig(source_type, source_config)
+            config.data_sources[name] = {"type": source_type, **source_config}
         return config
 
     def test_format_geo_distribution(self):
