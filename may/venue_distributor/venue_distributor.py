@@ -23,7 +23,7 @@ from may.utils.stacked_input import as_path_list, load_stacked_csv
 
 import logging
 import numpy as np
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

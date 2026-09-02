@@ -488,8 +488,8 @@ def allocate_overflow_to_households(
 
 
 def _select_person_for_excess_with_rule(
-    self, household: Venue, candidates: List["Person"], add_category: str, rule
-) -> Optional["Person"]:
+    self, household: Venue, candidates: List[Person], add_category: str, rule
+) -> Optional[Person]:
     """
     Select a person to add to an existing household using relationship rules.
 
