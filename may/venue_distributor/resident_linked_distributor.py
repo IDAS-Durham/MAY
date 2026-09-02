@@ -42,24 +42,6 @@ class ResidentLinkedDistributor(BaseDistributor):
         )
         logger.info(f"  Link level: {self.link_level}, Multiplier: {self.multiplier}")
 
-    def _pre_process_filters(self, filters: List[Dict]) -> List[Dict]:
-        """Pre-process filters to avoid repeated path parsing."""
-        processed = []
-        for f in filters:
-            p_filter = f.copy()
-            attr_name = f.get("attribute")
-            if attr_name:
-                parts = attr_name.split(".")
-                p_filter["path_parts"] = parts
-                p_filter["is_nested"] = len(parts) > 1
-                p_filter["is_residence"] = parts[0] == "residence"
-                if p_filter["is_residence"]:
-                    p_filter["residence_parts"] = parts[1:]
-            else:
-                p_filter["is_nested"] = False
-            processed.append(p_filter)
-        return processed
-
     def allocate(self, world):
         """
         Main allocation logic for large-scale populations.

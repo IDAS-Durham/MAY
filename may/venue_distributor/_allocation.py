@@ -3,15 +3,7 @@
 import numpy as np
 from typing import Tuple
 
-FALLBACK_STRATEGIES = {"skip", "relax_distance", "relax_capacity", "assign_closest"}
-SPECIAL_CASE_STRATEGIES = {"closest", "random"}
-SELECT_VENUE_STRATEGIES = {
-    "random",
-    "closest",
-    "proportional",
-    "closest_balanced",
-    "largest_capacity",
-}
+__all__ = "FALLBACK_STRATEGIES", "SPECIAL_CASE_STRATEGIES", "SELECT_VENUE_STRATEGIES"
 
 
 def _multinomial_capacity_draw(remaining: np.ndarray, n: int) -> Tuple[np.ndarray, int]:
@@ -46,9 +38,9 @@ def _multinomial_capacity_draw(remaining: np.ndarray, n: int) -> Tuple[np.ndarra
 
 
 from ._filtering import _FilteringMixin
-from ._fallbacks import _FallbackMixin
-from ._special_cases import _SpecialCasesMixin
-from ._matching import _MatchingMixin
+from ._fallbacks import FALLBACK_STRATEGIES, _FallbackMixin
+from ._special_cases import SPECIAL_CASE_STRATEGIES, _SpecialCasesMixin
+from ._matching import SELECT_VENUE_STRATEGIES, _MatchingMixin
 from ._strategies import _AllocationMixin
 from ._reporting import _ReportingMixin
 from may.utils.attribute_access import get_attribute

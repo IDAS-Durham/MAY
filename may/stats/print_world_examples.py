@@ -1,7 +1,7 @@
 import logging
 import random
 
-from . import StatMakerVenues
+from .stats_venues import StatMakerVenues
 
 logger = logging.getLogger(__name__)
 

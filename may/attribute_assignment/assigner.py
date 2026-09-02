@@ -935,7 +935,7 @@ class AttributeAssigner:
         return result
 
     def _get_person_residence_venue(self, person):
-        """Get residence venue for a person (e.g., household, pub, care home)."""
+        """Get residence venue for a person (e.g., household, boarding school, care home)."""
         # UNIFIED STRUCTURE: activity_map['residence'][venue_type] = [subsets]
         if "residence" in person.activity_map:
             for venue_type, subsets in person.activity_map["residence"].items():
