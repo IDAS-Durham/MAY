@@ -4,9 +4,9 @@ Configuration and command-line argument handling for MAY.
 
 import os
 import logging
-import yaml
 from may.geography import Geography
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger("config_loader")
 
@@ -25,8 +25,7 @@ def load_config(config_path="config.yaml"):
         logger.warning(f"Config file not found: {config_path}, using defaults")
         return {}
 
-    with open(config_path, 'r', encoding='utf-8-sig') as f:
-        config = yaml.safe_load(f)
+    config = load_yaml(config_path)
 
     logger.info(f"Loaded configuration from {config_path}")
     return config

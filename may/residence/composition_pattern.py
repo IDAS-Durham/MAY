@@ -13,6 +13,23 @@ from functools import lru_cache
 logger = logging.getLogger("composition_pattern")
 
 
+def _evaluate_operator(actual: int, operator: str, expected: int) -> bool:
+    """Evaluate a comparison operator."""
+    if operator == ">=":
+        return actual >= expected
+    elif operator == ">":
+        return actual > expected
+    elif operator == "==":
+        return actual == expected
+    elif operator == "<=":
+        return actual <= expected
+    elif operator == "<":
+        return actual < expected
+    else:
+        logger.warning(f"Unknown operator '{operator}', assuming False")
+        return False
+
+
 @lru_cache(maxsize=1024)
 def _parse_pattern_cached(pattern: str) -> Tuple[Tuple[str, int], ...]:
     """
@@ -130,7 +147,7 @@ class CompositionPattern:
             # Evaluate condition
             cond_operator = condition.get('operator')
             cond_value = condition.get('value')
-            if not self._evaluate_operator(cond_count, cond_operator, cond_value):
+            if not _evaluate_operator(cond_count, cond_operator, cond_value):
                 continue # Condition not met, skip to next rule
 
             # Condition met, check requirement(s)
@@ -150,7 +167,7 @@ class CompositionPattern:
                 req_operator = req.get('operator')
                 req_value = req.get('value')
                 
-                if self._evaluate_operator(req_count, req_operator, req_value):
+                if _evaluate_operator(req_count, req_operator, req_value):
                     any_req_met = True
                     break
 
@@ -160,32 +177,6 @@ class CompositionPattern:
                 return False
 
         return True
-
-    def _evaluate_operator(self, actual: int, operator: str, expected: int) -> bool:
-        """
-        Evaluate a comparison operator.
-
-        Args:
-            actual: Actual value
-            operator: Comparison operator (>=, >, ==, <=, <)
-            expected: Expected value
-
-        Returns:
-            bool: True if comparison holds, False otherwise
-        """
-        if operator == ">=":
-            return actual >= expected
-        elif operator == ">":
-            return actual > expected
-        elif operator == "==":
-            return actual == expected
-        elif operator == "<=":
-            return actual <= expected
-        elif operator == "<":
-            return actual < expected
-        else:
-            logger.warning(f"Unknown operator '{operator}', assuming False")
-            return False
 
     def demote_once(self, priority_order: List[int]) -> Optional['CompositionPattern']:
         """

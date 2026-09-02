@@ -4,8 +4,6 @@ Venues are places where people live, work, learn, or receive services.
 """
 
 import logging
-import pandas as pd
-import os
 from may.population import Subset
 
 logger = logging.getLogger("venue")

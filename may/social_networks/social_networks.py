@@ -1,8 +1,8 @@
 """YAML-driven construction of the built-in social network types."""
 
 import logging
-import yaml
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 from may.social_networks.builder_functions.filters_and_constraints.filters import pool_type_builders
 from may.social_networks.builder_functions.numba_random import (
@@ -64,8 +64,7 @@ class SocialNetworkBuilder:
 
     @classmethod
     def from_yaml(cls, world, yaml_path: str) -> "SocialNetworkBuilder":
-        with open(pr.resolve(yaml_path), encoding="utf-8-sig") as f:
-            config = yaml.safe_load(f)
+        config = load_yaml(yaml_path)
         return cls(world, config)
 
     def build_all(self) -> None:

@@ -1,7 +1,5 @@
 import numpy as np
-from scipy import stats
 import logging
-import random
 
 from .statmaker import StatMaker
 

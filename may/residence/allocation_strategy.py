@@ -8,12 +8,12 @@ import csv
 import os
 import logging
 import operator
-import yaml
 from typing import Dict, List, Optional
 from .venue_allocator import _allocate_to_venue_type
 from .household_distributor import HouseholdError
 from .composition_pattern import CompositionPattern
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 from may.utils import build_profile as bp
 
 logger = logging.getLogger("allocation_strategy")
@@ -51,8 +51,7 @@ def execute_allocation_strategy(population,
 
     # Load strategy configuration
     logger.info(f"Loading allocation strategy from {strategy_file}")
-    with open(strategy_file, 'r', encoding='utf-8-sig') as f:
-        strategy = yaml.safe_load(f)
+    strategy = load_yaml(strategy_file)
 
     # Check if enabled
     if not strategy.get('enabled', True):

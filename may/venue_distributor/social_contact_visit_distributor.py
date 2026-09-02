@@ -8,10 +8,10 @@ social_contacts are already populated.
 The activity allows disease modeling to track visits to contacts' homes.
 """
 
-import yaml
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,7 @@ class SocialContactVisitDistributor:
 
     def _load_config(self, config_path: str) -> Dict:
         """Load and parse YAML configuration file."""
-        with open(config_path, 'r', encoding='utf-8-sig') as f:
-            config = yaml.safe_load(f)
-        return config
+        return load_yaml(config_path)
 
     def _check_eligibility(self, person) -> bool:
         """

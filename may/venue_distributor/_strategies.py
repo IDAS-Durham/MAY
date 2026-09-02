@@ -1,6 +1,6 @@
 import numpy as np
 from collections import defaultdict
-from typing import List, Dict, Tuple
+from typing import List
 from ._allocation import _multinomial_capacity_draw
 import logging
 

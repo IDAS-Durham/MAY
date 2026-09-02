@@ -1,10 +1,10 @@
 import logging
 import pandas as pd
 import os
-import yaml
 from collections import defaultdict
 from .venue import Venue
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger("venuemanager")
 
@@ -410,8 +410,7 @@ class VenueManager:
             raise VenueError(f"Venue config file not found: {config_path}")
 
         logger.info(f"Loading venue configuration from {config_path}")
-        with open(config_path, 'r', encoding='utf-8-sig') as f:
-            config = yaml.safe_load(f)
+        config = load_yaml(config_path)
 
         if not config:
             raise VenueError(f"Empty venue configuration file: {config_path}")

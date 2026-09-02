@@ -1,14 +1,13 @@
-import yaml
 import math
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
-from collections import defaultdict
 from scipy.spatial import cKDTree
 import logging
 from may.utils import path_resolver as pr
 from may.utils.attribute_access import _compile_attribute, get_attribute
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +62,7 @@ class BaseDistributor:
 
     def _load_config(self, config_path: str) -> Dict:
         """Load and parse YAML configuration file."""
-        with open(config_path, 'r', encoding='utf-8-sig') as f:
-            return yaml.safe_load(f)
+        return load_yaml(config_path)
 
     def _get_person_location(self, person) -> Optional[Tuple[float, float]]:
         """Get person's coordinates from their residence or geographical unit."""

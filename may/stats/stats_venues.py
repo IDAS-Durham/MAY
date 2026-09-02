@@ -1,5 +1,4 @@
 import numpy as np
-from scipy import stats
 import logging
 import random
 
@@ -83,4 +82,3 @@ class StatMakerVenues(StatMaker):
     def print_extremes(self, venue_type):
         logger.info(f"Extreme {venue_type} types:")
         self.get_extreme_membership(venue_type)
-

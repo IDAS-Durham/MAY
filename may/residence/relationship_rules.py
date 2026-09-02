@@ -16,8 +16,8 @@ Everything is configurable and pattern-based.
 
 import os
 import logging
-import yaml
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 import numpy as np
 from operator import attrgetter
 from collections import defaultdict
@@ -115,8 +115,7 @@ class RelationshipRulesValidator:
 
     def _load_config(self, config_file: str):
         """Load configuration from YAML file."""
-        with open(pr.resolve(config_file), 'r', encoding='utf-8-sig') as f:
-            config = yaml.safe_load(f)
+        config = load_yaml(config_file)
 
         # An empty YAML body parses to None. Treat it the same as a missing
         # file: leave the validator disabled with no rules.

@@ -10,10 +10,7 @@ import logging
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from typing import Dict, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from may.geography import GeographicalUnit
+from typing import Dict
 
 from .person import Person
 

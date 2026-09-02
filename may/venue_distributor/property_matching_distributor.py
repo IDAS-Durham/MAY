@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict
 from .base_distributor import BaseDistributor
 
 logger = logging.getLogger("property_matching_distributor")

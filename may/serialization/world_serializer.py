@@ -181,9 +181,6 @@ class WorldSerializer:
 
         num_units = len(units_list)
 
-        # Create ID → index mapping for efficient lookup
-        id_to_index = {unit.id: idx for idx, unit in enumerate(units_list)}
-
         # Core attributes (always included)
         ids = np.array([unit.id for unit in units_list], dtype=np.int32)
         
@@ -874,8 +871,6 @@ class WorldSerializer:
         offsets_ds = self._create_empty_dataset(subsets_group, 'members_offsets', np.int32, (num_subsets,))
 
         current_member_idx = 0
-        all_offsets = []
-
         logger.info(f"    Writing subset memberships in chunks...")
         for i in range(0, num_subsets, chunk_size):
             end = min(i + chunk_size, num_subsets)
@@ -971,8 +966,6 @@ class WorldSerializer:
         offsets_ds = self._create_empty_dataset(activity_map_group, 'activity_offsets', np.int32, (num_people,))
         
         current_mapping_idx = 0
-        activity_offsets = []
-
         logger.info(f"    Writing activity mappings in chunks...")
         for i in range(0, num_people, chunk_size):
             end = min(i + chunk_size, num_people)
@@ -1277,8 +1270,8 @@ class WorldSerializer:
         
         # Add venue types mapping
         if hasattr(self, '_venue_type_id_map'):
-            vtype_reg = registry_group.create_dataset('venue_types', 
-                                                     data=np.array(list(self._venue_type_id_map.keys()), dtype=h5py.string_dtype()))
+            registry_group.create_dataset('venue_types',
+                                         data=np.array(list(self._venue_type_id_map.keys()), dtype=h5py.string_dtype()))
             
         # Add geo levels mapping
         if 'geo_levels' in self.registries:

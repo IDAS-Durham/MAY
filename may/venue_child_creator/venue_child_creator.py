@@ -11,12 +11,12 @@ Example workflow:
 """
 
 import logging
-import yaml
 import math
 from collections import defaultdict
 
 from may.utils.attribute_access import get_attribute
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger("venue_child_creator")
 
@@ -152,8 +152,7 @@ class VenueChildCreator:
         yaml_file = pr.resolve(str(yaml_file))
         logger.info(f"Loading VenueChildCreator config from {yaml_file}")
 
-        with open(yaml_file, 'r', encoding='utf-8-sig') as f:
-            config = yaml.safe_load(f)
+        config = load_yaml(yaml_file)
 
         instance = cls(
             parent_venue_type=config['parent_venue_type'],

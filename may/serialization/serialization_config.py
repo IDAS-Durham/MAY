@@ -6,9 +6,9 @@ to include when exporting world state to HDF5.
 """
 
 import logging
-import yaml
 import os
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger("serialization_config")
 
@@ -53,8 +53,7 @@ class SerializationConfig:
 
         logger.info(f"Loading serialization config from {self.config_file}")
 
-        with open(self.config_file, 'r', encoding='utf-8-sig') as f:
-            self.config = yaml.safe_load(f)
+        self.config = load_yaml(self.config_file)
 
         if not self.config:
             raise ValueError(f"Empty serialization config: {self.config_file}")

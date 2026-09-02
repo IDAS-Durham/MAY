@@ -1,7 +1,10 @@
 import pytest
 import copy
 
-from may.residence.composition_pattern import CompositionPattern
+from may.residence.composition_pattern import (
+    CompositionPattern,
+    _evaluate_operator,
+)
 
 # 1. Parsing & Construction
 def test_parse_real_patterns():
@@ -248,13 +251,12 @@ def test_validate_unknown_category(validation_rules, cat_map):
 
 # 9. operator evaluation internals
 def test_evaluate_operator():
-    cp = CompositionPattern.from_string("0")
-    assert cp._evaluate_operator(5, ">=", 3) is True
-    assert cp._evaluate_operator(5, ">", 3) is True
-    assert cp._evaluate_operator(5, "==", 5) is True
-    assert cp._evaluate_operator(5, "<=", 5) is True
-    assert cp._evaluate_operator(5, "<", 10) is True
-    assert cp._evaluate_operator(5, "foo", 5) is False
+    assert _evaluate_operator(5, ">=", 3) is True
+    assert _evaluate_operator(5, ">", 3) is True
+    assert _evaluate_operator(5, "==", 5) is True
+    assert _evaluate_operator(5, "<=", 5) is True
+    assert _evaluate_operator(5, "<", 10) is True
+    assert _evaluate_operator(5, "foo", 5) is False
 
 # 10. Edge cases
 def test_empty_pattern():

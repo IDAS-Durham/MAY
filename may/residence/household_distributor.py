@@ -11,7 +11,6 @@ This module handles:
 import os
 import logging
 import time
-import yaml
 import math
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Set
@@ -23,6 +22,7 @@ from may.geography.venue import Venue
 from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
+from may.utils.yaml_loader import load_yaml
 from may.residence.relationship_rules import RelationshipRulesValidator
 from may.utils import path_resolver as pr
 from may.residence.models import Category
@@ -78,8 +78,7 @@ class HouseholdDistributor:
             config_path = os.path.join(data_dir, config_file)
 
         try:
-            with open(config_path, 'r', encoding='utf-8-sig') as f:
-                self.config = yaml.safe_load(f)
+            self.config = load_yaml(config_path)
         except FileNotFoundError:
             raise HouseholdError(f"Household config file not found: {config_path}")
         if not self.config:

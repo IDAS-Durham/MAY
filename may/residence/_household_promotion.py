@@ -4,7 +4,10 @@ import logging
 import numpy as np
 from typing import List, Optional, Dict
 from itertools import islice
-from may.residence.composition_pattern import CompositionPattern
+from may.residence.composition_pattern import (
+    CompositionPattern,
+    _evaluate_operator,
+)
 
 logger = logging.getLogger("household")
 
@@ -54,9 +57,7 @@ def _adding_person_satisfies_rules(self, household, category_name: str,
         cond_operator = condition.get('operator')
         cond_value = condition.get('value')
 
-        # Use the existing operator evaluator from CompositionPattern
-        cp = CompositionPattern.from_string("0")  # dummy — just for _evaluate_operator
-        if not cp._evaluate_operator(cond_count, cond_operator, cond_value):
+        if not _evaluate_operator(cond_count, cond_operator, cond_value):
             continue  # condition not triggered
 
         # Condition is met — check requirement(s)
@@ -69,7 +70,7 @@ def _adding_person_satisfies_rules(self, household, category_name: str,
             req_count = simulated.get(req_category, 0)
             req_operator = req.get('operator')
             req_value = req.get('value')
-            if cp._evaluate_operator(req_count, req_operator, req_value):
+            if _evaluate_operator(req_count, req_operator, req_value):
                 any_req_met = True
                 break
 

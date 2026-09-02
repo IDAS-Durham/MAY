@@ -866,9 +866,6 @@ def _load_subsets(subsets_group, venues_by_global_id, subset_names_arr=None, sli
     member_counts = subsets_group['member_counts'][:]
 
     # Read member lists (ragged array)
-    members_flat = subsets_group['members_flat'][:]
-    members_offsets = subsets_group['members_offsets'][:]
-
     num_subsets = len(venue_ids)
 
     # Create Subset objects (members will be added later during relationship loading)

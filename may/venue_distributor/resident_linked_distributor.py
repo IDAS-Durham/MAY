@@ -1,8 +1,7 @@
 import logging
 import random
-import numpy as np
 import time
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from .base_distributor import BaseDistributor
 from ._allocation import VenueAllocation
 

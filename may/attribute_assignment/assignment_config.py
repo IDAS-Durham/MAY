@@ -8,7 +8,6 @@ Simplified attribute assignment configuration:
 - Cleaner, more user-friendly configuration format
 """
 
-import yaml
 import logging
 from collections import defaultdict
 from typing import Dict, List, Any, Optional
@@ -18,6 +17,7 @@ from functools import lru_cache
 from may.residence.composition_pattern import CompositionPattern
 from may.attribute_assignment.strategies import validate_assignment_config
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 
 logger = logging.getLogger("may.attribute_assignment.config")
 
@@ -343,8 +343,7 @@ class AttributeAssignmentConfig:
         """Load configuration from YAML."""
         self.config_path = Path(pr.resolve(str(config_path)))
 
-        with open(self.config_path, 'r', encoding='utf-8-sig') as f:
-            self.raw_config = yaml.safe_load(f)
+        self.raw_config = load_yaml(self.config_path)
 
         # Parse sections
         self.attributes = self._parse_attributes()

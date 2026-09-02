@@ -39,8 +39,8 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-import yaml
 from may.utils import path_resolver as pr
+from may.utils.yaml_loader import load_yaml
 from may.utils.attribute_access import get_attribute
 from may.utils.stacked_input import as_path_list, load_stacked_csv
 
@@ -110,8 +110,7 @@ class RomanticDistributor:
     @staticmethod
     def _load_config(config) -> dict:
         if isinstance(config, str):
-            with open(pr.resolve(config), 'r', encoding='utf-8-sig') as f:
-                return yaml.safe_load(f)
+            return load_yaml(config)
         return config
 
     def _load_data_sources(self, ds: Dict):
