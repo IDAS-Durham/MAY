@@ -38,7 +38,7 @@ class SocialContactVisitDistributor:
         """
         # Load config
         if config_file:
-            self.config = self._load_config(config_file)
+            self.config = load_yaml(config_file)
             self.config_path = Path(config_file)
         elif config_dict:
             self.config = config_dict
@@ -80,10 +80,6 @@ class SocialContactVisitDistributor:
             f"source='{self.source_property_key}', "
             f"max_contacts={self.max_contacts}"
         )
-
-    def _load_config(self, config_path: str) -> Dict:
-        """Load and parse YAML configuration file."""
-        return load_yaml(config_path)
 
     def _check_eligibility(self, person) -> bool:
         """

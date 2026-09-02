@@ -32,7 +32,7 @@ class BaseDistributor:
         """
         if config_file:
             config_file = pr.resolve(str(config_file))
-            self.config = self._load_config(config_file)
+            self.config = load_yaml(config_file)
             self.config_path = Path(config_file)
         elif config_dict:
             self.config = config_dict
@@ -63,10 +63,6 @@ class BaseDistributor:
         self.population_arrays = {}
         self.person_id_to_index = {}
         self.attribute_mappings = {}  # attr_name -> {value: int_index}
-
-    def _load_config(self, config_path: str) -> Dict:
-        """Load and parse YAML configuration file."""
-        return load_yaml(config_path)
 
     def _get_person_location(self, person) -> Optional[Tuple[float, float]]:
         """Get person's coordinates from their residence or geographical unit."""

@@ -47,15 +47,13 @@ class StatMakerVenues(StatMaker):
                 )
             )
 
-    def get_example_membership(
-        self, venue_type: str, n_examples=3, stats_label: str = None
-    ):
+    def get_example_membership(self, venue_type: str, n_examples=3):
         my_venues = self.venue_manager.get_venues_by_type(venue_type)
         for i in range(n_examples):
             example_venue = random.choice(my_venues)
             self.print_venue_comp(example_venue)
 
-    def get_extreme_membership(self, venue_type: str, stats_label: str = None):
+    def get_extreme_membership(self, venue_type: str):
         my_venues = self.venue_manager.get_venues_by_type(venue_type)
         num_subsets = len(my_venues[0].subsets)
         subset_numbers = np.zeros((len(my_venues), num_subsets))
