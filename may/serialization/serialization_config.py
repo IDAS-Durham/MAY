@@ -15,7 +15,7 @@ logger = logging.getLogger("serialization_config")
 
 class SerializationConfig:
     """
-    Loads and validates serialization configuration from YAML.
+    Loads and normalizes serialization configuration from YAML.
 
     The config file specifies which properties to include for:
     - Population (person.properties)
@@ -60,48 +60,27 @@ class SerializationConfig:
         if not self.config:
             raise ValueError(f"Empty serialization config: {self.config_file}")
 
-        # Parse each section
-        self._parse_population()
-        self._parse_geography()
-        self._parse_venues()
-        self.relationships = self.config.get("relationships", {})
-        self.output_settings = self.config.get("output", {})
-
-    def _parse_population(self):
-        """Parse population configuration section."""
-        pop_config = self.config.get("population", {})
-        self.population_properties = pop_config.get("properties", [])
-
+        population = self.config.get("population", {})
+        self.population_properties = population.get("properties", [])
         logger.info(
             f"Population: {len(self.population_properties)} additional properties to serialize"
         )
         if self.population_properties:
             logger.info(f"  Properties: {self.population_properties}")
 
-    def _parse_geography(self):
-        """Parse geography configuration section."""
-        geo_config = self.config.get("geography", {})
-        self.geography_include_coordinates = geo_config.get("include_coordinates", True)
-        self.geography_properties = geo_config.get("properties", [])
-
+        geography = self.config.get("geography", {})
+        self.geography_include_coordinates = geography.get("include_coordinates", True)
+        self.geography_properties = geography.get("properties", [])
         logger.info(
             f"Geography: coordinates={self.geography_include_coordinates}, "
             f"{len(self.geography_properties)} additional properties"
         )
 
-    def _parse_venues(self):
-        """Parse venues configuration section."""
-        venues_config = self.config.get("venues", {})
-
-        # Global settings
-        self.venue_global_settings = venues_config.get("global", {})
-
-        # Per-type properties
-        types_config = venues_config.get("types", {})
-        for venue_type, type_config in types_config.items():
+        venues = self.config.get("venues", {})
+        self.venue_global_settings = venues.get("global", {})
+        for venue_type, type_config in venues.get("types", {}).items():
             properties = type_config.get("properties", [])
             self.venue_type_properties[venue_type] = properties
-
             if properties:
                 logger.info(
                     f"Venue '{venue_type}': {len(properties)} properties to serialize"
@@ -111,3 +90,6 @@ class SerializationConfig:
                 logger.debug(
                     f"Venue '{venue_type}': minimal serialization (core attributes only)"
                 )
+
+        self.relationships = self.config.get("relationships", {})
+        self.output_settings = self.config.get("output", {})

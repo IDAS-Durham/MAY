@@ -83,14 +83,30 @@ class BaseDistributor:
         return processed
 
     def _get_person_location(self, person) -> Optional[Tuple[float, float]]:
-        """Get person's coordinates from their residence or geographical unit."""
+        """Get a person's coordinates from the configured location source."""
+        source = self.config.get("venue_selection", {}).get(
+            "locate_person_by", "geographical_unit.coordinates"
+        )
+        location = get_attribute(person, source, nested_properties=False)
+        if source.startswith("properties.") and isinstance(location, str):
+            world = getattr(self, "world", None)
+            geography = getattr(world, "geography", None)
+            location = geography.get_unit(location) if geography else None
+        if location is not None and hasattr(location, "coordinates"):
+            location = location.coordinates
+        if location is not None and not isinstance(location, str):
+            try:
+                if len(location) == 2:
+                    return tuple(location)
+            except TypeError:
+                pass
+        if source.startswith("properties."):
+            return None
+
         residence = get_attribute(person, "residence")
         lat, lon = get_attribute(residence, "lat"), get_attribute(residence, "lon")
         if lat is not None and lon is not None:
             return (lat, lon)
-        coordinates = get_attribute(person, "geographical_unit.coordinates")
-        if coordinates:
-            return tuple(coordinates)
         return None
 
     def _get_venue_location(self, venue) -> Optional[Tuple[float, float]]:

@@ -61,12 +61,6 @@ class VenueDistributor(BaseDistributor):
         # One internal owner keeps the allocation state together.
         self.allocation = VenueAllocation(self)
 
-        # Where to locate the person for venue matching (e.g. 'geographical_unit.coordinates'
-        # for residence, or 'properties.workplace_sgu' for work location).
-        self.person_loc_attr = self.config.get("venue_selection", {}).get(
-            "locate_person_by", "geographical_unit.coordinates"
-        )
-
         self._pre_processed_filters = self._pre_process_filters(
             self.config.get("eligibility", {}).get("global_filters", [])
         )
@@ -629,14 +623,3 @@ class VenueDistributor(BaseDistributor):
             return self.allocation.allocate_by_geo_unit(people, venues)
         else:
             return self.allocation.allocate_individual(people, venues)
-
-    def _get_person_location(self, person) -> Optional[Tuple[float, float]]:
-        """Get person's location coordinates."""
-        # Try configured source first
-        source = self.person_loc_attr
-        if source == "geographical_unit.coordinates":
-            if hasattr(person, "geographical_unit") and person.geographical_unit:
-                return person.geographical_unit.coordinates
-
-        # Fallback to general base distributor logic
-        return get_attribute(person, "geographical_unit.coordinates")

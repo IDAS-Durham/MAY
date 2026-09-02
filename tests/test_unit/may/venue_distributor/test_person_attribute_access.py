@@ -10,9 +10,11 @@ resolver: the distributor's `required_person_attributes` gate, the residence all
 """
 import pytest
 import yaml
+from types import SimpleNamespace
 
 from may.population.person import Person
 from may.residence.venue_allocator import _get_eligible_people
+from may.venue_distributor.base_distributor import BaseDistributor
 from may.venue_distributor.venue_distributor import VenueDistributor
 
 
@@ -128,3 +130,21 @@ def test_venue_filtering_without_prefetched_attributes(rel):
     assert d.allocation.filter_venues_by_person(
         _person(work_sector="G"), [], person_attrs=None
     ) == []
+
+
+def test_person_location_uses_configured_source():
+    home = SimpleNamespace(coordinates=(1.0, 2.0))
+    workplace = SimpleNamespace(coordinates=(3.0, 4.0))
+    person = _person(geographical_unit=home, workplace_mgu="WORK")
+    distributor = BaseDistributor(config_dict={
+        "venue_selection": {"locate_person_by": "properties.workplace_mgu"},
+    })
+    distributor.world = SimpleNamespace(
+        geography=SimpleNamespace(
+            get_unit=lambda name: workplace if name == "WORK" else None
+        )
+    )
+
+    assert distributor._get_person_location(person) == (3.0, 4.0)
+    person.properties.pop("workplace_mgu")
+    assert distributor._get_person_location(person) is None
