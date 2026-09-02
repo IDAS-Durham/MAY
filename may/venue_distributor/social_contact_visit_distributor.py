@@ -223,16 +223,3 @@ class SocialContactVisitDistributor:
             )
 
         return self.stats
-
-    @classmethod
-    def from_yaml(cls, yaml_path: str):
-        """
-        Factory method to create distributor from YAML file.
-
-        Args:
-            yaml_path: Path to YAML config file
-
-        Returns:
-            SocialContactVisitDistributor instance
-        """
-        return cls(config_file=yaml_path)

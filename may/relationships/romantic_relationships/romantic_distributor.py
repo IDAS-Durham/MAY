@@ -43,6 +43,7 @@ from may.utils import path_resolver as pr
 from may.utils.yaml_loader import load_yaml
 from may.utils.attribute_access import get_attribute
 from may.utils.stacked_input import as_path_list, load_stacked_csv
+from may.utils.age_bands import OPEN_BAND_MAX, parse_age_band
 
 logger = logging.getLogger("romantic_relationships")
 
@@ -69,13 +70,12 @@ class RomanticDistributor:
         # YAML-fallback age groups (only used when data sources are absent).
         self.age_groups: List[Dict] = []
         for group_str in orient_config.get("age_adjustments", {}).keys():
-            if "-" in group_str:
-                start, end = map(int, group_str.split("-"))
-                self.age_groups.append({"name": group_str, "start": start, "end": end})
-            elif "+" in group_str:
-                start = int(group_str.replace("+", ""))
-                self.age_groups.append({"name": group_str, "start": start, "end": 200})
-        self.age_groups.append({"name": "all_ages_default", "start": 0, "end": 200})
+            bounds = parse_age_band(group_str, strict=("-" in group_str or "+" in group_str))
+            if bounds is None:
+                continue
+            start, end = bounds
+            self.age_groups.append({"name": group_str, "start": start, "end": end})
+        self.age_groups.append({"name": "all_ages_default", "start": 0, "end": OPEN_BAND_MAX})
         self.age_groups.sort(key=lambda x: x["start"])
 
         storage = self.config.get("storage", {})
@@ -165,16 +165,8 @@ class RomanticDistributor:
             if band not in bands_seen:
                 bands_seen.append(band)
 
-        def _parse_band(b: str) -> Tuple[int, int]:
-            if "-" in b:
-                start, end = map(int, b.split("-"))
-                return start, end
-            if "+" in b:
-                return int(b.replace("+", "")), 200
-            raise ValueError(f"Unrecognized age band: {b!r}")
-
         self._prevalence_band_names = bands_seen
-        self._prevalence_bands = [_parse_band(b) for b in bands_seen]
+        self._prevalence_bands = [parse_age_band(b, strict=True) for b in bands_seen]
 
         n_bands = len(bands_seen)
         prevalence_table = np.zeros(

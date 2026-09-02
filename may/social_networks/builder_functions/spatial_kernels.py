@@ -15,7 +15,6 @@ from .geo.geo_neighbors import (
 )
 from .store import store_contacts
 
-import random
 import numpy as np
 import numba as nb
 
@@ -265,44 +264,6 @@ def _build_local_social_network(
     _store_contacts_from_matrix(
         all_people, all_connections, storage_key, activity_config
     )
-
-
-def _allocate_random_bounded_distance_contacts(
-    geography: "Geography",
-    radius_km: float,
-    mean_connections_per_person: float,
-    geo_unit_level=None,
-    storage_key: str = None,
-    method: str = "libpysal",
-    **kwargs,
-) -> None:
-    """
-    Allocates contacts randomly to people within a specified radius.
-
-    Gathers all people within the set radius and assigns random contacts directly.
-    Faster than the graph-based _build_bounded_distance_social_network.
-    """
-    if storage_key is None:
-        storage_key = f"social_contacts_radius_{radius_km}"
-    if geo_unit_level is None:
-        geo_unit_level = geography.levels[0]
-
-    geo_units = geography.get_units_by_level(geo_unit_level)
-    geo_unit_neighbours = find_neighbours(list(geo_units.values()), radius_km=radius_km)
-
-    rng_generator = np.random.default_rng()
-    for geo_unit_id, connected_ids in geo_unit_neighbours.items():
-        people_to_connect_to = list(
-            _collate_people_in_geo_units(geography, connected_ids)
-        )
-        people_to_connect_from = geography.units_by_id[geo_unit_id].get_people()
-        if people_to_connect_to and people_to_connect_from:
-            for person in people_to_connect_from:
-                contacts = random.sample(
-                    people_to_connect_to,
-                    k=rng_generator.poisson(lam=mean_connections_per_person),
-                )
-                store_contacts(person, contacts, storage_key)
 
 
 def _build_bounded_distance_social_network(

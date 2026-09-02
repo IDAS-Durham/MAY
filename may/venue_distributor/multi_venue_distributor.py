@@ -22,31 +22,13 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional
 from may.utils.attribute_access import get_attribute
+from may.utils.age_bands import parse_age_band
 
 from .base_distributor import BaseDistributor
 from may.population import Subset
 from may.utils import path_resolver as pr
 
 logger = logging.getLogger(__name__)
-
-# Open-ended bands ("65+", "65-+") run to this age rather than to infinity.
-_OPEN_BAND_MAX = 200
-
-
-def _parse_age_band(label):
-    """Parse an age band such as "16-24", "65-+" or "65+". None if unparseable."""
-    try:
-        if label.endswith("+") and "-" not in label:
-            return int(label[:-1]), _OPEN_BAND_MAX
-        parts = label.split("-")
-        if len(parts) != 2:
-            return None
-        low = int(parts[0])
-        high = _OPEN_BAND_MAX if parts[1].endswith("+") else int(parts[1])
-        return low, high
-    except (ValueError, AttributeError):
-        return None
-
 
 def _parse_numerical_band(label):
     """Parse a numerical band such as "1.5-3.0". None if unparseable."""
@@ -283,7 +265,7 @@ class MultiVenueDistributor(BaseDistributor):
         for filter_idx, filter_cfg in enumerate(row_filters):
             match_type = filter_cfg.get("match_type", "exact")
             if match_type == "age_range":
-                parse = _parse_age_band
+                parse = parse_age_band
             elif match_type == "numerical_range":
                 parse = _parse_numerical_band
             else:
