@@ -205,7 +205,9 @@ def load_world_from_hdf5(
             logger.info(
                 "Slim mode: skipping relationship loading (member counts already injected)."
             )
-        elif activity_group_name in f and config.should_include_activity_map():
+        elif activity_group_name in f and config.relationships.get(
+            "include_activity_map", True
+        ):
             logger.info("Loading relationships...")
             try:
                 if population and venue_manager:

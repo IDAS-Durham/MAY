@@ -64,8 +64,8 @@ class SerializationConfig:
         self._parse_population()
         self._parse_geography()
         self._parse_venues()
-        self._parse_relationships()
-        self._parse_output()
+        self.relationships = self.config.get("relationships", {})
+        self.output_settings = self.config.get("output", {})
 
     def _parse_population(self):
         """Parse population configuration section."""
@@ -111,81 +111,3 @@ class SerializationConfig:
                 logger.debug(
                     f"Venue '{venue_type}': minimal serialization (core attributes only)"
                 )
-
-    def _parse_relationships(self):
-        """Parse relationships configuration section."""
-        self.relationships = self.config.get("relationships", {})
-
-    def _parse_output(self):
-        """Parse output settings section."""
-        self.output_settings = self.config.get("output", {})
-
-    def get_person_properties(self):
-        """
-        Get list of person properties to serialize.
-
-        Returns:
-            List of property names from person.properties dict
-        """
-        return self.population_properties
-
-    def get_geography_settings(self):
-        """
-        Get geography serialization settings.
-
-        Returns:
-            Dict with 'include_coordinates' and 'properties' keys
-        """
-        return {
-            "include_coordinates": self.geography_include_coordinates,
-            "properties": self.geography_properties,
-        }
-
-    def get_venue_properties(self, venue_type):
-        """
-        Get list of properties to serialize for a specific venue type.
-
-        Args:
-            venue_type: Type of venue (e.g., "school", "household")
-
-        Returns:
-            List of property names to include, or [] if not configured
-        """
-        return self.venue_type_properties.get(venue_type, [])
-
-    def get_venue_global_settings(self):
-        """
-        Get global venue serialization settings.
-
-        Returns:
-            Dict with global venue settings
-        """
-        return self.venue_global_settings
-
-    def should_include_activity_map(self):
-        """Check if activity_map should be serialized."""
-        return self.relationships.get("include_activity_map", True)
-
-    def get_compression_settings(self):
-        """
-        Get HDF5 compression settings.
-
-        Returns:
-            Dict with 'compression' and 'compression_level' keys
-        """
-        return {
-            "compression": self.output_settings.get("compression", "gzip"),
-            "compression_level": self.output_settings.get("compression_level", 4),
-        }
-
-    def get_metadata_settings(self):
-        """
-        Get metadata settings.
-
-        Returns:
-            Dict with 'include' and 'fields' keys
-        """
-        return {
-            "include": self.output_settings.get("include_metadata", True),
-            "fields": self.output_settings.get("metadata", []),
-        }

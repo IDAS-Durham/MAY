@@ -59,7 +59,12 @@ class WorldSerializer:
             config_file: Path to serialization YAML configuration
         """
         self.config = SerializationConfig(config_file)
-        self.compression_settings = self.config.get_compression_settings()
+        self.compression_settings = {
+            "compression": self.config.output_settings.get("compression", "gzip"),
+            "compression_level": self.config.output_settings.get(
+                "compression_level", 4
+            ),
+        }
         self.registries = {}  # Registry of string-to-int mappings
 
     def export(self, world, output_file):
@@ -144,7 +149,10 @@ class WorldSerializer:
 
     def _write_metadata(self, f, world, stats):
         """Write metadata attributes to root of HDF5 file."""
-        metadata_settings = self.config.get_metadata_settings()
+        metadata_settings = {
+            "include": self.config.output_settings.get("include_metadata", True),
+            "fields": self.config.output_settings.get("metadata", []),
+        }
 
         if not metadata_settings["include"]:
             return
@@ -171,7 +179,10 @@ class WorldSerializer:
     def _write_geography(self, f, world):
         """Write geography hierarchy to HDF5."""
         geo_group = f.create_group("geography")
-        geo_settings = self.config.get_geography_settings()
+        geo_settings = {
+            "include_coordinates": self.config.geography_include_coordinates,
+            "properties": self.config.geography_properties,
+        }
 
         # Get all units keyed by unique ID (units_by_id): a single name can
         # occur at multiple levels (e.g. SGU "DURHAM" parish under MGU
@@ -326,7 +337,7 @@ class WorldSerializer:
         logger.info(f"    ✓ Wrote core datasets to HDF5")
 
         # Properties (configured in YAML)
-        properties_to_include = self.config.get_person_properties()
+        properties_to_include = self.config.population_properties
         if properties_to_include:
             props_group = pop_group.create_group("properties")
 
@@ -748,7 +759,7 @@ class WorldSerializer:
     def _write_venues(self, f, world):
         """Write venues and subsets to HDF5."""
         venues_group = f.create_group("venues")
-        venue_global_settings = self.config.get_venue_global_settings()
+        venue_global_settings = self.config.venue_global_settings
 
         # Get all venues as a list
         all_venues = world.venues.get_all_venues_list()
@@ -888,7 +899,9 @@ class WorldSerializer:
         props_group = venues_group.create_group("properties")
 
         for venue_type, venues in venues_by_type.items():
-            properties_to_include = self.config.get_venue_properties(venue_type)
+            properties_to_include = self.config.venue_type_properties.get(
+                venue_type, []
+            )
 
             if not properties_to_include:
                 continue
@@ -1039,7 +1052,7 @@ class WorldSerializer:
         rel_group = f.create_group("activity_mappings")
 
         # Activity map (person → venues via activities)
-        if self.config.should_include_activity_map():
+        if self.config.relationships.get("include_activity_map", True):
             # Use sorted people order (same as population)
             people_sorted = getattr(self, "_people_sorted", world.population.people)
             self._write_activity_map(rel_group, world, people_sorted)
