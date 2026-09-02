@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="62.661785mm"
+   height="39.544132mm"
+   viewBox="0 0 62.661785 39.544132"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <g
+     id="layer1"
+     transform="translate(83.608336,-38.364603)">
+    <g
+       id="g4-9"
+       transform="translate(-94.050835,63.605258)">
+      <path
+         style="font-size:25.4px;font-family:'Adwaita Mono';-inkscape-font-specification:'Adwaita Mono';fill:#e6e6e6;stroke-width:0.248"
+         d="M 10.442491,-6.5716591 V -25.240659 h 3.124199 l 2.8448,14.2748 2.8448,-14.2748 h 3.1242 v 18.6689999 h -2.032 v -3.7337999 q 0,-1.6256 0.0254,-3.2512 0.0254,-1.651 0.0508,-3.2766 l 0.0508,-1.8796 q 0.0254,-1.0414 0.0254,-2.0828 0.0254,-1.0668 0.0254,-2.1336 l -3.2512,16.3575999 h -1.7272 L 12.296691,-22.929259 q 0,1.0668 0,2.1336 0.0254,1.0414 0.0508,2.0828 l 0.0508,1.8796 q 0.0254,1.6256 0.0508,3.2766 0.0254,1.6256 0.0254,3.2512 v 3.7337999 z m 25.272995,0 4.8768,-18.6689999 h 2.4384 l 4.8768,18.6689999 h -2.1844 l -1.1684,-4.7497999 h -5.4864 l -1.1684,4.7497999 z m 8.382,-6.6039999 -1.4478,-5.842 q -0.2032,-0.8636 -0.4318,-1.7272 -0.2032,-0.889 -0.4064,-1.778 -0.2032,0.889 -0.4318,1.778 -0.2032,0.8636 -0.4064,1.7272 l -1.4478,5.842 z m 22.072596,6.6039999 v -7.4675999 l -4.8514,-11.2014 h 2.3114 l 3.5814,8.6614 3.5814,-8.6614 h 2.3114 l -4.8514,11.2014 v 7.4675999 z"
+         id="text4-9-6-3-2"
+         aria-label="M A Y" />
+      <path
+         style="fill:none;stroke:#e6e6e6;stroke-width:1.48104;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1"
+         d="M 17.163877,-2.768095 41.785826,10.683938"
+         id="path2-3-9-10-6-0" />
+      <path
+         style="fill:none;stroke:#e6e6e6;stroke-width:1.46224;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1"
+         d="M 66.39229,-2.780522 42.438135,10.69772"
+         id="path2-3-9-12-3-2-23" />
+      <path
+         style="fill:none;stroke:#e6e6e6;stroke-width:1.4794;stroke-linecap:round;stroke-dasharray:none;stroke-opacity:1"
+         d="m 42.098455,-2.516968 0.02215,12.991549"
+         id="path2-3-9-12-6-0-1-75" />
+      <ellipse
+         style="fill:#ffe448;fill-opacity:1;stroke:#e6e6e6;stroke-width:0.552618;stroke-dasharray:none;stroke-opacity:1"
+         id="path4-4-7-9"
+         cx="42.109436"
+         cy="9.3434687"
+         rx="6.8845892"
+         ry="4.6836901" />
+    </g>
+  </g>
+</svg>
