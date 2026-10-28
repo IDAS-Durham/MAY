@@ -56,7 +56,7 @@ filters:
     type: "activity_venue"
     description: "Worker in a venue that requires on-site attendance"
     activity: "primary_activity"
-    venue_types: ["hospital", "care_home", "classroom"]
+    venue_types: ["hospital", "care_home", "classroom", "pub", "grocery", "cinema", "gym"]
     subset_names: ["worker"]
 
 # Required Attributes (Dependencies)

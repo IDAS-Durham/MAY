@@ -140,6 +140,22 @@ timeline:
     - type: distributor
       config: "${config_root}/distributors/specific_workplace_classrooms_distributor.yaml"
 
+    # I sector -> Pubs
+    - type: distributor
+      config: "${config_root}/distributors/specific_workplace_pub_distributor.yaml"
+
+    # G sector -> Groceries
+    - type: distributor
+      config: "${config_root}/distributors/specific_workplace_grocery_distributor.yaml"
+
+    # J sector -> Cinemas
+    - type: distributor
+      config: "${config_root}/distributors/specific_workplace_cinema_distributor.yaml"
+
+    # Other sector -> Gyms
+    - type: distributor
+      config: "${config_root}/distributors/specific_workplace_gym_distributor.yaml"
+
     # 5. General employment
     - type: distributor
       config: "${config_root}/distributors/company_distributor.yaml"

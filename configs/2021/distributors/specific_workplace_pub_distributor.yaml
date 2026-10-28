@@ -1,0 +1,81 @@
+# Specific Workplace Distributor - Pubs (sector I)
+# Places sector-I workers in pub venues as staff.
+# Access via: person.activity_map['primary_activity'] -> pub venue
+#
+# The same pub venues receive patrons from the leisure distributor, so staff
+# and patrons share one venue object. The company stock is not reduced: workers
+# placed here leave the sector pool, and the company distributor places the
+# rest, so company staff stand for the people who are not on the public floor.
+#
+# Each venue seats a flat 8 staff. The venue file has no staff column.
+# Runs BEFORE company_distributor so these workers are not taken by companies.
+
+venue_type: "pub"
+description: "Distribute sector-I workers to pub venues (8 per venue)"
+
+activity_map_key: "primary_activity"
+subset_key: "worker"
+
+eligibility:
+
+  require_unassigned: true
+
+  global_filters:
+    - attribute: "age"
+      type: "numerical"
+      description: "Only consider working-age people"
+      min: 18
+      max: 64
+
+    - attribute: "properties.workplace_mgu"
+      type: "categorical"
+      description: "Geographical unit name for where they are supposed to work"
+
+    - attribute: "properties.work_sector"
+      type: "categorical"
+      description: "Only sector I workers (accommodation and food service)"
+      values: ["I"]
+
+    - attribute: "residence.type"
+      type: "categorical"
+      description: "Exclude people in care homes, prisons, and student dorms"
+      values: ["household"]
+
+    - attribute: "properties.work_mode"
+      type: "categorical"
+      description: "Only on-site workers take a post here; From_Home workers have an employer but no on-site post"
+      values: ["Normal", "Hybrid"]
+
+  attributes:
+    - name: "properties.work_sector"
+      type: "categorical"
+      description: "Person's work_sector should be I"
+      matching_rules:
+        "I": ["I"]
+      case_sensitive: false
+
+venue_selection:
+  consider_by: "geo_unit"
+
+  # Leisure rows are located at an MGU, the same level as workplace_mgu.
+  venue_geo_level: "MGU"
+  locate_person_by: "properties.workplace_mgu"
+  batch_geo_level: "MGU"
+
+  respect_capacity: true
+
+allocation:
+  strategy: "random"
+
+  fixed_capacity: 8
+
+  track_capacity: true
+  when_full: "exclude"
+
+  batch_by: "geo_unit"
+
+settings:
+  verbose: true
+
+fallback:
+  strategy: "skip"  # Workers beyond the venues' seats go to company_distributor
