@@ -49,7 +49,7 @@ filters:
     type: "activity_venue"
     description: "Must have an assigned workplace venue, as a worker"
     activity: "primary_activity"
-    venue_types: ["office", "classroom", "hospital", "care_home"]
+    venue_types: ["office", "classroom", "hospital", "care_home", "pub", "grocery", "cinema", "gym"]
     subset_names: ["worker"]
 
 # Required Attributes (Dependencies)
