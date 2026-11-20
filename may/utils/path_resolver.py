@@ -6,8 +6,9 @@ Call init() once at startup (after loading config.yaml). resolve() is a no-op
 until init() is called, so bare paths continue to work unchanged.
 """
 
+import os
 import re
-from typing import Optional
+from typing import List, Optional
 
 _resolver: Optional["PathResolver"] = None
 
@@ -40,3 +41,28 @@ def resolve(path: str) -> str:
     if _resolver is None:
         return path
     return _resolver.resolve(path)
+
+
+class ConfigFileNotFoundError(FileNotFoundError):
+    """Config file not found at any tried location. Message omits the config key; caller adds it."""
+
+    def __init__(self, path: str, tried: List[str]):
+        self.path = path
+        self.tried = tried
+        super().__init__(f"not found; tried {', '.join(tried)}")
+
+
+def find_config_file(path: str, data_dir: Optional[str]) -> str:
+    """Find a config file: absolute as written; relative in working dir, then under data_dir.
+
+    Returns the path as found. Raises ConfigFileNotFoundError listing every path tried.
+    """
+    path = resolve(path)
+    data_dir = resolve(data_dir) if data_dir else data_dir
+    tried = [path]
+    if not os.path.isabs(path) and data_dir:
+        tried.append(os.path.join(data_dir, path))
+    for candidate in tried:
+        if os.path.exists(candidate):
+            return candidate
+    raise ConfigFileNotFoundError(path, tried)
