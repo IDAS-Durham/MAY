@@ -1,6 +1,7 @@
 """
 `run_timeline` runs a world config's timeline steps in order, each through the entry
-point its type names, and turns any failure into a logged exit.
+point its type names, and turns any failure into a logged `TimelineError` the entry
+point exits on.
 """
 from unittest.mock import MagicMock, patch
 
@@ -102,16 +103,17 @@ class StepFailure(Exception):
     pass
 
 
-def test_an_expected_error_logs_one_line_and_exits(caplog):
+def test_an_expected_error_logs_one_line_and_raises_a_timeline_error(caplog):
     world_config = timeline_config({"type": "attribute", "config": "age.yaml"})
     registry = recording_registry(
         [], failure=StepFailure("bad marginals"), expected_errors=(StepFailure,),
     )
 
-    with patch.dict(timeline.TIMELINE_STEPS, registry), pytest.raises(SystemExit) as excinfo:
+    with patch.dict(timeline.TIMELINE_STEPS, registry), \
+            pytest.raises(timeline.TimelineError) as excinfo:
         timeline.run_timeline(MagicMock(), world_config)
 
-    assert excinfo.value.code == 1
+    assert isinstance(excinfo.value.__cause__, (StepFailure, KeyError))
     errors = [record for record in caplog.records if record.levelname == "ERROR"]
     assert len(errors) == 1
     assert "attribute" in errors[0].getMessage()
@@ -120,14 +122,15 @@ def test_an_expected_error_logs_one_line_and_exits(caplog):
     assert errors[0].exc_info is None
 
 
-def test_an_unexpected_error_logs_its_traceback_and_exits(caplog):
+def test_an_unexpected_error_logs_its_traceback_and_raises_a_timeline_error(caplog):
     world_config = timeline_config({"type": "distributor", "config": "pubs.yaml"})
     registry = recording_registry([], failure=KeyError("venue_id"))
 
-    with patch.dict(timeline.TIMELINE_STEPS, registry), pytest.raises(SystemExit) as excinfo:
+    with patch.dict(timeline.TIMELINE_STEPS, registry), \
+            pytest.raises(timeline.TimelineError) as excinfo:
         timeline.run_timeline(MagicMock(), world_config)
 
-    assert excinfo.value.code == 1
+    assert isinstance(excinfo.value.__cause__, (StepFailure, KeyError))
     errors = [record for record in caplog.records if record.levelname == "ERROR"]
     assert any("distributor" in record.getMessage() and "pubs.yaml" in record.getMessage()
                for record in errors)
@@ -142,7 +145,7 @@ def test_a_failed_step_stops_the_timeline():
     )
 
     with patch.dict(timeline.TIMELINE_STEPS, recording_registry(calls, failure=KeyError("x"))):
-        with pytest.raises(SystemExit):
+        with pytest.raises(timeline.TimelineError):
             timeline.run_timeline(MagicMock(), world_config)
 
     assert calls == ["distributor:pubs"]
@@ -153,7 +156,8 @@ def test_a_failed_step_stops_the_timeline():
     {"timeline": {"enabled": False, "steps": [{"type": "attribute", "config": "a.yaml"}]}},
     {"timeline": {"enabled": True, "steps": []}},
     {"timeline": {"enabled": True}},
-], ids=["missing", "disabled", "empty", "no_steps"])
+    {"timeline": None},
+], ids=["missing", "disabled", "empty", "no_steps", "blank_key"])
 def test_a_world_without_an_enabled_timeline_is_rejected(world_config):
     with pytest.raises(ValueError, match="No enabled timeline with steps found"):
         timeline.run_timeline(MagicMock(), world_config)
@@ -192,6 +196,15 @@ def test_an_unknown_step_type_fails_in_resolution_not_in_the_households_check(ca
     )
 
     with pytest.raises(ValueError, match="Unknown timeline step type 'attribut'"):
+        timeline.run_timeline(MagicMock(), world_config)
+
+
+@pytest.mark.parametrize("step", ["attribute", None, ["attribute", "age.yaml"]],
+                         ids=["string", "blank", "list"])
+def test_a_step_that_is_not_a_mapping_is_rejected_before_the_households_check(step):
+    world_config = timeline_config(step, households={"data_dir": "d"})
+
+    with pytest.raises(ValueError, match="Timeline step 1 must be a mapping"):
         timeline.run_timeline(MagicMock(), world_config)
 
 

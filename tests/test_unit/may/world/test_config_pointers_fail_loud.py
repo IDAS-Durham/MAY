@@ -1,8 +1,8 @@
 """
 A config key that names a file is either written or rejected, never guessed.
 
-Three blocks completed themselves when a pointer was absent. A timeline step with no
-`config:` carried a falsy path into whichever loader it hit; the romantic block filled in
+Two blocks completed themselves when a pointer was absent (timeline steps, once a third,
+are covered in tests/test_unit/may/timeline/test_timeline_steps.py): the romantic block filled in
 2021's orientation model, so a Mexico or 1911 world would have built with UK census
 marginals raked over its own geography; and the households block guessed a CWD-relative
 `data/households/households.csv`, so the loader reported a missing file the author never

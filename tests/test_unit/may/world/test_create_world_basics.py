@@ -150,3 +150,24 @@ def test_main_hands_the_world_and_its_config_to_run_timeline(tmp_path):
     world, world_config = run_timeline.call_args.args
     assert world is world_class.return_value
     assert world_config["timeline"]["steps"] == [{"type": "attribute", "config": "age.yaml"}]
+
+
+def test_main_exits_when_the_timeline_fails(tmp_path):
+    """The library raises; only the entry point turns a timeline failure into an exit."""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(f"serialization:\n  output_dir: {tmp_path}\n", encoding="utf-8")
+    old = pr._resolver
+    try:
+        with patch("create_world.setup_geography", return_value=(MagicMock(), None)), \
+                patch("create_world.VenueManager"), \
+                patch("create_world.PopulationManager"), \
+                patch("create_world.World"), \
+                patch("create_world.run_timeline",
+                      side_effect=create_world.TimelineError("step failed")):
+            with pytest.raises(SystemExit) as excinfo:
+                main(create_world.parse_args(["--config", str(config_path)]))
+    finally:
+        pr._resolver = old
+        create_world.bp._recorder = None
+
+    assert excinfo.value.code == 1

@@ -1,7 +1,6 @@
 """The build timeline: which step types exist, how each is resolved, and running them in order."""
 import logging
 import os
-import sys
 from dataclasses import dataclass
 from typing import Callable
 
@@ -14,6 +13,10 @@ from may.venue_distributor import distributor_from_yaml
 from may.world import setup_households
 
 logger = logging.getLogger(__name__)
+
+
+class TimelineError(Exception):
+    """A timeline step failed. Already logged; the cause is chained."""
 
 
 @dataclass(frozen=True)
@@ -97,7 +100,8 @@ def step_label(step_type, step_config):
 
 def run_timeline(world, world_config):
     """Run the world config's timeline steps in the order they are written."""
-    timeline_config = world_config.get("timeline", {})
+    # A blank `timeline:` key loads as None.
+    timeline_config = world_config.get("timeline") or {}
     if not (timeline_config.get("enabled", False) and timeline_config.get("steps")):
         # Every scenario drives all events through the timeline, including an
         # explicit `residence_allocation` step for households.
@@ -117,6 +121,12 @@ def run_timeline(world, world_config):
     # A households: block only wires data for the residence_allocation step, so
     # a block with no step is almost always a mistake. Raw types are read here so
     # an unknown type is still reported by resolution, below.
+    for position, step in enumerate(timeline_config["steps"], start=1):
+        if not isinstance(step, dict):
+            raise ValueError(
+                f"Timeline step {position} must be a mapping with `type:` and "
+                f"`config:`; got {step!r}."
+            )
     step_types = [step.get("type") for step in timeline_config["steps"]]
     if world_config.get("households") and "residence_allocation" not in step_types:
         logger.warning(
@@ -135,13 +145,15 @@ def run_timeline(world, world_config):
 
 
 def _run_step(entry, step_type, config_path, world, world_config):
-    """Run one step, exiting the build on failure. An expected error already
-    says what went wrong, so only an unexpected one carries a traceback."""
+    """Run one step, raising `TimelineError` on failure. An expected error
+    already says what went wrong, so only an unexpected one carries a traceback."""
     try:
         entry.handler(world, config_path, world_config)
     except entry.expected_errors as error:
-        logger.error(f"Timeline step {step_type!r} failed for {config_path}: {error}")
-        sys.exit(1)
+        message = f"Timeline step {step_type!r} failed for {config_path}: {error}"
+        logger.error(message)
+        raise TimelineError(message) from error
     except Exception as error:
-        logger.exception(f"Timeline step {step_type!r} failed for {config_path}: {error}")
-        sys.exit(1)
+        message = f"Timeline step {step_type!r} failed for {config_path}: {error}"
+        logger.exception(message)
+        raise TimelineError(message) from error
