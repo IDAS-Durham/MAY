@@ -13,53 +13,9 @@ import pathlib
 
 import pytest
 
-import create_world
+from may.timeline import require_config_path
 from may.residence.household_distributor import HouseholdError
 from may.world import setup_households
-
-
-# --- #5 and #6: timeline steps ----------------------------------------------------
-
-
-def test_the_step_vocabulary_is_the_four_dispatched_types():
-    assert create_world.VALID_TIMELINE_STEP_TYPES == {
-        "residence_allocation", "attribute", "distributor", "child_creator",
-    }
-
-
-@pytest.mark.parametrize("step_type", sorted(create_world.VALID_TIMELINE_STEP_TYPES))
-def test_every_step_type_reports_a_missing_config(step_type):
-    """
-    `pr.resolve` passes None and '' straight through, so all four used to reach the
-    dispatch. Only `residence_allocation` said why; the rest died by traceback.
-    """
-    with pytest.raises(ValueError, match=f"`{step_type}` timeline step must set `config:`"):
-        create_world.resolve_timeline_step({"type": step_type})
-
-
-@pytest.mark.parametrize("empty", [None, ""])
-def test_a_falsy_config_is_a_missing_one(empty):
-    with pytest.raises(ValueError, match="must set `config:`"):
-        create_world.resolve_timeline_step({"type": "attribute", "config": empty})
-
-
-def test_residence_allocation_keeps_its_example_path():
-    with pytest.raises(ValueError, match="allocation_strategy.yaml"):
-        create_world.resolve_timeline_step({"type": "residence_allocation"})
-
-
-def test_unknown_step_type_raises_rather_than_skipping_the_step():
-    with pytest.raises(ValueError, match="Unknown timeline step type 'attribut'"):
-        create_world.resolve_timeline_step({"type": "attribut", "config": "x.yaml"})
-
-
-def test_a_valid_step_resolves():
-    step_type, path = create_world.resolve_timeline_step(
-        {"type": "distributor", "config": "d.yaml"}
-    )
-
-    assert step_type == "distributor"
-    assert path.endswith("d.yaml")
 
 
 # --- #7: the relationship blocks --------------------------------------------------
@@ -68,7 +24,7 @@ def test_a_valid_step_resolves():
 def test_romantic_block_without_a_config_raises():
     """It used to load configs/2021/relationships/romantic_relationships.yaml."""
     with pytest.raises(ValueError, match="romantic_relationships"):
-        create_world.require_config_path(
+        require_config_path(
             "`romantic_relationships.enabled: true`", {"enabled": True}
         )
 
@@ -79,7 +35,7 @@ def test_no_scenario_path_is_hardcoded_as_a_default():
 
 def test_relationship_pipeline_entry_without_a_config_raises():
     with pytest.raises(ValueError, match="must set `config:`"):
-        create_world.require_config_path(
+        require_config_path(
             "Every `relationship_pipeline.relationships` entry", {"name": "friends"}
         )
 

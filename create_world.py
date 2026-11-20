@@ -18,6 +18,7 @@ from may.social_networks import SocialNetworkBuilder
 from may.serialization.preflight import warn_about_venue_property_gaps
 from may.utils import path_resolver as pr
 from may.utils import build_profile as bp
+from may.timeline import require_config_path, resolve_timeline_step, step_label
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 logger = logging.getLogger("create_world")
@@ -55,39 +56,6 @@ set_random_seed(0)
 
 
 VALID_POPULATION_TYPES = {"matrix", "explicit", "explicit_batch"}
-
-VALID_TIMELINE_STEP_TYPES = {
-    "residence_allocation", "attribute", "distributor", "child_creator",
-}
-
-# What a step's `config:` should point at, where the step name does not say it.
-STEP_CONFIG_HINT = {
-    "residence_allocation":
-        " (e.g. configs/<scenario>/households/allocation_strategy.yaml)",
-}
-
-
-def require_config_path(owner, block, hint=""):
-    """Resolve a `config:` pointer, refusing to invent one that is not written.
-
-    A default here points every scenario at one scenario's file, and the loader then
-    reports a missing file the author never named."""
-    if not block.get("config"):
-        raise ValueError(f"{owner} must set `config:` to a YAML file{hint}.")
-    return pr.resolve(block["config"])
-
-
-def resolve_timeline_step(step):
-    """Validate one timeline step, returning its type and resolved config path."""
-    step_type = step.get("type")
-    if step_type not in VALID_TIMELINE_STEP_TYPES:
-        raise ValueError(
-            f"Unknown timeline step type {step_type!r}; expected one of "
-            f"{sorted(VALID_TIMELINE_STEP_TYPES)}."
-        )
-    return step_type, require_config_path(
-        f"A `{step_type}` timeline step", step, STEP_CONFIG_HINT.get(step_type, "")
-    )
 
 
 def setup_population(config, geo):
@@ -127,14 +95,6 @@ def setup_population(config, geo):
         population.generate_population()
 
     return population
-
-
-def step_label(step_type, step_config):
-    """Name a timeline step after the config file it runs, so twelve
-    distributors read as twelve stages rather than one."""
-    if not step_config:
-        return step_type
-    return f"{step_type}:{os.path.splitext(os.path.basename(step_config))[0]}"
 
 
 def parse_args(argv=None):
@@ -335,7 +295,7 @@ def main(args=None):
                 else:
                     raise ValueError(
                         f"Timeline step type {step_type!r} is accepted by "
-                        f"VALID_TIMELINE_STEP_TYPES but has no branch here."
+                        f"the timeline registry but has no branch here."
                     )
 
     else:
