@@ -9,15 +9,12 @@ import yaml
 from may.config_loader import setup_geography
 from may.geography import VenueManager, VenueError
 from may.population import PopulationManager, PopulationError
-from may.world import World, setup_households
-from may.residence.household_distributor import HouseholdError
-from may.attribute_assignment import AttributeAssignmentError
-from may.venue_distributor import distributor_from_yaml
-from may.venue_child_creator import VenueChildCreator
+from may.world import World
 from may.social_networks import SocialNetworkBuilder
 from may.serialization.preflight import warn_about_venue_property_gaps
 from may.utils import path_resolver as pr
 from may.utils import build_profile as bp
+from may.timeline import TimelineError, require_config_path, run_timeline, step_label
 #from debug_scripts.check_multiple_jobs import analyze_multiple_jobs
 
 logger = logging.getLogger("create_world")
@@ -55,39 +52,6 @@ set_random_seed(0)
 
 
 VALID_POPULATION_TYPES = {"matrix", "explicit", "explicit_batch"}
-
-VALID_TIMELINE_STEP_TYPES = {
-    "residence_allocation", "attribute", "distributor", "child_creator",
-}
-
-# What a step's `config:` should point at, where the step name does not say it.
-STEP_CONFIG_HINT = {
-    "residence_allocation":
-        " (e.g. configs/<scenario>/households/allocation_strategy.yaml)",
-}
-
-
-def require_config_path(owner, block, hint=""):
-    """Resolve a `config:` pointer, refusing to invent one that is not written.
-
-    A default here points every scenario at one scenario's file, and the loader then
-    reports a missing file the author never named."""
-    if not block.get("config"):
-        raise ValueError(f"{owner} must set `config:` to a YAML file{hint}.")
-    return pr.resolve(block["config"])
-
-
-def resolve_timeline_step(step):
-    """Validate one timeline step, returning its type and resolved config path."""
-    step_type = step.get("type")
-    if step_type not in VALID_TIMELINE_STEP_TYPES:
-        raise ValueError(
-            f"Unknown timeline step type {step_type!r}; expected one of "
-            f"{sorted(VALID_TIMELINE_STEP_TYPES)}."
-        )
-    return step_type, require_config_path(
-        f"A `{step_type}` timeline step", step, STEP_CONFIG_HINT.get(step_type, "")
-    )
 
 
 def setup_population(config, geo):
@@ -127,14 +91,6 @@ def setup_population(config, geo):
         population.generate_population()
 
     return population
-
-
-def step_label(step_type, step_config):
-    """Name a timeline step after the config file it runs, so twelve
-    distributors read as twelve stages rather than one."""
-    if not step_config:
-        return step_type
-    return f"{step_type}:{os.path.splitext(os.path.basename(step_config))[0]}"
 
 
 def parse_args(argv=None):
@@ -244,7 +200,7 @@ def main(args=None):
         bp.bind(population=population)
 
     # Households are allocated by the explicit `residence_allocation` timeline
-    # step (see the timeline loop below), not implicitly before the timeline.
+    # step (see run_timeline below), not implicitly before the timeline.
     # The World starts with no distributor; the step attaches it when it runs.
     household_distributor = None
 
@@ -255,99 +211,11 @@ def main(args=None):
     bp.bind(world=world)
     logger.info(world)
 
-    # TIMELINE - Unified Event Processing
-    # A present "timeline" section drives every event and takes precedence over
-    # the separate "attributes" and "venue_pipeline" sections.
-    
-    timeline_config = config.get("timeline", {})
-
-    if timeline_config.get("enabled", False) and timeline_config.get("steps"):
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("SIMULATION TIMELINE")
-        logger.info("=" * 60)
-
-        # Households/residence venues are allocated by an explicit
-        # `residence_allocation` step. A households: block only exists to wire
-        # data for that step, so a block with no step is almost always a mistake.
-        step_types = [s.get("type") for s in timeline_config.get("steps", [])]
-        if config.get("households") and "residence_allocation" not in step_types:
-            logger.warning(
-                "a households: block is configured but the timeline has no "
-                "'residence_allocation' step — households will NOT be allocated."
-            )
-
-        for step in timeline_config.get("steps", []):
-            step_type, step_config = resolve_timeline_step(step)
-
-            # Steps of one type are told apart by their config file, since a
-            # timeline runs a dozen distributors through the same code path.
-            with bp.stage(step_label(step_type, step_config), step_type, detail=step_config):
-                if step_type == "residence_allocation":
-                    # Runs the full household + residence-venue allocation strategy
-                    # at this point in the timeline. The step's `config:` points at
-                    # the allocation-strategy YAML (any filename, must follow that
-                    # format), the single source of truth for which strategy runs.
-                    # Placing attribute steps before it lets residence allocation
-                    # read those attributes.
-                    logger.info("")
-                    logger.info(f"[RESIDENCE ALLOCATION] {step_config}")
-                    try:
-                        world.household_distributor = setup_households(
-                            geo, population, venues, config, strategy_file=step_config
-                        )
-                    except HouseholdError as e:
-                        logger.error(f"Household allocation failed: {e}")
-                        sys.exit(1)
-
-                elif step_type == "attribute":
-                    logger.info("")
-                    logger.info(f"[ATTRIBUTE] {step_config}")
-                    try:
-                        world.assign_attributes(step_config)
-                    except AttributeAssignmentError as e:
-                        logger.error(f"Attribute assignment failed: {e}")
-                        sys.exit(1)
-
-                elif step_type == "distributor":
-                    logger.info("")
-                    logger.info(f"[DISTRIBUTOR] {step_config}")
-                    try:
-                        distributor = distributor_from_yaml(step_config)
-                        distributor.allocate(world)
-
-                    except Exception as e:
-                        logger.error(f"Failed to run distributor {step_config}: {e}")
-                        logger.exception(e)
-                        sys.exit(1)
-
-                elif step_type == "child_creator":
-                    logger.info("")
-                    logger.info(f"[CHILD CREATOR] {step_config}")
-                    try:
-                        creator = VenueChildCreator.from_yaml(step_config)
-                        creator.create_children(world)
-                    except Exception as e:
-                        logger.error(f"Failed to run child creator {step_config}: {e}")
-                        logger.exception(e)
-                        sys.exit(1)
-
-                else:
-                    raise ValueError(
-                        f"Timeline step type {step_type!r} is accepted by "
-                        f"VALID_TIMELINE_STEP_TYPES but has no branch here."
-                    )
-
-    else:
-        # Every scenario drives all events through the timeline, including an
-        # explicit `residence_allocation` step for households.
-        raise ValueError(
-            "No enabled timeline with steps found. The legacy "
-            "attributes/venue_pipeline path has been removed — every config "
-            "must define `timeline.enabled: true` with `timeline.steps`, "
-            "including an explicit `residence_allocation` step when "
-            "households are enabled."
-        )
+    try:
+        run_timeline(world, config)
+    except TimelineError:
+        # Already logged by the failing step.
+        sys.exit(1)
 
     # RELATIONSHIP PIPELINE - Build agent networks
     relationship_config = config.get("relationship_pipeline", {})
