@@ -136,6 +136,8 @@ Three allocation modes are selected by which optional files are set:
 timeline:
   enabled: true
   steps:
+    - type: residence_allocation
+      config: "configs/2021/households/allocation_strategy.yaml"
     - type: attribute
       config: "configs/2021/attributes/attribute_assignment.yaml"
     - type: distributor
@@ -148,6 +150,7 @@ timeline:
 
 | Type | Effect |
 |---|---|
+| `residence_allocation` | Places people into households; required when a `households:` block is set |
 | `attribute` | Assigns a property to each eligible person |
 | `distributor` | Places people into venues; writes to `activity_map` |
 | `child_creator` | Sub-divides a parent venue into child venues |
