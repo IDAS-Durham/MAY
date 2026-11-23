@@ -1,5 +1,7 @@
 """Shared YAML loading for configuration files."""
 
+import os
+
 import yaml
 
 from may.utils import path_resolver as pr
@@ -17,3 +19,12 @@ def invalid_yaml_message(path, error: yaml.YAMLError) -> str:
     if mark is None:
         return f"{path} is not valid YAML"
     return f"{path} is not valid YAML at line {mark.line + 1}, column {mark.column + 1}"
+
+
+def unreadable_file_message(path, error: Exception) -> str:
+    """'<path> could not be read: <reason>' for an `OSError` or `UnicodeDecodeError`."""
+    if isinstance(error, UnicodeDecodeError):
+        reason = "not UTF-8 text"
+    else:
+        reason = error.strerror or os.strerror(error.errno or 0)
+    return f"{path} could not be read: {reason}"

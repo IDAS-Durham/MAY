@@ -324,3 +324,24 @@ def test_blank_settings_is_clean_and_uses_defaults(write_config):
     venue_config, report = VenueManager.parse_config(block)
     assert not report.problems and not report.warnings
     assert venue_config.filter_by_geography is None
+
+
+def test_directory_as_config_file_is_problem(working_dir):
+    (working_dir / "venues.yaml").mkdir()
+    venue_config, report = VenueManager.parse_config(
+        {"data_dir": "data", "config_file": "venues.yaml"}
+    )
+    assert venue_config is None
+    assert [key for key, _ in problem_lines(report)] == ["config_file"]
+    assert problem_lines(report)[0][1].startswith("venues.yaml could not be read: ")
+
+
+def test_non_utf8_config_file_is_problem(working_dir):
+    (working_dir / "venues.yaml").write_bytes(b"venue_types: \xff\xfe\n")
+    venue_config, report = VenueManager.parse_config(
+        {"data_dir": "data", "config_file": "venues.yaml"}
+    )
+    assert venue_config is None
+    assert problem_lines(report) == [
+        ("config_file", "venues.yaml could not be read: not UTF-8 text")
+    ]

@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 from .venue import Venue
 from may.preflight.report import PreflightReport, not_mapping_message
 from may.utils import path_resolver as pr
-from may.utils.yaml_loader import invalid_yaml_message, load_yaml
+from may.utils.yaml_loader import invalid_yaml_message, load_yaml, unreadable_file_message
 
 logger = logging.getLogger("venuemanager")
 
@@ -433,6 +433,9 @@ class VenueManager:
             config = load_yaml(config_path)
         except yaml.YAMLError as error:
             report.problem("config_file", invalid_yaml_message(config_path, error))
+            return None, report
+        except (OSError, UnicodeDecodeError) as error:
+            report.problem("config_file", unreadable_file_message(config_path, error))
             return None, report
         if config is None:
             report.problem("config_file", f"{config_path} is empty")

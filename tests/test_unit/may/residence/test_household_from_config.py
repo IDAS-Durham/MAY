@@ -77,3 +77,15 @@ def test_rules_file_in_data_dir_reaches_validator(data_dir):
 def test_unset_rules_file_disables_validator(data_dir):
     distributor = build(block_for(data_dir))
     assert not distributor.relationship_rules.enabled
+
+
+@pytest.mark.parametrize("demotion", ["demotion:\n", "demotion:\n  priority:\n"])
+def test_blank_demotion_builds_with_category_order(data_dir, demotion):
+    distributor = build(block_for(data_dir, CATEGORIES + demotion))
+    assert distributor.fallback_priority == [0, 1]
+
+
+def test_empty_rules_file_disables_validator(data_dir):
+    (data_dir / "rules.yaml").write_text("# nothing\n")
+    distributor = build(block_for(data_dir, rules_file="rules.yaml"))
+    assert not distributor.relationship_rules.enabled

@@ -24,7 +24,7 @@ from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
 from may.preflight.report import PreflightReport, not_list_message, not_mapping_message
-from may.utils.yaml_loader import invalid_yaml_message, load_yaml
+from may.utils.yaml_loader import invalid_yaml_message, load_yaml, unreadable_file_message
 from may.residence.relationship_rules import RelationshipRulesValidator
 from may.utils import path_resolver as pr
 from may.residence.models import Category
@@ -62,7 +62,10 @@ class HouseholdConfig:
 
 
 def _find_and_load_yaml(report: PreflightReport, key: str, path: str, data_dir):
-    """(found path, parsed YAML) or `None` with a problem under `key`; empty is a problem."""
+    """(found path, parsed YAML) or `None` with a problem under `key`.
+
+    An empty file parses to (found path, `None`); the caller decides what that means.
+    """
     try:
         found_path = pr.find_config_file(path, data_dir)
     except pr.ConfigFileNotFoundError as error:
@@ -73,8 +76,8 @@ def _find_and_load_yaml(report: PreflightReport, key: str, path: str, data_dir):
     except yaml.YAMLError as error:
         report.problem(key, invalid_yaml_message(found_path, error))
         return None
-    if loaded is None:
-        report.problem(key, f"{found_path} is empty")
+    except (OSError, UnicodeDecodeError) as error:
+        report.problem(key, unreadable_file_message(found_path, error))
         return None
     return found_path, loaded
 
@@ -106,6 +109,13 @@ def _check_household_config(report: PreflightReport, file_key: str, config) -> N
                 f"{category_key}.type",
                 f"must be 'numerical' or 'categorical'; got {category['type']!r}",
             )
+        category_type = category.get("type")
+        if category_type in CATEGORY_TYPES and category_type in category:
+            if not isinstance(category[category_type], dict):
+                report.problem(
+                    f"{category_key}.{category_type}",
+                    not_mapping_message(category[category_type]),
+                )
         if "name" in category:
             category_names.append(category["name"])
     _check_demotion_priority(report, file_key, config.get("demotion"), category_names)
@@ -125,7 +135,13 @@ def _check_demotion_priority(report, file_key, demotion, category_names) -> None
     if not isinstance(priority, dict):
         report.problem(priority_key, not_mapping_message(priority))
         return
-    for name in priority:
+    for name, value in priority.items():
+        # bool is an int subclass, but `Kids: true` is not a priority.
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            report.problem(
+                f"{priority_key}.{name}",
+                f"must be a number; got {value!r} ({type(value).__name__})",
+            )
         if name not in category_names:
             report.warning(
                 f"{priority_key}.{name}",
@@ -207,7 +223,8 @@ class HouseholdDistributor:
         )
 
         # Pre-calculate demotion fallback priority
-        priority_config = self.config.get("demotion", {}).get("priority", {})
+        # A blank `demotion:` or `priority:` means no priorities, as in preflight.
+        priority_config = (self.config.get("demotion") or {}).get("priority") or {}
         priority_order = []
         for cat_idx, cat in enumerate(self.categories):
             priority = priority_config.get(cat.name, 999)
@@ -235,7 +252,9 @@ class HouseholdDistributor:
         config_path = config = None
         if block.get("config_file"):
             found = _find_and_load_yaml(report, "config_file", block["config_file"], data_dir)
-            if found is not None:
+            if found is not None and found[1] is None:
+                report.problem("config_file", f"{found[0]} is empty")
+            elif found is not None:
                 config_path, config = found
                 _check_household_config(report, f"config_file ({config_path})", config)
 
@@ -245,7 +264,14 @@ class HouseholdDistributor:
         else:
             found = _find_and_load_yaml(report, "rules_file", block["rules_file"], data_dir)
             if found is not None:
-                rules_path = found[0]
+                found_path, rules = found
+                # Every rule commented out means no rules, as before preflight.
+                if rules is None:
+                    report.warning("rules_file", f"{found_path} is empty; relationship rules disabled")
+                elif not isinstance(rules, dict):
+                    report.problem(f"rules_file ({found_path})", not_mapping_message(rules))
+                else:
+                    rules_path = found_path
 
         if report.has_problems:
             return None, report

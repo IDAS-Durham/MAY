@@ -1,7 +1,6 @@
 """Preflight coordinator: run every stage's config check and the cross-block checks."""
 
 import logging
-import os
 from typing import Optional
 
 import yaml
@@ -11,7 +10,7 @@ from may.preflight.report import PreflightError, PreflightReport, not_list_messa
 from may.residence.household_distributor import HouseholdDistributor
 from may.serialization.preflight import venue_property_gaps
 from may.utils import path_resolver as pr
-from may.utils.yaml_loader import invalid_yaml_message, load_yaml
+from may.utils.yaml_loader import invalid_yaml_message, load_yaml, unreadable_file_message
 
 logger = logging.getLogger("preflight")
 
@@ -95,7 +94,7 @@ def _load_serialization_schema(
 ) -> Optional[tuple]:
     """(path, parsed schema) if serialisation enabled with a readable config file, else `None`.
 
-    A missing or unreadable config file is a problem in `report`: export would
+    A missing, unreadable, empty or non-mapping config file is a problem in `report`: export would
     fail after the build.
     """
     if not serialization_block.get("enabled", True):
@@ -110,14 +109,20 @@ def _load_serialization_schema(
     except FileNotFoundError:
         report.problem(SERIALIZATION_CONFIG_FILE_KEY, f"{path} not found")
         return None
-    except OSError as error:
-        reason = error.strerror or os.strerror(error.errno or 0)
-        report.problem(SERIALIZATION_CONFIG_FILE_KEY, f"{path} could not be read: {reason}")
+    except (OSError, UnicodeDecodeError) as error:
+        report.problem(SERIALIZATION_CONFIG_FILE_KEY, unreadable_file_message(path, error))
         return None
     except yaml.YAMLError as error:
         report.problem(SERIALIZATION_CONFIG_FILE_KEY, invalid_yaml_message(path, error))
         return None
-    return path, schema or {}
+    # SerializationConfig rejects an empty schema, so export would fail after the build.
+    if not schema:
+        report.problem(SERIALIZATION_CONFIG_FILE_KEY, f"{path} is empty")
+        return None
+    if not isinstance(schema, dict):
+        report.problem(f"{SERIALIZATION_CONFIG_FILE_KEY} ({path})", not_mapping_message(schema))
+        return None
+    return path, schema
 
 
 def _venue_property_gap_report(path: str, schema, venue_config: VenueConfig) -> PreflightReport:

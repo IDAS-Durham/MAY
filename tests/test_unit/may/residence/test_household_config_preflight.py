@@ -300,12 +300,25 @@ def test_rules_file_not_found_is_problem(write_block):
     ]
 
 
-def test_rules_file_empty_is_problem(write_block):
+def test_rules_file_empty_is_warning_and_disables_rules(write_block):
     household_config, report = HouseholdDistributor.parse_config(
         write_block(rules_text="# nothing\n")
     )
+    assert not report.problems
+    assert household_config.rules_path is None
+    assert warning_lines(report) == [
+        ("rules_file", "rules.yaml is empty; relationship rules disabled")
+    ]
+
+
+def test_rules_file_not_mapping_is_problem(write_block):
+    household_config, report = HouseholdDistributor.parse_config(
+        write_block(rules_text="- enabled\n")
+    )
     assert household_config is None
-    assert problem_lines(report) == [("rules_file", "rules.yaml is empty")]
+    assert problem_lines(report) == [
+        ("rules_file (rules.yaml)", "must be a mapping; got sequence (list)")
+    ]
 
 
 def test_rules_file_invalid_yaml_is_problem(write_block):
@@ -331,4 +344,54 @@ def test_preflight_returns_parse_report(write_block):
     assert not report.problems
     assert warning_lines(report) == [
         ("rules_file", "not set; relationship rules disabled")
+    ]
+
+
+@pytest.mark.parametrize("value", ["high", "true", "[1]"])
+def test_demotion_priority_not_number_is_problem(write_block, value):
+    household_config, report = HouseholdDistributor.parse_config(
+        write_block(config_text=CATEGORIES + f"demotion:\n  priority:\n    Kids: {value}\n")
+    )
+    assert household_config is None
+    assert [key for key, _ in problem_lines(report)] == [
+        "config_file (households.yaml): demotion.priority.Kids"
+    ]
+    assert problem_lines(report)[0][1].startswith("must be a number; got ")
+
+
+@pytest.mark.parametrize("category_type", ["numerical", "categorical"])
+@pytest.mark.parametrize("sub_block", ["", " [0, 17]"], ids=["blank", "list"])
+def test_category_type_block_not_mapping_is_problem(write_block, category_type, sub_block):
+    config_text = (
+        "categories:\n"
+        f"  - name: Kids\n    symbol: K\n    attribute: age\n    type: {category_type}\n"
+        f"    {category_type}:{sub_block}\n"
+    )
+    household_config, report = HouseholdDistributor.parse_config(
+        write_block(config_text=config_text)
+    )
+    assert household_config is None
+    assert [key for key, _ in problem_lines(report)] == [
+        f"config_file (households.yaml): categories[0].{category_type}"
+    ]
+
+
+@pytest.mark.parametrize("key", ["config_file", "rules_file"])
+def test_directory_as_file_is_problem(write_block, working_dir, key):
+    (working_dir / "folder.yaml").mkdir()
+    household_config, report = HouseholdDistributor.parse_config(
+        write_block(**{key: "folder.yaml"})
+    )
+    assert household_config is None
+    assert [problem_key for problem_key, _ in problem_lines(report)] == [key]
+    assert problem_lines(report)[0][1].startswith("folder.yaml could not be read: ")
+
+
+def test_non_utf8_file_is_problem(write_block, working_dir):
+    block = write_block()
+    (working_dir / "households.yaml").write_bytes(b"categories: \xff\xfe\n")
+    household_config, report = HouseholdDistributor.parse_config(block)
+    assert household_config is None
+    assert problem_lines(report) == [
+        ("config_file", "households.yaml could not be read: not UTF-8 text")
     ]

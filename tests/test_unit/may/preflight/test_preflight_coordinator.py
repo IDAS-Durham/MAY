@@ -183,8 +183,8 @@ def test_unreadable_schema_is_problem_even_when_venues_are_broken(venues_dir, tm
 
 @pytest.mark.parametrize(
     "schema_yaml",
-    ["- not a mapping\n", "venues: [a, b]\n", "venues:\n  types: company\n"],
-    ids=["top_level_list", "venues_list", "types_string"],
+    ["venues: [a, b]\n", "venues:\n  types: company\n"],
+    ids=["venues_list", "types_string"],
 )
 def test_gap_check_failure_is_warning(venues_dir, tmp_path, schema_yaml):
     serialization_path = tmp_path / "serialization.yaml"
@@ -275,4 +275,37 @@ def test_malformed_timeline_is_problem_and_skips_households(
     report = check_world_config(config)
     assert [(finding.key, finding.message) for finding in report.problems] == [
         (expected_key, expected_message)
+    ]
+
+
+@pytest.mark.parametrize("schema_yaml", ["", "# nothing\n", "{}\n"], ids=["empty", "comment", "empty_mapping"])
+def test_empty_schema_is_problem(venues_dir, tmp_path, schema_yaml):
+    serialization_path = tmp_path / "serialization.yaml"
+    config = world_config(venues_dir, COMPANY_VENUES, serialization_path, schema_yaml)
+    report = check_world_config(config)
+    assert [(finding.key, finding.message) for finding in report.problems] == [
+        ("serialization.config_file", f"{serialization_path} is empty")
+    ]
+
+
+def test_schema_not_mapping_is_problem(venues_dir, tmp_path):
+    serialization_path = tmp_path / "serialization.yaml"
+    config = world_config(venues_dir, COMPANY_VENUES, serialization_path, "- population\n")
+    report = check_world_config(config)
+    assert [(finding.key, finding.message) for finding in report.problems] == [
+        (
+            f"serialization.config_file ({serialization_path})",
+            "must be a mapping; got sequence (list)",
+        )
+    ]
+    assert report.warnings == []
+
+
+def test_non_utf8_schema_is_problem(venues_dir, tmp_path):
+    serialization_path = tmp_path / "serialization.yaml"
+    config = world_config(venues_dir, COMPANY_VENUES, serialization_path, "")
+    serialization_path.write_bytes(b"venues: \xff\xfe\n")
+    report = check_world_config(config)
+    assert [(finding.key, finding.message) for finding in report.problems] == [
+        ("serialization.config_file", f"{serialization_path} could not be read: not UTF-8 text")
     ]
