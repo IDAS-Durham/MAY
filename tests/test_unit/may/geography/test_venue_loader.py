@@ -170,9 +170,10 @@ def test_missing_csv_fails_loud(loaded_geography, tmp_path):
         "  filter_by_geography: true\n"
     )
 
-    vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
     with pytest.raises(VenueError, match="field.csv"):
-        vm.load_from_yaml_config("test_venues_config.yaml")
+        VenueManager.from_config(
+            {"data_dir": str(venues_dir), "config_file": "test_venues_config.yaml"}, loaded_geography
+        )
 
 
 def test_filter_column_filter_values_drops_rows(loaded_geography, caplog):
@@ -243,8 +244,9 @@ def test_venue_type_metadata_propagates_to_venues(loaded_geography, tmp_path):
         "  filter_by_geography: true\n"
     )
 
-    vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
-    vm.load_from_yaml_config("test_venues_config.yaml")
+    vm = VenueManager.from_config(
+        {"data_dir": str(venues_dir), "config_file": "test_venues_config.yaml"}, loaded_geography
+    )
 
     dorms = vm.get_venues_by_type('student_dorms')
     assert len(dorms) == 1
@@ -276,9 +278,10 @@ def test_total_venues_log_reflects_true_count_with_collisions(loaded_geography, 
         "  filter_by_geography: true\n"
     )
 
-    vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
     with caplog.at_level(logging.INFO, logger='venuemanager'):
-        vm.load_from_yaml_config("test_venues_config.yaml")
+        vm = VenueManager.from_config(
+            {"data_dir": str(venues_dir), "config_file": "test_venues_config.yaml"}, loaded_geography
+        )
 
     total_lines = [r.message for r in caplog.records if 'Total venues created' in r.message]
     assert len(total_lines) == 1
@@ -301,9 +304,10 @@ def test_total_venues_log_no_parenthetical_when_no_collisions(loaded_geography, 
         "  filter_by_geography: true\n"
     )
 
-    vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
     with caplog.at_level(logging.INFO, logger='venuemanager'):
-        vm.load_from_yaml_config("test_venues_config.yaml")
+        vm = VenueManager.from_config(
+            {"data_dir": str(venues_dir), "config_file": "test_venues_config.yaml"}, loaded_geography
+        )
 
     total_lines = [r.message for r in caplog.records if 'Total venues created' in r.message]
     assert len(total_lines) == 1

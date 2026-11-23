@@ -1,12 +1,68 @@
 import logging
 import pandas as pd
+import yaml
 import os
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Optional, Tuple
 from .venue import Venue
+from may.preflight.report import PreflightReport, not_mapping_message
 from may.utils import path_resolver as pr
-from may.utils.yaml_loader import load_yaml
+from may.utils.yaml_loader import invalid_yaml_message, load_yaml
 
 logger = logging.getLogger("venuemanager")
+
+DEFAULT_DATA_DIR = "data/venues"
+DEFAULT_CONFIG_FILE = "venues_config.yaml"
+
+
+def _check_bool(report: PreflightReport, key: str, mapping: dict, name: str) -> None:
+    if name in mapping and not isinstance(mapping[name], bool):
+        report.problem(key, f"must be true or false; got {mapping[name]!r}")
+
+
+def _check_venue_type(report: PreflightReport, type_key: str, type_config) -> None:
+    if not isinstance(type_config, dict):
+        report.problem(type_key, f"must be a mapping; got {type_config!r}")
+        return
+    for flag in ("enabled", "batch_mode"):
+        _check_bool(report, f"{type_key}.{flag}", type_config, flag)
+    filename = type_config.get("filename")
+    if type_config.get("enabled", True) is not False and not filename:
+        report.problem(f"{type_key}.filename", "not set; type is enabled")
+    if type_config.get("filter_column") and not type_config.get("filter_values"):
+        report.warning(f"{type_key}.filter_values", "not set; filter_column ignored")
+    if type_config.get("filter_values") and not type_config.get("filter_column"):
+        report.warning(f"{type_key}.filter_column", "not set; filter_values ignored")
+    if type_config.get("batch_mode") is True and filename:
+        if not isinstance(filename, str):
+            report.problem(
+                f"{type_key}.filename",
+                f"batch_mode takes one pattern, not a list; got {filename!r}",
+            )
+        elif "{unit}" not in filename:
+            report.problem(
+                f"{type_key}.filename",
+                f"batch_mode pattern must contain '{{unit}}'; got {filename!r}",
+            )
+
+
+@dataclass(frozen=True)
+class VenueConfig:
+    """Parsed venue config block and YAML file; checked by `VenueManager.parse_config`."""
+
+    data_dir: str
+    config_path: str
+    venue_types: dict
+    filter_by_geography: Optional[bool]
+
+    @property
+    def enabled_venue_types(self) -> frozenset:
+        return frozenset(
+            venue_type
+            for venue_type, type_config in self.venue_types.items()
+            if type_config.get("enabled", True) is not False
+        )
 
 
 class VenueError(Exception):
@@ -19,7 +75,7 @@ class VenueManager:
     Manages venues and their relationship to geographical units.
     """
 
-    def __init__(self, geography, data_dir="data/venues", filter_by_geography=True):
+    def __init__(self, geography, data_dir=None, filter_by_geography=True):
         self.geography = geography  # Reference to Geography object
         self.data_dir = data_dir
         self.venues_by_type_and_id = defaultdict(
@@ -360,6 +416,89 @@ class VenueManager:
 
         logger.info(f"Created {venues_created} {venue_type} venues")
 
+    @staticmethod
+    def parse_config(block: dict) -> Tuple[Optional[VenueConfig], PreflightReport]:
+        """Parse a `venues` config block and its YAML file. Config is `None` if any problem."""
+        report = PreflightReport()
+        # A blank key (`data_dir:` with no value) falls back to the default.
+        data_dir = pr.resolve(block.get("data_dir") or DEFAULT_DATA_DIR)
+        try:
+            config_path = pr.find_config_file(
+                block.get("config_file") or DEFAULT_CONFIG_FILE, data_dir
+            )
+        except pr.ConfigFileNotFoundError as error:
+            report.problem("config_file", str(error))
+            return None, report
+        try:
+            config = load_yaml(config_path)
+        except yaml.YAMLError as error:
+            report.problem("config_file", invalid_yaml_message(config_path, error))
+            return None, report
+        if config is None:
+            report.problem("config_file", f"{config_path} is empty")
+            return None, report
+        file_key = f"config_file ({config_path})"
+        if not isinstance(config, dict):
+            report.problem(file_key, not_mapping_message(config))
+            return None, report
+        venue_types_key = f"{file_key}: venue_types"
+        # A blank `venue_types:` (every type commented out) loads no venues.
+        venue_types = config.get("venue_types")
+        if venue_types is None and "venue_types" in config:
+            venue_types = {}
+        if "venue_types" not in config:
+            report.problem(venue_types_key, "not set")
+        elif not isinstance(venue_types, dict):
+            report.problem(venue_types_key, not_mapping_message(venue_types))
+        else:
+            for venue_type, type_config in venue_types.items():
+                _check_venue_type(report, f"{venue_types_key}.{venue_type}", type_config)
+        # A blank `settings:` (every setting commented out) uses the defaults.
+        settings = config.get("settings")
+        if settings is None:
+            settings = {}
+        if not isinstance(settings, dict):
+            report.problem(f"{file_key}: settings", not_mapping_message(settings))
+        else:
+            _check_bool(
+                report,
+                f"{file_key}: settings.filter_by_geography",
+                settings,
+                "filter_by_geography",
+            )
+        if report.has_problems:
+            return None, report
+        venue_config = VenueConfig(
+            data_dir=data_dir,
+            config_path=config_path,
+            venue_types=venue_types,
+            filter_by_geography=settings.get("filter_by_geography"),
+        )
+        return venue_config, report
+
+    @staticmethod
+    def preflight(block: dict) -> PreflightReport:
+        """Check a `venues` config block and its YAML file without loading venues."""
+        _, report = VenueManager.parse_config(block)
+        return report
+
+    @classmethod
+    def from_config(cls, block: dict, geography) -> "VenueManager":
+        """Build a VenueManager from a `venues` config block; `VenueError` on any problem."""
+        venue_config, report = cls.parse_config(block)
+        report.raise_if_problems(
+            VenueError, f"Venue config has {len(report.problems)} problem(s):"
+        )
+        for finding in report.warnings:
+            logger.info(f"Venue config warning: {finding.key}: {finding.message}")
+        logger.info(f"Loading venue configuration from {venue_config.config_path}")
+        settings = {}
+        if venue_config.filter_by_geography is not None:
+            settings["filter_by_geography"] = venue_config.filter_by_geography
+        venue_manager = cls(geography, data_dir=venue_config.data_dir, **settings)
+        venue_manager._load(venue_config)
+        return venue_manager
+
     def load_venue_type_from_csv(
         self, venue_type, filename, filter_column=None, filter_values=None, dtype=None
     ):
@@ -384,6 +523,11 @@ class VenueManager:
         """
         from may.utils.stacked_input import as_path_list, load_stacked_csv
 
+        if self.data_dir is None:
+            raise VenueError(
+                f"Cannot load venue type '{venue_type}' from CSV: VenueManager "
+                "has no data_dir; build it with VenueManager.from_config."
+            )
         venue_paths = [
             os.path.join(self.data_dir, p)
             for p in as_path_list(filename, f"venue type '{venue_type}'")
@@ -405,64 +549,15 @@ class VenueManager:
             filter_values=filter_values,
         )
 
-    def load_from_yaml_config(self, config_file="venues_config.yaml"):
-        """
-        Load venues from a YAML configuration file.
-
-        The YAML file defines which venue types to load and their settings.
-
-        Example YAML structure:
-        ```yaml
-        venue_types:
-          hospital:
-            enabled: true
-            filename: hospitals.csv
-            description: "Healthcare facilities"
-          school:
-            enabled: false
-            filename: schools.csv
-
-        settings:
-          filter_by_geography: true
-        ```
-
-        Args:
-            config_file: Path to YAML config file. ${...} templating is applied
-                first; an absolute result is used as-is. A relative path is tried
-                against the current working directory, then against data_dir.
-        """
-        config_path = pr.resolve(config_file)
-        if not os.path.isabs(config_path) and not os.path.exists(config_path):
-            # Relative path not found from CWD, so try data_dir-relative.
-            config_path = os.path.join(self.data_dir, config_path)
-        if not os.path.exists(config_path):
-            raise VenueError(f"Venue config file not found: {config_path}")
-
-        logger.info(f"Loading venue configuration from {config_path}")
-        config = load_yaml(config_path)
-
-        if not config:
-            raise VenueError(f"Empty venue configuration file: {config_path}")
-        if "venue_types" not in config:
-            raise VenueError(f"Venue config has no 'venue_types' key: {config_path}")
-
-        # Parse settings if provided
-        settings = config.get("settings", {})
-        if "filter_by_geography" in settings:
-            self.filter_by_geography = settings["filter_by_geography"]
-            self._loaded_geo_units = set(self.geography.get_all_units().keys())
-
-        venue_types_config = config["venue_types"]
-
-        # An explicit empty mapping is a valid "this world has no venues"
-        # declaration; a *missing* venue_types key (above) is a config error.
-        if not venue_types_config:
+    def _load(self, venue_config: VenueConfig) -> None:
+        """Load every enabled venue type of a parsed config; records all type configs."""
+        if not venue_config.venue_types:
             logger.info("venue_types is empty; loading no venues.")
             return
 
         enabled_types = []
         disabled_types = []
-        for venue_type, type_config in venue_types_config.items():
+        for venue_type, type_config in venue_config.venue_types.items():
             self.venue_configs[venue_type] = type_config
             if not type_config.get("enabled", True):
                 disabled_types.append(venue_type)
@@ -475,60 +570,37 @@ class VenueManager:
 
         for venue_type in enabled_types:
             type_config = self.venue_configs[venue_type]
-            filename = type_config.get("filename")
-            if not filename:
-                raise VenueError(
-                    f"Venue type '{venue_type}' is enabled but has no 'filename'."
-                )
-            filter_column = type_config.get("filter_column")
-            filter_values = type_config.get("filter_values")
-            dtype = type_config.get("dtype")
-
+            filename = type_config["filename"]
+            load_options = {
+                "filter_column": type_config.get("filter_column"),
+                "filter_values": type_config.get("filter_values"),
+                "dtype": type_config.get("dtype"),
+            }
             if type_config.get("batch_mode", False):
-                # One file per batch-partition-level (levels[1]) unit,
-                # named by substituting {unit} into the filename. Absent per-unit
-                # files are skipped (partial geographies are routine), but an
-                # enabled batch type matching zero files is a hard error.
-                if not isinstance(filename, str):
-                    raise VenueError(
-                        f"Batch venue type '{venue_type}' takes a single "
-                        f"filename pattern, not a list; got {filename!r}."
-                    )
-                if "{unit}" not in filename:
-                    raise VenueError(
-                        f"Batch venue type '{venue_type}' filename must contain "
-                        f"the '{{unit}}' placeholder; got {filename!r}."
-                    )
-                units = self.geography.get_units_by_level(self.geography.levels[1])
-                matched = 0
-                for unit_name in units.keys():
-                    unit_filename = filename.replace("{unit}", unit_name)
-                    if not os.path.exists(os.path.join(self.data_dir, unit_filename)):
-                        continue
-                    self.load_venue_type_from_csv(
-                        venue_type,
-                        unit_filename,
-                        filter_column=filter_column,
-                        filter_values=filter_values,
-                        dtype=dtype,
-                    )
-                    matched += 1
-                if matched == 0:
-                    raise VenueError(
-                        f"Batch venue type '{venue_type}' matched no files in "
-                        f"{self.data_dir} (pattern {filename!r})."
-                    )
+                self._load_batch_type(venue_type, filename, load_options)
             else:
-                self.load_venue_type_from_csv(
-                    venue_type,
-                    filename,
-                    filter_column=filter_column,
-                    filter_values=filter_values,
-                    dtype=dtype,
-                )
+                self.load_venue_type_from_csv(venue_type, filename, **load_options)
 
         self._log_total_created()
         self._log_summary()
+
+    def _load_batch_type(self, venue_type, filename, load_options) -> None:
+        """One file per batch-partition-level (levels[1]) unit, named by
+        substituting {unit} into the filename. Absent per-unit files are skipped
+        (partial geographies are routine), but zero matches is a hard error."""
+        units = self.geography.get_units_by_level(self.geography.levels[1])
+        matched = 0
+        for unit_name in units.keys():
+            unit_filename = filename.replace("{unit}", unit_name)
+            if not os.path.exists(os.path.join(self.data_dir, unit_filename)):
+                continue
+            self.load_venue_type_from_csv(venue_type, unit_filename, **load_options)
+            matched += 1
+        if matched == 0:
+            raise VenueError(
+                f"Batch venue type '{venue_type}' matched no files in "
+                f"{self.data_dir} (pattern {filename!r})."
+            )
 
     def extend(self, other: "VenueManager"):
         """Adds all the venues from another instance of the VenueManager class into this instance.

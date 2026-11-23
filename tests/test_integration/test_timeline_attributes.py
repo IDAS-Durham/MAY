@@ -21,8 +21,9 @@ def geography(test_dir):
 
 @pytest.fixture
 def venue_manager(geography, test_dir):
-    vm = VenueManager(geography, data_dir=os.path.join(test_dir, "venues"))
-    vm.load_from_yaml_config("test_venues_config.yaml")
+    vm = VenueManager.from_config(
+        {"data_dir": os.path.join(test_dir, "venues"), "config_file": "test_venues_config.yaml"}, geography
+    )
     return vm
 
 @pytest.fixture

@@ -6,21 +6,14 @@ name a column the data supplies. Running it at the start of a build puts that
 answer in the log while there is still time to act on it.
 """
 
-import logging
-
 import pytest
 
-from may.serialization.preflight import (
-    venue_property_gaps,
-    warn_about_venue_property_gaps,
-)
+from may.serialization.preflight import venue_property_gaps
 
-VENUES = {
-    "venue_types": {
-        "company": {"filename": "companies.csv"},
-        "school": {"filename": ["ew_schools.csv", "sct_schools.csv"]},
-        "household": {"description": "built during the run, no file"},
-    }
+VENUE_TYPES = {
+    "company": {"filename": "companies.csv"},
+    "school": {"filename": ["ew_schools.csv", "sct_schools.csv"]},
+    "household": {"description": "built during the run, no file"},
 }
 
 
@@ -39,19 +32,19 @@ def schema(types):
 class TestVenuePropertyGaps:
     def test_a_column_the_files_carry_is_matched(self, venue_dir):
         gaps = venue_property_gaps(
-            schema({"company": {"properties": ["industry_code"]}}), VENUES, venue_dir
+            schema({"company": {"properties": ["industry_code"]}}), VENUE_TYPES, venue_dir
         )
         assert gaps == []
 
     def test_a_name_absent_from_the_headers_is_a_gap(self, venue_dir):
         gaps = venue_property_gaps(
-            schema({"company": {"properties": ["work_sector"]}}), VENUES, venue_dir
+            schema({"company": {"properties": ["work_sector"]}}), VENUE_TYPES, venue_dir
         )
         assert [(t, p) for t, p, _ in gaps] == [("company", "work_sector")]
 
     def test_gap_reports_the_columns_the_files_carry(self, venue_dir):
         gaps = venue_property_gaps(
-            schema({"company": {"properties": ["work_sector"]}}), VENUES, venue_dir
+            schema({"company": {"properties": ["work_sector"]}}), VENUE_TYPES, venue_dir
         )
         assert "industry_code" in gaps[0][2]
 
@@ -60,7 +53,7 @@ class TestVenuePropertyGaps:
         counts as supplied."""
         gaps = venue_property_gaps(
             schema({"school": {"properties": ["Gender", "NumberOfPupils"]}}),
-            VENUES, venue_dir,
+            VENUE_TYPES, venue_dir,
         )
         assert gaps == []
 
@@ -68,34 +61,13 @@ class TestVenuePropertyGaps:
         """The run assembles household venues, so their properties appear
         once the build reaches them."""
         gaps = venue_property_gaps(
-            schema({"household": {"properties": ["capacity"]}}), VENUES, venue_dir
+            schema({"household": {"properties": ["capacity"]}}), VENUE_TYPES, venue_dir
         )
         assert gaps == []
 
     def test_absent_files_are_skipped(self, tmp_path):
         gaps = venue_property_gaps(
-            schema({"company": {"properties": ["anything"]}}), VENUES, str(tmp_path)
+            schema({"company": {"properties": ["anything"]}}), VENUE_TYPES, str(tmp_path)
         )
         assert gaps == []
 
-
-class TestWarning:
-    def test_gap_is_logged_with_the_available_columns(self, venue_dir, caplog):
-        with caplog.at_level(logging.WARNING, logger="serialization_preflight"):
-            warn_about_venue_property_gaps(
-                schema({"company": {"properties": ["work_sector"]}}),
-                VENUES, venue_dir,
-            )
-        messages = [r.message for r in caplog.records]
-        assert any("work_sector" in m and "industry_code" in m for m in messages)
-
-    def test_a_broken_schema_leaves_the_run_free_to_start(self, venue_dir, caplog):
-        """The comparison is advisory, so a malformed schema leaves the run
-        free to start."""
-        with caplog.at_level(logging.WARNING, logger="serialization_preflight"):
-            gaps = warn_about_venue_property_gaps(
-                {"venues": {"types": {"company": {"properties": "not-a-list"}}}},
-                {"venue_types": {"company": {"filename": 42}}},
-                venue_dir,
-            )
-        assert gaps == []

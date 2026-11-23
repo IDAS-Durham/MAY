@@ -11,7 +11,8 @@ from may.geography import VenueManager, VenueError
 from may.population import PopulationManager, PopulationError
 from may.world import World
 from may.social_networks import SocialNetworkBuilder
-from may.serialization.preflight import warn_about_venue_property_gaps
+from may.preflight.preflight_coordinator import run_preflight
+from may.preflight.report import PreflightError
 from may.utils import path_resolver as pr
 from may.utils import build_profile as bp
 from may.timeline import TimelineError, require_config_path, run_timeline, step_label
@@ -115,6 +116,11 @@ def parse_args(argv=None):
         action="store_true",
         help="Also record function-level cProfile data. Slows the build and shifts the timings it reports, so it is off by default."
     )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Check the config and exit (0 if clean, 1 on problems) without building or writing anything."
+    )
     return parser.parse_args(argv)
 
 
@@ -143,9 +149,19 @@ def main(args=None):
         output_root=config.get("output_root", str(_Path.cwd() / "output")),
     )
 
+    try:
+        run_preflight(config)
+    except PreflightError:
+        logger.error("Preflight failed; fix the config problems above and rerun.")
+        sys.exit(1)
+
+    if getattr(args, "preflight_only", False):
+        logger.info("--preflight-only given; stopping before the build.")
+        return None
+
     # Every build records what its stages cost. The profile lands next to the
     # world this run produces.
-    profile_output_dir = pr.resolve(config.get("serialization", {}).get("output_dir", "."))
+    profile_output_dir = pr.resolve((config.get("serialization") or {}).get("output_dir", "."))
     bp.start(profile_output_dir, args.config, cprofile_enabled=getattr(args, "profile", False))
 
     # Setup geography from config and command-line arguments
@@ -160,33 +176,12 @@ def main(args=None):
     logger.info("")
     logger.info("Loading venues...")
     with bp.stage("venues_load", "pipeline"):
-        venue_config = config.get("venues", {})
-        venues = VenueManager(
-            geography=geo,
-            data_dir=pr.resolve(venue_config.get("data_dir", "data/venues"))
-        )
-
-        yaml_config_file = pr.resolve(venue_config.get("config_file", "venues_config.yaml"))
         try:
-            venues.load_from_yaml_config(yaml_config_file)
+            venues = VenueManager.from_config(config.get("venues") or {}, geo)
         except VenueError as e:
             logger.error(f"Venue loading failed: {e}")
             sys.exit(1)
         bp.bind(venues=venues)
-
-        # Compare the export schema with the venue files here, at the point
-        # where acting on a mismatch still costs one restart.
-        serial_settings = config.get("serialization", {})
-        if serial_settings.get("enabled", True) and serial_settings.get("config_file"):
-            with open(pr.resolve(serial_settings["config_file"]), "r",
-                      encoding="utf-8-sig") as f:
-                serial_schema = yaml.safe_load(f) or {}
-            with open(yaml_config_file, "r", encoding="utf-8-sig") as f:
-                venues_schema = yaml.safe_load(f) or {}
-            warn_about_venue_property_gaps(
-                serial_schema, venues_schema,
-                pr.resolve(venue_config.get("data_dir", "data/venues")),
-            )
 
     # Load population
     logger.info("")
@@ -280,7 +275,7 @@ def main(args=None):
     logger.info("=" * 60)
 
     # Export world to HDF5 for C++ simulation
-    serial_config = config.get("serialization", {})
+    serial_config = config.get("serialization") or {}
     if serial_config.get("enabled", True):
         logger.info("")
         logger.info("Exporting world to HDF5...")

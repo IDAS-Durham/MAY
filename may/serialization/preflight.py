@@ -11,23 +11,20 @@ exist on disk. Types assembled during the run, and the person properties, take
 their values from the build itself and are checked as the export writes them.
 """
 
-import logging
 import os
 
 import pandas as pd
 
 from may.utils.stacked_input import as_path_list
 
-logger = logging.getLogger("serialization_preflight")
 
-
-def venue_property_gaps(serialization_config, venues_config, venues_data_dir):
+def venue_property_gaps(serialization_config, venue_types, venues_data_dir):
     """
     Configured venue properties whose name is missing from the venue files.
 
     Args:
         serialization_config: Parsed serialization YAML.
-        venues_config: Parsed venues YAML.
+        venue_types: Parsed venue types (name -> type config), as in `VenueConfig`.
         venues_data_dir: Directory the venue filenames are relative to.
 
     Returns:
@@ -36,7 +33,6 @@ def venue_property_gaps(serialization_config, venues_config, venues_data_dir):
         supplies the type. columns_available holds the names those headers do
         carry, sorted.
     """
-    venue_types = venues_config.get("venue_types", venues_config) or {}
     configured = ((serialization_config.get("venues") or {}).get("types")) or {}
 
     gaps = []
@@ -65,30 +61,3 @@ def venue_property_gaps(serialization_config, venues_config, venues_data_dir):
                 gaps.append((venue_type, prop, sorted(columns)))
     return gaps
 
-
-def warn_about_venue_property_gaps(
-    serialization_config, venues_config, venues_data_dir
-):
-    """
-    Log a warning for each configured venue property missing from the files.
-
-    A distributor is free to attach the property as the run proceeds, so a gap
-    here reads as something to look at and the run carries on. The export warns
-    again for any property that reaches the end of the build unset.
-    """
-    try:
-        gaps = venue_property_gaps(serialization_config, venues_config, venues_data_dir)
-    except Exception as exc:
-        # The comparison is advisory, so any failure inside it leaves the
-        # run free to continue.
-        logger.warning(f"Could not check the serialization schema: {exc}")
-        return []
-
-    for venue_type, prop, columns in gaps:
-        logger.warning(
-            f"serialization config asks for {prop!r} on venue type "
-            f"{venue_type!r}; the venue files carry {columns}. The exported "
-            f"file will hold this column if something attaches {prop!r} during "
-            f"the run."
-        )
-    return gaps

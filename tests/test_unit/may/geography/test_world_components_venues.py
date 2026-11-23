@@ -30,8 +30,9 @@ def test_venue_manager_load_from_yaml(loaded_geography):
     - Mapping SGU vs MGU correctly
     - is_residence mapping
     """
-    vm = VenueManager(geography=loaded_geography, data_dir="tests/test_data/micro_world/venues")
-    vm.load_from_yaml_config("test_venues_config.yaml")
+    vm = VenueManager.from_config(
+        {"data_dir": "tests/test_data/micro_world/venues", "config_file": "test_venues_config.yaml"}, loaded_geography
+    )
 
     # Check households
     households = vm.get_venues_by_type("household")

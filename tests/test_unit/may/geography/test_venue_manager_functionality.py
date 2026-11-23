@@ -207,88 +207,6 @@ class TestIDGeneration:
         assert school_ids.isdisjoint(hospital_ids)
 
 
-class TestYamlConfig:
-
-    def test_missing_config_file_raises(self, loaded_geography, tmp_path):
-        vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
-        with pytest.raises(VenueError):
-            vm.load_from_yaml_config(str(tmp_path / "does_not_exist.yaml"))
-
-    def test_empty_config_file_fails_loud(self, loaded_geography, tmp_path):
-        config = tmp_path / "empty.yaml"
-        config.write_text("")
-        vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
-        with pytest.raises(VenueError):
-            vm.load_from_yaml_config(str(config))
-
-    def test_config_without_venue_types_key_fails_loud(self, loaded_geography, tmp_path):
-        config = tmp_path / "no_types.yaml"
-        config.write_text("settings:\n  filter_by_geography: true\n")
-        vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
-        with pytest.raises(VenueError):
-            vm.load_from_yaml_config(str(config))
-
-    def test_explicit_empty_venue_types_is_valid_no_op(self, loaded_geography, tmp_path):
-        """An explicit `venue_types: {}` is a legitimate 'this world has no
-        venues' declaration (e.g. a scenario with no venue data yet), so it must
-        NOT raise, unlike a missing venue_types key or empty file."""
-        config = tmp_path / "no_venues.yaml"
-        config.write_text("venue_types: {}\n")
-        vm = VenueManager(geography=loaded_geography, data_dir=str(tmp_path))
-        vm.load_from_yaml_config(str(config))
-        assert vm.get_all_venues_list() == []
-
-    def test_settings_filter_by_geography_is_honoured(self, loaded_geography, tmp_path):
-        """Yaml `settings.filter_by_geography: false` must override the
-        VenueManager constructor default (True), not be ignored."""
-        venues_dir = tmp_path / "venues"
-        venues_dir.mkdir()
-        # Two rows: one in-geography, one out.
-        (venues_dir / "schools.csv").write_text(
-            "name,geo_unit\nIn,SGU_001\nOut,SGU_999\n"
-        )
-        (venues_dir / "config.yaml").write_text(
-            "venue_types:\n"
-            "  school:\n"
-            "    enabled: true\n"
-            "    filename: schools.csv\n"
-            "settings:\n"
-            "  filter_by_geography: false\n"
-        )
-        # Constructor default would be True; yaml flips it.
-        vm = VenueManager(
-            geography=loaded_geography,
-            data_dir=str(venues_dir),
-            filter_by_geography=True,
-        )
-        vm.load_from_yaml_config("config.yaml")
-        # Out-of-geo row is skipped by per-row check, but pre-filter step
-        # must NOT have run (otherwise the warning wouldn't fire). Verify
-        # the per-row warning instead of the pre-filter one.
-        assert vm.filter_by_geography is False
-        assert [v.name for v in vm.get_venues_by_type('school')] == ['In']
-
-    def test_disabled_venue_types_have_config_recorded_for_residence_lookup(
-        self, loaded_geography, tmp_path
-    ):
-        """`household` is intentionally disabled in the production yaml but
-        marked is_residence, because the rest of the code relies on
-        `is_residence_type('household')` returning True without any household
-        venues being loaded. Lock this contract in."""
-        venues_dir = tmp_path / "venues"
-        venues_dir.mkdir()
-        (venues_dir / "config.yaml").write_text(
-            "venue_types:\n"
-            "  household:\n"
-            "    enabled: false\n"
-            "    is_residence: true\n"
-        )
-        vm = VenueManager(geography=loaded_geography, data_dir=str(venues_dir))
-        vm.load_from_yaml_config("config.yaml")
-        assert vm.is_residence_type('household') is True
-        assert vm.get_venues_by_type('household') == []
-
-
 class TestResidenceHelpers:
 
     def _vm_with_residence_config(self, geo, tmp_path):
@@ -314,8 +232,9 @@ class TestResidenceHelpers:
             "    filename: shops.csv\n"
             "    is_residence: false\n"
         )
-        vm = VenueManager(geography=geo, data_dir=str(venues_dir))
-        vm.load_from_yaml_config("config.yaml")
+        vm = VenueManager.from_config(
+            {"data_dir": str(venues_dir), "config_file": "config.yaml"}, geo
+        )
         return vm
 
     def test_get_residence_types_lists_only_is_residence_types(

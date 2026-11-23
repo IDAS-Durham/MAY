@@ -75,7 +75,7 @@ def test_main_cli_arg_parsing(mock_setup_geography):
                 mock_setup_geography.return_value = (MagicMock(), None)
                 
                 # Mock world and venues so it does not crash when moving forward
-                with patch('create_world.VenueManager'):
+                with patch('create_world.VenueManager'), patch('create_world.run_preflight'):
                     with patch('create_world.PopulationManager'):
                         with patch('create_world.World'):
                             # Stop it from executing the big timeline logic and return early by patching
@@ -128,8 +128,10 @@ class TimelineReached(Exception):
 def test_main_hands_the_world_and_its_config_to_run_timeline(tmp_path):
     """create_world holds no timeline logic: the whole timeline is one call."""
     config_path = tmp_path / "config.yaml"
+    (tmp_path / "venues_config.yaml").write_text("venue_types: {}\n", encoding="utf-8")
     config_path.write_text(
-        f"serialization:\n  output_dir: {tmp_path}\n"
+        f"venues:\n  data_dir: {tmp_path}\n"
+        f"serialization:\n  enabled: false\n  output_dir: {tmp_path}\n"
         "timeline:\n  enabled: true\n  steps:\n"
         "    - type: attribute\n      config: age.yaml\n",
         encoding="utf-8",
@@ -155,7 +157,11 @@ def test_main_hands_the_world_and_its_config_to_run_timeline(tmp_path):
 def test_main_exits_when_the_timeline_fails(tmp_path):
     """The library raises; only the entry point turns a timeline failure into an exit."""
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(f"serialization:\n  output_dir: {tmp_path}\n", encoding="utf-8")
+    (tmp_path / "venues_config.yaml").write_text("venue_types: {}\n", encoding="utf-8")
+    config_path.write_text(
+        f"venues:\n  data_dir: {tmp_path}\nserialization:\n  enabled: false\n  output_dir: {tmp_path}\n",
+        encoding="utf-8",
+    )
     old = pr._resolver
     try:
         with patch("create_world.setup_geography", return_value=(MagicMock(), None)), \
@@ -163,11 +169,95 @@ def test_main_exits_when_the_timeline_fails(tmp_path):
                 patch("create_world.PopulationManager"), \
                 patch("create_world.World"), \
                 patch("create_world.run_timeline",
-                      side_effect=create_world.TimelineError("step failed")):
+                      side_effect=create_world.TimelineError("step failed")) as run_timeline:
             with pytest.raises(SystemExit) as excinfo:
                 main(create_world.parse_args(["--config", str(config_path)]))
     finally:
         pr._resolver = old
         create_world.bp._recorder = None
 
+    assert excinfo.value.code == 1
+    run_timeline.assert_called_once()
+
+
+def write_world_config(tmp_path, venues_yaml="venue_types: {}\n"):
+    """Config whose venue YAML lives only under venues.data_dir, with serialisation on."""
+    venues_dir = tmp_path / "venues"
+    venues_dir.mkdir()
+    (venues_dir / "venues.yaml").write_text(venues_yaml, encoding="utf-8")
+    (venues_dir / "companies.csv").write_text("geo_unit,industry_code\nA,C\n", encoding="utf-8")
+    schema_path = tmp_path / "serialization.yaml"
+    schema_path.write_text(
+        "venues:\n  types:\n    company:\n      properties: [industry_code]\n", encoding="utf-8"
+    )
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"venues:\n  data_dir: {venues_dir}\n  config_file: venues.yaml\n"
+        f"serialization:\n  enabled: true\n  config_file: {schema_path}\n"
+        f"  output_dir: {tmp_path / 'output'}\n",
+        encoding="utf-8",
+    )
+    return config_path
+
+
+COMPANY_VENUES = (
+    "settings:\n  filter_by_geography: false\n"
+    "venue_types:\n  company:\n    filename: companies.csv\n"
+)
+BROKEN_VENUES = "venue_types:\n  company:\n    enabled: 'yes'\n    filename: companies.csv\n"
+WARNING_VENUES = (
+    "venue_types:\n  company:\n    filename: companies.csv\n    filter_column: industry_code\n"
+)
+
+
+def run_main(config_path, *extra_args):
+    old = pr._resolver
+    try:
+        return main(create_world.parse_args(["--config", str(config_path), *extra_args]))
+    finally:
+        pr._resolver = old
+        create_world.bp._recorder = None
+
+
+def test_venue_config_only_under_data_dir_with_serialisation_loads_venues(tmp_path):
+    """Regression: the schema-gap check must not reopen the venue YAML relative to the cwd."""
+    config_path = write_world_config(tmp_path, COMPANY_VENUES)
+    with patch("create_world.setup_geography", return_value=(MagicMock(), None)), \
+            patch("create_world.PopulationManager"), \
+            patch("create_world.World") as world_class, \
+            patch("create_world.run_timeline", side_effect=TimelineReached):
+        with pytest.raises(TimelineReached):
+            run_main(config_path)
+    venues = world_class.call_args.kwargs["venues"]
+    assert "company" in venues.get_venue_types()
+
+
+def test_config_problem_exits_before_geography_loads(tmp_path):
+    config_path = write_world_config(tmp_path, BROKEN_VENUES)
+    with patch("create_world.setup_geography") as setup_geography:
+        with pytest.raises(SystemExit) as excinfo:
+            run_main(config_path)
+    assert excinfo.value.code == 1
+    setup_geography.assert_not_called()
+
+
+def test_preflight_only_clean_config_stops_before_the_build(tmp_path):
+    config_path = write_world_config(tmp_path)
+    with patch("create_world.setup_geography") as setup_geography:
+        assert run_main(config_path, "--preflight-only") is None
+    setup_geography.assert_not_called()
+    assert not (tmp_path / "output").exists()
+
+
+def test_preflight_only_warnings_alone_exit_cleanly(tmp_path):
+    config_path = write_world_config(tmp_path, WARNING_VENUES)
+    with patch("create_world.setup_geography") as setup_geography:
+        assert run_main(config_path, "--preflight-only") is None
+    setup_geography.assert_not_called()
+
+
+def test_preflight_only_problems_exit_with_one(tmp_path):
+    config_path = write_world_config(tmp_path, BROKEN_VENUES)
+    with pytest.raises(SystemExit) as excinfo:
+        run_main(config_path, "--preflight-only")
     assert excinfo.value.code == 1
