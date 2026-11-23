@@ -44,12 +44,15 @@ def _make_distributor(geo, data_dir):
     pm = PopulationManager(geography=geo, data_dir='/tmp')
     vm = VenueManager(geo, filter_by_geography=False)
     config_src = "tests/test_data/micro_world/households/test_households_config.yaml"
-    return HouseholdDistributor(
+    return HouseholdDistributor.from_config(
+        {
+            "data_dir": data_dir,
+            "config_file": config_src,
+            "data_file": "households.csv",
+        },
         geography=geo,
         population=pm,
         venue_manager=vm,
-        data_dir=data_dir,
-        config_file=config_src,
     )
 
 

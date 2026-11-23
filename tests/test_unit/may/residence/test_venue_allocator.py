@@ -67,12 +67,15 @@ def venue_manager(geography):
 
 @pytest.fixture
 def hd(geography, population_manager, venue_manager):
-    distributor = HouseholdDistributor(
+    distributor = HouseholdDistributor.from_config(
+        {
+            "data_dir": f"{STRESS_DATA}/households",
+            "config_file": "test_households_config.yaml",
+            "data_file": "households.csv",
+        },
         geography=geography,
         population=population_manager,
         venue_manager=venue_manager,
-        data_dir=f"{STRESS_DATA}/households",
-        config_file="test_households_config.yaml",
     )
     distributor.load_household_data("households.csv")
     return distributor

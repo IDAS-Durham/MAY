@@ -34,12 +34,15 @@ def population_manager(geography, test_dir):
 
 @pytest.fixture
 def household_distributor(geography, population_manager, venue_manager, test_dir):
-    distributor = HouseholdDistributor(
+    distributor = HouseholdDistributor.from_config(
+        {
+            "data_dir": os.path.join(test_dir, "households"),
+            "config_file": "test_households_config.yaml",
+            "data_file": "households.csv",
+        },
         geography=geography,
         population=population_manager,
         venue_manager=venue_manager,
-        data_dir=os.path.join(test_dir, "households"),
-        config_file="test_households_config.yaml"
     )
     distributor.load_household_data("households.csv")
     

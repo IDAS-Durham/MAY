@@ -7,7 +7,7 @@ This module also contains setup functions for orchestrating world creation.
 
 import logging
 from typing import Optional, Set
-from may.residence.household_distributor import HouseholdDistributor, HouseholdError
+from may.residence.household_distributor import HouseholdDistributor
 from may.residence.allocation_strategy import execute_allocation_strategy
 from may.utils import path_resolver as pr
 
@@ -297,49 +297,25 @@ def setup_households(geo, population, venues, config, strategy_file=None):
     """
     logger.info("")
     logger.info("Distributing households...")
-    household_config = config.get("households", {})
+    households_block = config.get("households", {})
 
-    # Defaulting these pointed every scenario at one scenario's layout, and the
-    # loader then reported a missing file the config never named. The defect is
-    # the absent key, so say that instead.
-    missing = [
-        k
-        for k in ("data_dir", "config_file", "data_file")
-        if not household_config.get(k)
-    ]
-    if missing:
-        raise HouseholdError(
-            f"households: block is missing {missing}. Each must name a path; the "
-            f"engine does not guess one."
-        )
-
-    household_distributor = HouseholdDistributor(
-        geography=geo,
-        population=population,
-        venue_manager=venues,
-        data_dir=pr.resolve(household_config["data_dir"]),
-        config_file=pr.resolve(household_config["config_file"]),
-        rules_file=(
-            pr.resolve(household_config.get("rules_file"))
-            if household_config.get("rules_file")
-            else None
-        ),
+    household_distributor = HouseholdDistributor.from_config(
+        households_block, geography=geo, population=population, venue_manager=venues
     )
 
-    # Load household data. data_file may be a single file or a list of files
-    # to stack; column_policy: union_zero_fill lets sources with different
-    # composition vocabularies combine (absent pattern = zero households).
-    household_data_file = household_config["data_file"]
+    # data_file may be a single file or a list of files to stack; column_policy:
+    # union_zero_fill lets sources with different composition vocabularies
+    # combine (absent pattern = zero households).
+    household_config = household_distributor.household_config
     household_distributor.load_household_data(
-        household_data_file,
-        column_policy=household_config.get("column_policy", "strict"),
+        household_config.data_file, column_policy=household_config.column_policy
     )
 
     # Distribute households and venues based on configuration mode.
     # The strategy file comes from the residence_allocation timeline step;
     # fall back to the households block only for direct programmatic callers.
-    if strategy_file is None and household_config.get("strategy_file"):
-        strategy_file = pr.resolve(household_config.get("strategy_file"))
+    if strategy_file is None and households_block.get("strategy_file"):
+        strategy_file = pr.resolve(households_block.get("strategy_file"))
 
     if strategy_file:
         # Mode 1: Unified strategy (households + venues in order)

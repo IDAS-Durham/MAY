@@ -34,12 +34,15 @@ def population_manager(geography):
 
 @pytest.fixture
 def distributor(geography, population_manager, venue_manager):
-    distributor = HouseholdDistributor(
+    distributor = HouseholdDistributor.from_config(
+        {
+            "data_dir": "tests/test_data/micro_world/households",
+            "config_file": "test_households_config.yaml",
+            "data_file": "households.csv",
+        },
         geography=geography,
         population=population_manager,
         venue_manager=venue_manager,
-        data_dir="tests/test_data/micro_world/households",
-        config_file="test_households_config.yaml"
     )
     # Ensure person pools are initialized as empty dicts for each category
     distributor.person_pool_by_geo_unit = {"SGU_001": [{} for _ in distributor.categories]}

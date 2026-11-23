@@ -149,41 +149,24 @@ class HouseholdDistributor:
         geography: Geography,
         population: PopulationManager,
         venue_manager: VenueManager,
-        data_dir,
-        config_file,
-        rules_file: Optional[str] = None,
+        household_config: HouseholdConfig,
     ):
         """
-        Initialize the household distributor.
+        Initialise the household distributor.
 
         Args:
             geography: Geography object with loaded geographical units
             population: PopulationManager with generated population
-            data_dir: Directory containing household data files
-            config_file: Path to YAML configuration file (relative to data_dir)
-            rules_file: Path to relationship_rules.yaml. When None (i.e. the
-                world config did not set `households.rules_file`), relationship
-                rules are disabled.
+            venue_manager: VenueManager holding the world's venues
+            household_config: Checked `households` block, from `parse_config`.
+                Relationship rules are disabled when its ``rules_path`` is None.
         """
         self.geography = geography
         self.population = population
         self.venue_manager = venue_manager
-        self.data_dir = data_dir
-
-        # Load configuration
-        # Try relative to current working directory first, then relative to data_dir
-        config_file = pr.resolve(config_file)
-        if os.path.isabs(config_file) or os.path.exists(config_file):
-            config_path = config_file
-        else:
-            config_path = os.path.join(data_dir, config_file)
-
-        try:
-            self.config = load_yaml(config_path)
-        except FileNotFoundError:
-            raise HouseholdError(f"Household config file not found: {config_path}")
-        if not self.config:
-            raise HouseholdError(f"Empty household config file: {config_path}")
+        self.household_config = household_config
+        self.data_dir = household_config.data_dir
+        self.config = household_config.config
 
         # Parse categories from config
         self.categories = self._parse_categories()
@@ -217,24 +200,9 @@ class HouseholdDistributor:
         self._households_by_geo_unit = None
         self._households_by_pattern = None
 
-        # Initialize relationship rules validator. The path must come from the
-        # world config's `households.rules_file`. If unset, the validator is
-        # constructed with an empty path and disables itself.
-        if rules_file:
-            rules_file = pr.resolve(rules_file)
-            if os.path.isabs(rules_file) or os.path.exists(rules_file):
-                rules_config_path = rules_file
-            else:
-                rules_config_path = os.path.join(data_dir, rules_file)
-        else:
-            logger.warning(
-                "households.rules_file is not set; relationship rules disabled"
-            )
-            rules_config_path = ""
-
         self.relationship_rules = RelationshipRulesValidator(
             categories=self.categories,
-            config_file=rules_config_path,
+            config_file=household_config.rules_path or "",
             geography=self.geography,
         )
 
@@ -296,6 +264,20 @@ class HouseholdDistributor:
         """Check a `households` block and its YAML files without loading household data."""
         _, report = HouseholdDistributor.parse_config(block)
         return report
+
+    @classmethod
+    def from_config(
+        cls, block: dict, geography, population, venue_manager
+    ) -> "HouseholdDistributor":
+        """Build from a `households` block; `HouseholdError` on any problem. Loads no data."""
+        household_config, report = cls.parse_config(block)
+        report.raise_if_problems(
+            HouseholdError, f"Household config has {len(report.problems)} problem(s):"
+        )
+        for finding in report.warnings:
+            logger.info(f"Household config warning: {finding.key}: {finding.message}")
+        logger.info(f"Loading household configuration from {household_config.config_path}")
+        return cls(geography, population, venue_manager, household_config)
 
     def _parse_categories(self) -> List[Category]:
         """Parse categories from config."""
