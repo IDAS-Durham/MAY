@@ -7,7 +7,8 @@ from typing import Optional
 import yaml
 
 from may.geography.venue_manager import VenueConfig, VenueManager
-from may.preflight.report import PreflightError, PreflightReport, not_mapping_message
+from may.preflight.report import PreflightError, PreflightReport, not_list_message, not_mapping_message
+from may.residence.household_distributor import HouseholdDistributor
 from may.serialization.preflight import venue_property_gaps
 from may.utils import path_resolver as pr
 from may.utils.yaml_loader import invalid_yaml_message, load_yaml
@@ -22,11 +23,21 @@ def check_world_config(config: dict) -> PreflightReport:
     block_report = PreflightReport()
     venues_block = _mapping_block(config, "venues", block_report)
     serialization_block = _mapping_block(config, "serialization", block_report)
+    households_block = (
+        _mapping_block(config, "households", block_report)
+        if _has_residence_step(config, block_report)
+        else None
+    )
     venue_config = None
     report = block_report
     if venues_block is not None:
         venue_config, venue_report = VenueManager.parse_config(venues_block)
         report = PreflightReport.merge(report, venue_report.under("venues", sep="."))
+    if households_block is not None:
+        _, household_report = HouseholdDistributor.parse_config(households_block)
+        report = PreflightReport.merge(
+            report, household_report.under("households", sep=".")
+        )
     loaded_schema = None
     if serialization_block is not None:
         schema_report = PreflightReport()
@@ -46,6 +57,26 @@ def run_preflight(config: dict) -> PreflightReport:
     if report.has_problems:
         raise PreflightError(report)
     return report
+
+
+def _has_residence_step(config: dict, report: PreflightReport) -> bool:
+    """Whether the timeline allocates residences, the only reader of `households`.
+
+    A malformed `timeline` or `timeline.steps` is a problem in `report`, and `False`.
+    """
+    timeline = _mapping_block(config, "timeline", report)
+    if timeline is None:
+        return False
+    steps = timeline.get("steps")
+    if steps is None:
+        return False
+    if not isinstance(steps, list):
+        report.problem("timeline.steps", not_list_message(steps))
+        return False
+    return any(
+        isinstance(step, dict) and step.get("type") == "residence_allocation"
+        for step in steps
+    )
 
 
 def _mapping_block(config: dict, name: str, report: PreflightReport) -> Optional[dict]:

@@ -216,3 +216,63 @@ def test_run_preflight_returns_report_on_warnings_only(venues_dir, tmp_path, cap
         report = run_preflight(config)
     assert len(report.warnings) == 1
     assert caplog.records[0].getMessage() == report.format()
+
+
+RESIDENCE_TIMELINE = {"steps": [{"type": "residence_allocation"}]}
+
+
+def households_config(venues_dir, households_block, timeline=RESIDENCE_TIMELINE):
+    (venues_dir / "venues.yaml").write_text("venue_types: {}\n")
+    return {
+        "venues": {"data_dir": str(venues_dir), "config_file": "venues.yaml"},
+        "serialization": {"enabled": False},
+        "households": households_block,
+        "timeline": timeline,
+    }
+
+
+def test_household_problems_are_prefixed_with_households(venues_dir):
+    config = households_config(venues_dir, {"config_file": "c.yaml", "data_file": "h.csv"})
+    report = check_world_config(config)
+    assert ("households.data_dir", "not set; there is no default") in [
+        (finding.key, finding.message) for finding in report.problems
+    ]
+
+
+@pytest.mark.parametrize(
+    "timeline",
+    [None, {"steps": []}, {"steps": [{"type": "venue_allocation"}, "not a step"]}],
+    ids=["no_timeline", "no_steps", "other_steps"],
+)
+def test_households_not_checked_without_residence_step(venues_dir, timeline):
+    config = households_config(venues_dir, "not a mapping", timeline=timeline)
+    report = check_world_config(config)
+    assert report.problems == []
+    assert report.warnings == []
+
+
+def test_households_not_mapping_is_problem(venues_dir):
+    config = households_config(venues_dir, ["a"])
+    report = check_world_config(config)
+    assert [(finding.key, finding.message) for finding in report.problems] == [
+        ("households", "must be a mapping; got sequence (list)")
+    ]
+
+
+@pytest.mark.parametrize(
+    "timeline, expected_key, expected_message",
+    [
+        (["a"], "timeline", "must be a mapping; got sequence (list)"),
+        ({"steps": "residence_allocation"}, "timeline.steps", "must be a list; got scalar (str)"),
+        ({"steps": {"type": "residence_allocation"}}, "timeline.steps", "must be a list; got mapping (dict)"),
+    ],
+    ids=["timeline_list", "steps_string", "steps_mapping"],
+)
+def test_malformed_timeline_is_problem_and_skips_households(
+    venues_dir, timeline, expected_key, expected_message
+):
+    config = households_config(venues_dir, "not a mapping", timeline=timeline)
+    report = check_world_config(config)
+    assert [(finding.key, finding.message) for finding in report.problems] == [
+        (expected_key, expected_message)
+    ]
