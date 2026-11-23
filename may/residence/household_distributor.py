@@ -12,7 +12,9 @@ import os
 import logging
 import math
 import numpy as np
-from typing import Dict, List, Tuple, Optional, Set
+import yaml
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple, Optional, Set
 from itertools import islice
 from collections import defaultdict
 
@@ -21,7 +23,8 @@ from may.geography.venue import Venue
 from may.geography.venue_manager import VenueManager
 from may.population.person import Person
 from may.population.population import PopulationManager
-from may.utils.yaml_loader import load_yaml
+from may.preflight.report import PreflightReport, not_list_message, not_mapping_message
+from may.utils.yaml_loader import invalid_yaml_message, load_yaml
 from may.residence.relationship_rules import RelationshipRulesValidator
 from may.utils import path_resolver as pr
 from may.residence.models import Category
@@ -35,6 +38,99 @@ logger = logging.getLogger("household")
 class HouseholdError(Exception):
     """Raised when household configuration or data is missing/invalid. Mirrors
     VenueError/PopulationError: the engine works on complete data or fails loudly."""
+
+
+REQUIRED_KEYS = ("data_dir", "config_file", "data_file")
+CATEGORY_KEYS = ("name", "symbol", "attribute", "type")
+CATEGORY_TYPES = ("numerical", "categorical")
+
+
+@dataclass(frozen=True)
+class HouseholdConfig:
+    """A checked `households` block: resolved paths and the parsed household config.
+
+    ``rules_path`` is ``None`` when `rules_file` is unset (relationship rules
+    disabled). ``data_file`` is carried as written; its lookup is the loader's.
+    """
+
+    data_dir: str
+    config_path: str
+    config: Dict[str, Any]
+    rules_path: Optional[str]
+    data_file: Any
+    column_policy: str
+
+
+def _find_and_load_yaml(report: PreflightReport, key: str, path: str, data_dir):
+    """(found path, parsed YAML) or `None` with a problem under `key`; empty is a problem."""
+    try:
+        found_path = pr.find_config_file(path, data_dir)
+    except pr.ConfigFileNotFoundError as error:
+        report.problem(key, str(error))
+        return None
+    try:
+        loaded = load_yaml(found_path)
+    except yaml.YAMLError as error:
+        report.problem(key, invalid_yaml_message(found_path, error))
+        return None
+    if loaded is None:
+        report.problem(key, f"{found_path} is empty")
+        return None
+    return found_path, loaded
+
+
+def _check_household_config(report: PreflightReport, file_key: str, config) -> None:
+    """Structure of a parsed household config file; findings keyed under `file_key`."""
+    if not isinstance(config, dict):
+        report.problem(file_key, not_mapping_message(config))
+        return
+    categories_key = f"{file_key}: categories"
+    if "categories" not in config:
+        report.problem(categories_key, "not set")
+        return
+    categories = config["categories"]
+    if not isinstance(categories, list):
+        report.problem(categories_key, not_list_message(categories))
+        return
+    category_names = []
+    for index, category in enumerate(categories):
+        category_key = f"{categories_key}[{index}]"
+        if not isinstance(category, dict):
+            report.problem(category_key, not_mapping_message(category))
+            continue
+        for key in CATEGORY_KEYS:
+            if key not in category:
+                report.problem(f"{category_key}.{key}", "not set")
+        if "type" in category and category["type"] not in CATEGORY_TYPES:
+            report.problem(
+                f"{category_key}.type",
+                f"must be 'numerical' or 'categorical'; got {category['type']!r}",
+            )
+        if "name" in category:
+            category_names.append(category["name"])
+    _check_demotion_priority(report, file_key, config.get("demotion"), category_names)
+
+
+def _check_demotion_priority(report, file_key, demotion, category_names) -> None:
+    # A blank `demotion:` or `priority:` (every entry commented out) means no priorities.
+    if demotion is None:
+        return
+    if not isinstance(demotion, dict):
+        report.problem(f"{file_key}: demotion", not_mapping_message(demotion))
+        return
+    priority = demotion.get("priority")
+    if priority is None:
+        return
+    priority_key = f"{file_key}: demotion.priority"
+    if not isinstance(priority, dict):
+        report.problem(priority_key, not_mapping_message(priority))
+        return
+    for name in priority:
+        if name not in category_names:
+            report.warning(
+                f"{priority_key}.{name}",
+                f"not a category; ignored. Categories: {category_names}",
+            )
 
 
 class HouseholdDistributor:
@@ -156,6 +252,50 @@ class HouseholdDistributor:
         )
         for cat in self.categories:
             logger.info(f"  - {cat}")
+
+    @staticmethod
+    def parse_config(block: dict) -> Tuple[Optional[HouseholdConfig], PreflightReport]:
+        """Parse a `households` block and its YAML files. Config is `None` if any problem."""
+        report = PreflightReport()
+        # Defaulting these would point every scenario at one scenario's layout,
+        # so an absent key is reported as absent rather than as a missing file.
+        for key in REQUIRED_KEYS:
+            if not block.get(key):
+                report.problem(key, "not set; there is no default")
+        data_dir = pr.resolve(block["data_dir"]) if block.get("data_dir") else None
+
+        config_path = config = None
+        if block.get("config_file"):
+            found = _find_and_load_yaml(report, "config_file", block["config_file"], data_dir)
+            if found is not None:
+                config_path, config = found
+                _check_household_config(report, f"config_file ({config_path})", config)
+
+        rules_path = None
+        if not block.get("rules_file"):
+            report.warning("rules_file", "not set; relationship rules disabled")
+        else:
+            found = _find_and_load_yaml(report, "rules_file", block["rules_file"], data_dir)
+            if found is not None:
+                rules_path = found[0]
+
+        if report.has_problems:
+            return None, report
+        household_config = HouseholdConfig(
+            data_dir=data_dir,
+            config_path=config_path,
+            config=config,
+            rules_path=rules_path,
+            data_file=block["data_file"],
+            column_policy=block.get("column_policy", "strict"),
+        )
+        return household_config, report
+
+    @staticmethod
+    def preflight(block: dict) -> PreflightReport:
+        """Check a `households` block and its YAML files without loading household data."""
+        _, report = HouseholdDistributor.parse_config(block)
+        return report
 
     def _parse_categories(self) -> List[Category]:
         """Parse categories from config."""

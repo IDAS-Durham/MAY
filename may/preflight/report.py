@@ -28,6 +28,17 @@ def not_mapping_message(value) -> str:
     return f"must be a mapping; got {yaml_term} ({type(value).__name__})"
 
 
+def not_list_message(value) -> str:
+    """Problem message for a config value that should be a YAML sequence."""
+    if value is None:
+        yaml_term = "null"
+    elif isinstance(value, dict):
+        yaml_term = "mapping"
+    else:
+        yaml_term = "scalar"
+    return f"must be a list; got {yaml_term} ({type(value).__name__})"
+
+
 @dataclass
 class PreflightReport:
     problems: List[Finding] = field(default_factory=list)
